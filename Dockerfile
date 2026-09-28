@@ -3,8 +3,8 @@ FROM node:22-alpine
 WORKDIR /app
 
 # Install dependencies
-COPY package.json package-lock.json* ./
-RUN npm install
+COPY package.json package-lock.json* .npmrc* ./
+RUN npm install --legacy-peer-deps
 
 # Copy source files
 COPY . .

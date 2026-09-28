@@ -34,7 +34,7 @@ Puoi pubblicare questa applicazione sul tuo account personale di **[Render.com](
    - Seleziona **Build and deploy from a Git repository** e scegli il tuo repository GitHub.
    - Render rileverà automaticamente il file `render.yaml` oppure imposta:
      - **Environment**: `Node`
-     - **Build Command**: `npm install && npm run build`
+     - **Build Command**: `npm install --legacy-peer-deps && npm run build`
      - **Start Command**: `npm start`
      - **Instance Type**: `Free`
    - Clicca su **Deploy Web Service**.

@@ -30,7 +30,7 @@ export const PrivacyDeployModal: React.FC<PrivacyDeployModalProps> = ({ onClose 
 2. Vai su https://render.com e crea un 'New Web Service'
 3. Collega il tuo repository GitHub
 4. Render leggerà automaticamente il file 'render.yaml'
-   - Build: npm install && npm run build
+   - Build: npm install --legacy-peer-deps && npm run build
    - Start: npm start
 5. Clicca Deploy e il tuo player privato sarà online in 2 minuti!`;
 
