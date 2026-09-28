@@ -9,6 +9,7 @@ import {
   Clock,
   ChevronRight,
   TrendingUp,
+  Download,
 } from 'lucide-react';
 import {
   XtreamVodStream,
@@ -18,6 +19,7 @@ import {
 import { sortVodStreams, sortSeriesList, formatRecentDate } from '../utils/recentSorting';
 import { buildStreamUrl } from '../utils/parseXtreamUrl';
 import { storage } from '../services/storage';
+import { startMediaDownload } from '../utils/downloadManager';
 
 interface RecentProductsShelfProps {
   vodStreams: XtreamVodStream[];
@@ -215,11 +217,32 @@ export const RecentProductsShelf: React.FC<RecentProductsShelfProps> = ({
                     />
                   </button>
 
-                  {/* Hover play button */}
-                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <div className="w-12 h-12 rounded-full bg-emerald-500 flex items-center justify-center text-white shadow-xl transform group-hover:scale-110 transition">
-                      <Play className="w-6 h-6 ml-0.5 fill-white" />
+                  {/* Hover play & download buttons */}
+                  <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
+                    <div className="w-11 h-11 rounded-full bg-emerald-500 flex items-center justify-center text-white shadow-xl transform group-hover:scale-110 transition">
+                      <Play className="w-5 h-5 ml-0.5 fill-white" />
                     </div>
+
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        startMediaDownload({
+                          serverUrl,
+                          username,
+                          password,
+                          type: 'movie',
+                          streamId: movie.stream_id,
+                          title: movie.name,
+                          containerExtension: movie.container_extension || 'mp4',
+                          poster: movie.stream_icon,
+                        });
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-zinc-900/90 hover:bg-cyan-950 text-zinc-300 hover:text-cyan-300 text-[10px] font-medium border border-zinc-700 hover:border-cyan-700 flex items-center gap-1 transition"
+                      title="Scarica film"
+                    >
+                      <Download className="w-3 h-3" />
+                      Scarica
+                    </button>
                   </div>
                 </div>
 

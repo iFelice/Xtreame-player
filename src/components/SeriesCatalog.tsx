@@ -12,6 +12,7 @@ import {
   ChevronRight,
   Film,
   ArrowDownUp,
+  Download,
 } from 'lucide-react';
 import {
   XtreamCategory,
@@ -24,6 +25,7 @@ import { buildStreamUrl, formatDuration } from '../utils/parseXtreamUrl';
 import { xtreamClient } from '../services/xtreamClient';
 import { storage } from '../services/storage';
 import { sortSeriesList } from '../utils/recentSorting';
+import { startMediaDownload } from '../utils/downloadManager';
 
 interface SeriesCatalogProps {
   categories: XtreamCategory[];
@@ -455,6 +457,30 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                             </p>
                           )}
                         </div>
+
+                        {/* Download Episode Button */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            startMediaDownload({
+                              serverUrl,
+                              username,
+                              password,
+                              type: 'episode',
+                              streamId: episode.id,
+                              title: episode.title || `Episodio ${episode.episode_num}`,
+                              containerExtension: episode.container_extension || 'mp4',
+                              poster: episode.info?.movie_image || activeSeriesDetail.series.cover,
+                              seriesName: activeSeriesDetail.series.name,
+                              seasonNum: Number(activeSeriesDetail.selectedSeason) || 1,
+                              episodeNum: Number(episode.episode_num) || 1,
+                            });
+                          }}
+                          className="p-2 rounded-lg bg-zinc-900 hover:bg-cyan-950/80 border border-zinc-800 hover:border-cyan-700 text-zinc-400 hover:text-cyan-300 transition shrink-0 cursor-pointer"
+                          title="Scarica questo episodio"
+                        >
+                          <Download className="w-4 h-4" />
+                        </button>
                       </div>
                     )
                   )}

@@ -54,7 +54,7 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
       password,
       'live',
       stream.stream_id,
-      'm3u8',
+      'ts',
       true
     );
 
@@ -65,7 +65,7 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
       streamUrl,
       poster: stream.stream_icon,
       categoryName: 'Canale Live TV',
-      containerExtension: 'm3u8',
+      containerExtension: 'ts',
     };
 
     onPlay(mediaItem);

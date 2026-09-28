@@ -167,6 +167,25 @@ export function buildStreamUrl(
 }
 
 /**
+ * Builds a download URL that sets Content-Disposition attachment with the specified filename
+ */
+export function buildDownloadUrl(
+  serverUrl: string,
+  username: string,
+  password: string,
+  type: 'movie' | 'series',
+  streamId: string | number,
+  containerExtension: string = 'mp4',
+  filename: string
+): string {
+  const cleanServer = serverUrl.replace(/\/+$/, '');
+  const ext = containerExtension || 'mp4';
+  const path = `${cleanServer}/${type}/${encodeURIComponent(username)}/${encodeURIComponent(password)}/${streamId}.${ext}`;
+  const cleanFilename = filename.toLowerCase().endsWith(`.${ext}`) ? filename : `${filename}.${ext}`;
+  return `/api/proxy/stream?url=${encodeURIComponent(path)}&download=1&filename=${encodeURIComponent(cleanFilename)}`;
+}
+
+/**
  * Formats seconds or minutes into a human-readable duration (e.g. 1h 45m)
  */
 export function formatDuration(durationOrSecs?: string | number): string {

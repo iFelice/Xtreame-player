@@ -12,12 +12,14 @@ import {
   X,
   ExternalLink,
   ArrowDownUp,
+  Download,
 } from 'lucide-react';
 import { XtreamCategory, XtreamVodStream, XtreamVodDetails, PlayableMediaItem } from '../types/xtream';
 import { buildStreamUrl, formatDuration } from '../utils/parseXtreamUrl';
 import { xtreamClient } from '../services/xtreamClient';
 import { storage } from '../services/storage';
 import { sortVodStreams } from '../utils/recentSorting';
+import { startMediaDownload } from '../utils/downloadManager';
 
 interface VodCatalogProps {
   categories: XtreamCategory[];
@@ -268,19 +270,41 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                   <div className="absolute inset-0 bg-black/75 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col items-center justify-center p-3 gap-2">
                     <button
                       onClick={() => handlePlayStream(stream)}
-                      className="w-12 h-12 rounded-full bg-emerald-500 hover:bg-emerald-400 text-white flex items-center justify-center shadow-lg transform transition hover:scale-110 active:scale-95"
+                      className="w-12 h-12 rounded-full bg-emerald-500 hover:bg-emerald-400 text-white flex items-center justify-center shadow-lg transform transition hover:scale-110 active:scale-95 cursor-pointer"
                       title="Riproduci ora"
                     >
                       <Play className="w-6 h-6 ml-0.5 fill-white" />
                     </button>
 
-                    <button
-                      onClick={() => handleOpenDetails(stream)}
-                      className="px-3 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium flex items-center gap-1 border border-zinc-700 transition"
-                    >
-                      <Info className="w-3.5 h-3.5" />
-                      Dettagli
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => handleOpenDetails(stream)}
+                        className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium flex items-center gap-1 border border-zinc-700 transition cursor-pointer"
+                      >
+                        <Info className="w-3.5 h-3.5" />
+                        Dettagli
+                      </button>
+
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          startMediaDownload({
+                            serverUrl,
+                            username,
+                            password,
+                            type: 'movie',
+                            streamId: stream.stream_id,
+                            title: stream.name,
+                            containerExtension: stream.container_extension || 'mp4',
+                            poster: stream.stream_icon,
+                          });
+                        }}
+                        className="p-1 rounded-lg bg-zinc-800 hover:bg-cyan-950/80 text-zinc-300 hover:text-cyan-300 border border-zinc-700 hover:border-cyan-700 transition cursor-pointer"
+                        title="Scarica film sul dispositivo"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -410,7 +434,7 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                   )}
 
                   {/* Action Buttons */}
-                  <div className="flex items-center gap-3 mt-4">
+                  <div className="flex flex-wrap items-center gap-3 mt-4">
                     <button
                       onClick={() =>
                         handlePlayStream(
@@ -418,14 +442,35 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                           activeMovieDetail.details
                         )
                       }
-                      className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-sm flex items-center gap-2 shadow-lg shadow-emerald-950/40 transition"
+                      className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-sm flex items-center gap-2 shadow-lg shadow-emerald-950/40 transition cursor-pointer"
                     >
                       <Play className="w-4 h-4 fill-white" />
                       Avvia Riproduzione
                     </button>
+
+                    <button
+                      onClick={() => {
+                        startMediaDownload({
+                          serverUrl,
+                          username,
+                          password,
+                          type: 'movie',
+                          streamId: activeMovieDetail.stream.stream_id,
+                          title: activeMovieDetail.stream.name,
+                          containerExtension: activeMovieDetail.stream.container_extension || 'mp4',
+                          poster: activeMovieDetail.stream.stream_icon,
+                        });
+                      }}
+                      className="px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-cyan-950/80 border border-zinc-700 hover:border-cyan-700 text-zinc-200 hover:text-cyan-300 text-sm font-medium flex items-center gap-2 transition cursor-pointer"
+                      title="Scarica film per vederlo offline"
+                    >
+                      <Download className="w-4 h-4 text-cyan-400" />
+                      Scarica Film
+                    </button>
+
                     <button
                       onClick={() => setActiveMovieDetail(null)}
-                      className="px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm font-medium transition"
+                      className="px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm font-medium transition cursor-pointer"
                     >
                       Chiudi
                     </button>

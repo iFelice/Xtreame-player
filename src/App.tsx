@@ -12,6 +12,7 @@ import {
   ExternalLink,
   ShieldCheck,
   Zap,
+  Download,
 } from 'lucide-react';
 import { Navbar } from './components/Navbar';
 import { UrlInputBar } from './components/UrlInputBar';
@@ -23,6 +24,8 @@ import { FavoritesView } from './components/FavoritesView';
 import { ServerInfoModal } from './components/ServerInfoModal';
 import { PrivacyDeployModal } from './components/PrivacyDeployModal';
 import { RecentProductsShelf } from './components/RecentProductsShelf';
+import { InstallAppModal } from './components/InstallAppModal';
+import { DownloadsView } from './components/DownloadsView';
 
 import {
   XtreamParsedUrl,
@@ -43,14 +46,20 @@ export default function App() {
   const [password, setPassword] = useState<string>('');
   const [authData, setAuthData] = useState<XtreamAuthResponse | null>(null);
 
-  const [activeTab, setActiveTab] = useState<'recent' | 'movies' | 'live' | 'series' | 'favorites'>('recent');
+  const [activeTab, setActiveTab] = useState<'live' | 'movies' | 'series' | 'recent' | 'downloads' | 'favorites'>('live');
   const [activeMedia, setActiveMedia] = useState<PlayableMediaItem | null>(null);
   const [selectedSeriesForModal, setSelectedSeriesForModal] = useState<string | number | null>(null);
 
   const [isLoadingCatalog, setIsLoadingCatalog] = useState<boolean>(false);
+  const [isRefreshingCatalog, setIsRefreshingCatalog] = useState<boolean>(false);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<number | null>(null);
+  const [appIcon, setAppIconState] = useState<string>(storage.getAppIcon());
+  const [refreshSuccessMessage, setRefreshSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showServerInfo, setShowServerInfo] = useState<boolean>(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState<boolean>(false);
+  const [showInstallAppModal, setShowInstallAppModal] = useState<boolean>(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
   // Catalog data
   const [vodCategories, setVodCategories] = useState<XtreamCategory[]>([]);
@@ -59,6 +68,26 @@ export default function App() {
   const [liveStreams, setLiveStreams] = useState<XtreamLiveStream[]>([]);
   const [seriesCategories, setSeriesCategories] = useState<XtreamCategory[]>([]);
   const [seriesList, setSeriesList] = useState<XtreamSeries[]>([]);
+
+  // Capture PWA install prompt
+  useEffect(() => {
+    const handler = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  // Sync app icon on startup
+  useEffect(() => {
+    const current = storage.getAppIcon();
+    setAppIconState(current);
+    const link = document.querySelector("link[rel='icon']") as HTMLLinkElement | null;
+    if (link) link.href = current;
+    const apple = document.querySelector("link[rel='apple-touch-icon']") as HTMLLinkElement | null;
+    if (apple) apple.href = current;
+  }, []);
 
   // Load last saved account if any on startup
   useEffect(() => {
@@ -69,6 +98,48 @@ export default function App() {
       setPassword(last.password);
     }
   }, []);
+
+  // Function to refresh the existing catalog
+  const handleRefreshCatalog = async () => {
+    if (!serverUrl || !username || !password) return;
+    setIsRefreshingCatalog(true);
+    setErrorMessage(null);
+    try {
+      const [
+        fetchedVodCats,
+        fetchedVodStreams,
+        fetchedLiveCats,
+        fetchedLiveStreams,
+        fetchedSeriesCats,
+        fetchedSeries,
+      ] = await Promise.all([
+        xtreamClient.getVodCategories(serverUrl, username, password).catch(() => []),
+        xtreamClient.getVodStreams(serverUrl, username, password).catch(() => []),
+        xtreamClient.getLiveCategories(serverUrl, username, password).catch(() => []),
+        xtreamClient.getLiveStreams(serverUrl, username, password).catch(() => []),
+        xtreamClient.getSeriesCategories(serverUrl, username, password).catch(() => []),
+        xtreamClient.getSeries(serverUrl, username, password).catch(() => []),
+      ]);
+
+      setVodCategories(fetchedVodCats);
+      setVodStreams(fetchedVodStreams);
+      setLiveCategories(fetchedLiveCats);
+      setLiveStreams(fetchedLiveStreams);
+      setSeriesCategories(fetchedSeriesCats);
+      setSeriesList(fetchedSeries);
+      setLastRefreshedAt(Date.now());
+
+      setRefreshSuccessMessage(
+        `Catalogo aggiornato con successo: ${fetchedLiveStreams.length} canali live, ${fetchedVodStreams.length} film, ${fetchedSeries.length} serie TV.`
+      );
+      setTimeout(() => setRefreshSuccessMessage(null), 4000);
+    } catch (err: any) {
+      console.error('Refresh error:', err);
+      setErrorMessage(`Errore durante l'aggiornamento del catalogo: ${err.message}`);
+    } finally {
+      setIsRefreshingCatalog(false);
+    }
+  };
 
   // Connect to server and fetch all catalogs
   const connectToServer = useCallback(
@@ -128,12 +199,17 @@ export default function App() {
         setLiveStreams(fetchedLiveStreams);
         setSeriesCategories(fetchedSeriesCats);
         setSeriesList(fetchedSeries);
+        setLastRefreshedAt(Date.now());
 
-        // Default to active tab based on what content is available
-        if (fetchedVodStreams.length > 0 || fetchedSeries.length > 0) {
-          setActiveTab('recent');
-        } else if (fetchedLiveStreams.length > 0) {
+        // Default to active tab in requested order: Live TV -> Film & VOD -> Serie TV
+        if (fetchedLiveStreams.length > 0) {
           setActiveTab('live');
+        } else if (fetchedVodStreams.length > 0) {
+          setActiveTab('movies');
+        } else if (fetchedSeries.length > 0) {
+          setActiveTab('series');
+        } else {
+          setActiveTab('recent');
         }
       } catch (err: any) {
         console.error('Connection error:', err);
@@ -189,10 +265,28 @@ export default function App() {
         onOpenServerInfo={() => setShowServerInfo(true)}
         onOpenPrivacy={() => setShowPrivacyModal(true)}
         onDisconnect={handleDisconnect}
+        onRefreshCatalog={handleRefreshCatalog}
+        isRefreshing={isRefreshingCatalog}
+        onInstallApp={() => setShowInstallAppModal(true)}
       />
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
+        {/* Refresh Success Notification Banner */}
+        {refreshSuccessMessage && (
+          <div className="p-3.5 rounded-2xl bg-emerald-950/80 border border-emerald-800/80 text-emerald-200 flex items-center justify-between gap-3 animate-in fade-in shadow-lg">
+            <div className="flex items-center gap-2.5 text-xs font-medium">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>{refreshSuccessMessage}</span>
+            </div>
+            <button
+              onClick={() => setRefreshSuccessMessage(null)}
+              className="text-xs text-emerald-400 hover:text-white px-2 py-0.5"
+            >
+              ✕
+            </button>
+          </div>
+        )}
         {/* Active Media Player View */}
         {activeMedia && (
           <section className="space-y-2 animate-in fade-in slide-in-from-top-4 duration-300">
@@ -235,11 +329,60 @@ export default function App() {
 
         {/* Connected Catalog Navigation Tabs */}
         {isConnected && !isLoadingCatalog && (
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 pb-3">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-zinc-800 pb-3">
             <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+              {/* 1. Live TV first */}
+              <button
+                onClick={() => setActiveTab('live')}
+                className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition cursor-pointer ${
+                  activeTab === 'live'
+                    ? 'bg-rose-600 text-white shadow-lg shadow-rose-950/40'
+                    : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
+                }`}
+              >
+                <Tv className="w-4 h-4 text-rose-400" />
+                Live TV
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-black/40">
+                  {liveStreams.length}
+                </span>
+              </button>
+
+              {/* 2. Film & VOD second */}
+              <button
+                onClick={() => setActiveTab('movies')}
+                className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition cursor-pointer ${
+                  activeTab === 'movies'
+                    ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-950/40'
+                    : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
+                }`}
+              >
+                <Film className="w-4 h-4 text-emerald-400" />
+                Film & VOD
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-black/40">
+                  {vodStreams.length}
+                </span>
+              </button>
+
+              {/* 3. Serie TV third */}
+              <button
+                onClick={() => setActiveTab('series')}
+                className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition cursor-pointer ${
+                  activeTab === 'series'
+                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-950/40'
+                    : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
+                }`}
+              >
+                <Layers className="w-4 h-4 text-blue-400" />
+                Serie TV
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-black/40">
+                  {seriesList.length}
+                </span>
+              </button>
+
+              {/* 4. Novità & Recenti */}
               <button
                 onClick={() => setActiveTab('recent')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition cursor-pointer ${
+                className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition cursor-pointer ${
                   activeTab === 'recent'
                     ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-950/40'
                     : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
@@ -249,54 +392,23 @@ export default function App() {
                 Novità & Recenti
               </button>
 
+              {/* 5. I Miei Download */}
               <button
-                onClick={() => setActiveTab('movies')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition cursor-pointer ${
-                  activeTab === 'movies'
-                    ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-950/40'
+                onClick={() => setActiveTab('downloads')}
+                className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition cursor-pointer ${
+                  activeTab === 'downloads'
+                    ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-950/40'
                     : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
                 }`}
               >
-                <Film className="w-4 h-4" />
-                Film & VOD
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-black/40">
-                  {vodStreams.length}
-                </span>
+                <Download className="w-4 h-4 text-cyan-400" />
+                I Miei Download
               </button>
 
-              <button
-                onClick={() => setActiveTab('live')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition cursor-pointer ${
-                  activeTab === 'live'
-                    ? 'bg-rose-600 text-white shadow-lg shadow-rose-950/40'
-                    : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
-                }`}
-              >
-                <Tv className="w-4 h-4" />
-                Canali Live
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-black/40">
-                  {liveStreams.length}
-                </span>
-              </button>
-
-              <button
-                onClick={() => setActiveTab('series')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition cursor-pointer ${
-                  activeTab === 'series'
-                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-950/40'
-                    : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
-                }`}
-              >
-                <Layers className="w-4 h-4" />
-                Serie TV
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-black/40">
-                  {seriesList.length}
-                </span>
-              </button>
-
+              {/* 6. Preferiti */}
               <button
                 onClick={() => setActiveTab('favorites')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition cursor-pointer ${
+                className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition cursor-pointer ${
                   activeTab === 'favorites'
                     ? 'bg-zinc-800 text-white border border-zinc-700 shadow-md'
                     : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
@@ -307,11 +419,23 @@ export default function App() {
               </button>
             </div>
 
-            <div className="hidden lg:flex items-center gap-2 text-xs text-zinc-400">
-              <span className="flex items-center gap-1.5 bg-emerald-950/50 border border-emerald-800/40 text-emerald-400 px-2.5 py-1 rounded-lg">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                Proxy CORS Attivo
-              </span>
+            {/* Dedicated Prominent Aggiorna Catalogo Action Button */}
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={handleRefreshCatalog}
+                disabled={isRefreshingCatalog}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-lg shadow-emerald-950/50 transition cursor-pointer disabled:opacity-50"
+                title="Ricarica tutti i contenuti dal server Xtream"
+              >
+                <RefreshCw className={`w-4 h-4 ${isRefreshingCatalog ? 'animate-spin' : ''}`} />
+                <span>{isRefreshingCatalog ? 'Aggiornamento in corso...' : 'Aggiorna Catalogo'}</span>
+              </button>
+
+              {lastRefreshedAt && (
+                <span className="hidden xl:inline text-[11px] text-zinc-400">
+                  Ultimo sync: {new Date(lastRefreshedAt).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              )}
             </div>
           </div>
         )}
@@ -329,26 +453,10 @@ export default function App() {
           </div>
         ) : isConnected ? (
           <div className="mt-4">
-            {activeTab === 'recent' && (
-              <RecentProductsShelf
-                vodStreams={vodStreams}
-                seriesList={seriesList}
-                serverUrl={serverUrl}
-                username={username}
-                password={password}
-                onPlay={handlePlayDirect}
-                onOpenSeries={(series) => {
-                  setSelectedSeriesForModal(series.series_id);
-                  setActiveTab('series');
-                }}
-                onNavigateToTab={(tab) => setActiveTab(tab)}
-              />
-            )}
-
-            {activeTab === 'movies' && (
-              <VodCatalog
-                categories={vodCategories}
-                streams={vodStreams}
+            {activeTab === 'live' && (
+              <LiveCatalog
+                categories={liveCategories}
+                streams={liveStreams}
                 serverUrl={serverUrl}
                 username={username}
                 password={password}
@@ -357,10 +465,10 @@ export default function App() {
               />
             )}
 
-            {activeTab === 'live' && (
-              <LiveCatalog
-                categories={liveCategories}
-                streams={liveStreams}
+            {activeTab === 'movies' && (
+              <VodCatalog
+                categories={vodCategories}
+                streams={vodStreams}
                 serverUrl={serverUrl}
                 username={username}
                 password={password}
@@ -380,6 +488,29 @@ export default function App() {
                 isLoading={isLoadingCatalog}
                 selectedSeriesId={selectedSeriesForModal}
                 onClearSelectedSeries={() => setSelectedSeriesForModal(null)}
+              />
+            )}
+
+            {activeTab === 'recent' && (
+              <RecentProductsShelf
+                vodStreams={vodStreams}
+                seriesList={seriesList}
+                serverUrl={serverUrl}
+                username={username}
+                password={password}
+                onPlay={handlePlayDirect}
+                onOpenSeries={(series) => {
+                  setSelectedSeriesForModal(series.series_id);
+                  setActiveTab('series');
+                }}
+                onNavigateToTab={(tab) => setActiveTab(tab)}
+              />
+            )}
+
+            {activeTab === 'downloads' && (
+              <DownloadsView
+                onPlay={handlePlayDirect}
+                onExploreContent={(tab) => setActiveTab(tab)}
               />
             )}
 
@@ -514,6 +645,21 @@ export default function App() {
       {/* Privacy & Render Deploy Modal */}
       {showPrivacyModal && (
         <PrivacyDeployModal onClose={() => setShowPrivacyModal(false)} />
+      )}
+
+      {/* Install App Modal */}
+      {showInstallAppModal && (
+        <InstallAppModal
+          onClose={() => setShowInstallAppModal(false)}
+          canPrompt={Boolean(deferredPrompt)}
+          currentIcon={appIcon}
+          onIconChange={(newIcon) => setAppIconState(newIcon)}
+          onTriggerPrompt={() => {
+            if (deferredPrompt) {
+              deferredPrompt.prompt();
+            }
+          }}
+        />
       )}
 
       {/* Footer */}

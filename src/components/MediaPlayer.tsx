@@ -18,8 +18,10 @@ import {
   AlertCircle,
   RefreshCw,
   Cast,
+  Download,
 } from 'lucide-react';
 import Hls from 'hls.js';
+import mpegts from 'mpegts.js';
 import { PlayableMediaItem } from '../types/xtream';
 import { storage } from '../services/storage';
 
@@ -34,6 +36,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({ media, onClose }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const hlsRef = useRef<Hls | null>(null);
+  const mpegtsRef = useRef<any>(null);
 
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
@@ -103,17 +106,69 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({ media, onClose }) => {
     setIsLoading(true);
     setErrorMessage(null);
 
-    // Destroy existing HLS instance if any
+    // Destroy existing HLS / mpegts instances if any
     if (hlsRef.current) {
       hlsRef.current.destroy();
       hlsRef.current = null;
     }
+    if (mpegtsRef.current) {
+      mpegtsRef.current.destroy();
+      mpegtsRef.current = null;
+    }
 
-    const isHls =
-      liveFormat === 'm3u8' &&
-      (url.includes('.m3u8') || media.type === 'live' || media.containerExtension === 'm3u8');
+    const isLive = media.type === 'live';
 
-    if (isHls && Hls.isSupported()) {
+    if (isLive && liveFormat === 'ts' && mpegts.isSupported()) {
+      // Real-time MPEG-TS streaming via mpegts.js (MediaSource demuxer)
+      try {
+        const player = mpegts.createPlayer(
+          {
+            type: 'mpegts',
+            isLive: true,
+            url,
+          },
+          {
+            enableWorker: true,
+            lazyLoad: false,
+            liveBufferLatencyChasing: true,
+            liveBufferLatencyMaxLatency: 2.0,
+            liveBufferLatencyMinRemain: 0.3,
+            autoCleanupSourceBuffer: true,
+          }
+        );
+        mpegtsRef.current = player;
+        player.attachMediaElement(video);
+        player.load();
+
+        player.on(mpegts.Events.MEDIA_INFO, () => {
+          setIsLoading(false);
+          setIsPlaying(true);
+        });
+
+        player.on(mpegts.Events.ERROR, (errorType: string, errorDetail: string) => {
+          console.warn('mpegts error:', errorType, errorDetail);
+          // Try auto-fallback to HLS if TS encounters a stream issue
+          if (liveFormat === 'ts') {
+            console.log('Tentativo di fallback automatico su formato HLS (.m3u8)...');
+            setLiveFormat('m3u8');
+          } else {
+            setErrorMessage('Impossibile caricare il flusso live MPEG-TS.');
+            setIsLoading(false);
+          }
+        });
+
+        video
+          .play()
+          .then(() => {
+            setIsLoading(false);
+            setIsPlaying(true);
+          })
+          .catch(() => {});
+      } catch (err: any) {
+        console.warn('mpegts init failed, falling back:', err);
+        setLiveFormat('m3u8');
+      }
+    } else if (isLive && liveFormat === 'm3u8' && Hls.isSupported()) {
       const hls = new Hls({
         enableWorker: true,
         lowLatencyMode: true,
@@ -143,11 +198,9 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({ media, onClose }) => {
         if (data.fatal) {
           switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
-              // Try standard native fallback if Hls fails
               hls.destroy();
-              video.src = url;
-              video.load();
-              video.play().catch(() => {});
+              // Try TS format fallback
+              setLiveFormat('ts');
               break;
             case Hls.ErrorTypes.MEDIA_ERROR:
               hls.recoverMediaError();
@@ -155,7 +208,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({ media, onClose }) => {
             default:
               hls.destroy();
               setErrorMessage(
-                'Errore di caricamento del flusso live HLS. Prova a passare al formato TS o verifica la connessione.'
+                'Errore di caricamento HLS. Prova a passare al formato MPEG-TS (.ts) tramite il pulsante in alto.'
               );
               setIsLoading(false);
               break;
@@ -163,7 +216,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({ media, onClose }) => {
         }
       });
     } else {
-      // Standard video source (MP4, MKV, WebM, TS)
+      // Standard video source (MP4, MKV, WebM)
       video.src = url;
       video.load();
       video
@@ -182,6 +235,10 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({ media, onClose }) => {
       if (hlsRef.current) {
         hlsRef.current.destroy();
         hlsRef.current = null;
+      }
+      if (mpegtsRef.current) {
+        mpegtsRef.current.destroy();
+        mpegtsRef.current = null;
       }
     };
   }, [media, getEffectiveUrl, liveFormat]);
@@ -498,6 +555,41 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({ media, onClose }) => {
         </div>
 
         <div className="flex items-center gap-2">
+          {media.type !== 'live' && (
+            <button
+              onClick={() => {
+                const currentStreamUrl = getEffectiveUrl();
+                const cleanName = media.title.replace(/[/\\?%*:|"<>]/g, '_');
+                const ext = media.containerExtension || 'mp4';
+                const cleanUrl = currentStreamUrl.includes('&download=1')
+                  ? currentStreamUrl
+                  : `${currentStreamUrl}&download=1&filename=${encodeURIComponent(`${cleanName}.${ext}`)}`;
+
+                const a = document.createElement('a');
+                a.href = cleanUrl;
+                a.download = `${cleanName}.${ext}`;
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(() => document.body.removeChild(a), 1000);
+
+                storage.addDownload({
+                  id: `${media.type}_${media.id}_${Date.now()}`,
+                  title: media.title,
+                  type: media.type === 'movie' ? 'movie' : 'episode',
+                  streamUrl: cleanUrl.replace('&download=1', ''),
+                  downloadUrl: cleanUrl,
+                  poster: media.poster,
+                  containerExtension: ext,
+                  downloadedAt: Date.now(),
+                });
+              }}
+              title="Scarica questo video sul tuo computer/dispositivo"
+              className="p-2 text-zinc-300 hover:text-cyan-400 hover:bg-white/10 rounded-lg transition cursor-pointer"
+            >
+              <Download className="w-5 h-5" />
+            </button>
+          )}
+
           <button
             onClick={copyDirectStreamLink}
             title="Copia link stream per VLC o lettore esterno"

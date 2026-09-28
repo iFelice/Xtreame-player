@@ -135,27 +135,75 @@ function proxyStream(targetUrl: string, req: Request, res: Response, redirectCou
         else if (targetUrl.endsWith('.m3u8')) responseHeaders['Content-Type'] = 'application/vnd.apple.mpegurl';
       }
 
+      // Handle download request
+      if (req.query.download === '1' || req.query.download === 'true') {
+        const rawFilename =
+          typeof req.query.filename === 'string' && req.query.filename.trim()
+            ? req.query.filename.trim()
+            : 'video.mp4';
+        const cleanFilename = rawFilename.replace(/[/\\?%*:|"<>]/g, '_');
+        responseHeaders['Content-Disposition'] = `attachment; filename="${cleanFilename}"`;
+      }
+
       if (req.method === 'HEAD') {
         res.writeHead(proxyRes.statusCode || 200, responseHeaders);
         res.end();
         return;
       }
 
-      const isM3u8 =
-        targetUrl.toLowerCase().includes('.m3u8') ||
-        (proxyRes.headers['content-type'] &&
+      const declaredM3u8 = targetUrl.toLowerCase().includes('.m3u8');
+      const isMpegUrlHeader = Boolean(
+        proxyRes.headers['content-type'] &&
           (proxyRes.headers['content-type'].includes('mpegurl') ||
-            proxyRes.headers['content-type'].includes('application/x-mpegurl')));
+            proxyRes.headers['content-type'].includes('application/x-mpegurl'))
+      );
 
-      if (isM3u8) {
-        // Intercept M3U8 text and rewrite chunk paths so they proxy over HTTPS
+      const isExplicitBinary = Boolean(
+        targetUrl.toLowerCase().includes('.ts') ||
+          (proxyRes.headers['content-type'] &&
+            (proxyRes.headers['content-type'].includes('mp2t') ||
+              proxyRes.headers['content-type'].includes('octet-stream') ||
+              proxyRes.headers['content-type'].includes('video/mp2t')))
+      );
+
+      if ((declaredM3u8 || isMpegUrlHeader) && !isExplicitBinary) {
         let manifestData = '';
+        let headersSent = false;
         proxyRes.setEncoding('utf8');
+
+        // Safety timeout: if manifest doesn't finish within 2 seconds, it's not a text manifest, it's an active stream
+        const manifestTimeout = setTimeout(() => {
+          if (!headersSent && !res.headersSent) {
+            headersSent = true;
+            responseHeaders['Content-Type'] = 'video/mp2t';
+            res.writeHead(proxyRes.statusCode || 200, responseHeaders);
+            res.write(manifestData);
+            proxyRes.pipe(res);
+          }
+        }, 2000);
+
         proxyRes.on('data', (chunk) => {
+          if (headersSent) return;
           manifestData += chunk;
+
+          // If the first chunk does NOT contain #EXTM3U or exceeds 64KB, stream directly
+          if (
+            (!manifestData.includes('#EXTM3U') && manifestData.length > 500) ||
+            manifestData.length > 65536
+          ) {
+            clearTimeout(manifestTimeout);
+            headersSent = true;
+            responseHeaders['Content-Type'] = 'video/mp2t';
+            res.writeHead(proxyRes.statusCode || 200, responseHeaders);
+            res.write(manifestData);
+            proxyRes.pipe(res);
+          }
         });
+
         proxyRes.on('end', () => {
-          if (manifestData.includes('#EXTM3U') || targetUrl.toLowerCase().includes('.m3u8')) {
+          clearTimeout(manifestTimeout);
+          if (headersSent || res.headersSent) return;
+          if (manifestData.includes('#EXTM3U')) {
             const rewritten = rewriteM3u8(manifestData, targetUrl);
             responseHeaders['Content-Type'] = 'application/vnd.apple.mpegurl';
             responseHeaders['Content-Length'] = Buffer.byteLength(rewritten, 'utf8').toString();

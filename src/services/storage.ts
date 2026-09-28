@@ -19,10 +19,72 @@ export interface WatchHistoryItem {
   timestamp: number;
 }
 
+export interface DownloadItem {
+  id: string; // e.g. movie_123 or series_456_s1_e2
+  title: string;
+  type: 'movie' | 'episode' | 'series';
+  streamUrl: string;
+  downloadUrl: string;
+  poster?: string;
+  containerExtension?: string;
+  seriesName?: string;
+  seasonNum?: number;
+  episodeNum?: number;
+  downloadedAt: number;
+}
+
+export interface AppIconTheme {
+  id: string;
+  name: string;
+  colorName: string;
+  path: string;
+  previewGradient: string;
+}
+
+export const AVAILABLE_APP_ICONS: AppIconTheme[] = [
+  {
+    id: 'emerald',
+    name: 'Smeraldo Cyber',
+    colorName: 'Verde Neon',
+    path: '/favicon.svg',
+    previewGradient: 'from-emerald-500 to-teal-600',
+  },
+  {
+    id: 'purple',
+    name: 'Ametista Neon',
+    colorName: 'Viola Cyberpunk',
+    path: '/favicon-purple.svg',
+    previewGradient: 'from-purple-500 to-pink-600',
+  },
+  {
+    id: 'red',
+    name: 'Rubino Cinema',
+    colorName: 'Rosso Scarlatto',
+    path: '/favicon-red.svg',
+    previewGradient: 'from-rose-500 to-red-700',
+  },
+  {
+    id: 'blue',
+    name: 'Zaffiro Spaziale',
+    colorName: 'Blu Elettrico',
+    path: '/favicon-blue.svg',
+    previewGradient: 'from-blue-500 to-indigo-600',
+  },
+  {
+    id: 'gold',
+    name: 'Oro Deluxe',
+    colorName: 'Oro Lux',
+    path: '/favicon-gold.svg',
+    previewGradient: 'from-amber-400 to-yellow-600',
+  },
+];
+
 const ACCOUNTS_KEY = 'xtream_saved_accounts';
 const FAVORITES_KEY = 'xtream_favorites';
 const HISTORY_KEY = 'xtream_watch_history';
 const LAST_ACCOUNT_KEY = 'xtream_last_account';
+const DOWNLOADS_KEY = 'xtream_downloads';
+const APP_ICON_KEY = 'xtream_app_icon';
 
 export const storage = {
   getAccounts(): SavedAccount[] {
@@ -130,5 +192,58 @@ export const storage = {
 
   clearHistory(): void {
     localStorage.removeItem(HISTORY_KEY);
+  },
+
+  getDownloads(): DownloadItem[] {
+    try {
+      const data = localStorage.getItem(DOWNLOADS_KEY);
+      return data ? JSON.parse(data) : [];
+    } catch {
+      return [];
+    }
+  },
+
+  addDownload(item: DownloadItem): void {
+    try {
+      const list = this.getDownloads().filter((d) => d.id !== item.id);
+      list.unshift(item);
+      localStorage.setItem(DOWNLOADS_KEY, JSON.stringify(list.slice(0, 200)));
+    } catch (e) {
+      console.error('Failed to add download record:', e);
+    }
+  },
+
+  removeDownload(id: string): void {
+    try {
+      const list = this.getDownloads().filter((d) => d.id !== id);
+      localStorage.setItem(DOWNLOADS_KEY, JSON.stringify(list));
+    } catch (e) {
+      console.error('Failed to remove download:', e);
+    }
+  },
+
+  clearDownloads(): void {
+    localStorage.removeItem(DOWNLOADS_KEY);
+  },
+
+  getAppIcon(): string {
+    try {
+      return localStorage.getItem(APP_ICON_KEY) || '/favicon.svg';
+    } catch {
+      return '/favicon.svg';
+    }
+  },
+
+  setAppIcon(iconPath: string): void {
+    try {
+      localStorage.setItem(APP_ICON_KEY, iconPath);
+      // Update link[rel="icon"] dynamically
+      const link = document.querySelector("link[rel='icon']") as HTMLLinkElement | null;
+      if (link) link.href = iconPath;
+      const appleLink = document.querySelector("link[rel='apple-touch-icon']") as HTMLLinkElement | null;
+      if (appleLink) appleLink.href = iconPath;
+    } catch (e) {
+      console.error('Failed to set app icon:', e);
+    }
   },
 };

@@ -12,6 +12,8 @@ import {
   Shield,
   Layers,
   Sparkles,
+  RefreshCw,
+  Download,
 } from 'lucide-react';
 import { XtreamAuthResponse } from '../types/xtream';
 import { SavedAccount, storage } from '../services/storage';
@@ -25,6 +27,9 @@ interface NavbarProps {
   onOpenServerInfo: () => void;
   onOpenPrivacy: () => void;
   onDisconnect: () => void;
+  onRefreshCatalog?: () => void;
+  isRefreshing?: boolean;
+  onInstallApp?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -35,19 +40,31 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenServerInfo,
   onOpenPrivacy,
   onDisconnect,
+  onRefreshCatalog,
+  isRefreshing = false,
+  onInstallApp,
 }) => {
   const [showAccountDropdown, setShowAccountDropdown] = useState<boolean>(false);
   const savedAccounts = storage.getAccounts();
+  const currentAppIcon = storage.getAppIcon();
 
   const isConnected = Boolean(serverUrl && username);
 
   return (
     <header className="sticky top-0 z-40 w-full bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800/80">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
-        {/* Brand */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
+        {/* Brand with Dynamic Icon */}
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center shadow-lg shadow-emerald-950/50">
-            <Tv className="w-5 h-5 text-white" />
+          <div
+            onClick={onInstallApp}
+            className="w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-700/80 p-1 flex items-center justify-center shadow-lg shadow-emerald-950/30 cursor-pointer hover:border-emerald-500 transition group"
+            title="Clicca per personalizzare l'icona o installare l'app"
+          >
+            <img
+              src={currentAppIcon}
+              alt="Xtream Player Icon"
+              className="w-full h-full object-contain group-hover:scale-105 transition-transform"
+            />
           </div>
           <div>
             <div className="flex items-center gap-2">
@@ -55,7 +72,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 Xtream <span className="text-emerald-400">StreamPlayer</span>
               </h1>
               <span className="hidden sm:inline-block px-1.5 py-0.5 rounded bg-zinc-800 text-[10px] text-zinc-400 font-mono">
-                v2.0
+                v2.1
               </span>
             </div>
             <p className="text-[11px] text-zinc-400 hidden sm:block">
@@ -65,7 +82,19 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
         {/* Server & Connection Status / Controls */}
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2">
+          {/* Install as Desktop/Mobile App Button */}
+          {onInstallApp && (
+            <button
+              onClick={onInstallApp}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs text-zinc-300 hover:text-emerald-400 transition cursor-pointer"
+              title="Salva come icona/app su Desktop o Telefono"
+            >
+              <Download className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="hidden sm:inline font-medium">Installa App</span>
+            </button>
+          )}
+
           {/* Privacy & Render Deploy Button */}
           <button
             onClick={onOpenPrivacy}
@@ -125,6 +154,21 @@ export const Navbar: React.FC<NavbarProps> = ({
                   </div>
                 )}
               </div>
+
+              {/* Refresh Catalog Button */}
+              {onRefreshCatalog && (
+                <button
+                  onClick={onRefreshCatalog}
+                  disabled={isRefreshing}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-700/70 text-xs text-emerald-300 hover:text-emerald-200 transition cursor-pointer disabled:opacity-50 shadow-xs"
+                  title="Aggiorna e risincronizza catalogo dal server Xtream"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 text-emerald-400 ${isRefreshing ? 'animate-spin' : ''}`} />
+                  <span className="font-semibold hidden sm:inline">
+                    {isRefreshing ? 'Aggiornamento...' : 'Aggiorna'}
+                  </span>
+                </button>
+              )}
 
               {/* Server Info Button */}
               {authData && (
