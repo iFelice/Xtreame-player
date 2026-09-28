@@ -14,6 +14,7 @@ import {
   Sparkles,
   RefreshCw,
   Download,
+  Link2,
 } from 'lucide-react';
 import { XtreamAuthResponse } from '../types/xtream';
 import { SavedAccount, storage } from '../services/storage';
@@ -27,8 +28,7 @@ interface NavbarProps {
   onOpenServerInfo: () => void;
   onOpenPrivacy: () => void;
   onDisconnect: () => void;
-  onRefreshCatalog?: () => void;
-  isRefreshing?: boolean;
+  onOpenPasteLink?: () => void;
   onInstallApp?: () => void;
 }
 
@@ -40,8 +40,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenServerInfo,
   onOpenPrivacy,
   onDisconnect,
-  onRefreshCatalog,
-  isRefreshing = false,
+  onOpenPasteLink,
   onInstallApp,
 }) => {
   const [showAccountDropdown, setShowAccountDropdown] = useState<boolean>(false);
@@ -155,18 +154,15 @@ export const Navbar: React.FC<NavbarProps> = ({
                 )}
               </div>
 
-              {/* Refresh Catalog Button */}
-              {onRefreshCatalog && (
+              {/* Incolla Link Button in head */}
+              {onOpenPasteLink && (
                 <button
-                  onClick={onRefreshCatalog}
-                  disabled={isRefreshing}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-700/70 text-xs text-emerald-300 hover:text-emerald-200 transition cursor-pointer disabled:opacity-50 shadow-xs"
-                  title="Aggiorna e risincronizza catalogo dal server Xtream"
+                  onClick={onOpenPasteLink}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-semibold shadow-md shadow-emerald-950/40 transition cursor-pointer"
+                  title="Incolla un link streaming o connetti un nuovo server"
                 >
-                  <RefreshCw className={`w-3.5 h-3.5 text-emerald-400 ${isRefreshing ? 'animate-spin' : ''}`} />
-                  <span className="font-semibold hidden sm:inline">
-                    {isRefreshing ? 'Aggiornamento...' : 'Aggiorna'}
-                  </span>
+                  <Link2 className="w-3.5 h-3.5 text-emerald-100" />
+                  <span className="font-semibold">Incolla Link</span>
                 </button>
               )}
 

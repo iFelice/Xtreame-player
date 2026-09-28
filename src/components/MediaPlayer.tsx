@@ -130,10 +130,14 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({ media, onClose }) => {
           {
             enableWorker: true,
             lazyLoad: false,
-            liveBufferLatencyChasing: true,
-            liveBufferLatencyMaxLatency: 2.0,
-            liveBufferLatencyMinRemain: 0.3,
+            liveBufferLatencyChasing: false, // Prevents aggressive buffer trimming that causes stuttering/drops
+            liveBufferLatencyMaxLatency: 8.0,
+            liveBufferLatencyMinRemain: 1.0,
             autoCleanupSourceBuffer: true,
+            autoCleanupMaxBackwardDuration: 30,
+            autoCleanupMinBackwardDuration: 15,
+            fixAudioTimestampGap: true,
+            accurateSeek: false,
           }
         );
         mpegtsRef.current = player;
@@ -145,13 +149,16 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({ media, onClose }) => {
           setIsPlaying(true);
         });
 
-        player.on(mpegts.Events.ERROR, (errorType: string, errorDetail: string) => {
-          console.warn('mpegts error:', errorType, errorDetail);
-          // Try auto-fallback to HLS if TS encounters a stream issue
-          if (liveFormat === 'ts') {
-            console.log('Tentativo di fallback automatico su formato HLS (.m3u8)...');
-            setLiveFormat('m3u8');
-          } else {
+        player.on(mpegts.Events.ERROR, (errorType: string, errorDetail: string, info: any) => {
+          console.warn('mpegts event warning/error:', errorType, errorDetail, info);
+
+          // If video is already actively playing or has buffered content, ignore non-fatal events
+          if (video && (video.currentTime > 1 || video.readyState >= 2)) {
+            return;
+          }
+
+          // If stream never started at all, inform user
+          if (!video || video.currentTime === 0) {
             setErrorMessage('Impossibile caricare il flusso live MPEG-TS.');
             setIsLoading(false);
           }
@@ -426,6 +433,11 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({ media, onClose }) => {
         onWaiting={() => setIsLoading(true)}
         onPlaying={() => setIsLoading(false)}
         onError={() => {
+          // If video is actually already playing or has loaded frames, do not trigger error overlay
+          if (videoRef.current && (videoRef.current.currentTime > 1 || videoRef.current.readyState >= 3 || videoRef.current.videoWidth > 0)) {
+            console.warn('HTML5 video onError ignored because video is actively playing');
+            return;
+          }
           setIsLoading(false);
           setErrorMessage(
             'Errore di caricamento del flusso video. Verifica se il server è attivo o prova a disattivare/attivare il proxy.'
@@ -451,8 +463,8 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({ media, onClose }) => {
         </div>
       )}
 
-      {/* Error Overlay */}
-      {errorMessage && (
+      {/* Error Overlay - only show if video is not actively rendering/playing */}
+      {errorMessage && (!videoRef.current || videoRef.current.paused || videoRef.current.currentTime === 0) && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-950/90 p-6 text-center z-30">
           <AlertCircle className="w-12 h-12 text-rose-500 mb-3 animate-pulse" />
           <h3 className="text-lg font-semibold text-white mb-2">Impossibile riprodurre lo stream</h3>

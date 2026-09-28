@@ -26,6 +26,7 @@ import { PrivacyDeployModal } from './components/PrivacyDeployModal';
 import { RecentProductsShelf } from './components/RecentProductsShelf';
 import { InstallAppModal } from './components/InstallAppModal';
 import { DownloadsView } from './components/DownloadsView';
+import { PasteLinkModal } from './components/PasteLinkModal';
 
 import {
   XtreamParsedUrl,
@@ -59,6 +60,7 @@ export default function App() {
   const [showServerInfo, setShowServerInfo] = useState<boolean>(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState<boolean>(false);
   const [showInstallAppModal, setShowInstallAppModal] = useState<boolean>(false);
+  const [showPasteLinkModal, setShowPasteLinkModal] = useState<boolean>(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
   // Catalog data
@@ -265,8 +267,7 @@ export default function App() {
         onOpenServerInfo={() => setShowServerInfo(true)}
         onOpenPrivacy={() => setShowPrivacyModal(true)}
         onDisconnect={handleDisconnect}
-        onRefreshCatalog={handleRefreshCatalog}
-        isRefreshing={isRefreshingCatalog}
+        onOpenPasteLink={() => setShowPasteLinkModal(true)}
         onInstallApp={() => setShowInstallAppModal(true)}
       />
 
@@ -294,15 +295,17 @@ export default function App() {
           </section>
         )}
 
-        {/* Input Bar (Always accessible to paste new links or change stream) */}
-        <section>
-          <UrlInputBar
-            onPlayDirect={handlePlayDirect}
-            onConnectCatalog={handleConnectCatalog}
-            currentConnectedServer={serverUrl}
-            isLoading={isLoadingCatalog}
-          />
-        </section>
+        {/* Input Bar (Shown when not connected, or accessible anytime from 'Incolla Link' in the head) */}
+        {!isConnected && (
+          <section>
+            <UrlInputBar
+              onPlayDirect={handlePlayDirect}
+              onConnectCatalog={handleConnectCatalog}
+              currentConnectedServer={serverUrl}
+              isLoading={isLoadingCatalog}
+            />
+          </section>
+        )}
 
         {/* Error Notification Banner */}
         {errorMessage && (
@@ -659,6 +662,17 @@ export default function App() {
               deferredPrompt.prompt();
             }
           }}
+        />
+      )}
+
+      {/* Paste Link Modal */}
+      {showPasteLinkModal && (
+        <PasteLinkModal
+          onClose={() => setShowPasteLinkModal(false)}
+          onPlayDirect={handlePlayDirect}
+          onConnectCatalog={handleConnectCatalog}
+          currentConnectedServer={serverUrl}
+          isLoading={isLoadingCatalog}
         />
       )}
 

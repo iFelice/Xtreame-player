@@ -96,9 +96,23 @@ function proxyStream(targetUrl: string, req: Request, res: Response, redirectCou
     {
       method: req.method === 'HEAD' ? 'HEAD' : 'GET',
       headers,
-      timeout: 30000,
+      timeout: 15000, // Initial connect timeout only
     },
     (proxyRes) => {
+      // Clear timeout immediately upon response arrival so continuous live streams never get killed
+      proxyReq.setTimeout(0);
+      if (proxyRes.socket) {
+        proxyRes.socket.setTimeout(0);
+        proxyRes.socket.setKeepAlive(true, 10000);
+      }
+      if (req.socket) {
+        req.socket.setTimeout(0);
+        req.socket.setKeepAlive(true, 10000);
+      }
+      if (res.socket) {
+        res.socket.setTimeout(0);
+      }
+
       // Handle redirects (301, 302, 303, 307, 308)
       if (
         proxyRes.statusCode &&
@@ -231,8 +245,8 @@ function proxyStream(targetUrl: string, req: Request, res: Response, redirectCou
   );
 
   proxyReq.on('timeout', () => {
-    proxyReq.destroy();
     if (!res.headersSent) {
+      proxyReq.destroy();
       res.status(504).send('Stream gateway timeout');
     }
   });
