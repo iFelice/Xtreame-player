@@ -11,11 +11,13 @@ import {
   Sparkles,
   X,
   ExternalLink,
+  ArrowDownUp,
 } from 'lucide-react';
 import { XtreamCategory, XtreamVodStream, XtreamVodDetails, PlayableMediaItem } from '../types/xtream';
 import { buildStreamUrl, formatDuration } from '../utils/parseXtreamUrl';
 import { xtreamClient } from '../services/xtreamClient';
 import { storage } from '../services/storage';
+import { sortVodStreams } from '../utils/recentSorting';
 
 interface VodCatalogProps {
   categories: XtreamCategory[];
@@ -38,6 +40,7 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [sortBy, setSortBy] = useState<'recent' | 'rating' | 'name' | 'id'>('recent');
   const [activeMovieDetail, setActiveMovieDetail] = useState<{
     stream: XtreamVodStream;
     details: XtreamVodDetails | null;
@@ -54,9 +57,9 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
     return counts;
   }, [streams]);
 
-  // Filtered streams
+  // Filtered and sorted streams
   const filteredStreams = useMemo(() => {
-    return streams.filter((stream) => {
+    const matched = streams.filter((stream) => {
       const matchesCategory =
         selectedCategory === 'all' || String(stream.category_id) === String(selectedCategory);
       const matchesSearch =
@@ -64,7 +67,9 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
         stream.name.toLowerCase().includes(searchQuery.toLowerCase());
       return matchesCategory && matchesSearch;
     });
-  }, [streams, selectedCategory, searchQuery]);
+
+    return sortVodStreams(matched, sortBy);
+  }, [streams, selectedCategory, searchQuery, sortBy]);
 
   const handleOpenDetails = async (stream: XtreamVodStream) => {
     setActiveMovieDetail({ stream, details: null, isLoading: true });
@@ -129,22 +134,41 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
           )}
         </div>
 
-        {/* Category Select Dropdown */}
-        <div className="flex items-center gap-2">
-          <Layers className="w-4 h-4 text-emerald-400 shrink-0" />
-          <select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            aria-label="Filtra per categoria film"
-            className="bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-sm text-zinc-200 focus:outline-hidden focus:border-emerald-500 max-w-xs"
-          >
-            <option value="all">Tutte le Categorie ({streams.length})</option>
-            {categories.map((cat) => (
-              <option key={cat.category_id} value={cat.category_id}>
-                {cat.category_name} ({categoryCounts[cat.category_id] || 0})
-              </option>
-            ))}
-          </select>
+        {/* Category & Sorting Selectors */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Sorting Dropdown */}
+          <div className="flex items-center gap-1.5">
+            <ArrowDownUp className="w-4 h-4 text-emerald-400 shrink-0" />
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as any)}
+              aria-label="Ordina film"
+              className="bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-xs sm:text-sm text-zinc-200 focus:outline-hidden focus:border-emerald-500"
+            >
+              <option value="recent">🕒 Più Recenti (Novità)</option>
+              <option value="rating">⭐ Valutazione Migliore</option>
+              <option value="name">🔤 Titolo (A-Z)</option>
+              <option value="id">🔢 ID Decrescente</option>
+            </select>
+          </div>
+
+          {/* Category Select Dropdown */}
+          <div className="flex items-center gap-1.5">
+            <Layers className="w-4 h-4 text-zinc-400 shrink-0" />
+            <select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              aria-label="Filtra per categoria film"
+              className="bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-xs sm:text-sm text-zinc-200 focus:outline-hidden focus:border-emerald-500 max-w-xs"
+            >
+              <option value="all">Tutte le Categorie ({streams.length})</option>
+              {categories.map((cat) => (
+                <option key={cat.category_id} value={cat.category_id}>
+                  {cat.category_name} ({categoryCounts[cat.category_id] || 0})
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 

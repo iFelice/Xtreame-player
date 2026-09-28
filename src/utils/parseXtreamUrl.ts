@@ -157,7 +157,7 @@ export function buildStreamUrl(
   } else if (type === 'series') {
     streamPath = `${cleanServer}/series/${encodeURIComponent(username)}/${encodeURIComponent(password)}/${streamId}.${containerExtension || 'mp4'}`;
   } else if (type === 'live') {
-    streamPath = `${cleanServer}/live/${encodeURIComponent(username)}/${encodeURIComponent(password)}/${streamId}.${containerExtension || 'ts'}`;
+    streamPath = `${cleanServer}/live/${encodeURIComponent(username)}/${encodeURIComponent(password)}/${streamId}.${containerExtension || 'm3u8'}`;
   }
 
   if (useProxy) {

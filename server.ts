@@ -27,6 +27,43 @@ app.use((req, res, next) => {
 
 const DEFAULT_USER_AGENT = 'IPTVSmartersPro/3.1.5.1 (Linux; Android 11; Smart TV)';
 
+// Helper function to rewrite M3U8 manifests for HLS playback through proxy
+function rewriteM3u8(content: string, baseUrl: string): string {
+  const lines = content.split(/\r?\n/);
+  const rewrittenLines: string[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      rewrittenLines.push(line);
+      continue;
+    }
+
+    if (trimmed.startsWith('#')) {
+      // Check for URI in tags like #EXT-X-KEY:METHOD=...,URI="..." or #EXT-X-MAP:URI="..."
+      const modifiedTag = line.replace(/URI=["']([^"']+)["']/g, (match, uri) => {
+        try {
+          const resolved = new URL(uri, baseUrl).toString();
+          return `URI="/api/proxy/stream?url=${encodeURIComponent(resolved)}"`;
+        } catch {
+          return match;
+        }
+      });
+      rewrittenLines.push(modifiedTag);
+    } else {
+      // Segment or child playlist URL
+      try {
+        const resolved = new URL(trimmed, baseUrl).toString();
+        rewrittenLines.push(`/api/proxy/stream?url=${encodeURIComponent(resolved)}`);
+      } catch {
+        rewrittenLines.push(trimmed);
+      }
+    }
+  }
+
+  return rewrittenLines.join('\n');
+}
+
 // Helper to make HTTP/HTTPS request following redirects
 function proxyStream(targetUrl: string, req: Request, res: Response, redirectCount = 0) {
   if (redirectCount > 5) {
@@ -62,7 +99,7 @@ function proxyStream(targetUrl: string, req: Request, res: Response, redirectCou
       timeout: 30000,
     },
     (proxyRes) => {
-      // Handle redirects (301, 302, 307, 308)
+      // Handle redirects (301, 302, 303, 307, 308)
       if (
         proxyRes.statusCode &&
         [301, 302, 303, 307, 308].includes(proxyRes.statusCode) &&
@@ -98,19 +135,50 @@ function proxyStream(targetUrl: string, req: Request, res: Response, redirectCou
         else if (targetUrl.endsWith('.m3u8')) responseHeaders['Content-Type'] = 'application/vnd.apple.mpegurl';
       }
 
-      res.writeHead(proxyRes.statusCode || 200, responseHeaders);
-
       if (req.method === 'HEAD') {
+        res.writeHead(proxyRes.statusCode || 200, responseHeaders);
         res.end();
         return;
       }
 
-      proxyRes.pipe(res);
+      const isM3u8 =
+        targetUrl.toLowerCase().includes('.m3u8') ||
+        (proxyRes.headers['content-type'] &&
+          (proxyRes.headers['content-type'].includes('mpegurl') ||
+            proxyRes.headers['content-type'].includes('application/x-mpegurl')));
 
-      req.on('close', () => {
-        proxyReq.destroy();
-        proxyRes.destroy();
-      });
+      if (isM3u8) {
+        // Intercept M3U8 text and rewrite chunk paths so they proxy over HTTPS
+        let manifestData = '';
+        proxyRes.setEncoding('utf8');
+        proxyRes.on('data', (chunk) => {
+          manifestData += chunk;
+        });
+        proxyRes.on('end', () => {
+          if (manifestData.includes('#EXTM3U') || targetUrl.toLowerCase().includes('.m3u8')) {
+            const rewritten = rewriteM3u8(manifestData, targetUrl);
+            responseHeaders['Content-Type'] = 'application/vnd.apple.mpegurl';
+            responseHeaders['Content-Length'] = Buffer.byteLength(rewritten, 'utf8').toString();
+            responseHeaders['Cache-Control'] = 'no-cache, no-store, must-revalidate';
+            delete responseHeaders['Content-Range'];
+            res.writeHead(proxyRes.statusCode || 200, responseHeaders);
+            res.end(rewritten);
+          } else {
+            responseHeaders['Content-Length'] = Buffer.byteLength(manifestData, 'utf8').toString();
+            res.writeHead(proxyRes.statusCode || 200, responseHeaders);
+            res.end(manifestData);
+          }
+        });
+      } else {
+        // Binary media stream (TS, MP4, MKV)
+        res.writeHead(proxyRes.statusCode || 200, responseHeaders);
+        proxyRes.pipe(res);
+
+        req.on('close', () => {
+          proxyReq.destroy();
+          proxyRes.destroy();
+        });
+      }
     }
   );
 

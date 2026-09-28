@@ -22,6 +22,7 @@ import { SeriesCatalog } from './components/SeriesCatalog';
 import { FavoritesView } from './components/FavoritesView';
 import { ServerInfoModal } from './components/ServerInfoModal';
 import { PrivacyDeployModal } from './components/PrivacyDeployModal';
+import { RecentProductsShelf } from './components/RecentProductsShelf';
 
 import {
   XtreamParsedUrl,
@@ -42,8 +43,9 @@ export default function App() {
   const [password, setPassword] = useState<string>('');
   const [authData, setAuthData] = useState<XtreamAuthResponse | null>(null);
 
-  const [activeTab, setActiveTab] = useState<'movies' | 'live' | 'series' | 'favorites'>('movies');
+  const [activeTab, setActiveTab] = useState<'recent' | 'movies' | 'live' | 'series' | 'favorites'>('recent');
   const [activeMedia, setActiveMedia] = useState<PlayableMediaItem | null>(null);
+  const [selectedSeriesForModal, setSelectedSeriesForModal] = useState<string | number | null>(null);
 
   const [isLoadingCatalog, setIsLoadingCatalog] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -128,12 +130,10 @@ export default function App() {
         setSeriesList(fetchedSeries);
 
         // Default to active tab based on what content is available
-        if (fetchedVodStreams.length > 0) {
-          setActiveTab('movies');
+        if (fetchedVodStreams.length > 0 || fetchedSeries.length > 0) {
+          setActiveTab('recent');
         } else if (fetchedLiveStreams.length > 0) {
           setActiveTab('live');
-        } else if (fetchedSeries.length > 0) {
-          setActiveTab('series');
         }
       } catch (err: any) {
         console.error('Connection error:', err);
@@ -236,7 +236,19 @@ export default function App() {
         {/* Connected Catalog Navigation Tabs */}
         {isConnected && !isLoadingCatalog && (
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 pb-3">
-            <div className="flex items-center gap-1.5 sm:gap-2">
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+              <button
+                onClick={() => setActiveTab('recent')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition cursor-pointer ${
+                  activeTab === 'recent'
+                    ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-950/40'
+                    : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
+                }`}
+              >
+                <Sparkles className="w-4 h-4 text-amber-200" />
+                Novità & Recenti
+              </button>
+
               <button
                 onClick={() => setActiveTab('movies')}
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition cursor-pointer ${
@@ -286,12 +298,12 @@ export default function App() {
                 onClick={() => setActiveTab('favorites')}
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition cursor-pointer ${
                   activeTab === 'favorites'
-                    ? 'bg-amber-600 text-white shadow-lg shadow-amber-950/40'
+                    ? 'bg-zinc-800 text-white border border-zinc-700 shadow-md'
                     : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
                 }`}
               >
-                <Star className="w-4 h-4" />
-                Preferiti & Recenti
+                <Star className="w-4 h-4 text-amber-400" />
+                Preferiti
               </button>
             </div>
 
@@ -317,6 +329,22 @@ export default function App() {
           </div>
         ) : isConnected ? (
           <div className="mt-4">
+            {activeTab === 'recent' && (
+              <RecentProductsShelf
+                vodStreams={vodStreams}
+                seriesList={seriesList}
+                serverUrl={serverUrl}
+                username={username}
+                password={password}
+                onPlay={handlePlayDirect}
+                onOpenSeries={(series) => {
+                  setSelectedSeriesForModal(series.series_id);
+                  setActiveTab('series');
+                }}
+                onNavigateToTab={(tab) => setActiveTab(tab)}
+              />
+            )}
+
             {activeTab === 'movies' && (
               <VodCatalog
                 categories={vodCategories}
@@ -350,6 +378,8 @@ export default function App() {
                 password={password}
                 onPlay={handlePlayDirect}
                 isLoading={isLoadingCatalog}
+                selectedSeriesId={selectedSeriesForModal}
+                onClearSelectedSeries={() => setSelectedSeriesForModal(null)}
               />
             )}
 

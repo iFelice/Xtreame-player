@@ -49,27 +49,38 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({ media, onClose }) => {
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
   const [controlsVisible, setControlsVisible] = useState<boolean>(true);
   const [useProxy, setUseProxy] = useState<boolean>(true);
+  const [liveFormat, setLiveFormat] = useState<'m3u8' | 'ts'>('m3u8');
   const hideControlsTimerRef = useRef<any>(null);
 
   // Derive source URL: either through backend proxy or direct
   const getEffectiveUrl = useCallback(() => {
     if (!media) return '';
-    if (useProxy) {
-      // If it already starts with /api/proxy/stream, return as is
-      if (media.streamUrl.startsWith('/api/proxy/stream')) {
-        return media.streamUrl;
+    let target = media.streamUrl;
+
+    // Handle live stream format conversion (m3u8 vs ts)
+    if (media.type === 'live') {
+      if (liveFormat === 'm3u8') {
+        target = target.replace(/\.ts(\?|$)/i, '.m3u8$1');
+      } else {
+        target = target.replace(/\.m3u8(\?|$)/i, '.ts$1');
       }
-      return `/api/proxy/stream?url=${encodeURIComponent(media.streamUrl)}`;
     }
-    // Direct URL (extract from proxy if needed)
-    if (media.streamUrl.startsWith('/api/proxy/stream?url=')) {
-      const match = media.streamUrl.match(/url=([^&]+)/);
+
+    if (useProxy) {
+      if (target.startsWith('/api/proxy/stream')) {
+        return target;
+      }
+      return `/api/proxy/stream?url=${encodeURIComponent(target)}`;
+    }
+
+    if (target.startsWith('/api/proxy/stream?url=')) {
+      const match = target.match(/url=([^&]+)/);
       if (match && match[1]) {
         return decodeURIComponent(match[1]);
       }
     }
-    return media.streamUrl;
-  }, [media, useProxy]);
+    return target;
+  }, [media, useProxy, liveFormat]);
 
   // Activity timer to hide controls during playback
   const showControlsTemporarily = useCallback(() => {
@@ -98,17 +109,20 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({ media, onClose }) => {
       hlsRef.current = null;
     }
 
-    const isHlsStream =
-      url.includes('.m3u8') ||
-      url.includes('type=m3u') ||
-      media.containerExtension === 'm3u8' ||
-      media.type === 'live';
+    const isHls =
+      liveFormat === 'm3u8' &&
+      (url.includes('.m3u8') || media.type === 'live' || media.containerExtension === 'm3u8');
 
-    if (isHlsStream && Hls.isSupported()) {
+    if (isHls && Hls.isSupported()) {
       const hls = new Hls({
         enableWorker: true,
         lowLatencyMode: true,
-        backBufferLength: 90,
+        backBufferLength: 60,
+        maxBufferLength: 30,
+        liveSyncDurationCount: 3,
+        liveMaxLatencyDurationCount: 10,
+        fragLoadingTimeOut: 25000,
+        manifestLoadingTimeOut: 25000,
       });
       hlsRef.current = hls;
 
@@ -120,13 +134,19 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({ media, onClose }) => {
         video.play().catch(() => setIsPlaying(false));
       });
 
+      hls.on(Hls.Events.FRAG_LOADED, () => {
+        setIsLoading(false);
+      });
+
       hls.on(Hls.Events.ERROR, (_event, data) => {
+        console.warn('HLS Event Error:', data);
         if (data.fatal) {
           switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
               // Try standard native fallback if Hls fails
               hls.destroy();
               video.src = url;
+              video.load();
               video.play().catch(() => {});
               break;
             case Hls.ErrorTypes.MEDIA_ERROR:
@@ -134,7 +154,9 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({ media, onClose }) => {
               break;
             default:
               hls.destroy();
-              setErrorMessage('Impossibile riprodurre lo stream live HLS.');
+              setErrorMessage(
+                'Errore di caricamento del flusso live HLS. Prova a passare al formato TS o verifica la connessione.'
+              );
               setIsLoading(false);
               break;
           }
@@ -162,7 +184,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({ media, onClose }) => {
         hlsRef.current = null;
       }
     };
-  }, [media, getEffectiveUrl]);
+  }, [media, getEffectiveUrl, liveFormat]);
 
   // Video event handlers
   const handleTimeUpdate = () => {
@@ -395,6 +417,15 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({ media, onClose }) => {
               Riprova
             </button>
 
+            {media.type === 'live' && (
+              <button
+                onClick={() => setLiveFormat(liveFormat === 'm3u8' ? 'ts' : 'm3u8')}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-sm font-medium flex items-center gap-2 transition"
+              >
+                Passa a formato {liveFormat === 'm3u8' ? 'MPEG-TS (.ts)' : 'HLS (.m3u8)'}
+              </button>
+            )}
+
             <button
               onClick={() => setUseProxy(!useProxy)}
               className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-sm font-medium flex items-center gap-2 border border-zinc-700 transition"
@@ -439,10 +470,19 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({ media, onClose }) => {
                 </span>
               )}
               {media.type === 'live' && (
-                <span className="flex items-center gap-1 text-rose-400 font-semibold text-[11px]">
-                  <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span>
-                  LIVE
-                </span>
+                <>
+                  <span className="flex items-center gap-1 text-rose-400 font-semibold text-[11px]">
+                    <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span>
+                    LIVE
+                  </span>
+                  <button
+                    onClick={() => setLiveFormat(liveFormat === 'm3u8' ? 'ts' : 'm3u8')}
+                    className="px-1.5 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[10px] font-mono border border-zinc-700 transition"
+                    title="Clicca per alternare tra HLS (.m3u8) e MPEG-TS (.ts)"
+                  >
+                    Formato: {liveFormat.toUpperCase()}
+                  </button>
+                </>
               )}
               {useProxy ? (
                 <span className="text-emerald-400 text-[10px] bg-emerald-950/70 border border-emerald-800/60 px-1.5 py-0.5 rounded">

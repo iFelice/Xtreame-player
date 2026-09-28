@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Search,
   Tv,
@@ -11,6 +11,7 @@ import {
   Calendar,
   ChevronRight,
   Film,
+  ArrowDownUp,
 } from 'lucide-react';
 import {
   XtreamCategory,
@@ -22,6 +23,7 @@ import {
 import { buildStreamUrl, formatDuration } from '../utils/parseXtreamUrl';
 import { xtreamClient } from '../services/xtreamClient';
 import { storage } from '../services/storage';
+import { sortSeriesList } from '../utils/recentSorting';
 
 interface SeriesCatalogProps {
   categories: XtreamCategory[];
@@ -31,6 +33,8 @@ interface SeriesCatalogProps {
   password: string;
   onPlay: (item: PlayableMediaItem) => void;
   isLoading?: boolean;
+  selectedSeriesId?: string | number | null;
+  onClearSelectedSeries?: () => void;
 }
 
 export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
@@ -41,9 +45,12 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
   password,
   onPlay,
   isLoading = false,
+  selectedSeriesId,
+  onClearSelectedSeries,
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [sortBy, setSortBy] = useState<'recent' | 'rating' | 'name' | 'id'>('recent');
   const [activeSeriesDetail, setActiveSeriesDetail] = useState<{
     series: XtreamSeries;
     info: XtreamSeriesInfo | null;
@@ -62,7 +69,7 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
   }, [seriesList]);
 
   const filteredSeries = useMemo(() => {
-    return seriesList.filter((item) => {
+    const matched = seriesList.filter((item) => {
       const matchesCategory =
         selectedCategory === 'all' || String(item.category_id) === String(selectedCategory);
       const matchesSearch =
@@ -70,7 +77,18 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
         item.name.toLowerCase().includes(searchQuery.toLowerCase());
       return matchesCategory && matchesSearch;
     });
-  }, [seriesList, selectedCategory, searchQuery]);
+
+    return sortSeriesList(matched, sortBy);
+  }, [seriesList, selectedCategory, searchQuery, sortBy]);
+
+  useEffect(() => {
+    if (selectedSeriesId && seriesList.length > 0) {
+      const found = seriesList.find((s) => String(s.series_id) === String(selectedSeriesId));
+      if (found) {
+        handleOpenSeries(found);
+      }
+    }
+  }, [selectedSeriesId, seriesList]);
 
   const handleOpenSeries = async (series: XtreamSeries) => {
     setActiveSeriesDetail({
@@ -150,21 +168,41 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
           )}
         </div>
 
-        <div className="flex items-center gap-2">
-          <Layers className="w-4 h-4 text-blue-400 shrink-0" />
-          <select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            aria-label="Filtra per categoria serie TV"
-            className="bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-sm text-zinc-200 focus:outline-hidden focus:border-blue-500 max-w-xs"
-          >
-            <option value="all">Tutte le Serie ({seriesList.length})</option>
-            {categories.map((cat) => (
-              <option key={cat.category_id} value={cat.category_id}>
-                {cat.category_name} ({categoryCounts[cat.category_id] || 0})
-              </option>
-            ))}
-          </select>
+        {/* Category & Sorting Selectors */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Sorting Dropdown */}
+          <div className="flex items-center gap-1.5">
+            <ArrowDownUp className="w-4 h-4 text-blue-400 shrink-0" />
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as any)}
+              aria-label="Ordina serie TV"
+              className="bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-xs sm:text-sm text-zinc-200 focus:outline-hidden focus:border-blue-500"
+            >
+              <option value="recent">🕒 Più Recenti / Aggiornate</option>
+              <option value="rating">⭐ Valutazione Migliore</option>
+              <option value="name">🔤 Titolo (A-Z)</option>
+              <option value="id">🔢 ID Decrescente</option>
+            </select>
+          </div>
+
+          {/* Category Select Dropdown */}
+          <div className="flex items-center gap-1.5">
+            <Layers className="w-4 h-4 text-zinc-400 shrink-0" />
+            <select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              aria-label="Filtra per categoria serie TV"
+              className="bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-xs sm:text-sm text-zinc-200 focus:outline-hidden focus:border-blue-500 max-w-xs"
+            >
+              <option value="all">Tutte le Serie ({seriesList.length})</option>
+              {categories.map((cat) => (
+                <option key={cat.category_id} value={cat.category_id}>
+                  {cat.category_name} ({categoryCounts[cat.category_id] || 0})
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
