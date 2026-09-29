@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Search, Tv, Star, Play, Layers, Radio, Sparkles } from 'lucide-react';
+import { Search, Tv, Star, Play, Layers, LayoutGrid, List } from 'lucide-react';
 import { XtreamCategory, XtreamLiveStream, PlayableMediaItem } from '../types/xtream';
 import { buildStreamUrl } from '../utils/parseXtreamUrl';
 import { storage } from '../services/storage';
@@ -25,6 +25,20 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>(() => {
+    try {
+      return (localStorage.getItem('xtream_live_view_mode') as 'grid' | 'list') || 'grid';
+    } catch {
+      return 'grid';
+    }
+  });
+
+  const handleToggleViewMode = (mode: 'grid' | 'list') => {
+    setViewMode(mode);
+    try {
+      localStorage.setItem('xtream_live_view_mode', mode);
+    } catch {}
+  };
 
   // Category counts
   const categoryCounts = useMemo(() => {
@@ -48,13 +62,14 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
   }, [streams, selectedCategory, searchQuery]);
 
   const handlePlayLive = (stream: XtreamLiveStream) => {
+    // Default to HLS (.m3u8) as in 000player for superior stability across all devices
     const streamUrl = buildStreamUrl(
       serverUrl,
       username,
       password,
       'live',
       stream.stream_id,
-      'ts',
+      'm3u8',
       true
     );
 
@@ -65,16 +80,38 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
       streamUrl,
       poster: stream.stream_icon,
       categoryName: 'Canale Live TV',
-      containerExtension: 'ts',
+      containerExtension: 'm3u8',
     };
 
     onPlay(mediaItem);
   };
 
+  const toggleFavorite = (stream: XtreamLiveStream) => {
+    const streamUrl = buildStreamUrl(
+      serverUrl,
+      username,
+      password,
+      'live',
+      stream.stream_id,
+      'm3u8',
+      true
+    );
+    const item: PlayableMediaItem = {
+      id: `live_${stream.stream_id}`,
+      title: stream.name,
+      type: 'live',
+      streamUrl,
+      poster: stream.stream_icon,
+      categoryName: 'Canale Live TV',
+      containerExtension: 'm3u8',
+    };
+    storage.toggleFavorite(item);
+  };
+
   return (
     <div className="space-y-6">
-      {/* Search & Category Filter */}
-      <div className="flex flex-col md:flex-row gap-4 items-stretch md:items-center justify-between bg-zinc-900/60 p-4 rounded-2xl border border-zinc-800">
+      {/* Search, Category Filter & View Mode Bar */}
+      <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between bg-zinc-900/60 p-3 sm:p-4 rounded-2xl border border-zinc-800">
         <div className="relative flex-1">
           <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
           <input
@@ -87,7 +124,7 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400 hover:text-white"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400 hover:text-white cursor-pointer"
             >
               ✕
             </button>
@@ -95,20 +132,53 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
         </div>
 
         <div className="flex items-center gap-2 w-full md:w-auto">
-          <Layers className="w-4 h-4 text-rose-400 shrink-0" />
-          <select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            aria-label="Filtra per categoria canali"
-            className="w-full md:max-w-xs bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-sm text-zinc-200 focus:outline-hidden focus:border-rose-500"
-          >
-            <option value="all">Tutti i Canali ({streams.length})</option>
-            {categories.map((cat) => (
-              <option key={cat.category_id} value={cat.category_id}>
-                {cat.category_name} ({categoryCounts[cat.category_id] || 0})
-              </option>
-            ))}
-          </select>
+          {/* Category Select */}
+          <div className="flex items-center gap-2 flex-1 md:flex-initial">
+            <Layers className="w-4 h-4 text-rose-400 shrink-0" />
+            <select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              aria-label="Filtra per categoria canali"
+              className="w-full md:max-w-xs bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-sm text-zinc-200 focus:outline-hidden focus:border-rose-500"
+            >
+              <option value="all">Tutti i Canali ({streams.length})</option>
+              {categories.map((cat) => (
+                <option key={cat.category_id} value={cat.category_id}>
+                  {cat.category_name} ({categoryCounts[cat.category_id] || 0})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* View Mode Toggle: Grid (Icone) vs List (Lista) */}
+          <div className="flex items-center bg-zinc-950 border border-zinc-800 rounded-xl p-1 shrink-0">
+            <button
+              type="button"
+              onClick={() => handleToggleViewMode('grid')}
+              className={`px-2.5 py-1.5 rounded-lg text-xs transition cursor-pointer flex items-center gap-1.5 ${
+                viewMode === 'grid'
+                  ? 'bg-rose-600 text-white shadow-xs font-semibold'
+                  : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+              title="Vista a Icone / Card"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Icone</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleToggleViewMode('list')}
+              className={`px-2.5 py-1.5 rounded-lg text-xs transition cursor-pointer flex items-center gap-1.5 ${
+                viewMode === 'list'
+                  ? 'bg-rose-600 text-white shadow-xs font-semibold'
+                  : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+              title="Vista a Lista compatta"
+            >
+              <List className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Lista</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -120,14 +190,14 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
         {selectedCategory !== 'all' && (
           <button
             onClick={() => setSelectedCategory('all')}
-            className="text-rose-400 hover:underline"
+            className="text-rose-400 hover:underline cursor-pointer"
           >
             Azzera filtro categoria
           </button>
         )}
       </div>
 
-      {/* Grid of channels */}
+      {/* Channels display */}
       {isLoading ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
           {Array.from({ length: 12 }).map((_, i) => (
@@ -142,7 +212,83 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
             {searchQuery ? 'Prova a cercare un altro nome' : 'Nessun canale in questa categoria'}
           </p>
         </div>
+      ) : viewMode === 'list' ? (
+        /* Vista a Lista compatta */
+        <div className="space-y-2">
+          {filteredStreams.map((stream, idx) => {
+            const isFav = storage.isFavorite(`live_${stream.stream_id}`);
+            return (
+              <div
+                key={stream.stream_id}
+                onClick={() => handlePlayLive(stream)}
+                className="group flex items-center justify-between p-2.5 sm:p-3 rounded-2xl bg-zinc-900/70 hover:bg-zinc-850 border border-zinc-800/80 hover:border-rose-500/50 transition cursor-pointer gap-2 sm:gap-4 shadow-xs"
+              >
+                <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0 flex-1">
+                  <span className="font-mono text-xs text-zinc-500 w-7 text-right shrink-0">
+                    {stream.num || idx + 1}
+                  </span>
+                  <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-zinc-950 border border-zinc-800 p-1 flex items-center justify-center overflow-hidden shrink-0">
+                    {stream.stream_icon ? (
+                      <img
+                        src={stream.stream_icon}
+                        alt={stream.name}
+                        loading="lazy"
+                        onError={(e) => {
+                          (e.target as HTMLElement).style.display = 'none';
+                        }}
+                        className="w-full h-full object-contain"
+                      />
+                    ) : (
+                      <Tv className="w-5 h-5 text-zinc-600" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h4 className="text-xs sm:text-sm font-semibold text-white truncate group-hover:text-rose-400 transition">
+                      {stream.name}
+                    </h4>
+                    <div className="flex items-center gap-2 text-[10px] sm:text-[11px] text-zinc-400">
+                      <span className="font-mono text-zinc-500">ID: #{stream.stream_id}</span>
+                      {categoryCounts[stream.category_id] && (
+                        <span className="text-zinc-400 truncate hidden xs:inline">
+                          &bull; {categories.find((c) => String(c.category_id) === String(stream.category_id))?.category_name}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                  <span className="hidden sm:flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-950/80 text-rose-400 text-[10px] font-semibold border border-rose-800/40">
+                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
+                    LIVE
+                  </span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleFavorite(stream);
+                    }}
+                    className="p-1.5 rounded-lg text-zinc-400 hover:text-amber-400 hover:bg-zinc-800 transition cursor-pointer"
+                    title="Aggiungi ai Preferiti"
+                  >
+                    <Star className={`w-4 h-4 ${isFav ? 'text-amber-400 fill-amber-400' : ''}`} />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handlePlayLive(stream);
+                    }}
+                    className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold flex items-center gap-1 shadow-sm transition cursor-pointer"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-current" />
+                    <span className="hidden sm:inline">Guarda</span>
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       ) : (
+        /* Vista a Icone / Card */
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
           {filteredStreams.map((stream) => {
             const isFav = storage.isFavorite(`live_${stream.stream_id}`);
@@ -179,38 +325,25 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        const item: PlayableMediaItem = {
-                          id: `live_${stream.stream_id}`,
-                          title: stream.name,
-                          type: 'live',
-                          streamUrl: buildStreamUrl(serverUrl, username, password, 'live', stream.stream_id, 'ts', true),
-                          poster: stream.stream_icon,
-                          containerExtension: 'ts',
-                        };
-                        storage.toggleFavorite(item);
-                        setSelectedCategory((c) => c);
+                        toggleFavorite(stream);
                       }}
-                      aria-label={isFav ? "Rimuovi dai preferiti" : "Aggiungi ai preferiti"}
-                      className="p-1 rounded text-zinc-400 hover:text-amber-400 transition"
+                      className="p-1 rounded text-zinc-400 hover:text-amber-400 hover:bg-zinc-800 transition cursor-pointer"
+                      title="Preferiti"
                     >
-                      <Star className={`w-3.5 h-3.5 ${isFav ? 'fill-amber-400 text-amber-400' : ''}`} />
+                      <Star className={`w-3.5 h-3.5 ${isFav ? 'text-amber-400 fill-amber-400' : ''}`} />
                     </button>
                   </div>
                 </div>
 
                 {/* Channel Name */}
-                <div>
-                  <h3
-                    className="text-xs font-semibold text-zinc-200 line-clamp-2 group-hover:text-rose-400 transition-colors"
-                    title={stream.name}
-                  >
+                <div className="mt-1">
+                  <h4 className="text-xs font-semibold text-white group-hover:text-rose-400 transition-colors line-clamp-2">
                     {stream.name}
-                  </h3>
-                  <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-zinc-800/60 text-[10px] text-zinc-500">
+                  </h4>
+                  <div className="flex items-center justify-between text-[10px] text-zinc-500 font-mono mt-2">
                     <span>ID #{stream.stream_id}</span>
-                    <span className="group-hover:text-rose-400 flex items-center gap-1 font-medium transition">
-                      <Play className="w-3 h-3 fill-current" />
-                      Guarda
+                    <span className="text-rose-400 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
+                      <Play className="w-2.5 h-2.5 fill-current" /> Guarda
                     </span>
                   </div>
                 </div>

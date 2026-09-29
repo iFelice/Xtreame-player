@@ -279,6 +279,62 @@ export default function App() {
     setActiveMedia(null);
   };
 
+  const handleNextChannel = () => {
+    if (!activeMedia || activeMedia.type !== 'live' || liveStreams.length === 0) return;
+    const currentStreamId = activeMedia.id.replace('live_', '');
+    const currentIndex = liveStreams.findIndex((s) => String(s.stream_id) === String(currentStreamId));
+    const nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % liveStreams.length;
+    const nextStream = liveStreams[nextIndex];
+    if (nextStream) {
+      const streamUrl = buildStreamUrl(
+        serverUrl,
+        username,
+        password,
+        'live',
+        nextStream.stream_id,
+        'm3u8',
+        true
+      );
+      setActiveMedia({
+        id: `live_${nextStream.stream_id}`,
+        title: nextStream.name,
+        type: 'live',
+        streamUrl,
+        poster: nextStream.stream_icon,
+        categoryName: 'Canale Live TV',
+        containerExtension: 'm3u8',
+      });
+    }
+  };
+
+  const handlePreviousChannel = () => {
+    if (!activeMedia || activeMedia.type !== 'live' || liveStreams.length === 0) return;
+    const currentStreamId = activeMedia.id.replace('live_', '');
+    const currentIndex = liveStreams.findIndex((s) => String(s.stream_id) === String(currentStreamId));
+    const prevIndex = currentIndex === -1 ? liveStreams.length - 1 : (currentIndex - 1 + liveStreams.length) % liveStreams.length;
+    const prevStream = liveStreams[prevIndex];
+    if (prevStream) {
+      const streamUrl = buildStreamUrl(
+        serverUrl,
+        username,
+        password,
+        'live',
+        prevStream.stream_id,
+        'm3u8',
+        true
+      );
+      setActiveMedia({
+        id: `live_${prevStream.stream_id}`,
+        title: prevStream.name,
+        type: 'live',
+        streamUrl,
+        poster: prevStream.stream_icon,
+        categoryName: 'Canale Live TV',
+        containerExtension: 'm3u8',
+      });
+    }
+  };
+
   const isConnected = Boolean(serverUrl && username && password);
 
   return (
@@ -317,7 +373,12 @@ export default function App() {
         {/* Active Media Player View */}
         {activeMedia && (
           <section className="space-y-2 animate-in fade-in slide-in-from-top-4 duration-300">
-            <MediaPlayer media={activeMedia} onClose={() => setActiveMedia(null)} />
+            <MediaPlayer
+              media={activeMedia}
+              onClose={() => setActiveMedia(null)}
+              onNext={activeMedia.type === 'live' && liveStreams.length > 1 ? handleNextChannel : undefined}
+              onPrevious={activeMedia.type === 'live' && liveStreams.length > 1 ? handlePreviousChannel : undefined}
+            />
           </section>
         )}
 

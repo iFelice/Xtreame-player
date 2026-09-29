@@ -19,6 +19,10 @@ import {
   RefreshCw,
   Cast,
   Download,
+  ChevronLeft,
+  ChevronRight,
+  SkipBack,
+  SkipForward,
 } from 'lucide-react';
 import Hls from 'hls.js';
 import mpegts from 'mpegts.js';
@@ -32,7 +36,12 @@ interface MediaPlayerProps {
   onPrevious?: () => void;
 }
 
-export const MediaPlayer: React.FC<MediaPlayerProps> = ({ media, onClose }) => {
+export const MediaPlayer: React.FC<MediaPlayerProps> = ({
+  media,
+  onClose,
+  onNext,
+  onPrevious,
+}) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const hlsRef = useRef<Hls | null>(null);
@@ -176,15 +185,25 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({ media, onClose }) => {
         setLiveFormat('m3u8');
       }
     } else if (isLive && liveFormat === 'm3u8' && Hls.isSupported()) {
+      // 000player-style robust IPTV HLS configuration
       const hls = new Hls({
         enableWorker: true,
-        lowLatencyMode: true,
-        backBufferLength: 60,
+        lowLatencyMode: false, // Vital for IPTV streams with variable packet delivery
+        backBufferLength: 30,
         maxBufferLength: 30,
+        maxMaxBufferLength: 60,
+        maxBufferSize: 60 * 1000 * 1000,
+        maxBufferHole: 0.5,
+        highBufferWatchdogPeriod: 2,
+        nudgeOffset: 0.2,
+        nudgeMaxRetry: 5,
+        maxFragLookUpTolerance: 0.25,
         liveSyncDurationCount: 3,
         liveMaxLatencyDurationCount: 10,
-        fragLoadingTimeOut: 25000,
-        manifestLoadingTimeOut: 25000,
+        manifestLoadingTimeOut: 20000,
+        manifestLoadingMaxRetry: 4,
+        fragLoadingTimeOut: 20000,
+        fragLoadingMaxRetry: 6,
       });
       hlsRef.current = hls;
 
@@ -200,28 +219,59 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({ media, onClose }) => {
         setIsLoading(false);
       });
 
+      let netRetries = 0;
       hls.on(Hls.Events.ERROR, (_event, data) => {
-        console.warn('HLS Event Error:', data);
-        if (data.fatal) {
-          switch (data.type) {
-            case Hls.ErrorTypes.NETWORK_ERROR:
+        if (!data.fatal) return;
+
+        // If the video is actively playing frames, avoid interrupting the user
+        if (video && (video.currentTime > 1 || video.readyState >= 3)) {
+          return;
+        }
+
+        console.warn('HLS Event Error:', data.type, data.details);
+        switch (data.type) {
+          case Hls.ErrorTypes.NETWORK_ERROR:
+            if (netRetries < 3) {
+              netRetries++;
+              hls.startLoad();
+            } else {
+              // Seamless fallback to TS format without an error wall
               hls.destroy();
-              // Try TS format fallback
               setLiveFormat('ts');
-              break;
-            case Hls.ErrorTypes.MEDIA_ERROR:
+            }
+            break;
+          case Hls.ErrorTypes.MEDIA_ERROR:
+            try {
               hls.recoverMediaError();
-              break;
-            default:
-              hls.destroy();
-              setErrorMessage(
-                'Errore di caricamento HLS. Prova a passare al formato MPEG-TS (.ts) tramite il pulsante in alto.'
-              );
-              setIsLoading(false);
-              break;
-          }
+            } catch {
+              try {
+                hls.swapAudioCodec();
+                hls.recoverMediaError();
+              } catch {
+                hls.destroy();
+                setLiveFormat('ts');
+              }
+            }
+            break;
+          default:
+            hls.destroy();
+            setLiveFormat('ts');
+            break;
         }
       });
+    } else if (isLive && video.canPlayType('application/vnd.apple.mpegurl')) {
+      // Native Apple HLS (iOS Safari, macOS Safari)
+      video.src = url;
+      video.load();
+      video
+        .play()
+        .then(() => {
+          setIsLoading(false);
+          setIsPlaying(true);
+        })
+        .catch(() => {
+          setIsLoading(false);
+        });
     } else {
       // Standard video source (MP4, MKV, WebM)
       video.src = url;
@@ -368,12 +418,20 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({ media, onClose }) => {
       if (e.code === 'Space') {
         e.preventDefault();
         togglePlay();
-      } else if (e.code === 'ArrowRight') {
+      } else if (e.code === 'ArrowRight' || e.code === 'KeyN' || e.code === 'PageDown') {
         e.preventDefault();
-        handleSkip(10);
-      } else if (e.code === 'ArrowLeft') {
+        if (media?.type === 'live' && onNext) {
+          onNext();
+        } else {
+          handleSkip(10);
+        }
+      } else if (e.code === 'ArrowLeft' || e.code === 'KeyP' || e.code === 'PageUp') {
         e.preventDefault();
-        handleSkip(-10);
+        if (media?.type === 'live' && onPrevious) {
+          onPrevious();
+        } else {
+          handleSkip(-10);
+        }
       } else if (e.code === 'ArrowUp') {
         e.preventDefault();
         setVolume((v) => {
@@ -513,6 +571,39 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({ media, onClose }) => {
         </div>
       )}
 
+      {/* Side floating channel zapping buttons for Live TV */}
+      {media.type === 'live' && onPrevious && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onPrevious();
+          }}
+          className={`absolute left-2.5 top-1/2 -translate-y-1/2 p-2.5 sm:p-3 rounded-full bg-black/60 hover:bg-rose-600 text-white shadow-xl backdrop-blur-xs border border-white/20 transition-all z-20 cursor-pointer ${
+            controlsVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'
+          }`}
+          title="Canale Precedente (⏮️ / Freccia Sinistra / P)"
+        >
+          <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
+        </button>
+      )}
+
+      {media.type === 'live' && onNext && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onNext();
+          }}
+          className={`absolute right-2.5 top-1/2 -translate-y-1/2 p-2.5 sm:p-3 rounded-full bg-black/60 hover:bg-rose-600 text-white shadow-xl backdrop-blur-xs border border-white/20 transition-all z-20 cursor-pointer ${
+            controlsVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'
+          }`}
+          title="Canale Successivo (⏭️ / Freccia Destra / N)"
+        >
+          <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6" />
+        </button>
+      )}
+
       {/* Top Header Bar (Title & Close) */}
       <div
         className={`absolute top-0 left-0 right-0 p-4 bg-gradient-to-b from-black/90 via-black/50 to-transparent transition-opacity duration-300 z-20 flex items-center justify-between ${
@@ -520,7 +611,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({ media, onClose }) => {
         }`}
       >
         <div className="flex items-center gap-3 min-w-0">
-          <div className="p-2 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+          <div className="p-2 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0">
             {media.type === 'movie' ? (
               <Film className="w-5 h-5" />
             ) : (
@@ -528,9 +619,35 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({ media, onClose }) => {
             )}
           </div>
           <div className="min-w-0">
-            <h2 className="text-white font-medium text-base truncate drop-shadow-md">
-              {media.title}
-            </h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-white font-medium text-base truncate drop-shadow-md">
+                {media.title}
+              </h2>
+              {media.type === 'live' && (
+                <div className="flex items-center gap-1 shrink-0 ml-1">
+                  {onPrevious && (
+                    <button
+                      type="button"
+                      onClick={onPrevious}
+                      className="p-1 sm:p-1.5 rounded-lg bg-zinc-800/90 hover:bg-rose-600 text-zinc-300 hover:text-white transition cursor-pointer border border-zinc-700/60"
+                      title="Canale Precedente"
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  {onNext && (
+                    <button
+                      type="button"
+                      onClick={onNext}
+                      className="p-1 sm:p-1.5 rounded-lg bg-zinc-800/90 hover:bg-rose-600 text-zinc-300 hover:text-white transition cursor-pointer border border-zinc-700/60"
+                      title="Canale Successivo"
+                    >
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
             <div className="flex items-center gap-2 text-xs text-zinc-400">
               {media.categoryName && <span>{media.categoryName}</span>}
               {media.containerExtension && (
@@ -663,11 +780,35 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({ media, onClose }) => {
           <div className="flex items-center gap-2">
             <button
               onClick={togglePlay}
-              className="p-2 text-white hover:text-emerald-400 hover:bg-white/10 rounded-lg transition"
+              className="p-2 text-white hover:text-emerald-400 hover:bg-white/10 rounded-lg transition cursor-pointer"
               title={isPlaying ? 'Pausa (Spazio)' : 'Riproduci (Spazio)'}
             >
               {isPlaying ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 fill-current" />}
             </button>
+
+            {/* Live TV Previous & Next Channel buttons */}
+            {media.type === 'live' && (
+              <>
+                {onPrevious && (
+                  <button
+                    onClick={onPrevious}
+                    className="p-2 text-zinc-300 hover:text-white hover:bg-white/10 rounded-lg transition cursor-pointer"
+                    title="Canale Precedente (⏮️ / Freccia Sinistra / P)"
+                  >
+                    <SkipBack className="w-4 h-4 sm:w-5 sm:h-5" />
+                  </button>
+                )}
+                {onNext && (
+                  <button
+                    onClick={onNext}
+                    className="p-2 text-zinc-300 hover:text-white hover:bg-white/10 rounded-lg transition cursor-pointer"
+                    title="Canale Successivo (⏭️ / Freccia Destra / N)"
+                  >
+                    <SkipForward className="w-4 h-4 sm:w-5 sm:h-5" />
+                  </button>
+                )}
+              </>
+            )}
 
             {media.type !== 'live' && (
               <>
