@@ -94,13 +94,13 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full md:w-auto">
           <Layers className="w-4 h-4 text-rose-400 shrink-0" />
           <select
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
             aria-label="Filtra per categoria canali"
-            className="bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-sm text-zinc-200 focus:outline-hidden focus:border-rose-500 max-w-xs"
+            className="w-full md:max-w-xs bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-sm text-zinc-200 focus:outline-hidden focus:border-rose-500"
           >
             <option value="all">Tutti i Canali ({streams.length})</option>
             {categories.map((cat) => (

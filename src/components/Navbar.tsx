@@ -1,24 +1,16 @@
 import React, { useState } from 'react';
 import {
-  Tv,
-  Film,
-  Server,
-  Activity,
-  Calendar,
-  History,
   Info,
   LogOut,
   ChevronDown,
   Shield,
-  Layers,
-  Sparkles,
-  RefreshCw,
   Download,
   Link2,
+  QrCode,
+  Settings,
 } from 'lucide-react';
 import { XtreamAuthResponse } from '../types/xtream';
 import { SavedAccount, storage } from '../services/storage';
-import { formatExpiryDate } from '../utils/parseXtreamUrl';
 
 interface NavbarProps {
   serverUrl: string | null;
@@ -29,6 +21,7 @@ interface NavbarProps {
   onOpenPrivacy: () => void;
   onDisconnect: () => void;
   onOpenPasteLink?: () => void;
+  onOpenSettingsSync?: () => void;
   onInstallApp?: () => void;
 }
 
@@ -41,6 +34,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenPrivacy,
   onDisconnect,
   onOpenPasteLink,
+  onOpenSettingsSync,
   onInstallApp,
 }) => {
   const [showAccountDropdown, setShowAccountDropdown] = useState<boolean>(false);
@@ -50,14 +44,14 @@ export const Navbar: React.FC<NavbarProps> = ({
   const isConnected = Boolean(serverUrl && username);
 
   return (
-    <header className="sticky top-0 z-40 w-full bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800/80">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
+    <header className="sticky top-0 z-40 w-full max-w-full bg-zinc-950/95 backdrop-blur-md border-b border-zinc-800/80">
+      <div className="max-w-7xl mx-auto px-2.5 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-1.5 sm:gap-3">
         {/* Brand with Dynamic Icon */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           <div
             onClick={onInstallApp}
-            className="w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-700/80 p-1 flex items-center justify-center shadow-lg shadow-emerald-950/30 cursor-pointer hover:border-emerald-500 transition group"
-            title="Clicca per personalizzare l'icona o installare l'app"
+            className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-zinc-900 border border-zinc-700/80 p-0.5 sm:p-1 flex items-center justify-center shadow-lg shadow-emerald-950/30 cursor-pointer hover:border-emerald-500 transition group shrink-0"
+            title="Personalizza icona o installa l'app"
           >
             <img
               src={currentAppIcon}
@@ -66,63 +60,99 @@ export const Navbar: React.FC<NavbarProps> = ({
             />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-base sm:text-lg font-bold text-white tracking-tight">
-                Xtream <span className="text-emerald-400">StreamPlayer</span>
+            <div className="flex items-center gap-1.5">
+              <h1 className="text-sm sm:text-lg font-bold text-white tracking-tight">
+                Xtream <span className="text-emerald-400">Player</span>
               </h1>
-              <span className="hidden sm:inline-block px-1.5 py-0.5 rounded bg-zinc-800 text-[10px] text-zinc-400 font-mono">
+              <span className="hidden md:inline-block px-1.5 py-0.5 rounded bg-zinc-800 text-[10px] text-zinc-400 font-mono">
                 v2.1
               </span>
             </div>
-            <p className="text-[11px] text-zinc-400 hidden sm:block">
+            <p className="text-[10px] text-zinc-400 hidden lg:block">
               Lettore Multimediale & Browser Xtream Codes
             </p>
           </div>
         </div>
 
         {/* Server & Connection Status / Controls */}
-        <div className="flex items-center gap-2">
-          {/* Install as Desktop/Mobile App Button */}
-          {onInstallApp && (
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+          {/* Settings & QR Code Sync Button (Primary button on Mobile and Desktop) */}
+          {onOpenSettingsSync && (
             <button
-              onClick={onInstallApp}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs text-zinc-300 hover:text-emerald-400 transition cursor-pointer"
-              title="Salva come icona/app su Desktop o Telefono"
+              onClick={onOpenSettingsSync}
+              className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-emerald-700/50 hover:border-emerald-500 text-xs text-emerald-300 hover:text-emerald-200 transition cursor-pointer shadow-xs"
+              title="Apri Impostazioni, modifica Server/User/Password o scansiona QR Code"
             >
-              <Download className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="hidden sm:inline font-medium">Installa App</span>
+              <QrCode className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="font-semibold text-[11px] sm:text-xs">QR / Setup</span>
             </button>
           )}
 
-          {/* Privacy & Render Deploy Button */}
+          {/* Incolla Link Button */}
+          {onOpenPasteLink && (
+            <button
+              onClick={onOpenPasteLink}
+              className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-semibold shadow-md shadow-emerald-950/40 transition cursor-pointer"
+              title="Incolla un link streaming diretto o connetti un nuovo server"
+            >
+              <Link2 className="w-3.5 h-3.5 text-emerald-100" />
+              <span className="font-semibold text-[11px] sm:text-xs hidden xs:inline">Link</span>
+            </button>
+          )}
+
+          {/* Install App Button (Visible on desktop/tablet) */}
+          {onInstallApp && (
+            <button
+              onClick={onInstallApp}
+              className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs text-zinc-300 hover:text-emerald-400 transition cursor-pointer"
+              title="Salva come app su Desktop o Telefono"
+            >
+              <Download className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="font-medium">Installa</span>
+            </button>
+          )}
+
+          {/* Privacy & Render Deploy Button (Desktop only) */}
           <button
             onClick={onOpenPrivacy}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800/90 border border-zinc-800 text-xs text-zinc-300 hover:text-emerald-400 transition cursor-pointer"
+            className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800/90 border border-zinc-800 text-xs text-zinc-300 hover:text-emerald-400 transition cursor-pointer"
             title="Privacy dei dati & Guida Deploy su Render"
           >
             <Shield className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="hidden md:inline font-medium">Privacy & Deploy Render</span>
+            <span className="font-medium">Deploy</span>
           </button>
 
           {isConnected ? (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 sm:gap-2">
               {/* Connected Server Badge with dropdown */}
               <div className="relative">
                 <button
                   onClick={() => setShowAccountDropdown(!showAccountDropdown)}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-xs text-zinc-200 transition"
+                  className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-xs text-zinc-200 transition"
+                  title={`${username}@${serverUrl}`}
                 >
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                  <span className="font-mono font-medium max-w-[120px] sm:max-w-[160px] truncate">
-                    {username}@{serverUrl?.replace(/^https?:\/\//, '')}
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+                  <span className="font-mono font-medium max-w-[70px] sm:max-w-[130px] truncate text-[11px] sm:text-xs">
+                    {username}
                   </span>
-                  <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
+                  <ChevronDown className="w-3 h-3 text-zinc-400 shrink-0" />
                 </button>
 
                 {showAccountDropdown && (
                   <div className="absolute right-0 mt-2 w-64 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl p-2 z-50 animate-in fade-in">
-                    <div className="text-[11px] font-semibold text-zinc-400 px-2 py-1.5 border-b border-zinc-800">
-                      Server e Account Recenti
+                    <div className="text-[11px] font-semibold text-zinc-400 px-2 py-1.5 border-b border-zinc-800 flex items-center justify-between">
+                      <span>Server e Account</span>
+                      {onOpenSettingsSync && (
+                        <button
+                          onClick={() => {
+                            setShowAccountDropdown(false);
+                            onOpenSettingsSync();
+                          }}
+                          className="text-emerald-400 hover:underline flex items-center gap-1 text-[10px]"
+                        >
+                          <Settings className="w-3 h-3" /> Modifica
+                        </button>
+                      )}
                     </div>
                     {savedAccounts.length === 0 ? (
                       <div className="text-xs text-zinc-500 p-2 text-center">
@@ -154,43 +184,31 @@ export const Navbar: React.FC<NavbarProps> = ({
                 )}
               </div>
 
-              {/* Incolla Link Button in head */}
-              {onOpenPasteLink && (
-                <button
-                  onClick={onOpenPasteLink}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-semibold shadow-md shadow-emerald-950/40 transition cursor-pointer"
-                  title="Incolla un link streaming o connetti un nuovo server"
-                >
-                  <Link2 className="w-3.5 h-3.5 text-emerald-100" />
-                  <span className="font-semibold">Incolla Link</span>
-                </button>
-              )}
-
               {/* Server Info Button */}
               {authData && (
                 <button
                   onClick={onOpenServerInfo}
-                  className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800/80 rounded-xl border border-zinc-800 transition"
+                  className="p-1.5 sm:p-2 text-zinc-400 hover:text-white hover:bg-zinc-800/80 rounded-xl border border-zinc-800 transition"
                   title="Dettagli abbonamento e server"
                 >
-                  <Info className="w-4 h-4" />
+                  <Info className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 </button>
               )}
 
               {/* Disconnect Button */}
               <button
                 onClick={onDisconnect}
-                className="p-2 text-zinc-400 hover:text-rose-400 hover:bg-rose-950/30 rounded-xl border border-zinc-800 transition"
+                className="p-1.5 sm:p-2 text-zinc-400 hover:text-rose-400 hover:bg-rose-950/30 rounded-xl border border-zinc-800 transition"
                 title="Disconnetti server"
               >
-                <LogOut className="w-4 h-4" />
+                <LogOut className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </button>
             </div>
           ) : (
-            <div className="flex items-center gap-2">
-              <span className="hidden sm:flex items-center gap-1.5 text-xs text-zinc-400 px-3 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800">
+            <div className="flex items-center gap-1.5">
+              <span className="hidden md:flex items-center gap-1.5 text-xs text-zinc-400 px-2.5 py-1 rounded-xl bg-zinc-900 border border-zinc-800">
                 <span className="w-2 h-2 rounded-full bg-zinc-600"></span>
-                Incolla un link per iniziare
+                Incolla link o configura
               </span>
             </div>
           )}
@@ -199,3 +217,4 @@ export const Navbar: React.FC<NavbarProps> = ({
     </header>
   );
 };
+

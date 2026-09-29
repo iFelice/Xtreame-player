@@ -27,6 +27,7 @@ import { RecentProductsShelf } from './components/RecentProductsShelf';
 import { InstallAppModal } from './components/InstallAppModal';
 import { DownloadsView } from './components/DownloadsView';
 import { PasteLinkModal } from './components/PasteLinkModal';
+import { SettingsSyncModal } from './components/SettingsSyncModal';
 
 import {
   XtreamParsedUrl,
@@ -61,6 +62,8 @@ export default function App() {
   const [showPrivacyModal, setShowPrivacyModal] = useState<boolean>(false);
   const [showInstallAppModal, setShowInstallAppModal] = useState<boolean>(false);
   const [showPasteLinkModal, setShowPasteLinkModal] = useState<boolean>(false);
+  const [showSettingsSyncModal, setShowSettingsSyncModal] = useState<boolean>(false);
+  const [savedAccounts, setSavedAccounts] = useState<SavedAccount[]>(() => storage.getAccounts());
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
   // Catalog data
@@ -91,15 +94,7 @@ export default function App() {
     if (apple) apple.href = current;
   }, []);
 
-  // Load last saved account if any on startup
-  useEffect(() => {
-    const last = storage.getLastAccount();
-    if (last) {
-      setServerUrl(last.serverUrl);
-      setUsername(last.username);
-      setPassword(last.password);
-    }
-  }, []);
+  // Load last saved account if any on startup is handled below after connectToServer is initialized
 
   // Function to refresh the existing catalog
   const handleRefreshCatalog = async () => {
@@ -177,6 +172,7 @@ export default function App() {
           status: auth.user_info?.status,
           expDate: auth.user_info?.exp_date || undefined,
         });
+        setSavedAccounts(storage.getAccounts());
 
         // 2. Fetch categories and streams concurrently
         const [
@@ -226,6 +222,35 @@ export default function App() {
     []
   );
 
+  // On app startup: check URL query parameters first (?server=...&user=...&pass=...) or load last account
+  useEffect(() => {
+    try {
+      const searchParams = new URLSearchParams(window.location.search);
+      const paramServer = searchParams.get('server') || searchParams.get('url');
+      const paramUser = searchParams.get('user') || searchParams.get('username');
+      const paramPass = searchParams.get('pass') || searchParams.get('password');
+      const paramSettings = searchParams.get('settings') || searchParams.get('setup');
+
+      if (paramServer && paramUser && paramPass) {
+        connectToServer(paramServer, paramUser, paramPass);
+        return;
+      }
+
+      if (paramSettings) {
+        setShowSettingsSyncModal(true);
+      }
+    } catch (e) {
+      console.error('Error reading URL params:', e);
+    }
+
+    const last = storage.getLastAccount();
+    if (last) {
+      setServerUrl(last.serverUrl);
+      setUsername(last.username);
+      setPassword(last.password);
+    }
+  }, [connectToServer]);
+
   const handlePlayDirect = (media: PlayableMediaItem) => {
     setActiveMedia(media);
     // Smooth scroll to top player
@@ -257,7 +282,7 @@ export default function App() {
   const isConnected = Boolean(serverUrl && username && password);
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col selection:bg-emerald-500/30 selection:text-emerald-200">
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col selection:bg-emerald-500/30 selection:text-emerald-200 w-full max-w-full overflow-x-hidden">
       {/* Top Navbar */}
       <Navbar
         serverUrl={serverUrl}
@@ -268,11 +293,12 @@ export default function App() {
         onOpenPrivacy={() => setShowPrivacyModal(true)}
         onDisconnect={handleDisconnect}
         onOpenPasteLink={() => setShowPasteLinkModal(true)}
+        onOpenSettingsSync={() => setShowSettingsSyncModal(true)}
         onInstallApp={() => setShowInstallAppModal(true)}
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-2.5 sm:px-6 py-4 sm:py-6 space-y-5 sm:space-y-6 overflow-x-hidden">
         {/* Refresh Success Notification Banner */}
         {refreshSuccessMessage && (
           <div className="p-3.5 rounded-2xl bg-emerald-950/80 border border-emerald-800/80 text-emerald-200 flex items-center justify-between gap-3 animate-in fade-in shadow-lg">
@@ -675,6 +701,24 @@ export default function App() {
           isLoading={isLoadingCatalog}
         />
       )}
+
+      {/* Settings & QR Code Sync Modal */}
+      <SettingsSyncModal
+        isOpen={showSettingsSyncModal}
+        onClose={() => setShowSettingsSyncModal(false)}
+        currentServer={serverUrl || ''}
+        currentUsername={username || ''}
+        currentPassword={password || ''}
+        onSaveAndConnect={(newServer, newUser, newPass) => {
+          connectToServer(newServer, newUser, newPass);
+        }}
+        savedAccounts={savedAccounts}
+        onSelectAccount={handleSelectSavedAccount}
+        onDeleteAccount={(id) => {
+          storage.deleteAccount(id);
+          setSavedAccounts(storage.getAccounts());
+        }}
+      />
 
       {/* Footer */}
       <footer className="w-full border-t border-zinc-900 bg-zinc-950 py-4 text-center text-xs text-zinc-600">
