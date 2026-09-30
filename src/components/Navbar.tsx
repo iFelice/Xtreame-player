@@ -3,12 +3,7 @@ import {
   Info,
   LogOut,
   ChevronDown,
-  Shield,
-  Download,
-  Link2,
-  QrCode,
   Settings,
-  Tv,
 } from 'lucide-react';
 import { XtreamAuthResponse } from '../types/xtream';
 import { SavedAccount, storage } from '../services/storage';
@@ -19,12 +14,8 @@ interface NavbarProps {
   authData: XtreamAuthResponse | null;
   onSelectAccount: (account: SavedAccount) => void;
   onOpenServerInfo: () => void;
-  onOpenPrivacy: () => void;
   onDisconnect: () => void;
-  onOpenPasteLink?: () => void;
   onOpenSettingsSync?: () => void;
-  onInstallApp?: () => void;
-  onOpenTvQrLogin?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -33,12 +24,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   authData,
   onSelectAccount,
   onOpenServerInfo,
-  onOpenPrivacy,
   onDisconnect,
-  onOpenPasteLink,
   onOpenSettingsSync,
-  onInstallApp,
-  onOpenTvQrLogin,
 }) => {
   const [showAccountDropdown, setShowAccountDropdown] = useState<boolean>(false);
   const savedAccounts = storage.getAccounts();
@@ -77,18 +64,6 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Server & Connection Controls */}
         <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
-          {/* Incolla Link Button */}
-          {onOpenPasteLink && (
-            <button
-              onClick={onOpenPasteLink}
-              className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-semibold shadow-md shadow-emerald-950/40 transition cursor-pointer"
-              title="Incolla un link streaming diretto o connetti un nuovo server"
-            >
-              <Link2 className="w-3.5 h-3.5 text-emerald-100" />
-              <span className="font-semibold text-[11px] sm:text-xs">Nuovo Link</span>
-            </button>
-          )}
-
           {isConnected ? (
             <div className="flex items-center gap-1 sm:gap-2">
               {/* Connected Server Badge with dropdown */}

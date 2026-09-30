@@ -369,12 +369,8 @@ export default function App() {
         authData={authData}
         onSelectAccount={handleSelectSavedAccount}
         onOpenServerInfo={() => setShowServerInfo(true)}
-        onOpenPrivacy={() => setShowPrivacyModal(true)}
         onDisconnect={handleDisconnect}
-        onOpenPasteLink={() => setShowPasteLinkModal(true)}
         onOpenSettingsSync={() => setShowSettingsSyncModal(true)}
-        onInstallApp={() => setShowInstallAppModal(true)}
-        onOpenTvQrLogin={() => setShowTvQrModal(true)}
       />
 
       {/* Main Content Area */}
