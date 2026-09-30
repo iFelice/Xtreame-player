@@ -140,23 +140,25 @@ export const storage = {
     }
   },
 
-  getFavorites(): PlayableMediaItem[] {
+  getFavorites(accountKey?: string): PlayableMediaItem[] {
     try {
-      const data = localStorage.getItem(FAVORITES_KEY);
+      const key = accountKey ? `${FAVORITES_KEY}_${accountKey}` : FAVORITES_KEY;
+      const data = localStorage.getItem(key);
       return data ? JSON.parse(data) : [];
     } catch {
       return [];
     }
   },
 
-  isFavorite(id: string): boolean {
-    const favs = this.getFavorites();
+  isFavorite(id: string, accountKey?: string): boolean {
+    const favs = this.getFavorites(accountKey);
     return favs.some((f) => f.id === id);
   },
 
-  toggleFavorite(item: PlayableMediaItem): boolean {
+  toggleFavorite(item: PlayableMediaItem, accountKey?: string): boolean {
     try {
-      const favs = this.getFavorites();
+      const key = accountKey ? `${FAVORITES_KEY}_${accountKey}` : FAVORITES_KEY;
+      const favs = this.getFavorites(accountKey);
       const index = favs.findIndex((f) => f.id === item.id);
       let isFav = false;
       if (index >= 0) {
@@ -166,72 +168,79 @@ export const storage = {
         favs.unshift(item);
         isFav = true;
       }
-      localStorage.setItem(FAVORITES_KEY, JSON.stringify(favs.slice(0, 100)));
+      localStorage.setItem(key, JSON.stringify(favs.slice(0, 100)));
       return isFav;
     } catch {
       return false;
     }
   },
 
-  getHistory(): WatchHistoryItem[] {
+  getHistory(accountKey?: string): WatchHistoryItem[] {
     try {
-      const data = localStorage.getItem(HISTORY_KEY);
+      const key = accountKey ? `${HISTORY_KEY}_${accountKey}` : HISTORY_KEY;
+      const data = localStorage.getItem(key);
       return data ? JSON.parse(data) : [];
     } catch {
       return [];
     }
   },
 
-  saveHistory(media: PlayableMediaItem, currentTime: number, duration: number): void {
+  saveHistory(media: PlayableMediaItem, currentTime: number, duration: number, accountKey?: string): void {
     if (!media || !media.id) return;
     try {
-      const list = this.getHistory().filter((h) => h.media.id !== media.id);
+      const key = accountKey ? `${HISTORY_KEY}_${accountKey}` : HISTORY_KEY;
+      const list = this.getHistory(accountKey).filter((h) => h.media.id !== media.id);
       list.unshift({
         media,
         currentTime,
         duration,
         timestamp: Date.now(),
       });
-      localStorage.setItem(HISTORY_KEY, JSON.stringify(list.slice(0, 50)));
+      localStorage.setItem(key, JSON.stringify(list.slice(0, 50)));
     } catch (e) {
       console.error('Failed to save history:', e);
     }
   },
 
-  clearHistory(): void {
-    localStorage.removeItem(HISTORY_KEY);
+  clearHistory(accountKey?: string): void {
+    const key = accountKey ? `${HISTORY_KEY}_${accountKey}` : HISTORY_KEY;
+    localStorage.removeItem(key);
   },
 
-  getDownloads(): DownloadItem[] {
+  getDownloads(accountKey?: string): DownloadItem[] {
     try {
-      const data = localStorage.getItem(DOWNLOADS_KEY);
+      const key = accountKey ? `${DOWNLOADS_KEY}_${accountKey}` : DOWNLOADS_KEY;
+      const data = localStorage.getItem(key);
       return data ? JSON.parse(data) : [];
     } catch {
       return [];
     }
   },
 
-  addDownload(item: DownloadItem): void {
+  addDownload(item: DownloadItem, accountKey?: string): void {
     try {
-      const list = this.getDownloads().filter((d) => d.id !== item.id);
+      const key = accountKey ? `${DOWNLOADS_KEY}_${accountKey}` : DOWNLOADS_KEY;
+      const list = this.getDownloads(accountKey).filter((d) => d.id !== item.id);
       list.unshift(item);
-      localStorage.setItem(DOWNLOADS_KEY, JSON.stringify(list.slice(0, 200)));
+      localStorage.setItem(key, JSON.stringify(list.slice(0, 200)));
     } catch (e) {
       console.error('Failed to add download record:', e);
     }
   },
 
-  removeDownload(id: string): void {
+  removeDownload(id: string, accountKey?: string): void {
     try {
-      const list = this.getDownloads().filter((d) => d.id !== id);
-      localStorage.setItem(DOWNLOADS_KEY, JSON.stringify(list));
+      const key = accountKey ? `${DOWNLOADS_KEY}_${accountKey}` : DOWNLOADS_KEY;
+      const list = this.getDownloads(accountKey).filter((d) => d.id !== id);
+      localStorage.setItem(key, JSON.stringify(list));
     } catch (e) {
       console.error('Failed to remove download:', e);
     }
   },
 
-  clearDownloads(): void {
-    localStorage.removeItem(DOWNLOADS_KEY);
+  clearDownloads(accountKey?: string): void {
+    const key = accountKey ? `${DOWNLOADS_KEY}_${accountKey}` : DOWNLOADS_KEY;
+    localStorage.removeItem(key);
   },
 
   getAppIcon(): string {

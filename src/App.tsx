@@ -7,28 +7,20 @@ import {
   Sparkles,
   AlertCircle,
   RefreshCw,
-  HelpCircle,
   CheckCircle2,
-  ExternalLink,
-  ShieldCheck,
-  Zap,
   Download,
 } from 'lucide-react';
 import { Navbar } from './components/Navbar';
-import { UrlInputBar } from './components/UrlInputBar';
+import { LoginForm } from './components/LoginForm';
 import { MediaPlayer } from './components/MediaPlayer';
 import { VodCatalog } from './components/VodCatalog';
 import { LiveCatalog } from './components/LiveCatalog';
 import { SeriesCatalog } from './components/SeriesCatalog';
 import { FavoritesView } from './components/FavoritesView';
 import { ServerInfoModal } from './components/ServerInfoModal';
-import { PrivacyDeployModal } from './components/PrivacyDeployModal';
 import { RecentProductsShelf } from './components/RecentProductsShelf';
-import { InstallAppModal } from './components/InstallAppModal';
 import { DownloadsView } from './components/DownloadsView';
-import { PasteLinkModal } from './components/PasteLinkModal';
 import { SettingsSyncModal } from './components/SettingsSyncModal';
-import { TvQrLoginModal } from './components/TvQrLoginModal';
 import { RemoteLoginView } from './components/RemoteLoginView';
 
 import {
@@ -42,7 +34,7 @@ import {
 } from './types/xtream';
 import { xtreamClient } from './services/xtreamClient';
 import { storage, SavedAccount } from './services/storage';
-import { parseXtreamUrl, buildStreamUrl } from './utils/parseXtreamUrl';
+import { buildStreamUrl } from './utils/parseXtreamUrl';
 
 export default function App() {
   const [serverUrl, setServerUrl] = useState<string>('');
@@ -57,15 +49,10 @@ export default function App() {
   const [isLoadingCatalog, setIsLoadingCatalog] = useState<boolean>(false);
   const [isRefreshingCatalog, setIsRefreshingCatalog] = useState<boolean>(false);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<number | null>(null);
-  const [appIcon, setAppIconState] = useState<string>(storage.getAppIcon());
   const [refreshSuccessMessage, setRefreshSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showServerInfo, setShowServerInfo] = useState<boolean>(false);
-  const [showPrivacyModal, setShowPrivacyModal] = useState<boolean>(false);
-  const [showInstallAppModal, setShowInstallAppModal] = useState<boolean>(false);
-  const [showPasteLinkModal, setShowPasteLinkModal] = useState<boolean>(false);
   const [showSettingsSyncModal, setShowSettingsSyncModal] = useState<boolean>(false);
-  const [showTvQrModal, setShowTvQrModal] = useState<boolean>(false);
   const [isRemoteLoginPage, setIsRemoteLoginPage] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     const path = window.location.pathname.toLowerCase();
@@ -73,7 +60,6 @@ export default function App() {
     return path.includes('remote-login') || search.get('page') === 'remote-login' || search.has('code');
   });
   const [savedAccounts, setSavedAccounts] = useState<SavedAccount[]>(() => storage.getAccounts());
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
   // Catalog data
   const [vodCategories, setVodCategories] = useState<XtreamCategory[]>([]);
@@ -82,28 +68,6 @@ export default function App() {
   const [liveStreams, setLiveStreams] = useState<XtreamLiveStream[]>([]);
   const [seriesCategories, setSeriesCategories] = useState<XtreamCategory[]>([]);
   const [seriesList, setSeriesList] = useState<XtreamSeries[]>([]);
-
-  // Capture PWA install prompt
-  useEffect(() => {
-    const handler = (e: any) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-    };
-    window.addEventListener('beforeinstallprompt', handler);
-    return () => window.removeEventListener('beforeinstallprompt', handler);
-  }, []);
-
-  // Sync app icon on startup
-  useEffect(() => {
-    const current = storage.getAppIcon();
-    setAppIconState(current);
-    const link = document.querySelector("link[rel='icon']") as HTMLLinkElement | null;
-    if (link) link.href = current;
-    const apple = document.querySelector("link[rel='apple-touch-icon']") as HTMLLinkElement | null;
-    if (apple) apple.href = current;
-  }, []);
-
-  // Load last saved account if any on startup is handled below after connectToServer is initialized
 
   // Function to refresh the existing catalog
   const handleRefreshCatalog = async () => {
@@ -136,7 +100,7 @@ export default function App() {
       setLastRefreshedAt(Date.now());
 
       setRefreshSuccessMessage(
-        `Catalogo aggiornato con successo: ${fetchedLiveStreams.length} canali live, ${fetchedVodStreams.length} film, ${fetchedSeries.length} serie TV.`
+        `Catalogo aggiornato: ${fetchedLiveStreams.length} canali live, ${fetchedVodStreams.length} film, ${fetchedSeries.length} serie TV.`
       );
       setTimeout(() => setRefreshSuccessMessage(null), 4000);
     } catch (err: any) {
@@ -231,7 +195,7 @@ export default function App() {
     []
   );
 
-  // On app startup: check URL query parameters first (?server=...&user=...&pass=...) or load last account
+  // On app startup: check URL query parameters or auto-connect to last saved account
   useEffect(() => {
     try {
       const searchParams = new URLSearchParams(window.location.search);
@@ -257,19 +221,13 @@ export default function App() {
       setServerUrl(last.serverUrl);
       setUsername(last.username);
       setPassword(last.password);
-      // Connessione automatica al login salvato (mantiene l'accesso memorizzato)
       connectToServer(last.serverUrl, last.username, last.password, last.originalLink);
     }
   }, [connectToServer]);
 
   const handlePlayDirect = (media: PlayableMediaItem) => {
     setActiveMedia(media);
-    // Smooth scroll to top player
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const handleConnectCatalog = (parsed: XtreamParsedUrl) => {
-    connectToServer(parsed.serverUrl, parsed.username, parsed.password, parsed.originalUrl);
   };
 
   const handleSelectSavedAccount = (account: SavedAccount) => {
@@ -289,6 +247,8 @@ export default function App() {
     setSeriesCategories([]);
     setSeriesList([]);
     setActiveMedia(null);
+    setErrorMessage(null);
+    setRefreshSuccessMessage(null);
   };
 
   const handleNextChannel = () => {
@@ -348,6 +308,7 @@ export default function App() {
   };
 
   const isConnected = Boolean(serverUrl && username && password);
+  const currentAccountKey = serverUrl && username ? `${serverUrl}_${username}` : undefined;
 
   if (isRemoteLoginPage) {
     return (
@@ -374,64 +335,49 @@ export default function App() {
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 w-full max-w-[2400px] mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-5 sm:space-y-6 overflow-x-hidden">
+      <main className="flex-1 w-full max-w-[2400px] mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-6 overflow-x-hidden">
         {/* Refresh Success Notification Banner */}
         {refreshSuccessMessage && (
-          <div className="p-3.5 rounded-2xl bg-emerald-950/80 border border-emerald-800/80 text-emerald-200 flex items-center justify-between gap-3 animate-in fade-in shadow-lg">
-            <div className="flex items-center gap-2.5 text-xs font-medium">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <div className="p-4 rounded-2xl bg-emerald-950/90 border border-emerald-800 text-emerald-200 flex items-center justify-between gap-3 animate-in fade-in shadow-xl">
+            <div className="flex items-center gap-3 text-sm font-semibold">
+              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
               <span>{refreshSuccessMessage}</span>
             </div>
             <button
               onClick={() => setRefreshSuccessMessage(null)}
-              className="text-xs text-emerald-400 hover:text-white px-2 py-0.5"
+              className="text-sm font-bold text-emerald-400 hover:text-white px-2.5 py-1 rounded-lg hover:bg-emerald-900/40 cursor-pointer"
             >
               ✕
             </button>
           </div>
         )}
+
         {/* Active Media Player View */}
         {activeMedia && (
-          <section className="space-y-2 animate-in fade-in slide-in-from-top-4 duration-300">
+          <section className="space-y-3 animate-in fade-in slide-in-from-top-4 duration-300">
             <MediaPlayer
               media={activeMedia}
               onClose={() => setActiveMedia(null)}
               onNext={activeMedia.type === 'live' && liveStreams.length > 1 ? handleNextChannel : undefined}
               onPrevious={activeMedia.type === 'live' && liveStreams.length > 1 ? handlePreviousChannel : undefined}
-            />
-          </section>
-        )}
-
-        {/* Input Bar (Shown when not connected, or accessible anytime from 'Incolla Link' in the head) */}
-        {!isConnected && (
-          <section>
-            <UrlInputBar
-              onPlayDirect={handlePlayDirect}
-              onConnectCatalog={handleConnectCatalog}
-              currentConnectedServer={serverUrl}
-              isLoading={isLoadingCatalog}
-              onOpenTvQrLogin={() => setShowTvQrModal(true)}
+              accountKey={currentAccountKey}
             />
           </section>
         )}
 
         {/* Error Notification Banner */}
         {errorMessage && (
-          <div className="p-4 rounded-2xl bg-rose-950/60 border border-rose-800/80 text-rose-200 flex items-start justify-between gap-3 animate-in fade-in">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+          <div className="p-4 sm:p-5 rounded-2xl bg-rose-950/80 border border-rose-800 text-rose-200 flex items-start justify-between gap-3 animate-in fade-in shadow-xl">
+            <div className="flex items-start gap-3.5">
+              <AlertCircle className="w-6 h-6 text-rose-400 shrink-0 mt-0.5" />
               <div>
-                <h4 className="text-sm font-semibold text-rose-300">Errore di Connessione</h4>
-                <p className="text-xs text-rose-300/80 mt-0.5 leading-relaxed">{errorMessage}</p>
-                <div className="mt-2 text-[11px] text-zinc-400">
-                  Suggerimento: se il server blocca le chiamate API o è offline, puoi comunque cliccare su 
-                  <strong className="text-zinc-200"> "Riproduci Subito Questo Video"</strong> per provare lo streaming diretto tramite proxy.
-                </div>
+                <h4 className="text-base font-bold text-rose-300">Errore di Connessione</h4>
+                <p className="text-sm text-rose-300/90 mt-1 leading-relaxed">{errorMessage}</p>
               </div>
             </div>
             <button
               onClick={() => setErrorMessage(null)}
-              className="text-xs text-rose-400 hover:text-white px-2 py-1 rounded hover:bg-rose-900/40 transition"
+              className="text-xs sm:text-sm font-bold text-rose-400 hover:text-white px-3 py-1.5 rounded-lg hover:bg-rose-900/60 transition cursor-pointer"
             >
               Chiudi
             </button>
@@ -440,52 +386,52 @@ export default function App() {
 
         {/* Connected Catalog Navigation Tabs */}
         {isConnected && !isLoadingCatalog && (
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-zinc-800 pb-3">
-            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-              {/* 1. Live TV first */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-zinc-800/90 pb-4">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              {/* 1. Live TV */}
               <button
                 onClick={() => setActiveTab('live')}
-                className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition cursor-pointer ${
+                className={`flex items-center gap-2.5 px-4 sm:px-5 py-2.5 rounded-2xl text-sm sm:text-base font-bold transition cursor-pointer shadow-md ${
                   activeTab === 'live'
-                    ? 'bg-rose-600 text-white shadow-lg shadow-rose-950/40'
-                    : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
+                    ? 'bg-rose-600 text-white shadow-rose-950/60 scale-105'
+                    : 'bg-zinc-900 text-zinc-300 hover:text-white hover:bg-zinc-850 border border-zinc-800'
                 }`}
               >
-                <Tv className="w-4 h-4 text-rose-400" />
+                <Tv className="w-5 h-5 text-rose-400" />
                 Live TV
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-black/40">
+                <span className="text-xs px-2 py-0.5 rounded-full bg-black/50 font-mono">
                   {liveStreams.length}
                 </span>
               </button>
 
-              {/* 2. Film & VOD second */}
+              {/* 2. Film & VOD */}
               <button
                 onClick={() => setActiveTab('movies')}
-                className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition cursor-pointer ${
+                className={`flex items-center gap-2.5 px-4 sm:px-5 py-2.5 rounded-2xl text-sm sm:text-base font-bold transition cursor-pointer shadow-md ${
                   activeTab === 'movies'
-                    ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-950/40'
-                    : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
+                    ? 'bg-emerald-600 text-white shadow-emerald-950/60 scale-105'
+                    : 'bg-zinc-900 text-zinc-300 hover:text-white hover:bg-zinc-850 border border-zinc-800'
                 }`}
               >
-                <Film className="w-4 h-4 text-emerald-400" />
+                <Film className="w-5 h-5 text-emerald-400" />
                 Film & VOD
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-black/40">
+                <span className="text-xs px-2 py-0.5 rounded-full bg-black/50 font-mono">
                   {vodStreams.length}
                 </span>
               </button>
 
-              {/* 3. Serie TV third */}
+              {/* 3. Serie TV */}
               <button
                 onClick={() => setActiveTab('series')}
-                className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition cursor-pointer ${
+                className={`flex items-center gap-2.5 px-4 sm:px-5 py-2.5 rounded-2xl text-sm sm:text-base font-bold transition cursor-pointer shadow-md ${
                   activeTab === 'series'
-                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-950/40'
-                    : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
+                    ? 'bg-blue-600 text-white shadow-blue-950/60 scale-105'
+                    : 'bg-zinc-900 text-zinc-300 hover:text-white hover:bg-zinc-850 border border-zinc-800'
                 }`}
               >
-                <Layers className="w-4 h-4 text-blue-400" />
+                <Layers className="w-5 h-5 text-blue-400" />
                 Serie TV
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-black/40">
+                <span className="text-xs px-2 py-0.5 rounded-full bg-black/50 font-mono">
                   {seriesList.length}
                 </span>
               </button>
@@ -493,58 +439,58 @@ export default function App() {
               {/* 4. Novità & Recenti */}
               <button
                 onClick={() => setActiveTab('recent')}
-                className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition cursor-pointer ${
+                className={`flex items-center gap-2.5 px-4 sm:px-5 py-2.5 rounded-2xl text-sm sm:text-base font-bold transition cursor-pointer shadow-md ${
                   activeTab === 'recent'
-                    ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-950/40'
-                    : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
+                    ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-amber-950/60 scale-105'
+                    : 'bg-zinc-900 text-zinc-300 hover:text-white hover:bg-zinc-850 border border-zinc-800'
                 }`}
               >
-                <Sparkles className="w-4 h-4 text-amber-200" />
+                <Sparkles className="w-5 h-5 text-amber-200" />
                 Novità & Recenti
               </button>
 
               {/* 5. I Miei Download */}
               <button
                 onClick={() => setActiveTab('downloads')}
-                className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition cursor-pointer ${
+                className={`flex items-center gap-2.5 px-4 sm:px-5 py-2.5 rounded-2xl text-sm sm:text-base font-bold transition cursor-pointer shadow-md ${
                   activeTab === 'downloads'
-                    ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-950/40'
-                    : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
+                    ? 'bg-cyan-600 text-white shadow-cyan-950/60 scale-105'
+                    : 'bg-zinc-900 text-zinc-300 hover:text-white hover:bg-zinc-850 border border-zinc-800'
                 }`}
               >
-                <Download className="w-4 h-4 text-cyan-400" />
+                <Download className="w-5 h-5 text-cyan-400" />
                 I Miei Download
               </button>
 
-              {/* 6. Preferiti */}
+              {/* 6. Preferiti & Continua a Guardare */}
               <button
                 onClick={() => setActiveTab('favorites')}
-                className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition cursor-pointer ${
+                className={`flex items-center gap-2.5 px-4 sm:px-5 py-2.5 rounded-2xl text-sm sm:text-base font-bold transition cursor-pointer shadow-md ${
                   activeTab === 'favorites'
-                    ? 'bg-zinc-800 text-white border border-zinc-700 shadow-md'
-                    : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
+                    ? 'bg-zinc-800 text-white border-2 border-amber-400/80 shadow-amber-950/50 scale-105'
+                    : 'bg-zinc-900 text-zinc-300 hover:text-white hover:bg-zinc-850 border border-zinc-800'
                 }`}
               >
-                <Star className="w-4 h-4 text-amber-400" />
-                Preferiti
+                <Star className="w-5 h-5 text-amber-400" />
+                Preferiti & Cronologia
               </button>
             </div>
 
-            {/* Dedicated Prominent Aggiorna Catalogo Action Button */}
-            <div className="flex items-center gap-2 shrink-0">
+            {/* Dedicated Aggiorna Catalogo Action Button */}
+            <div className="flex items-center gap-3 shrink-0">
               <button
                 onClick={handleRefreshCatalog}
                 disabled={isRefreshingCatalog}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-lg shadow-emerald-950/50 transition cursor-pointer disabled:opacity-50"
+                className="flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm sm:text-base font-bold bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-xl shadow-emerald-950/50 transition cursor-pointer disabled:opacity-50"
                 title="Ricarica tutti i contenuti dal server Xtream"
               >
-                <RefreshCw className={`w-4 h-4 ${isRefreshingCatalog ? 'animate-spin' : ''}`} />
-                <span>{isRefreshingCatalog ? 'Aggiornamento in corso...' : 'Aggiorna Catalogo'}</span>
+                <RefreshCw className={`w-4 h-4 sm:w-5 sm:h-5 ${isRefreshingCatalog ? 'animate-spin' : ''}`} />
+                <span>{isRefreshingCatalog ? 'Aggiornamento...' : 'Aggiorna Catalogo'}</span>
               </button>
 
               {lastRefreshedAt && (
-                <span className="hidden xl:inline text-[11px] text-zinc-400">
-                  Ultimo sync: {new Date(lastRefreshedAt).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
+                <span className="hidden xl:inline text-xs text-zinc-400 font-mono">
+                  Sync: {new Date(lastRefreshedAt).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
                 </span>
               )}
             </div>
@@ -553,12 +499,12 @@ export default function App() {
 
         {/* Catalog Views Content */}
         {isLoadingCatalog ? (
-          <div className="py-24 text-center">
-            <div className="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin mx-auto mb-4"></div>
-            <h3 className="text-base font-semibold text-white">
+          <div className="py-28 text-center">
+            <div className="w-14 h-14 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin mx-auto mb-4"></div>
+            <h3 className="text-lg sm:text-xl font-bold text-white">
               Recupero catalogo dal server Xtream...
             </h3>
-            <p className="text-xs text-zinc-400 mt-1 max-w-sm mx-auto">
+            <p className="text-sm text-zinc-400 mt-1.5 max-w-md mx-auto">
               Caricamento categorie, canali in diretta, film VOD e serie TV per l'account specificato.
             </p>
           </div>
@@ -572,6 +518,8 @@ export default function App() {
                 username={username}
                 password={password}
                 onPlay={handlePlayDirect}
+                activeMediaId={activeMedia?.id}
+                accountKey={currentAccountKey}
                 isLoading={isLoadingCatalog}
               />
             )}
@@ -584,6 +532,8 @@ export default function App() {
                 username={username}
                 password={password}
                 onPlay={handlePlayDirect}
+                activeMediaId={activeMedia?.id}
+                accountKey={currentAccountKey}
                 isLoading={isLoadingCatalog}
               />
             )}
@@ -596,6 +546,8 @@ export default function App() {
                 username={username}
                 password={password}
                 onPlay={handlePlayDirect}
+                activeMediaId={activeMedia?.id}
+                accountKey={currentAccountKey}
                 isLoading={isLoadingCatalog}
                 selectedSeriesId={selectedSeriesForModal}
                 onClearSelectedSeries={() => setSelectedSeriesForModal(null)}
@@ -625,122 +577,19 @@ export default function App() {
               />
             )}
 
-            {activeTab === 'favorites' && <FavoritesView onPlay={handlePlayDirect} />}
+            {activeTab === 'favorites' && (
+              <FavoritesView
+                onPlay={handlePlayDirect}
+                accountKey={currentAccountKey}
+              />
+            )}
           </div>
         ) : (
-          /* Empty State / Welcome Guide when not connected yet */
-          <div className="py-8 space-y-6">
-            <div className="p-6 sm:p-8 rounded-3xl bg-gradient-to-br from-zinc-900/90 to-zinc-950/90 border border-zinc-800 shadow-2xl relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none"></div>
-
-              <div className="max-w-2xl">
-                <div className="flex flex-wrap items-center gap-3 mb-4">
-                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold">
-                    <Sparkles className="w-3.5 h-3.5" />
-                    Xtream Codes Streaming Engine
-                  </div>
-                  <button
-                    onClick={() => setShowPrivacyModal(true)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-zinc-800/90 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 text-xs transition cursor-pointer font-medium"
-                  >
-                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                    Vuoi proteggere i tuoi dati su Render o in Locale? Clicca qui
-                  </button>
-                </div>
-
-                <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight leading-tight">
-                  Incolla il tuo link con credenziali e guarda subito i tuoi contenuti
-                </h2>
-
-                <p className="text-sm text-zinc-400 mt-3 leading-relaxed">
-                  Questo lettore multimediale estrae automaticamente host del server, nome utente,
-                  password e ID dello stream da qualsiasi link Xtream Codes. Puoi riprodurre il video
-                  immediatamente oppure sincronizzare l'intero catalogo di Film, Serie TV e Canali Live.
-                </p>
-
-                {/* Example Quick-Play Card */}
-                <div className="mt-6 p-4 rounded-2xl bg-zinc-950 border border-zinc-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                  <div className="min-w-0">
-                    <span className="text-[11px] font-semibold text-emerald-400 uppercase tracking-wider block mb-1">
-                      Link di esempio (dal tuo prompt)
-                    </span>
-                    <code className="text-xs text-zinc-300 font-mono break-all block">
-                      http://reload.loginflash.com/movie/User/Password/10112.mp4
-                    </code>
-                  </div>
-
-                  <button
-                    onClick={() => {
-                      const sample = 'http://reload.loginflash.com/movie/User/Password/10112.mp4';
-                      const parsed = parseXtreamUrl(sample);
-                      if (parsed) {
-                        const proxied = buildStreamUrl(
-                          parsed.serverUrl,
-                          parsed.username,
-                          parsed.password,
-                          'movie',
-                          '10112',
-                          'mp4',
-                          false
-                        );
-                        handlePlayDirect({
-                          id: 'sample_10112',
-                          title: 'Film Esempio #10112 (reload.loginflash.com)',
-                          type: 'movie',
-                          streamUrl: proxied,
-                          containerExtension: 'mp4',
-                          categoryName: 'Esempio Prompt',
-                        });
-                      }
-                    }}
-                    className="shrink-0 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs shadow-md transition flex items-center gap-2 cursor-pointer"
-                  >
-                    <Zap className="w-4 h-4 fill-white" />
-                    Prova Subito Esempio
-                  </button>
-                </div>
-              </div>
-
-              {/* Supported link types feature grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-8 pt-6 border-t border-zinc-800/80">
-                <div className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
-                  <div className="flex items-center gap-2 text-emerald-400 font-semibold text-xs mb-1">
-                    <Film className="w-4 h-4" />
-                    Film VOD
-                  </div>
-                  <p className="text-[11px] text-zinc-400">
-                    Formato: <code className="text-zinc-300">/movie/User/Pass/id.mp4</code>. Con supporto
-                    riavvolgimento, timeline seek e salto capitoli.
-                  </p>
-                </div>
-
-                <div className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
-                  <div className="flex items-center gap-2 text-rose-400 font-semibold text-xs mb-1">
-                    <Tv className="w-4 h-4" />
-                    Canali Live TV
-                  </div>
-                  <p className="text-[11px] text-zinc-400">
-                    Formato: <code className="text-zinc-300">/live/User/Pass/id.ts</code> o{' '}
-                    <code className="text-zinc-300">/User/Pass/id</code> in diretta streaming HLS/TS.
-                  </p>
-                </div>
-
-                <div className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
-                  <div className="flex items-center gap-2 text-blue-400 font-semibold text-xs mb-1">
-                    <Layers className="w-4 h-4" />
-                    Serie TV & M3U
-                  </div>
-                  <p className="text-[11px] text-zinc-400">
-                    Formato: <code className="text-zinc-300">/series/User/Pass/id.mp4</code> o link playlist{' '}
-                    <code className="text-zinc-300">get.php</code> con credenziali integrate.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Saved Accounts & History if available */}
-            <FavoritesView onPlay={handlePlayDirect} />
-          </div>
+          /* Clean Dedicated Login Form when not logged in (zero links/favorites before login) */
+          <LoginForm
+            onLogin={(targetServer, user, pass) => connectToServer(targetServer, user, pass)}
+            isLoading={isLoadingCatalog}
+          />
         )}
       </main>
 
@@ -750,37 +599,6 @@ export default function App() {
           authData={authData}
           serverUrl={serverUrl}
           onClose={() => setShowServerInfo(false)}
-        />
-      )}
-
-      {/* Privacy & Render Deploy Modal */}
-      {showPrivacyModal && (
-        <PrivacyDeployModal onClose={() => setShowPrivacyModal(false)} />
-      )}
-
-      {/* Install App Modal */}
-      {showInstallAppModal && (
-        <InstallAppModal
-          onClose={() => setShowInstallAppModal(false)}
-          canPrompt={Boolean(deferredPrompt)}
-          currentIcon={appIcon}
-          onIconChange={(newIcon) => setAppIconState(newIcon)}
-          onTriggerPrompt={() => {
-            if (deferredPrompt) {
-              deferredPrompt.prompt();
-            }
-          }}
-        />
-      )}
-
-      {/* Paste Link Modal */}
-      {showPasteLinkModal && (
-        <PasteLinkModal
-          onClose={() => setShowPasteLinkModal(false)}
-          onPlayDirect={handlePlayDirect}
-          onConnectCatalog={handleConnectCatalog}
-          currentConnectedServer={serverUrl}
-          isLoading={isLoadingCatalog}
         />
       )}
 
@@ -802,18 +620,9 @@ export default function App() {
         }}
       />
 
-      {/* Smart TV & Fire Stick QR Code & PIN Login Modal */}
-      <TvQrLoginModal
-        isOpen={showTvQrModal}
-        onClose={() => setShowTvQrModal(false)}
-        onSuccess={(creds) => {
-          connectToServer(creds.server, creds.username, creds.password, creds.originalLink);
-        }}
-      />
-
       {/* Footer */}
-      <footer className="w-full border-t border-zinc-900 bg-zinc-950 py-4 text-center text-xs text-zinc-600">
-        Xtream StreamPlayer &bull; Riproduttore multimediale universale per server Xtream Codes con proxy CORS integrato
+      <footer className="w-full border-t border-zinc-900 bg-zinc-950 py-4 text-center text-xs sm:text-sm text-zinc-600">
+        Xtream Player &bull; Riproduttore multimediale per server Xtream Codes
       </footer>
     </div>
   );
