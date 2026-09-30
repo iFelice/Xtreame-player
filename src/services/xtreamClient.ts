@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core';
 import {
   XtreamAuthResponse,
   XtreamCategory,
@@ -9,8 +10,10 @@ import {
 } from '../types/xtream';
 
 async function fetchFromXtream<T>(url: string): Promise<T> {
-  const proxyUrl = `/api/proxy/api?url=${encodeURIComponent(url)}`;
-  const res = await fetch(proxyUrl);
+  const isNative = Capacitor.isNativePlatform();
+  // Su app nativa iOS / Android si chiama direttamente il server IPTV senza passare da proxy web
+  const requestUrl = isNative ? url : `/api/proxy/api?url=${encodeURIComponent(url)}`;
+  const res = await fetch(requestUrl);
   if (!res.ok) {
     const errorText = await res.text();
     let msg = `HTTP ${res.status}`;

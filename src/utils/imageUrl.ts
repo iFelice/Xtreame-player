@@ -1,3 +1,5 @@
+import { Capacitor } from '@capacitor/core';
+
 /**
  * Utility to make image URLs secure (HTTPS) and avoid Mixed Content blocks in Chrome/Safari,
  * as well as bypassing hotlink/referer restrictions from IPTV servers.
@@ -10,6 +12,11 @@ export function getSecureImageUrl(rawUrl?: string | null): string {
 
   // If it's already a data: or blob: URL, return as is
   if (trimmed.startsWith('data:') || trimmed.startsWith('blob:')) {
+    return trimmed;
+  }
+
+  // Su app mobile nativa (iOS / Android), carichiamo direttamente senza proxy wsrv.nl
+  if (Capacitor.isNativePlatform()) {
     return trimmed;
   }
 

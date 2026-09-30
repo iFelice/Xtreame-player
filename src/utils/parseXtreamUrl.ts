@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core';
 import { XtreamParsedUrl } from '../types/xtream';
 
 /**
@@ -161,6 +162,10 @@ export function buildStreamUrl(
   }
 
   if (useProxy) {
+    // Su app nativa iOS / Android NON usiamo MAI il proxy: il flusso viene riprodotto direttamente dal server
+    if (Capacitor.isNativePlatform()) {
+      return streamPath;
+    }
     return `/api/proxy/stream?url=${encodeURIComponent(streamPath)}`;
   }
   return streamPath;

@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <!-- Background Gradient: Obsidian / Glassmorphism -->
+    <radialGradient id="bgGrad" cx="30%" cy="20%" r="90%">
+      <stop offset="0%" stop-color="#18221e"/>
+      <stop offset="50%" stop-color="#0c1110"/>
+      <stop offset="100%" stop-color="#050707"/>
+    </radialGradient>
+
+    <!-- Ring Accent: Cyber Emerald & Electric Mint -->
+    <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981"/>
+      <stop offset="40%" stop-color="#34d399"/>
+      <stop offset="70%" stop-color="#06b6d4"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </linearGradient>
+
+    <!-- Crystal Prism Play: Multi-Tone 3D -->
+    <linearGradient id="prismLeft" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6ee7b7"/>
+      <stop offset="100%" stop-color="#10b981"/>
+    </linearGradient>
+    <linearGradient id="prismRight" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#059669"/>
+      <stop offset="100%" stop-color="#065f46"/>
+    </linearGradient>
+    <linearGradient id="prismCenter" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#a7f3d0"/>
+      <stop offset="60%" stop-color="#34d399"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </linearGradient>
+
+    <!-- Glow Filter -->
+    <filter id="neonGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="22" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+
+  <!-- Squircle Base Canvas -->
+  <rect width="512" height="512" rx="140" fill="url(#bgGrad)"/>
+
+  <!-- High-Tech Glowing Ambient Ring -->
+  <rect x="24" y="24" width="464" height="464" rx="124" fill="none" stroke="url(#ringGrad)" stroke-width="12" opacity="0.85"/>
+  <rect x="36" y="36" width="440" height="440" rx="112" fill="none" stroke="#ffffff" stroke-width="2" opacity="0.15"/>
+
+  <!-- Stream Signal Wave Bars at top -->
+  <circle cx="216" cy="110" r="10" fill="#10b981" opacity="0.5"/>
+  <circle cx="256" cy="98" r="14" fill="#34d399" filter="url(#neonGlow)"/>
+  <circle cx="296" cy="110" r="10" fill="#10b981" opacity="0.5"/>
+
+  <!-- Dynamic Speed Stream Wings (Back of play icon) -->
+  <path d="M120 180 Q170 256 120 332" stroke="#10b981" stroke-width="14" stroke-linecap="round" fill="none" opacity="0.3" filter="url(#neonGlow)"/>
+  <path d="M155 205 Q190 256 155 307" stroke="#34d399" stroke-width="14" stroke-linecap="round" fill="none" opacity="0.6"/>
+
+  <!-- Iconic 3D Faceted Crystal Play Button -->
+  <!-- Upper facet -->
+  <path d="M210 160 L360 256 L265 256 Z" fill="url(#prismCenter)" filter="url(#neonGlow)"/>
+  <!-- Lower facet -->
+  <path d="M210 352 L360 256 L265 256 Z" fill="url(#prismRight)"/>
+  <!-- Left base facet -->
+  <path d="M210 160 L265 256 L210 352 Z" fill="url(#prismLeft)"/>
+
+  <!-- Center Shimmer Core Line -->
+  <path d="M210 160 L360 256 L210 352" stroke="#ffffff" stroke-width="6" stroke-linejoin="round" fill="none" opacity="0.6"/>
+
+  <!-- Subtle Brand Xtream 'X' spark -->
+  <circle cx="360" cy="256" r="12" fill="#ffffff" filter="url(#neonGlow)"/>
+</svg>
