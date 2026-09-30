@@ -192,8 +192,8 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
 
       {/* Movie Grid */}
       {isLoading ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-          {Array.from({ length: 12 }).map((_, i) => (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 3xl:grid-cols-8 4xl:grid-cols-10 gap-4">
+          {Array.from({ length: 14 }).map((_, i) => (
             <div key={i} className="aspect-2/3 bg-zinc-900 animate-pulse rounded-xl border border-zinc-800"></div>
           ))}
         </div>
@@ -206,7 +206,7 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 3xl:grid-cols-8 4xl:grid-cols-10 gap-4">
           {filteredStreams.map((stream) => {
             const isFav = storage.isFavorite(`movie_${stream.stream_id}`);
             return (

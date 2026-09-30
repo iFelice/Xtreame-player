@@ -702,24 +702,6 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
                   </button>
                 </>
               )}
-              <button
-                type="button"
-                onClick={() => {
-                  const nextVal = !useProxy;
-                  setUseProxy(nextVal);
-                  try {
-                    localStorage.setItem('xtream_use_proxy', String(nextVal));
-                  } catch {}
-                }}
-                className={`text-[10px] font-medium px-2 py-0.5 rounded cursor-pointer border transition flex items-center gap-1 ${
-                  useProxy
-                    ? 'text-amber-300 bg-amber-950/80 border-amber-700/80 hover:bg-amber-900/90'
-                    : 'text-emerald-300 bg-emerald-950/80 border-emerald-700/80 hover:bg-emerald-900/90'
-                }`}
-                title="Clicca per alternare tra Stream Diretto (Consumo server: 0 MB) e Proxy Server"
-              >
-                {useProxy ? 'Proxy Server (Consuma Banda)' : '⚡ Stream Diretto (Zero Banda)'}
-              </button>
             </div>
           </div>
         </div>

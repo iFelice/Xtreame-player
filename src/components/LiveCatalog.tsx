@@ -5,6 +5,49 @@ import { buildStreamUrl } from '../utils/parseXtreamUrl';
 import { storage } from '../services/storage';
 import { getSecureImageUrl } from '../utils/imageUrl';
 
+// Smart Channel Logo component with styled fallback initials to avoid black boxes
+const ChannelLogo: React.FC<{ icon?: string; name: string; size?: 'sm' | 'md' }> = ({
+  icon,
+  name,
+  size = 'md',
+}) => {
+  const [hasError, setHasError] = useState(false);
+
+  // Extract clean recognizable initials (e.g. Rai 1 HD -> R1, Canale 5 -> C5, TG3 -> TG3)
+  const initials = useMemo(() => {
+    const cleaned = name
+      .replace(/\[.*?\]|\(.*?\)|HD|FHD|4K|UHD|IT:|ITA:|IT|HEVC|H\.265/gi, '')
+      .trim();
+    const parts = cleaned.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return (cleaned.slice(0, 3) || 'TV').toUpperCase();
+  }, [name]);
+
+  if (!icon || hasError) {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-zinc-800 to-zinc-950 text-rose-400 font-bold font-mono rounded-lg shadow-inner border border-zinc-800 select-none p-0.5">
+        <span className={`${size === 'sm' ? 'text-[10px]' : 'text-xs'} tracking-wider leading-none font-bold`}>
+          {initials}
+        </span>
+        <Tv className={`${size === 'sm' ? 'w-2.5 h-2.5' : 'w-3 h-3'} text-zinc-500 mt-0.5 opacity-70`} />
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={getSecureImageUrl(icon)}
+      alt={name}
+      referrerPolicy="no-referrer"
+      loading="lazy"
+      onError={() => setHasError(true)}
+      className="w-full h-full object-contain"
+    />
+  );
+};
+
 interface LiveCatalogProps {
   categories: XtreamCategory[];
   streams: XtreamLiveStream[];
@@ -200,8 +243,8 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
 
       {/* Channels display */}
       {isLoading ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-          {Array.from({ length: 12 }).map((_, i) => (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 3xl:grid-cols-8 4xl:grid-cols-10 gap-3 sm:gap-4">
+          {Array.from({ length: 14 }).map((_, i) => (
             <div key={i} className="h-28 bg-zinc-900 animate-pulse rounded-xl border border-zinc-800"></div>
           ))}
         </div>
@@ -229,20 +272,7 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
                     {stream.num || idx + 1}
                   </span>
                   <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-zinc-950 border border-zinc-800 p-1 flex items-center justify-center overflow-hidden shrink-0">
-                    {stream.stream_icon ? (
-                      <img
-                        src={getSecureImageUrl(stream.stream_icon)}
-                        alt={stream.name}
-                        referrerPolicy="no-referrer"
-                        loading="lazy"
-                        onError={(e) => {
-                          (e.target as HTMLElement).style.display = 'none';
-                        }}
-                        className="w-full h-full object-contain"
-                      />
-                    ) : (
-                      <Tv className="w-5 h-5 text-zinc-600" />
-                    )}
+                    <ChannelLogo icon={stream.stream_icon} name={stream.name} size="sm" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <h4 className="text-xs sm:text-sm font-semibold text-white truncate group-hover:text-rose-400 transition">
@@ -291,7 +321,7 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
         </div>
       ) : (
         /* Vista a Icone / Card */
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 3xl:grid-cols-8 4xl:grid-cols-10 gap-3 sm:gap-4">
           {filteredStreams.map((stream) => {
             const isFav = storage.isFavorite(`live_${stream.stream_id}`);
             return (
@@ -303,20 +333,7 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
                 {/* Channel top: Logo and Fav */}
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <div className="w-12 h-12 rounded-lg bg-zinc-950 border border-zinc-800 p-1 flex items-center justify-center overflow-hidden shrink-0">
-                    {stream.stream_icon ? (
-                      <img
-                        src={getSecureImageUrl(stream.stream_icon)}
-                        alt={stream.name}
-                        referrerPolicy="no-referrer"
-                        loading="lazy"
-                        onError={(e) => {
-                          (e.target as HTMLElement).style.display = 'none';
-                        }}
-                        className="w-full h-full object-contain"
-                      />
-                    ) : (
-                      <Tv className="w-6 h-6 text-zinc-600" />
-                    )}
+                    <ChannelLogo icon={stream.stream_icon} name={stream.name} size="md" />
                   </div>
 
                   <div className="flex items-center gap-1">

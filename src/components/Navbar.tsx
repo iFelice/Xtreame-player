@@ -48,18 +48,16 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   return (
     <header className="sticky top-0 z-40 w-full max-w-full bg-zinc-950/95 backdrop-blur-md border-b border-zinc-800/80">
-      <div className="max-w-7xl mx-auto px-2.5 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-1.5 sm:gap-3">
+      <div className="w-full max-w-[2400px] mx-auto px-3 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-4">
         {/* Brand with Dynamic Icon */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           <div
-            onClick={onInstallApp}
-            className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-zinc-900 border border-zinc-700/80 p-0.5 sm:p-1 flex items-center justify-center shadow-lg shadow-emerald-950/30 cursor-pointer hover:border-emerald-500 transition group shrink-0"
-            title="Personalizza icona o installa l'app"
+            className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-zinc-900 border border-zinc-700/80 p-0.5 sm:p-1 flex items-center justify-center shadow-lg shadow-emerald-950/30 group shrink-0"
           >
             <img
               src={currentAppIcon}
               alt="Xtream Player Icon"
-              className="w-full h-full object-contain group-hover:scale-105 transition-transform"
+              className="w-full h-full object-contain"
             />
           </div>
           <div>
@@ -77,65 +75,19 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </div>
 
-        {/* Server & Connection Status / Controls */}
-        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-          {/* TV QR Login Button */}
-          {onOpenTvQrLogin && (
-            <button
-              onClick={onOpenTvQrLogin}
-              className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-xs text-emerald-300 transition cursor-pointer font-bold shadow-xs"
-              title="Accedi facilmente dalla TV o Fire TV Stick inquadrando un QR Code dal tuo smartphone"
-            >
-              <Tv className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="text-[11px] sm:text-xs">TV Login</span>
-            </button>
-          )}
-
-          {/* Settings & QR Code Sync Button (Primary button on Mobile and Desktop) */}
-          {onOpenSettingsSync && (
-            <button
-              onClick={onOpenSettingsSync}
-              className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-emerald-700/50 hover:border-emerald-500 text-xs text-emerald-300 hover:text-emerald-200 transition cursor-pointer shadow-xs"
-              title="Apri Impostazioni, modifica Server/User/Password o scansiona QR Code"
-            >
-              <QrCode className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="font-semibold text-[11px] sm:text-xs">QR / Setup</span>
-            </button>
-          )}
-
+        {/* Server & Connection Controls */}
+        <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
           {/* Incolla Link Button */}
           {onOpenPasteLink && (
             <button
               onClick={onOpenPasteLink}
-              className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-semibold shadow-md shadow-emerald-950/40 transition cursor-pointer"
+              className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-semibold shadow-md shadow-emerald-950/40 transition cursor-pointer"
               title="Incolla un link streaming diretto o connetti un nuovo server"
             >
               <Link2 className="w-3.5 h-3.5 text-emerald-100" />
-              <span className="font-semibold text-[11px] sm:text-xs hidden xs:inline">Link</span>
+              <span className="font-semibold text-[11px] sm:text-xs">Nuovo Link</span>
             </button>
           )}
-
-          {/* Install App Button (Visible on desktop/tablet) */}
-          {onInstallApp && (
-            <button
-              onClick={onInstallApp}
-              className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs text-zinc-300 hover:text-emerald-400 transition cursor-pointer"
-              title="Salva come app su Desktop o Telefono"
-            >
-              <Download className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="font-medium">Installa</span>
-            </button>
-          )}
-
-          {/* Privacy & Render Deploy Button (Desktop only) */}
-          <button
-            onClick={onOpenPrivacy}
-            className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800/90 border border-zinc-800 text-xs text-zinc-300 hover:text-emerald-400 transition cursor-pointer"
-            title="Privacy dei dati & Guida Deploy su Render"
-          >
-            <Shield className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="font-medium">Deploy</span>
-          </button>
 
           {isConnected ? (
             <div className="flex items-center gap-1 sm:gap-2">
