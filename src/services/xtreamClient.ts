@@ -17,7 +17,13 @@ async function fetchFromXtream<T>(url: string): Promise<T> {
     try {
       const parsed = JSON.parse(errorText);
       if (parsed.error) msg = parsed.error;
-    } catch {}
+    } catch {
+      if (res.status === 530) {
+        msg = 'HTTP 530: Il server IPTV non è raggiungibile o ha bloccato la connessione DNS/Cloudflare. Verifica se il link include la porta (es. :8080) o prova con http:// invece di https://.';
+      } else if (res.status === 502 || res.status === 504) {
+        msg = `HTTP ${res.status}: Il server IPTV risulta offline o non raggiungibile.`;
+      }
+    }
     throw new Error(msg);
   }
   return res.json();

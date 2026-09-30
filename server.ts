@@ -277,39 +277,77 @@ app.get('/api/proxy/api', async (req, res) => {
     return res.status(400).json({ error: 'Missing url parameter' });
   }
 
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 20000);
-
-    const response = await fetch(targetUrl, {
-      method: 'GET',
-      headers: {
-        'User-Agent': DEFAULT_USER_AGENT,
-        'Accept': 'application/json, text/plain, */*',
-      },
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeout);
-
-    const text = await response.text();
-
-    // Check if it's JSON
-    try {
-      const data = JSON.parse(text);
-      res.json(data);
-    } catch {
-      // Send raw text if not valid JSON (e.g. m3u or error string)
-      res.header('Content-Type', 'text/plain');
-      res.send(text);
-    }
-  } catch (err: any) {
-    console.error('API proxy error:', err.message);
-    res.status(502).json({
-      error: `Errore di connessione al server Xtream: ${err.message}`,
-      targetUrl,
-    });
+  const urlsToTry = [targetUrl];
+  if (targetUrl.startsWith('https://')) {
+    urlsToTry.push(targetUrl.replace(/^https:\/\//i, 'http://'));
+  } else if (targetUrl.startsWith('http://')) {
+    urlsToTry.push(targetUrl.replace(/^http:\/\//i, 'https://'));
   }
+
+  const userAgents = [
+    DEFAULT_USER_AGENT,
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'VLC/3.0.18 LibVLC/3.0.18',
+  ];
+
+  let lastStatus = 502;
+  let lastText = '';
+
+  for (const currentUrl of urlsToTry) {
+    for (const ua of userAgents) {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 12000);
+
+        const response = await fetch(currentUrl, {
+          method: 'GET',
+          headers: {
+            'User-Agent': ua,
+            'Accept': 'application/json, text/plain, */*',
+          },
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeout);
+        lastStatus = response.status;
+        const text = await response.text();
+        lastText = text;
+
+        if (response.ok) {
+          try {
+            const data = JSON.parse(text);
+            return res.json(data);
+          } catch {
+            res.header('Content-Type', 'text/plain');
+            return res.send(text);
+          }
+        }
+
+        if (response.status === 401) {
+          try {
+            return res.status(401).json(JSON.parse(text));
+          } catch {
+            return res.status(401).send(text);
+          }
+        }
+      } catch (err: any) {
+        lastText = err?.message || String(err);
+      }
+    }
+  }
+
+  let friendlyMessage = `Errore di connessione (HTTP ${lastStatus})`;
+  if (lastStatus === 530) {
+    friendlyMessage = 'HTTP 530: Il server IPTV non è raggiungibile o ha bloccato la connessione DNS/Cloudflare. Verifica se hai inserito la porta corretta (es. :8080) o prova con http:// anziché https://.';
+  } else if (lastStatus === 502 || lastStatus === 504) {
+    friendlyMessage = `HTTP ${lastStatus}: Il server IPTV risulta offline o non risponde entro i tempi previsti.`;
+  }
+
+  return res.status(lastStatus >= 400 && lastStatus < 600 ? lastStatus : 502).json({
+    error: friendlyMessage,
+    status: lastStatus,
+    targetUrl,
+  });
 });
 
 // Quick endpoint to test server connectivity and parse credentials

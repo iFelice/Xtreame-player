@@ -78,6 +78,7 @@ export default {
 
     if (targetUrl) {
       try {
+        const isApi = requestUrl.pathname.includes('/api/proxy/api') || targetUrl.includes('player_api.php');
         const isM3u8 = targetUrl.toLowerCase().includes('.m3u8');
         const forwardHeaders = new Headers();
         forwardHeaders.set('User-Agent', DEFAULT_USER_AGENT);
@@ -89,11 +90,30 @@ export default {
           forwardHeaders.set('Range', rangeHeader);
         }
 
-        const response = await fetch(targetUrl, {
+        let response = await fetch(targetUrl, {
           method: request.method === 'HEAD' ? 'HEAD' : 'GET',
           headers: forwardHeaders,
           redirect: 'follow',
         });
+
+        // Se l'API restituisce 530 o 5xx, prova a invertire http / https
+        if (isApi && !response.ok && (response.status === 530 || response.status >= 500)) {
+          try {
+            const altUrl = targetUrl.startsWith('https://')
+              ? targetUrl.replace(/^https:\/\//i, 'http://')
+              : targetUrl.replace(/^http:\/\//i, 'https://');
+            const altResponse = await fetch(altUrl, {
+              method: 'GET',
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                'Accept': 'application/json, text/plain, */*',
+              },
+            });
+            if (altResponse.ok) {
+              response = altResponse;
+            }
+          } catch (e) {}
+        }
 
         if (isM3u8 && response.ok) {
           const text = await response.text();
