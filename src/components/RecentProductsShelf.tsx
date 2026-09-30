@@ -20,6 +20,7 @@ import { sortVodStreams, sortSeriesList, formatRecentDate } from '../utils/recen
 import { buildStreamUrl } from '../utils/parseXtreamUrl';
 import { storage } from '../services/storage';
 import { startMediaDownload } from '../utils/downloadManager';
+import { getSecureImageUrl } from '../utils/imageUrl';
 
 interface RecentProductsShelfProps {
   vodStreams: XtreamVodStream[];
@@ -154,8 +155,9 @@ export const RecentProductsShelf: React.FC<RecentProductsShelfProps> = ({
                 <div className="relative aspect-2/3 bg-zinc-900 overflow-hidden">
                   {movie.stream_icon ? (
                     <img
-                      src={movie.stream_icon}
+                      src={getSecureImageUrl(movie.stream_icon)}
                       alt={movie.name}
+                      referrerPolicy="no-referrer"
                       loading="lazy"
                       onError={(e) => {
                         (e.target as HTMLElement).style.display = 'none';
@@ -278,8 +280,9 @@ export const RecentProductsShelf: React.FC<RecentProductsShelfProps> = ({
                 <div className="relative aspect-2/3 bg-zinc-900 overflow-hidden">
                   {series.cover ? (
                     <img
-                      src={series.cover}
+                      src={getSecureImageUrl(series.cover)}
                       alt={series.name}
+                      referrerPolicy="no-referrer"
                       loading="lazy"
                       onError={(e) => {
                         (e.target as HTMLElement).style.display = 'none';

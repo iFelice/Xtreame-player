@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Star, Clock, Play, Trash2, Film, Tv, Radio } from 'lucide-react';
 import { PlayableMediaItem } from '../types/xtream';
 import { storage, WatchHistoryItem } from '../services/storage';
+import { getSecureImageUrl } from '../utils/imageUrl';
 
 interface FavoritesViewProps {
   onPlay: (item: PlayableMediaItem) => void;
@@ -82,8 +83,9 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({ onPlay }) => {
                   <div className="w-20 h-14 bg-zinc-950 rounded-lg overflow-hidden shrink-0 relative flex items-center justify-center">
                     {h.media.poster ? (
                       <img
-                        src={h.media.poster}
+                        src={getSecureImageUrl(h.media.poster)}
                         alt={h.media.title}
+                        referrerPolicy="no-referrer"
                         className="w-full h-full object-cover"
                       />
                     ) : (
@@ -144,8 +146,9 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({ onPlay }) => {
                 <div className="relative aspect-2/3 bg-zinc-950 flex items-center justify-center">
                   {item.poster ? (
                     <img
-                      src={item.poster}
+                      src={getSecureImageUrl(item.poster)}
                       alt={item.title}
+                      referrerPolicy="no-referrer"
                       className="w-full h-full object-cover group-hover:scale-105 transition duration-200"
                     />
                   ) : (

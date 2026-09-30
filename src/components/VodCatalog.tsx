@@ -20,6 +20,7 @@ import { xtreamClient } from '../services/xtreamClient';
 import { storage } from '../services/storage';
 import { sortVodStreams } from '../utils/recentSorting';
 import { startMediaDownload } from '../utils/downloadManager';
+import { getSecureImageUrl } from '../utils/imageUrl';
 
 interface VodCatalogProps {
   categories: XtreamCategory[];
@@ -217,8 +218,9 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                 <div className="relative aspect-2/3 bg-zinc-950 overflow-hidden">
                   {stream.stream_icon ? (
                     <img
-                      src={stream.stream_icon}
+                      src={getSecureImageUrl(stream.stream_icon)}
                       alt={stream.name}
+                      referrerPolicy="no-referrer"
                       loading="lazy"
                       onError={(e) => {
                         // Fallback placeholder
@@ -359,11 +361,12 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                 {/* Poster */}
                 <div className="w-32 sm:w-40 aspect-2/3 shrink-0 rounded-xl overflow-hidden border border-zinc-700 bg-zinc-950 shadow-md">
                   <img
-                    src={
+                    src={getSecureImageUrl(
                       activeMovieDetail.details?.info?.movie_image ||
                       activeMovieDetail.stream.stream_icon
-                    }
+                    )}
                     alt={activeMovieDetail.stream.name}
+                    referrerPolicy="no-referrer"
                     className="w-full h-full object-cover"
                   />
                 </div>

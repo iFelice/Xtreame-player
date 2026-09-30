@@ -237,13 +237,20 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
         console.warn('HLS Event Error:', data.type, data.details);
         switch (data.type) {
           case Hls.ErrorTypes.NETWORK_ERROR:
-            if (netRetries < 3) {
+            if (netRetries < 2) {
               netRetries++;
               hls.startLoad();
             } else {
-              // Seamless fallback to TS format without an error wall
               hls.destroy();
-              setLiveFormat('ts');
+              const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+              if (isHttps && !useProxy) {
+                setErrorMessage(
+                  'Il browser (Chrome/Safari su HTTPS) blocca i flussi video HTTP diretti ("Mixed Content"). Clicca sul pulsante sotto per attivare il Proxy HTTPS e avviare il video.'
+                );
+                setIsLoading(false);
+              } else {
+                setLiveFormat('ts');
+              }
             }
             break;
           case Hls.ErrorTypes.MEDIA_ERROR:
@@ -503,9 +510,16 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
             return;
           }
           setIsLoading(false);
-          setErrorMessage(
-            'Errore di caricamento del flusso video. Verifica se il server è attivo o prova a disattivare/attivare il proxy.'
-          );
+          const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+          if (isHttps && !useProxy) {
+            setErrorMessage(
+              'Il browser (Chrome/Safari su HTTPS) blocca i flussi video HTTP diretti ("Mixed Content"). Clicca sul pulsante verde sotto per attivare il Proxy HTTPS e avviare il video.'
+            );
+          } else {
+            setErrorMessage(
+              'Errore di caricamento del flusso video. Verifica se il canale o server IPTV è attivo, oppure prova a cambiare formato (.ts / .m3u8).'
+            );
+          }
         }}
         onClick={togglePlay}
         className={`w-full h-full cursor-pointer transition-all duration-200 ${
@@ -566,10 +580,16 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
                 try {
                   localStorage.setItem('xtream_use_proxy', String(nextVal));
                 } catch {}
+                setErrorMessage(null);
+                setIsLoading(true);
               }}
-              className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-sm font-medium flex items-center gap-2 border border-zinc-700 transition cursor-pointer"
+              className={`px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 transition cursor-pointer shadow-md ${
+                !useProxy
+                  ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-950/50'
+                  : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700'
+              }`}
             >
-              {useProxy ? '⚡ Passa a Stream Diretto (Consumo Zero)' : '🛡️ Attiva Proxy Server (Se il browser blocca lo stream)'}
+              {useProxy ? '⚡ Passa a Stream Diretto (Consumo Zero)' : '🛡️ Attiva Proxy HTTPS (Riproduci in Chrome/Safari)'}
             </button>
 
             <button

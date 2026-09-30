@@ -3,6 +3,7 @@ import { Search, Tv, Star, Play, Layers, LayoutGrid, List } from 'lucide-react';
 import { XtreamCategory, XtreamLiveStream, PlayableMediaItem } from '../types/xtream';
 import { buildStreamUrl } from '../utils/parseXtreamUrl';
 import { storage } from '../services/storage';
+import { getSecureImageUrl } from '../utils/imageUrl';
 
 interface LiveCatalogProps {
   categories: XtreamCategory[];
@@ -230,8 +231,9 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
                   <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-zinc-950 border border-zinc-800 p-1 flex items-center justify-center overflow-hidden shrink-0">
                     {stream.stream_icon ? (
                       <img
-                        src={stream.stream_icon}
+                        src={getSecureImageUrl(stream.stream_icon)}
                         alt={stream.name}
+                        referrerPolicy="no-referrer"
                         loading="lazy"
                         onError={(e) => {
                           (e.target as HTMLElement).style.display = 'none';
@@ -303,8 +305,9 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
                   <div className="w-12 h-12 rounded-lg bg-zinc-950 border border-zinc-800 p-1 flex items-center justify-center overflow-hidden shrink-0">
                     {stream.stream_icon ? (
                       <img
-                        src={stream.stream_icon}
+                        src={getSecureImageUrl(stream.stream_icon)}
                         alt={stream.name}
+                        referrerPolicy="no-referrer"
                         loading="lazy"
                         onError={(e) => {
                           (e.target as HTMLElement).style.display = 'none';

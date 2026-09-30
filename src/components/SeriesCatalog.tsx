@@ -26,6 +26,7 @@ import { xtreamClient } from '../services/xtreamClient';
 import { storage } from '../services/storage';
 import { sortSeriesList } from '../utils/recentSorting';
 import { startMediaDownload } from '../utils/downloadManager';
+import { getSecureImageUrl } from '../utils/imageUrl';
 
 interface SeriesCatalogProps {
   categories: XtreamCategory[];
@@ -252,8 +253,9 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                 <div className="relative aspect-2/3 bg-zinc-950 overflow-hidden">
                   {series.cover ? (
                     <img
-                      src={series.cover}
+                      src={getSecureImageUrl(series.cover)}
                       alt={series.name}
+                      referrerPolicy="no-referrer"
                       loading="lazy"
                       onError={(e) => {
                         (e.target as HTMLElement).style.display = 'none';
@@ -335,8 +337,11 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
               <div className="flex gap-4 items-center">
                 <div className="w-16 h-24 rounded-lg overflow-hidden shrink-0 border border-zinc-700 bg-zinc-900">
                   <img
-                    src={activeSeriesDetail.info?.info?.cover || activeSeriesDetail.series.cover}
+                    src={getSecureImageUrl(
+                      activeSeriesDetail.info?.info?.cover || activeSeriesDetail.series.cover
+                    )}
                     alt={activeSeriesDetail.series.name}
+                    referrerPolicy="no-referrer"
                     className="w-full h-full object-cover"
                   />
                 </div>
