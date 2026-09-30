@@ -293,7 +293,7 @@ export default function App() {
         'live',
         nextStream.stream_id,
         'm3u8',
-        true
+        false
       );
       setActiveMedia({
         id: `live_${nextStream.stream_id}`,
@@ -321,7 +321,7 @@ export default function App() {
         'live',
         prevStream.stream_id,
         'm3u8',
-        true
+        false
       );
       setActiveMedia({
         id: `live_${prevStream.stream_id}`,
@@ -660,7 +660,7 @@ export default function App() {
                           'movie',
                           '10112',
                           'mp4',
-                          true
+                          false
                         );
                         handlePlayDirect({
                           id: 'sample_10112',

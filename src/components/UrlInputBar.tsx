@@ -88,7 +88,7 @@ export const UrlInputBar: React.FC<UrlInputBarProps> = ({
       streamType,
       streamId,
       ext,
-      true
+      false
     );
 
     const mediaItem: PlayableMediaItem = {

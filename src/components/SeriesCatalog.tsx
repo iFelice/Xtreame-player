@@ -126,7 +126,7 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
       'series',
       episode.id,
       ext,
-      true
+      false
     );
 
     const mediaItem: PlayableMediaItem = {

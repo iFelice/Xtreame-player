@@ -147,7 +147,7 @@ export function buildStreamUrl(
   type: 'movie' | 'series' | 'live',
   streamId: string | number,
   containerExtension: string = 'mp4',
-  useProxy: boolean = true
+  useProxy: boolean = false
 ): string {
   const cleanServer = serverUrl.replace(/\/+$/, '');
   let streamPath = '';

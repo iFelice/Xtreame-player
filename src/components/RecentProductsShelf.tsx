@@ -63,7 +63,7 @@ export const RecentProductsShelf: React.FC<RecentProductsShelfProps> = ({
       'movie',
       movie.stream_id,
       ext,
-      true
+      false
     );
 
     const mediaItem: PlayableMediaItem = {
@@ -201,7 +201,7 @@ export const RecentProductsShelf: React.FC<RecentProductsShelfProps> = ({
                           'movie',
                           movie.stream_id,
                           movie.container_extension || 'mp4',
-                          true
+                          false
                         ),
                         poster: movie.stream_icon,
                         containerExtension: movie.container_extension,

@@ -60,7 +60,13 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   const [showSettings, setShowSettings] = useState<boolean>(false);
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
   const [controlsVisible, setControlsVisible] = useState<boolean>(true);
-  const [useProxy, setUseProxy] = useState<boolean>(true);
+  const [useProxy, setUseProxy] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('xtream_use_proxy') === 'true';
+    } catch {
+      return false;
+    }
+  });
   const [liveFormat, setLiveFormat] = useState<'m3u8' | 'ts'>('m3u8');
   const hideControlsTimerRef = useRef<any>(null);
 
@@ -554,10 +560,16 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
             )}
 
             <button
-              onClick={() => setUseProxy(!useProxy)}
-              className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-sm font-medium flex items-center gap-2 border border-zinc-700 transition"
+              onClick={() => {
+                const nextVal = !useProxy;
+                setUseProxy(nextVal);
+                try {
+                  localStorage.setItem('xtream_use_proxy', String(nextVal));
+                } catch {}
+              }}
+              className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-sm font-medium flex items-center gap-2 border border-zinc-700 transition cursor-pointer"
             >
-              {useProxy ? 'Prova Stream Diretto (No Proxy)' : 'Attiva Proxy Server'}
+              {useProxy ? '⚡ Passa a Stream Diretto (Consumo Zero)' : '🛡️ Attiva Proxy Server (Se il browser blocca lo stream)'}
             </button>
 
             <button
@@ -670,15 +682,24 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
                   </button>
                 </>
               )}
-              {useProxy ? (
-                <span className="text-emerald-400 text-[10px] bg-emerald-950/70 border border-emerald-800/60 px-1.5 py-0.5 rounded">
-                  Proxy CORS Attivo
-                </span>
-              ) : (
-                <span className="text-amber-400 text-[10px] bg-amber-950/70 border border-amber-800/60 px-1.5 py-0.5 rounded">
-                  Stream Diretto
-                </span>
-              )}
+              <button
+                type="button"
+                onClick={() => {
+                  const nextVal = !useProxy;
+                  setUseProxy(nextVal);
+                  try {
+                    localStorage.setItem('xtream_use_proxy', String(nextVal));
+                  } catch {}
+                }}
+                className={`text-[10px] font-medium px-2 py-0.5 rounded cursor-pointer border transition flex items-center gap-1 ${
+                  useProxy
+                    ? 'text-amber-300 bg-amber-950/80 border-amber-700/80 hover:bg-amber-900/90'
+                    : 'text-emerald-300 bg-emerald-950/80 border-emerald-700/80 hover:bg-emerald-900/90'
+                }`}
+                title="Clicca per alternare tra Stream Diretto (Consumo server: 0 MB) e Proxy Server"
+              >
+                {useProxy ? 'Proxy Server (Consuma Banda)' : '⚡ Stream Diretto (Zero Banda)'}
+              </button>
             </div>
           </div>
         </div>

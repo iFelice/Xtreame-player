@@ -92,7 +92,7 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
       'movie',
       stream.stream_id,
       ext,
-      true
+      false
     );
 
     const mediaItem: PlayableMediaItem = {
@@ -252,7 +252,7 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                         id: `movie_${stream.stream_id}`,
                         title: stream.name,
                         type: 'movie',
-                        streamUrl: buildStreamUrl(serverUrl, username, password, 'movie', stream.stream_id, stream.container_extension || 'mp4', true),
+                        streamUrl: buildStreamUrl(serverUrl, username, password, 'movie', stream.stream_id, stream.container_extension || 'mp4', false),
                         poster: stream.stream_icon,
                         containerExtension: stream.container_extension,
                       };

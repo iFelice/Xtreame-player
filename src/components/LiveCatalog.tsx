@@ -70,7 +70,7 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
       'live',
       stream.stream_id,
       'm3u8',
-      true
+      false
     );
 
     const mediaItem: PlayableMediaItem = {
@@ -94,7 +94,7 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
       'live',
       stream.stream_id,
       'm3u8',
-      true
+      false
     );
     const item: PlayableMediaItem = {
       id: `live_${stream.stream_id}`,
