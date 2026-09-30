@@ -123,6 +123,14 @@ export const storage = {
     }
   },
 
+  clearLastAccount(): void {
+    try {
+      localStorage.removeItem(LAST_ACCOUNT_KEY);
+    } catch (e) {
+      console.error('Failed to clear last account:', e);
+    }
+  },
+
   deleteAccount(id: string): void {
     try {
       const existing = this.getAccounts().filter((a) => a.id !== id);

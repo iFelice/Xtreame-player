@@ -14,6 +14,8 @@ import {
   Film,
   Tv,
   HelpCircle,
+  QrCode,
+  Smartphone,
 } from 'lucide-react';
 import { parseXtreamUrl, buildStreamUrl } from '../utils/parseXtreamUrl';
 import { XtreamParsedUrl, PlayableMediaItem } from '../types/xtream';
@@ -23,6 +25,7 @@ interface UrlInputBarProps {
   onConnectCatalog: (parsed: XtreamParsedUrl) => void;
   currentConnectedServer?: string | null;
   isLoading?: boolean;
+  onOpenTvQrLogin?: () => void;
 }
 
 const EXAMPLE_LINK = 'http://reload.loginflash.com/movie/User/Password/10112.mp4';
@@ -32,6 +35,7 @@ export const UrlInputBar: React.FC<UrlInputBarProps> = ({
   onConnectCatalog,
   currentConnectedServer,
   isLoading = false,
+  onOpenTvQrLogin,
 }) => {
   const [urlInput, setUrlInput] = useState<string>('');
   const [parsed, setParsed] = useState<XtreamParsedUrl | null>(null);
@@ -133,6 +137,18 @@ export const UrlInputBar: React.FC<UrlInputBarProps> = ({
         </div>
 
         <div className="flex items-center gap-2 text-xs">
+          {onOpenTvQrLogin && (
+            <button
+              type="button"
+              onClick={onOpenTvQrLogin}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold transition cursor-pointer shadow-md shadow-emerald-500/20"
+              title="Accedi facilmente dalla TV o Fire Stick inquadrando un QR Code dal tuo smartphone"
+            >
+              <QrCode className="w-3.5 h-3.5" />
+              <span>Accesso TV con QR Code</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={handleLoadExample}

@@ -402,6 +402,78 @@ app.post('/api/xtream/test', async (req, res) => {
   }
 });
 
+// ==========================================
+// SMART TV / REMOTE LOGIN VIA QR CODE & PIN
+// (Compatibile al 100% con iFelice/login-extream)
+// ==========================================
+interface RemoteSession {
+  status: 'pending' | 'completed';
+  data: {
+    server: string;
+    username: string;
+    password: string;
+    originalLink?: string;
+  } | null;
+  createdAt: number;
+}
+
+const remoteSessions = new Map<string, RemoteSession>();
+
+// Cleanup periodico sessioni vecchie (> 15 minuti)
+setInterval(() => {
+  const now = Date.now();
+  for (const [code, session] of remoteSessions.entries()) {
+    if (now - session.createdAt > 15 * 60 * 1000) {
+      remoteSessions.delete(code);
+    }
+  }
+}, 60 * 1000);
+
+// 1. Chiamata dalla TV per generare un nuovo PIN temporaneo a 6 cifre
+app.get('/api/session/create', (_req, res) => {
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  remoteSessions.set(code, {
+    status: 'pending',
+    data: null,
+    createdAt: Date.now(),
+  });
+  res.json({ code, expiresInSeconds: 600 });
+});
+
+// 2. Chiamata dallo smartphone (Wi-Fi o 5G) per inviare le credenziali alla TV
+app.post('/api/session/submit', (req, res) => {
+  const { code, server, username, password, originalLink } = req.body;
+  if (!code || !remoteSessions.has(code)) {
+    return res.status(404).json({ error: 'Codice PIN non valido o sessione scaduta.' });
+  }
+
+  if (!server || !username || !password) {
+    return res.status(400).json({ error: 'Parametri mancanti: server, username o password' });
+  }
+
+  remoteSessions.set(code, {
+    status: 'completed',
+    data: {
+      server: String(server).trim().replace(/\/+$/, ''),
+      username: String(username).trim(),
+      password: String(password).trim(),
+      originalLink: originalLink ? String(originalLink).trim() : undefined,
+    },
+    createdAt: Date.now(),
+  });
+
+  res.json({ success: true, message: 'Dati inviati con successo alla TV!' });
+});
+
+// 3. Chiamata di polling periodico dalla TV per verificare se lo smartphone ha inviato i dati
+app.get('/api/session/status/:code', (req, res) => {
+  const session = remoteSessions.get(req.params.code);
+  if (!session) {
+    return res.status(404).json({ error: 'Sessione non trovata o scaduta' });
+  }
+  res.json(session);
+});
+
 // Setup Vite or static serving
 async function startServer() {
   const isProd = process.env.NODE_ENV === 'production';

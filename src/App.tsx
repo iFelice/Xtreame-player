@@ -28,6 +28,8 @@ import { InstallAppModal } from './components/InstallAppModal';
 import { DownloadsView } from './components/DownloadsView';
 import { PasteLinkModal } from './components/PasteLinkModal';
 import { SettingsSyncModal } from './components/SettingsSyncModal';
+import { TvQrLoginModal } from './components/TvQrLoginModal';
+import { RemoteLoginView } from './components/RemoteLoginView';
 
 import {
   XtreamParsedUrl,
@@ -63,6 +65,13 @@ export default function App() {
   const [showInstallAppModal, setShowInstallAppModal] = useState<boolean>(false);
   const [showPasteLinkModal, setShowPasteLinkModal] = useState<boolean>(false);
   const [showSettingsSyncModal, setShowSettingsSyncModal] = useState<boolean>(false);
+  const [showTvQrModal, setShowTvQrModal] = useState<boolean>(false);
+  const [isRemoteLoginPage, setIsRemoteLoginPage] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const path = window.location.pathname.toLowerCase();
+    const search = new URLSearchParams(window.location.search);
+    return path.includes('remote-login') || search.get('page') === 'remote-login' || search.has('code');
+  });
   const [savedAccounts, setSavedAccounts] = useState<SavedAccount[]>(() => storage.getAccounts());
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
@@ -244,10 +253,12 @@ export default function App() {
     }
 
     const last = storage.getLastAccount();
-    if (last) {
+    if (last && last.serverUrl && last.username && last.password) {
       setServerUrl(last.serverUrl);
       setUsername(last.username);
       setPassword(last.password);
+      // Connessione automatica al login salvato (mantiene l'accesso memorizzato)
+      connectToServer(last.serverUrl, last.username, last.password, last.originalLink);
     }
   }, [connectToServer]);
 
@@ -266,6 +277,7 @@ export default function App() {
   };
 
   const handleDisconnect = () => {
+    storage.clearLastAccount();
     setServerUrl('');
     setUsername('');
     setPassword('');
@@ -337,6 +349,17 @@ export default function App() {
 
   const isConnected = Boolean(serverUrl && username && password);
 
+  if (isRemoteLoginPage) {
+    return (
+      <RemoteLoginView
+        onBackToApp={() => {
+          window.history.pushState({}, '', '/');
+          setIsRemoteLoginPage(false);
+        }}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col selection:bg-emerald-500/30 selection:text-emerald-200 w-full max-w-full overflow-x-hidden">
       {/* Top Navbar */}
@@ -351,6 +374,7 @@ export default function App() {
         onOpenPasteLink={() => setShowPasteLinkModal(true)}
         onOpenSettingsSync={() => setShowSettingsSyncModal(true)}
         onInstallApp={() => setShowInstallAppModal(true)}
+        onOpenTvQrLogin={() => setShowTvQrModal(true)}
       />
 
       {/* Main Content Area */}
@@ -390,6 +414,7 @@ export default function App() {
               onConnectCatalog={handleConnectCatalog}
               currentConnectedServer={serverUrl}
               isLoading={isLoadingCatalog}
+              onOpenTvQrLogin={() => setShowTvQrModal(true)}
             />
           </section>
         )}
@@ -778,6 +803,15 @@ export default function App() {
         onDeleteAccount={(id) => {
           storage.deleteAccount(id);
           setSavedAccounts(storage.getAccounts());
+        }}
+      />
+
+      {/* Smart TV & Fire Stick QR Code & PIN Login Modal */}
+      <TvQrLoginModal
+        isOpen={showTvQrModal}
+        onClose={() => setShowTvQrModal(false)}
+        onSuccess={(creds) => {
+          connectToServer(creds.server, creds.username, creds.password, creds.originalLink);
         }}
       />
 

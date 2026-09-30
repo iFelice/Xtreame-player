@@ -8,6 +8,7 @@ import {
   Link2,
   QrCode,
   Settings,
+  Tv,
 } from 'lucide-react';
 import { XtreamAuthResponse } from '../types/xtream';
 import { SavedAccount, storage } from '../services/storage';
@@ -23,6 +24,7 @@ interface NavbarProps {
   onOpenPasteLink?: () => void;
   onOpenSettingsSync?: () => void;
   onInstallApp?: () => void;
+  onOpenTvQrLogin?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -36,6 +38,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenPasteLink,
   onOpenSettingsSync,
   onInstallApp,
+  onOpenTvQrLogin,
 }) => {
   const [showAccountDropdown, setShowAccountDropdown] = useState<boolean>(false);
   const savedAccounts = storage.getAccounts();
@@ -76,6 +79,18 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Server & Connection Status / Controls */}
         <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+          {/* TV QR Login Button */}
+          {onOpenTvQrLogin && (
+            <button
+              onClick={onOpenTvQrLogin}
+              className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-xs text-emerald-300 transition cursor-pointer font-bold shadow-xs"
+              title="Accedi facilmente dalla TV o Fire TV Stick inquadrando un QR Code dal tuo smartphone"
+            >
+              <Tv className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="text-[11px] sm:text-xs">TV Login</span>
+            </button>
+          )}
+
           {/* Settings & QR Code Sync Button (Primary button on Mobile and Desktop) */}
           {onOpenSettingsSync && (
             <button
