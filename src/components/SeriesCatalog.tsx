@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Search,
   Tv,
@@ -8,6 +8,8 @@ import {
   X,
   Clock,
   ChevronRight,
+  ChevronUp,
+  ChevronDown,
   ArrowDownUp,
   Radio,
 } from 'lucide-react';
@@ -51,6 +53,9 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
   onClearSelectedSeries,
   accountKey,
 }) => {
+  const categoriesListRef = useRef<HTMLDivElement | null>(null);
+  const seriesListRef = useRef<HTMLDivElement | null>(null);
+
   // Always default to the first category to avoid freezing with 4,000+ series
   const [selectedCategory, setSelectedCategory] = useState<string>(() => {
     return categories[0]?.category_id ? String(categories[0].category_id) : '';
@@ -79,6 +84,20 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
   useEffect(() => {
     setVisibleLimit(40);
   }, [selectedCategory, searchQuery, sortBy]);
+
+  const scrollCategories = (direction: 'up' | 'down') => {
+    if (categoriesListRef.current) {
+      const delta = direction === 'up' ? -260 : 260;
+      categoriesListRef.current.scrollBy({ top: delta, behavior: 'smooth' });
+    }
+  };
+
+  const scrollSeries = (direction: 'up' | 'down') => {
+    if (seriesListRef.current) {
+      const delta = direction === 'up' ? -360 : 360;
+      seriesListRef.current.scrollBy({ top: delta, behavior: 'smooth' });
+    }
+  };
 
   // Direct modal trigger if selectedSeriesId is passed
   useEffect(() => {
@@ -122,9 +141,28 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
     return sortSeriesList(matched, sortBy);
   }, [seriesList, selectedCategory, searchQuery, sortBy]);
 
+  // Active playing series automatically scales to position #1 in the tab
   const visibleSeries = useMemo(() => {
-    return filteredSeries.slice(0, visibleLimit);
-  }, [filteredSeries, visibleLimit]);
+    const list = filteredSeries.slice(0, visibleLimit);
+    if (!activeMediaId) return list;
+    const activeIndex = list.findIndex(
+      (s) => activeMediaId === `series_${s.series_id}` || activeMediaId.startsWith(`series_${s.series_id}_`)
+    );
+    if (activeIndex > 0) {
+      const activeItem = list[activeIndex];
+      const remaining = list.filter((_, idx) => idx !== activeIndex);
+      return [activeItem, ...remaining];
+    }
+    if (activeIndex === -1) {
+      const activeInFull = filteredSeries.find(
+        (s) => activeMediaId === `series_${s.series_id}` || activeMediaId.startsWith(`series_${s.series_id}_`)
+      );
+      if (activeInFull) {
+        return [activeInFull, ...list.slice(0, visibleLimit - 1)];
+      }
+    }
+    return list;
+  }, [filteredSeries, visibleLimit, activeMediaId]);
 
   const handleOpenSeries = async (series: XtreamSeries) => {
     setActiveSeriesDetail({
@@ -189,33 +227,54 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
       {/* Master - Detail Dual Column Layout */}
       <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 items-start">
         {/* Left Column: Categories List */}
-        <aside className="w-full lg:w-80 xl:w-96 shrink-0 bg-zinc-900/80 border border-zinc-800/90 rounded-2xl p-3 sm:p-4 flex flex-col space-y-3.5 shadow-xl">
+        <aside className="w-full lg:w-80 xl:w-96 shrink-0 bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 sm:p-5 flex flex-col space-y-4 shadow-xl">
           <div className="flex items-center justify-between px-1">
             <div className="flex items-center gap-2.5">
-              <Layers className="w-5 h-5 text-blue-400" />
-              <h3 className="text-sm sm:text-base font-bold text-white tracking-wide uppercase">
+              <Layers className="w-6 h-6 text-blue-400" />
+              <h3 className="text-base sm:text-lg font-black text-white tracking-wide uppercase">
                 Categorie Serie ({categories.length})
               </h3>
             </div>
-            <span className="text-xs text-zinc-400 font-mono font-semibold">SERIE</span>
+            {/* TV / Remote Scroll Navigation Arrows */}
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => scrollCategories('up')}
+                className="p-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition cursor-pointer shadow-xs"
+                title="Scorri categorie su (▲)"
+              >
+                <ChevronUp className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollCategories('down')}
+                className="p-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition cursor-pointer shadow-xs"
+                title="Scorri categorie giù (▼)"
+              >
+                <ChevronDown className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           {/* Search Category */}
           <div className="relative">
-            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+            <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" />
             <input
               type="text"
               value={categorySearch}
               onChange={(e) => setCategorySearch(e.target.value)}
               placeholder="Filtra categorie serie..."
-              className="w-full pl-9 pr-3.5 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-sm text-white placeholder-zinc-500 focus:outline-hidden focus:border-blue-500 transition"
+              className="w-full pl-12 pr-4 py-3 bg-zinc-950 border border-zinc-700/80 rounded-2xl text-sm sm:text-base font-medium text-white placeholder-zinc-500 focus:outline-hidden focus:border-blue-500 transition shadow-inner"
             />
           </div>
 
           {/* Scrollable Categories List */}
-          <div className="space-y-1.5 max-h-[50vh] lg:max-h-[680px] overflow-y-auto pr-1">
+          <div
+            ref={categoriesListRef}
+            className="space-y-2 max-h-[540px] overflow-y-auto scroll-smooth pr-1.5"
+          >
             {filteredCategories.length === 0 ? (
-              <div className="py-8 text-center text-zinc-500 text-sm">
+              <div className="py-10 text-center text-zinc-500 text-sm sm:text-base font-medium">
                 Nessuna categoria trovata
               </div>
             ) : (
@@ -229,18 +288,18 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                       setSelectedCategory(String(cat.category_id));
                       setSearchQuery('');
                     }}
-                    className={`w-full text-left px-3.5 py-2.5 sm:py-3 rounded-xl text-sm sm:text-base font-semibold flex items-center justify-between transition cursor-pointer group ${
+                    className={`w-full text-left px-4 py-3 sm:py-3.5 rounded-2xl text-sm sm:text-base font-bold flex items-center justify-between transition cursor-pointer group ${
                       isSelected
-                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-950/50'
-                        : 'text-zinc-300 hover:bg-zinc-850 hover:text-white'
+                        ? 'bg-blue-600 text-white shadow-xl shadow-blue-950/60 scale-[1.02]'
+                        : 'text-zinc-200 hover:bg-zinc-850 hover:text-white bg-zinc-950/40 border border-zinc-850'
                     }`}
                   >
                     <span className="truncate pr-2">{cat.category_name}</span>
                     <span
-                      className={`text-xs font-mono font-bold px-2 py-0.5 rounded-full shrink-0 ${
+                      className={`text-xs sm:text-sm font-mono font-bold px-2.5 py-0.5 rounded-full shrink-0 ${
                         isSelected
-                          ? 'bg-blue-800/90 text-blue-100'
-                          : 'bg-zinc-800 text-zinc-400 group-hover:text-zinc-200'
+                          ? 'bg-blue-800 text-white'
+                          : 'bg-zinc-800 text-zinc-300 group-hover:text-white'
                       }`}
                     >
                       {count}
@@ -253,28 +312,28 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
         </aside>
 
         {/* Right Column: Series in the Selected Category */}
-        <section className="flex-1 w-full min-w-0 bg-zinc-900/40 border border-zinc-800/80 rounded-2xl p-4 sm:p-6 flex flex-col space-y-4 shadow-xl">
+        <section className="flex-1 w-full min-w-0 bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 sm:p-6 flex flex-col space-y-4 shadow-xl">
           {/* Header of the Selected Category */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-zinc-800">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-800">
             <div className="min-w-0">
-              <h2 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2.5 truncate">
-                <Tv className="w-6 h-6 text-blue-400 shrink-0" />
+              <h2 className="text-xl sm:text-2xl font-black text-white flex items-center gap-3 truncate">
+                <Tv className="w-7 h-7 text-blue-400 shrink-0" />
                 <span className="truncate">{currentCategory?.category_name || 'Serie TV'}</span>
               </h2>
-              <p className="text-xs sm:text-sm text-zinc-400 mt-1">
-                Mostrando <strong className="text-zinc-200">{filteredSeries.length}</strong> serie TV
+              <p className="text-xs sm:text-sm text-zinc-400 font-medium mt-1">
+                Mostrando <strong className="text-zinc-100">{filteredSeries.length}</strong> serie TV
                 {searchQuery ? ` per "${searchQuery}"` : ''}
               </p>
             </div>
 
-            {/* Controls: Sort and Search */}
-            <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-              <div className="flex items-center gap-1.5 bg-zinc-950 border border-zinc-800 rounded-xl px-2.5 py-1.5 text-xs sm:text-sm">
+            {/* Controls: Sort, Search & Scroll Arrows */}
+            <div className="flex flex-wrap items-center gap-3 shrink-0">
+              <div className="flex items-center gap-2 bg-zinc-950 border border-zinc-800 rounded-2xl px-3 py-2 text-xs sm:text-sm font-semibold">
                 <ArrowDownUp className="w-4 h-4 text-zinc-400 shrink-0" />
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value as any)}
-                  className="bg-transparent text-zinc-200 text-xs sm:text-sm focus:outline-hidden cursor-pointer"
+                  className="bg-transparent text-zinc-100 text-xs sm:text-sm font-bold focus:outline-hidden cursor-pointer"
                 >
                   <option value="recent">🕒 Più Recenti</option>
                   <option value="rating">⭐ Valutazione</option>
@@ -284,44 +343,72 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
               </div>
 
               <div className="relative flex-1 sm:w-72">
-                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+                <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Cerca serie TV in questa categoria..."
-                  className="w-full pl-9 pr-3.5 py-2 bg-zinc-950 border border-zinc-700/80 rounded-xl text-xs sm:text-sm text-white placeholder-zinc-500 focus:outline-hidden focus:border-blue-500 transition"
+                  className="w-full pl-12 pr-4 py-2.5 bg-zinc-950 border border-zinc-700/80 rounded-2xl text-xs sm:text-base text-white placeholder-zinc-500 focus:outline-hidden focus:border-blue-500 transition shadow-inner font-medium"
                 />
+              </div>
+
+              {/* Up/Down Scroll Buttons for Series */}
+              <div className="flex items-center gap-1 bg-zinc-950 border border-zinc-800 p-1 rounded-2xl">
+                <button
+                  type="button"
+                  onClick={() => scrollSeries('up')}
+                  className="p-2 rounded-xl bg-zinc-850 hover:bg-zinc-750 text-zinc-300 hover:text-white transition cursor-pointer"
+                  title="Scorri serie su (▲)"
+                >
+                  <ChevronUp className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => scrollSeries('down')}
+                  className="p-2 rounded-xl bg-zinc-850 hover:bg-zinc-750 text-zinc-300 hover:text-white transition cursor-pointer"
+                  title="Scorri serie giù (▼)"
+                >
+                  <ChevronDown className="w-4 h-4" />
+                </button>
               </div>
             </div>
           </div>
 
           {/* Series Grid */}
-          {isLoading ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
-              {Array.from({ length: 10 }).map((_, i) => (
-                <div key={i} className="aspect-2/3 bg-zinc-900 animate-pulse rounded-xl border border-zinc-800"></div>
-              ))}
-            </div>
-          ) : filteredSeries.length === 0 ? (
-            <div className="py-20 text-center text-zinc-400 bg-zinc-900/30 rounded-2xl border border-dashed border-zinc-800">
-              <Tv className="w-14 h-14 mx-auto text-zinc-600 mb-3" />
-              <p className="text-base font-semibold text-zinc-300">Nessuna serie TV trovata in questa categoria</p>
-              <p className="text-xs text-zinc-500 mt-1">
-                {searchQuery ? 'Prova a modificare i termini di ricerca' : 'Seleziona un\'altra categoria a sinistra'}
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 sm:gap-5">
-              {visibleSeries.map((series) => {
-                const isFav = storage.isFavorite(`series_${series.series_id}`, accountKey);
+          <div ref={seriesListRef} className="max-h-[720px] overflow-y-auto scroll-smooth pr-1.5">
+            {isLoading ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
+                {Array.from({ length: 10 }).map((_, i) => (
+                  <div key={i} className="aspect-2/3 bg-zinc-900 animate-pulse rounded-xl border border-zinc-800"></div>
+                ))}
+              </div>
+            ) : filteredSeries.length === 0 ? (
+              <div className="py-20 text-center text-zinc-400 bg-zinc-900/30 rounded-2xl border border-dashed border-zinc-800">
+                <Tv className="w-14 h-14 mx-auto text-zinc-600 mb-3" />
+                <p className="text-base font-semibold text-zinc-300">Nessuna serie TV trovata in questa categoria</p>
+                <p className="text-xs text-zinc-500 mt-1">
+                  {searchQuery ? 'Prova a modificare i termini di ricerca' : 'Seleziona un\'altra categoria a sinistra'}
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 sm:gap-5">
+                {visibleSeries.map((series) => {
+                  const isFav = storage.isFavorite(`series_${series.series_id}`, accountKey);
+                  const isPlayingThis =
+                    activeMediaId === `series_${series.series_id}` ||
+                    (activeMediaId && activeMediaId.startsWith(`series_${series.series_id}_`));
 
-                return (
-                  <div
-                    key={series.series_id}
-                    onClick={() => handleOpenSeries(series)}
-                    className="group relative bg-zinc-900 border border-zinc-800 hover:border-blue-500/60 rounded-2xl overflow-hidden shadow-lg transition-all duration-300 hover:-translate-y-1 flex flex-col cursor-pointer"
-                  >
+                  return (
+                    <div
+                      key={series.series_id}
+                      onClick={() => handleOpenSeries(series)}
+                      className={`group relative rounded-2xl overflow-hidden shadow-lg transition-all duration-300 flex flex-col cursor-pointer ${
+                        isPlayingThis
+                          ? 'bg-blue-950/80 border-2 border-blue-400 ring-4 ring-blue-500/50 shadow-2xl shadow-blue-950/90 scale-[1.02]'
+                          : 'bg-zinc-900 border border-zinc-800/80 hover:border-blue-500/60 hover:-translate-y-1'
+                      }`}
+                    >
                     {/* Cover Container */}
                     <div className="relative aspect-2/3 bg-zinc-950 overflow-hidden">
                       {series.cover ? (
@@ -400,6 +487,7 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
               })}
             </div>
           )}
+          </div>
 
           {/* Load More Button */}
           {filteredSeries.length > visibleLimit && (

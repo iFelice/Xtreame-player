@@ -21,8 +21,6 @@ import {
   ChevronRight,
   SkipBack,
   SkipForward,
-  Expand,
-  Shrink,
   Ratio,
 } from 'lucide-react';
 import Hls from 'hls.js';
@@ -57,7 +55,6 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [isWindowFullscreen, setIsWindowFullscreen] = useState<boolean>(false);
-  const [isTheater, setIsTheater] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
@@ -130,7 +127,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       hideControlsTimerRef.current = setTimeout(() => {
         setControlsVisible(false);
         setShowSettings(false);
-      }, 3500);
+      }, 4000);
     }
   }, [isPlaying]);
 
@@ -156,7 +153,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     const isLive = media.type === 'live';
 
     if (isLive && liveFormat === 'ts' && mpegts.isSupported()) {
-      // Real-time MPEG-TS streaming via mpegts.js (MediaSource demuxer)
+      // Enhanced Real-time MPEG-TS streaming with higher buffer & latency protection
       try {
         const player = mpegts.createPlayer(
           {
@@ -168,11 +165,11 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
             enableWorker: true,
             lazyLoad: false,
             liveBufferLatencyChasing: false,
-            liveBufferLatencyMaxLatency: 8.0,
-            liveBufferLatencyMinRemain: 1.0,
+            liveBufferLatencyMaxLatency: 12.0,
+            liveBufferLatencyMinRemain: 2.0,
             autoCleanupSourceBuffer: true,
-            autoCleanupMaxBackwardDuration: 30,
-            autoCleanupMinBackwardDuration: 15,
+            autoCleanupMaxBackwardDuration: 40,
+            autoCleanupMinBackwardDuration: 20,
             fixAudioTimestampGap: true,
             accurateSeek: false,
           }
@@ -192,7 +189,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
             return;
           }
           if (!video || video.currentTime === 0) {
-            setErrorMessage('Impossibile caricare il flusso live MPEG-TS.');
+            setErrorMessage('Impossibile caricare il flusso live MPEG-TS. Clicca su Riprova o Proxy.');
             setIsLoading(false);
           }
         });
@@ -212,13 +209,16 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
         setLiveFormat('m3u8');
       }
     } else if (isLive && liveFormat === 'm3u8' && Hls.isSupported()) {
-      // HLS.js streaming
+      // Enhanced HLS.js streaming configuration for smooth and stable playback
       const hls = new Hls({
         enableWorker: true,
         lowLatencyMode: false,
-        backBufferLength: 30,
-        maxBufferLength: 30,
-        maxMaxBufferLength: 60,
+        backBufferLength: 60,
+        maxBufferLength: 60,
+        maxMaxBufferLength: 120,
+        maxBufferSize: 60 * 1000 * 1000,
+        highBufferWatchdogPeriod: 2,
+        nudgeMaxRetry: 10,
       });
 
       hlsRef.current = hls;
@@ -276,7 +276,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
         }
       });
     } else if (isLive && video.canPlayType('application/vnd.apple.mpegurl')) {
-      // Native Apple HLS (iOS Safari, macOS Safari)
+      // Native Apple HLS (iOS Safari, macOS Safari / Catalyst)
       video.src = url;
       video.load();
       video
@@ -402,10 +402,6 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     }
   };
 
-  const toggleTheaterMode = () => {
-    setIsTheater(!isTheater);
-  };
-
   const cycleAspectRatio = () => {
     const modes: Array<'contain' | '16_9' | '4_3' | 'cover' | 'fill'> = ['contain', '16_9', '4_3', 'cover', 'fill'];
     const idx = modes.indexOf(aspectRatio);
@@ -451,14 +447,27 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     setShowSettings(false);
   };
 
-  const copyDirectStreamLink = () => {
+  const copyDirectStreamLink = async () => {
     if (!media) return;
     const directUrl = media.streamUrl.startsWith('/api/proxy/stream?url=')
       ? decodeURIComponent(media.streamUrl.replace('/api/proxy/stream?url=', ''))
       : media.streamUrl;
-    navigator.clipboard.writeText(directUrl);
-    setCopiedLink(true);
-    setTimeout(() => setCopiedLink(false), 2500);
+
+    try {
+      await navigator.clipboard.writeText(directUrl);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2500);
+    } catch {
+      // Fallback
+      const input = document.createElement('input');
+      input.value = directUrl;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand('copy');
+      document.body.removeChild(input);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2500);
+    }
   };
 
   // Keyboard controls
@@ -500,9 +509,6 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       } else if (e.code === 'KeyF') {
         e.preventDefault();
         toggleFullscreen();
-      } else if (e.code === 'KeyT') {
-        e.preventDefault();
-        toggleTheaterMode();
       } else if (e.code === 'KeyM') {
         e.preventDefault();
         toggleMute();
@@ -518,7 +524,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isPlaying, duration, isMuted, onClose, isWindowFullscreen, isTheater]);
+  }, [isPlaying, duration, isMuted, onClose, isWindowFullscreen]);
 
   const formatTime = (secs: number) => {
     if (isNaN(secs) || secs <= 0) return '00:00';
@@ -540,15 +546,14 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       className={`transition-all duration-300 ${
         isWindowFullscreen
           ? 'fixed inset-0 z-[99999] w-screen h-screen bg-black flex flex-col justify-center items-center select-none overflow-hidden'
-          : isTheater
-          ? 'relative w-full bg-black select-none overflow-hidden rounded-3xl shadow-2xl border border-zinc-800 min-h-[460px] sm:min-h-[640px] max-h-[92vh] flex flex-col justify-center items-center group'
-          : 'relative w-full bg-black select-none overflow-hidden rounded-3xl shadow-2xl border border-zinc-800 min-h-[320px] sm:min-h-[480px] max-h-[85vh] flex flex-col justify-center items-center group'
+          : 'relative w-full bg-black select-none overflow-hidden rounded-3xl shadow-2xl border border-zinc-800 min-h-[360px] sm:min-h-[520px] max-h-[85vh] flex flex-col justify-center items-center group'
       }`}
     >
-      {/* Video Element with exact aspect ratio & fit control */}
+      {/* Video Element with exact aspect ratio & fit control (Guaranteed NO cropping with object-contain) */}
       <video
         ref={videoRef}
         playsInline
+        preload="auto"
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
         onPlay={() => setIsPlaying(true)}
@@ -564,7 +569,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
           const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
           if (isHttps && !useProxy) {
             setErrorMessage(
-              'Il browser blocca i flussi video HTTP diretti ("Mixed Content"). Clicca sul pulsante verde sotto per attivare il Proxy HTTPS e avviare il video.'
+              'Il browser blocca i flussi video HTTP diretti ("Mixed Content"). Clicca su "Attiva Proxy HTTPS" per avviare il video.'
             );
           } else {
             setErrorMessage(
@@ -573,17 +578,21 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
           }
         }}
         onClick={togglePlay}
-        className={`cursor-pointer transition-all duration-200 ${
-          aspectRatio === 'cover'
-            ? 'w-full h-full object-cover'
-            : aspectRatio === 'fill'
-            ? 'w-full h-full object-fill'
-            : aspectRatio === '16_9'
-            ? 'w-full h-full object-contain aspect-[16/9]'
-            : aspectRatio === '4_3'
-            ? 'w-full h-full object-contain aspect-[4/3]'
-            : 'w-full h-full object-contain max-h-full max-w-full'
-        }`}
+        style={{
+          objectFit:
+            aspectRatio === 'cover'
+              ? 'cover'
+              : aspectRatio === 'fill'
+              ? 'fill'
+              : 'contain',
+          aspectRatio:
+            aspectRatio === '16_9'
+              ? '16 / 9'
+              : aspectRatio === '4_3'
+              ? '4 / 3'
+              : undefined,
+        }}
+        className="w-full h-full max-h-full max-w-full cursor-pointer transition-all duration-200"
       />
 
       {/* Loading Spinner */}
@@ -691,7 +700,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
         </button>
       )}
 
-      {/* Top Header Bar (Title & Close) */}
+      {/* Top Header Bar (Title & Actions - clean without duplicate format buttons) */}
       <div
         className={`absolute top-0 left-0 right-0 p-4 sm:p-6 bg-gradient-to-b from-black/95 via-black/60 to-transparent transition-opacity duration-300 z-20 flex items-center justify-between ${
           controlsVisible || !isPlaying ? 'opacity-100' : 'opacity-0 pointer-events-none'
@@ -741,21 +750,6 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
                 <span className="uppercase px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 text-xs font-mono font-bold">
                   {media.containerExtension}
                 </span>
-              )}
-              {media.type === 'live' && (
-                <>
-                  <span className="flex items-center gap-1.5 text-rose-400 font-bold text-xs sm:text-sm">
-                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping"></span>
-                    LIVE
-                  </span>
-                  <button
-                    onClick={() => setLiveFormat(liveFormat === 'm3u8' ? 'ts' : 'm3u8')}
-                    className="px-2 py-0.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-mono font-bold border border-zinc-700 transition cursor-pointer"
-                    title="Clicca per alternare tra HLS (.m3u8) e MPEG-TS (.ts)"
-                  >
-                    Formato: {liveFormat.toUpperCase()}
-                  </button>
-                </>
               )}
             </div>
           </div>
@@ -940,28 +934,14 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Aspect Ratio Toggle */}
+            {/* Aspect Ratio Toggle (Adatta / 16:9 / 4:3 / Zoom / Riempi) */}
             <button
               onClick={cycleAspectRatio}
-              className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold text-zinc-200 hover:text-white bg-zinc-800/90 hover:bg-zinc-700 rounded-xl border border-zinc-600 transition cursor-pointer flex items-center gap-1.5 shadow-md"
-              title="Formato video: Adatta 100% (non taglia), Espandi (zoom), 16:9, 4:3, Riempi"
+              className="px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-bold text-zinc-100 hover:text-white bg-zinc-800 hover:bg-zinc-700 rounded-xl border border-zinc-600 transition cursor-pointer flex items-center gap-2 shadow-md"
+              title="Cambia formato video: Adatta 100% (non taglia), 16:9, 4:3, Zoom, Riempi"
             >
               <Ratio className="w-4 h-4 text-emerald-400" />
               <span>{getAspectLabel()}</span>
-            </button>
-
-            {/* Theater Mode ("Allarga Player") Toggle */}
-            <button
-              onClick={toggleTheaterMode}
-              className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold rounded-xl border transition cursor-pointer flex items-center gap-1.5 shadow-md ${
-                isTheater
-                  ? 'bg-emerald-600 text-white border-emerald-500'
-                  : 'text-zinc-200 hover:text-white bg-zinc-800/90 hover:bg-zinc-700 border-zinc-600'
-              }`}
-              title="Allarga lettore video (Modalità Cinema)"
-            >
-              {isTheater ? <Shrink className="w-4 h-4" /> : <Expand className="w-4 h-4" />}
-              <span className="hidden sm:inline">{isTheater ? 'Riduci' : 'Allarga Player'}</span>
             </button>
 
             {/* Playback Speed (for VOD) */}
@@ -980,7 +960,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
                       <button
                         key={s}
                         onClick={() => handleSpeedChange(s)}
-                        className={`px-3 py-2 text-xs sm:text-sm text-left rounded-lg hover:bg-zinc-800 transition cursor-pointer ${
+                        className={`px-3 py-1.5 text-xs sm:text-sm text-left rounded-lg hover:bg-zinc-800 transition cursor-pointer ${
                           playbackSpeed === s ? 'text-emerald-400 font-bold' : 'text-zinc-300 font-medium'
                         }`}
                       >

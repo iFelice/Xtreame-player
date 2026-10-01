@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Search,
   Film,
@@ -12,6 +12,8 @@ import {
   X,
   ArrowDownUp,
   ChevronRight,
+  ChevronUp,
+  ChevronDown,
   Radio,
 } from 'lucide-react';
 import { XtreamCategory, XtreamVodStream, XtreamVodDetails, PlayableMediaItem } from '../types/xtream';
@@ -44,6 +46,9 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
   isLoading = false,
   accountKey,
 }) => {
+  const categoriesListRef = useRef<HTMLDivElement | null>(null);
+  const moviesListRef = useRef<HTMLDivElement | null>(null);
+
   // Always default to the first category to avoid rendering 20,000 items at once
   const [selectedCategory, setSelectedCategory] = useState<string>(() => {
     return categories[0]?.category_id ? String(categories[0].category_id) : '';
@@ -71,6 +76,20 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
   useEffect(() => {
     setVisibleLimit(40);
   }, [selectedCategory, searchQuery, sortBy]);
+
+  const scrollCategories = (direction: 'up' | 'down') => {
+    if (categoriesListRef.current) {
+      const delta = direction === 'up' ? -260 : 260;
+      categoriesListRef.current.scrollBy({ top: delta, behavior: 'smooth' });
+    }
+  };
+
+  const scrollMovies = (direction: 'up' | 'down') => {
+    if (moviesListRef.current) {
+      const delta = direction === 'up' ? -360 : 360;
+      moviesListRef.current.scrollBy({ top: delta, behavior: 'smooth' });
+    }
+  };
 
   // Compute category counts
   const categoryCounts = useMemo(() => {
@@ -104,9 +123,25 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
     return sortVodStreams(matched, sortBy);
   }, [streams, selectedCategory, searchQuery, sortBy]);
 
+  // Active playing movie automatically scales to position #1 in the tab
   const visibleStreams = useMemo(() => {
-    return filteredStreams.slice(0, visibleLimit);
-  }, [filteredStreams, visibleLimit]);
+    const list = filteredStreams.slice(0, visibleLimit);
+    if (!activeMediaId || !activeMediaId.startsWith('movie_')) return list;
+    const activeStreamId = activeMediaId.replace('movie_', '');
+    const activeIndex = list.findIndex((s) => String(s.stream_id) === String(activeStreamId));
+    if (activeIndex > 0) {
+      const activeItem = list[activeIndex];
+      const remaining = list.filter((_, idx) => idx !== activeIndex);
+      return [activeItem, ...remaining];
+    }
+    if (activeIndex === -1) {
+      const activeInFull = filteredStreams.find((s) => String(s.stream_id) === String(activeStreamId));
+      if (activeInFull) {
+        return [activeInFull, ...list.slice(0, visibleLimit - 1)];
+      }
+    }
+    return list;
+  }, [filteredStreams, visibleLimit, activeMediaId]);
 
   const handleOpenDetails = async (stream: XtreamVodStream) => {
     setActiveMovieDetail({ stream, details: null, isLoading: true });
@@ -148,33 +183,54 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
       {/* Master - Detail Dual Column Layout */}
       <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 items-start">
         {/* Left Column: Categories List */}
-        <aside className="w-full lg:w-80 xl:w-96 shrink-0 bg-zinc-900/80 border border-zinc-800/90 rounded-2xl p-3 sm:p-4 flex flex-col space-y-3.5 shadow-xl">
+        <aside className="w-full lg:w-80 xl:w-96 shrink-0 bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 sm:p-5 flex flex-col space-y-4 shadow-xl">
           <div className="flex items-center justify-between px-1">
             <div className="flex items-center gap-2.5">
-              <Layers className="w-5 h-5 text-emerald-400" />
-              <h3 className="text-sm sm:text-base font-bold text-white tracking-wide uppercase">
+              <Layers className="w-6 h-6 text-emerald-400" />
+              <h3 className="text-base sm:text-lg font-black text-white tracking-wide uppercase">
                 Categorie Film ({categories.length})
               </h3>
             </div>
-            <span className="text-xs text-zinc-400 font-mono font-semibold">VOD</span>
+            {/* TV / Remote Scroll Navigation Arrows */}
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => scrollCategories('up')}
+                className="p-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition cursor-pointer shadow-xs"
+                title="Scorri categorie su (▲)"
+              >
+                <ChevronUp className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollCategories('down')}
+                className="p-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition cursor-pointer shadow-xs"
+                title="Scorri categorie giù (▼)"
+              >
+                <ChevronDown className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           {/* Search Category */}
           <div className="relative">
-            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+            <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" />
             <input
               type="text"
               value={categorySearch}
               onChange={(e) => setCategorySearch(e.target.value)}
               placeholder="Filtra categorie film..."
-              className="w-full pl-9 pr-3.5 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-sm text-white placeholder-zinc-500 focus:outline-hidden focus:border-emerald-500 transition"
+              className="w-full pl-12 pr-4 py-3 bg-zinc-950 border border-zinc-700/80 rounded-2xl text-sm sm:text-base font-medium text-white placeholder-zinc-500 focus:outline-hidden focus:border-emerald-500 transition shadow-inner"
             />
           </div>
 
           {/* Scrollable Categories List */}
-          <div className="space-y-1.5 max-h-[50vh] lg:max-h-[680px] overflow-y-auto pr-1">
+          <div
+            ref={categoriesListRef}
+            className="space-y-2 max-h-[540px] overflow-y-auto scroll-smooth pr-1.5"
+          >
             {filteredCategories.length === 0 ? (
-              <div className="py-8 text-center text-zinc-500 text-sm">
+              <div className="py-10 text-center text-zinc-500 text-sm sm:text-base font-medium">
                 Nessuna categoria trovata
               </div>
             ) : (
@@ -188,18 +244,18 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                       setSelectedCategory(String(cat.category_id));
                       setSearchQuery('');
                     }}
-                    className={`w-full text-left px-3.5 py-2.5 sm:py-3 rounded-xl text-sm sm:text-base font-semibold flex items-center justify-between transition cursor-pointer group ${
+                    className={`w-full text-left px-4 py-3 sm:py-3.5 rounded-2xl text-sm sm:text-base font-bold flex items-center justify-between transition cursor-pointer group ${
                       isSelected
-                        ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-950/50'
-                        : 'text-zinc-300 hover:bg-zinc-850 hover:text-white'
+                        ? 'bg-emerald-600 text-white shadow-xl shadow-emerald-950/60 scale-[1.02]'
+                        : 'text-zinc-200 hover:bg-zinc-850 hover:text-white bg-zinc-950/40 border border-zinc-850'
                     }`}
                   >
                     <span className="truncate pr-2">{cat.category_name}</span>
                     <span
-                      className={`text-xs font-mono font-bold px-2 py-0.5 rounded-full shrink-0 ${
+                      className={`text-xs sm:text-sm font-mono font-bold px-2.5 py-0.5 rounded-full shrink-0 ${
                         isSelected
-                          ? 'bg-emerald-800/90 text-emerald-100'
-                          : 'bg-zinc-800 text-zinc-400 group-hover:text-zinc-200'
+                          ? 'bg-emerald-800 text-white'
+                          : 'bg-zinc-800 text-zinc-300 group-hover:text-white'
                       }`}
                     >
                       {count}
@@ -212,28 +268,28 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
         </aside>
 
         {/* Right Column: Movies in the Selected Category */}
-        <section className="flex-1 w-full min-w-0 bg-zinc-900/40 border border-zinc-800/80 rounded-2xl p-4 sm:p-6 flex flex-col space-y-4 shadow-xl">
+        <section className="flex-1 w-full min-w-0 bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 sm:p-6 flex flex-col space-y-4 shadow-xl">
           {/* Header of the Selected Category */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-zinc-800">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-800">
             <div className="min-w-0">
-              <h2 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2.5 truncate">
-                <Film className="w-6 h-6 text-emerald-400 shrink-0" />
+              <h2 className="text-xl sm:text-2xl font-black text-white flex items-center gap-3 truncate">
+                <Film className="w-7 h-7 text-emerald-400 shrink-0" />
                 <span className="truncate">{currentCategory?.category_name || 'Film'}</span>
               </h2>
-              <p className="text-xs sm:text-sm text-zinc-400 mt-1">
-                Mostrando <strong className="text-zinc-200">{filteredStreams.length}</strong> film
+              <p className="text-xs sm:text-sm text-zinc-400 font-medium mt-1">
+                Mostrando <strong className="text-zinc-100">{filteredStreams.length}</strong> film
                 {searchQuery ? ` per "${searchQuery}"` : ''}
               </p>
             </div>
 
-            {/* Controls: Sort and Search */}
-            <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-              <div className="flex items-center gap-1.5 bg-zinc-950 border border-zinc-800 rounded-xl px-2.5 py-1.5 text-xs sm:text-sm">
+            {/* Controls: Sort, Search & Scroll Arrows */}
+            <div className="flex flex-wrap items-center gap-3 shrink-0">
+              <div className="flex items-center gap-2 bg-zinc-950 border border-zinc-800 rounded-2xl px-3 py-2 text-xs sm:text-sm font-semibold">
                 <ArrowDownUp className="w-4 h-4 text-zinc-400 shrink-0" />
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value as any)}
-                  className="bg-transparent text-zinc-200 text-xs sm:text-sm focus:outline-hidden cursor-pointer"
+                  className="bg-transparent text-zinc-100 text-xs sm:text-sm font-bold focus:outline-hidden cursor-pointer"
                 >
                   <option value="recent">🕒 Più Recenti</option>
                   <option value="rating">⭐ Valutazione</option>
@@ -243,20 +299,41 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
               </div>
 
               <div className="relative flex-1 sm:w-72">
-                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+                <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Cerca film in questa categoria..."
-                  className="w-full pl-9 pr-3.5 py-2 bg-zinc-950 border border-zinc-700/80 rounded-xl text-xs sm:text-sm text-white placeholder-zinc-500 focus:outline-hidden focus:border-emerald-500 transition"
+                  className="w-full pl-12 pr-4 py-2.5 bg-zinc-950 border border-zinc-700/80 rounded-2xl text-xs sm:text-base text-white placeholder-zinc-500 focus:outline-hidden focus:border-emerald-500 transition shadow-inner font-medium"
                 />
+              </div>
+
+              {/* Up/Down Scroll Buttons for Movies */}
+              <div className="flex items-center gap-1 bg-zinc-950 border border-zinc-800 p-1 rounded-2xl">
+                <button
+                  type="button"
+                  onClick={() => scrollMovies('up')}
+                  className="p-2 rounded-xl bg-zinc-850 hover:bg-zinc-750 text-zinc-300 hover:text-white transition cursor-pointer"
+                  title="Scorri film su (▲)"
+                >
+                  <ChevronUp className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => scrollMovies('down')}
+                  className="p-2 rounded-xl bg-zinc-850 hover:bg-zinc-750 text-zinc-300 hover:text-white transition cursor-pointer"
+                  title="Scorri film giù (▼)"
+                >
+                  <ChevronDown className="w-4 h-4" />
+                </button>
               </div>
             </div>
           </div>
 
           {/* Movie Grid */}
-          {isLoading ? (
+          <div ref={moviesListRef} className="max-h-[720px] overflow-y-auto scroll-smooth pr-1.5">
+            {isLoading ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
               {Array.from({ length: 10 }).map((_, i) => (
                 <div key={i} className="aspect-2/3 bg-zinc-900 animate-pulse rounded-xl border border-zinc-800"></div>
@@ -382,6 +459,7 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
               })}
             </div>
           )}
+          </div>
 
           {/* Load More Button */}
           {filteredStreams.length > visibleLimit && (
