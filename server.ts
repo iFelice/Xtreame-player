@@ -149,14 +149,16 @@ function proxyStream(targetUrl: string, req: Request, res: Response, redirectCou
         else if (targetUrl.endsWith('.m3u8')) responseHeaders['Content-Type'] = 'application/vnd.apple.mpegurl';
       }
 
-      // Handle download request
+      // Handle download request: force browser to download directly to ~/Downloads
       if (req.query.download === '1' || req.query.download === 'true') {
         const rawFilename =
           typeof req.query.filename === 'string' && req.query.filename.trim()
             ? req.query.filename.trim()
             : 'video.mp4';
-        const cleanFilename = rawFilename.replace(/[/\\?%*:|"<>]/g, '_');
-        responseHeaders['Content-Disposition'] = `attachment; filename="${cleanFilename}"`;
+        const cleanFilename = rawFilename.replace(/[/\\?%*:|"<>]/g, '_').trim();
+        responseHeaders['Content-Type'] = 'application/octet-stream';
+        responseHeaders['Content-Disposition'] = `attachment; filename="${cleanFilename.replace(/"/g, '')}"; filename*=UTF-8''${encodeURIComponent(cleanFilename)}`;
+        responseHeaders['Cache-Control'] = 'no-cache, no-store, must-revalidate';
       }
 
       if (req.method === 'HEAD') {

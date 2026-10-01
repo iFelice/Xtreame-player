@@ -73,14 +73,16 @@ export function startMediaDownload(options: {
     typeof window !== 'undefined' &&
     ((window as any).Capacitor?.isNativePlatform?.() || (window as any).Capacitor?.platform === 'ios');
 
+  const cloudProxyBase = 'https://ais-dev-dihbqwu76twglwk6fd3g6v-872512682555.europe-west2.run.app';
+  const effectiveDownloadUrl = isCapacitorNative
+    ? `${cloudProxyBase}${downloadUrl}`
+    : downloadUrl;
+
   if (isCapacitorNative) {
-    const cleanServer = serverUrl.replace(/\/+$/, '');
-    const ext = containerExtension || 'mp4';
-    const directPath = `${cleanServer}/${xtreamType}/${encodeURIComponent(username)}/${encodeURIComponent(password)}/${streamId}.${ext}`;
     try {
       const a = document.createElement('a');
-      a.href = directPath;
-      a.download = `${cleanFilename}.${ext}`;
+      a.href = effectiveDownloadUrl;
+      a.download = `${cleanFilename}.${containerExtension || 'mp4'}`;
       a.target = '_blank';
       a.rel = 'noopener noreferrer';
       document.body.appendChild(a);
@@ -89,7 +91,7 @@ export function startMediaDownload(options: {
         if (a.parentNode) a.parentNode.removeChild(a);
       }, 1000);
     } catch {
-      window.open(directPath, '_system');
+      window.open(effectiveDownloadUrl, '_system');
     }
   } else {
     // Web Browser on Mac (Safari, Chrome, etc.)

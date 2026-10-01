@@ -70,11 +70,12 @@ export function triggerMediaDownload(
     typeof window !== 'undefined' &&
     ((window as any).Capacitor?.isNativePlatform?.() || (window as any).Capacitor?.platform === 'ios');
 
-  // Build the backend proxy download URL with attachment header
+  // Cloud Run proxy fallback for native Capacitor app (when origin is capacitor://)
+  const cloudProxyBase = 'https://ais-dev-dihbqwu76twglwk6fd3g6v-872512682555.europe-west2.run.app';
   const origin =
     typeof window !== 'undefined' && window.location.origin.startsWith('http')
       ? window.location.origin
-      : '';
+      : cloudProxyBase;
   const proxyDownloadUrl = `${origin}/api/proxy/stream?url=${encodeURIComponent(rawUrl)}&download=1&filename=${encodeURIComponent(filename)}`;
 
   // Save to "I Miei Download" storage for in-app offline tracking
@@ -96,11 +97,11 @@ export function triggerMediaDownload(
     console.warn('Could not save download to local storage:', err);
   }
 
-  // Capacitor Native on Mac / iOS: open direct stream link
+  // Capacitor Native on Mac / iOS: trigger download via proxy attachment so browser downloads directly instead of playing
   if (isCapacitorNative) {
     try {
       const a = document.createElement('a');
-      a.href = rawUrl;
+      a.href = proxyDownloadUrl;
       a.download = filename;
       a.target = '_blank';
       a.rel = 'noopener noreferrer';
@@ -111,7 +112,7 @@ export function triggerMediaDownload(
       }, 1000);
       return true;
     } catch {
-      window.open(rawUrl, '_system');
+      window.open(proxyDownloadUrl, '_system');
       return true;
     }
   }
