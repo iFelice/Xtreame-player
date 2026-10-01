@@ -1,6 +1,5 @@
 import { Capacitor } from '@capacitor/core';
 import { Directory, Filesystem } from '@capacitor/filesystem';
-import { Share } from '@capacitor/share';
 import { storage } from '../services/storage';
 
 /**
@@ -57,9 +56,9 @@ function safeFilename(title: string, extension: string): string {
 
 /**
  * Downloads media. On native platforms the Express proxy does not exist, so
- * Capacitor Filesystem downloads the direct IPTV URL and Share exposes the
- * completed file to Files/Downloads or another app. On web the existing
- * Express download endpoint is retained.
+ * Capacitor Filesystem downloads the direct IPTV URL into the app's local
+ * Documents/Downloads directory. On web the existing Express download
+ * endpoint is retained.
  */
 export async function triggerMediaDownload(
   streamUrl: string,
@@ -103,12 +102,7 @@ export async function triggerMediaDownload(
         accountKey
       );
 
-      await Share.share({
-        title: filename,
-        text: 'Salva il video in File o aprilo con un’altra app.',
-        files: [result.path],
-        dialogTitle: 'Salva o condividi il video',
-      });
+      window.alert(`Download completato. File salvato in Downloads/${filename}`);
       return true;
     } catch (error) {
       console.error('Native media download failed:', error);

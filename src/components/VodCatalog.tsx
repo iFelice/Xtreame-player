@@ -16,7 +16,6 @@ import {
   ChevronDown,
   Radio,
   Download,
-  Check,
 } from 'lucide-react';
 import { XtreamCategory, XtreamVodStream, XtreamVodDetails, PlayableMediaItem } from '../types/xtream';
 import { buildStreamUrl, formatDuration } from '../utils/parseXtreamUrl';
@@ -25,7 +24,6 @@ import { storage } from '../services/storage';
 import { sortVodStreams } from '../utils/recentSorting';
 import { getSecureImageUrl } from '../utils/imageUrl';
 import { triggerMediaDownload, isTvEnvironment } from '../utils/downloadHelper';
-import { StreamExportModal } from './StreamExportModal';
 
 interface VodCatalogProps {
   categories: XtreamCategory[];
@@ -52,7 +50,6 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
 }) => {
   const categoriesListRef = useRef<HTMLDivElement | null>(null);
   const moviesListRef = useRef<HTMLDivElement | null>(null);
-  const [downloadingMovieId, setDownloadingMovieId] = useState<string | number | null>(null);
   const isTv = isTvEnvironment();
 
   // Always default to the first category to avoid rendering 20,000 items at once
@@ -63,11 +60,6 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
   const [categorySearch, setCategorySearch] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [sortBy, setSortBy] = useState<'recent' | 'rating' | 'name' | 'id'>('recent');
-  const [exportTarget, setExportTarget] = useState<{
-    title: string;
-    streamUrl: string;
-    containerExtension: string;
-  } | null>(null);
   const [activeMovieDetail, setActiveMovieDetail] = useState<{
     stream: XtreamVodStream;
     details: XtreamVodDetails | null;
@@ -341,7 +333,6 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
               {visibleStreams.map((stream) => {
                 const isFav = storage.isFavorite(`movie_${stream.stream_id}`, accountKey);
                 const isPlayingThis = activeMediaId === `movie_${stream.stream_id}`;
-                const isDownloadingThis = downloadingMovieId === stream.stream_id;
 
                 const handleDirectDownload = (e: React.MouseEvent) => {
                   e.stopPropagation();
@@ -364,11 +355,6 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                     ext,
                     accountKey
                   );
-                  setExportTarget({
-                    title: stream.name,
-                    streamUrl,
-                    containerExtension: ext,
-                  });
                 };
 
                 return (
@@ -424,17 +410,10 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                           <button
                             onClick={handleDirectDownload}
                             title="Scarica questo film nella cartella Download del Mac"
-                            className={`p-2 rounded-xl backdrop-blur-md transition cursor-pointer shadow-lg ${
-                              isDownloadingThis
-                                ? 'bg-emerald-600 text-white animate-pulse'
-                                : 'bg-black/80 hover:bg-emerald-600 text-zinc-300 hover:text-white'
-                            }`}
+                            aria-label="Scarica film"
+                            className="p-2 rounded-xl backdrop-blur-md bg-black/80 hover:bg-emerald-600 text-zinc-300 hover:text-white transition cursor-pointer shadow-lg"
                           >
-                            {isDownloadingThis ? (
-                              <Check className="w-4 h-4 text-white" />
-                            ) : (
-                              <Download className="w-4 h-4" />
-                            )}
+                            <Download className="w-4 h-4" />
                           </button>
                         )}
 
@@ -479,29 +458,6 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                             Dettagli
                           </button>
 
-                          {!isTv && (
-                            <button
-                              onClick={handleDirectDownload}
-                              className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-md ${
-                                isDownloadingThis
-                                  ? 'bg-emerald-500 text-white'
-                                  : 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                              }`}
-                              title="Scarica film su Mac"
-                            >
-                              {isDownloadingThis ? (
-                                <>
-                                  <Check className="w-3.5 h-3.5" />
-                                  <span>Avviato!</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Download className="w-3.5 h-3.5" />
-                                  <span>Scarica</span>
-                                </>
-                              )}
-                            </button>
-                          )}
                         </div>
                       </div>
                     </div>
@@ -607,16 +563,12 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                       ext,
                       accountKey
                     );
-                    setExportTarget({
-                      title: activeMovieDetail.stream.name,
-                      streamUrl,
-                      containerExtension: ext,
-                    });
                   }}
-                  className="px-5 py-3 rounded-xl border border-zinc-700 hover:border-cyan-500 bg-zinc-900 hover:bg-zinc-800 text-cyan-400 hover:text-white text-sm font-bold flex items-center gap-2 transition cursor-pointer"
+                  title="Scarica nella cartella locale dell’app"
+                  aria-label="Scarica film"
+                  className="p-3 rounded-xl border border-zinc-700 hover:border-cyan-500 bg-zinc-900 hover:bg-zinc-800 text-cyan-400 hover:text-white transition cursor-pointer"
                 >
-                  <Download className="w-4 h-4 text-cyan-400" />
-                  <span>Estrapola Link / VLC</span>
+                  <Download className="w-5 h-5" />
                 </button>
               )}
 
@@ -635,17 +587,6 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
         </div>
       )}
 
-      {/* Stream Export Modal */}
-      {exportTarget && (
-        <StreamExportModal
-          isOpen={Boolean(exportTarget)}
-          onClose={() => setExportTarget(null)}
-          title={exportTarget.title}
-          streamUrl={exportTarget.streamUrl}
-          type="movie"
-          containerExtension={exportTarget.containerExtension}
-        />
-      )}
     </div>
   );
 };

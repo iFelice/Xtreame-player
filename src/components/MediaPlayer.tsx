@@ -9,8 +9,6 @@ import {
   RotateCcw,
   RotateCw,
   X,
-  Copy,
-  Check,
   Tv,
   Film,
   AlertCircle,
@@ -29,7 +27,6 @@ import { Capacitor } from '@capacitor/core';
 import { PlayableMediaItem } from '../types/xtream';
 import { storage } from '../services/storage';
 import { triggerMediaDownload, isTvEnvironment } from '../utils/downloadHelper';
-import { StreamExportModal } from './StreamExportModal';
 
 interface MediaPlayerProps {
   media: PlayableMediaItem | null;
@@ -61,13 +58,10 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
-  const [downloadToast, setDownloadToast] = useState<boolean>(false);
   const isTv = isTvEnvironment();
   const isNative = typeof window !== 'undefined' && (Capacitor.isNativePlatform() || window.location.protocol === 'capacitor:');
   const [aspectRatio, setAspectRatio] = useState<'contain' | '16_9' | '4_3' | 'cover' | 'fill'>('contain');
   const [showSettings, setShowSettings] = useState<boolean>(false);
-  const [showExportModal, setShowExportModal] = useState<boolean>(false);
-  const [copiedLink, setCopiedLink] = useState<boolean>(false);
   const [controlsVisible, setControlsVisible] = useState<boolean>(true);
   const [useProxy, setUseProxy] = useState<boolean>(() => {
     // A Capacitor WebView has no Express server behind capacitor://localhost.
@@ -465,29 +459,6 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     setShowSettings(false);
   };
 
-  const copyDirectStreamLink = async () => {
-    if (!media) return;
-    const directUrl = media.streamUrl.startsWith('/api/proxy/stream?url=')
-      ? decodeURIComponent(media.streamUrl.replace('/api/proxy/stream?url=', ''))
-      : media.streamUrl;
-
-    try {
-      await navigator.clipboard.writeText(directUrl);
-      setCopiedLink(true);
-      setTimeout(() => setCopiedLink(false), 2500);
-    } catch {
-      // Fallback
-      const input = document.createElement('input');
-      input.value = directUrl;
-      document.body.appendChild(input);
-      input.select();
-      document.execCommand('copy');
-      document.body.removeChild(input);
-      setCopiedLink(true);
-      setTimeout(() => setCopiedLink(false), 2500);
-    }
-  };
-
   // Keyboard controls
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -683,13 +654,6 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
               </button>
             )}
 
-            <button
-              onClick={copyDirectStreamLink}
-              className="px-5 py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl text-sm sm:text-base font-semibold flex items-center gap-2 border border-zinc-700 transition cursor-pointer"
-            >
-              {copiedLink ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-              Copia Link per VLC
-            </button>
           </div>
         </div>
       )}
@@ -783,29 +747,29 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          {!isTv && (
+          {!isTv && media.type !== 'live' && (
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 e.preventDefault();
-                setShowExportModal(true);
+                void triggerMediaDownload(
+                  media.streamUrl,
+                  media.title,
+                  media.type === 'series' ? 'episode' : 'movie',
+                  media.poster,
+                  media.containerExtension || 'mp4',
+                  accountKey
+                );
               }}
-              title="Estrapola Link Flusso & Strumenti Download / VLC"
-              className="px-3 py-1.5 sm:px-3.5 sm:py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-2xl text-xs sm:text-sm font-bold flex items-center gap-2 transition cursor-pointer shadow-lg"
+              title="Scarica nella cartella locale dell’app"
+              aria-label="Scarica video"
+              className="p-2 sm:p-2.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-2xl transition cursor-pointer shadow-lg"
             >
-              <Download className="w-4 h-4" />
-              <span className="hidden sm:inline">Estrapola Link / VLC</span>
+              <Download className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
           )}
 
-          <button
-            onClick={copyDirectStreamLink}
-            title="Copia link stream per VLC o lettore esterno"
-            className="p-2 sm:p-2.5 text-zinc-300 hover:text-white hover:bg-white/10 rounded-2xl transition cursor-pointer"
-          >
-            {copiedLink ? <Check className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-400" /> : <Copy className="w-5 h-5 sm:w-6 sm:h-6" />}
-          </button>
           <button
             onClick={onClose}
             className="p-2 sm:p-2.5 text-zinc-300 hover:text-white hover:bg-white/10 rounded-2xl transition cursor-pointer"
@@ -816,15 +780,6 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
         </div>
       </div>
 
-      {/* Download Started Toast Notification */}
-      {downloadToast && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-30 px-5 py-3 rounded-2xl bg-emerald-950/95 border border-emerald-500/80 text-white shadow-2xl flex items-center gap-3 animate-in fade-in zoom-in-95">
-          <Check className="w-5 h-5 text-emerald-400 shrink-0" />
-          <span className="text-sm sm:text-base font-bold">
-            Download avviato! Il file verrà salvato nella cartella Download del Mac.
-          </span>
-        </div>
-      )}
 
       {/* Center Big Play Button (when paused) */}
       {!isPlaying && !isLoading && !errorMessage && (
@@ -1015,17 +970,6 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
         </div>
       </div>
 
-      {/* Stream Export & VLC Modal */}
-      {media && (
-        <StreamExportModal
-          isOpen={showExportModal}
-          onClose={() => setShowExportModal(false)}
-          title={media.title}
-          streamUrl={media.streamUrl}
-          type={media.type === 'movie' ? 'movie' : media.type === 'series' ? 'episode' : 'live'}
-          containerExtension={media.containerExtension || 'mp4'}
-        />
-      )}
     </div>
   );
 };

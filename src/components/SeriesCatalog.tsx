@@ -28,7 +28,6 @@ import { storage } from '../services/storage';
 import { sortSeriesList } from '../utils/recentSorting';
 import { getSecureImageUrl } from '../utils/imageUrl';
 import { triggerMediaDownload, isTvEnvironment } from '../utils/downloadHelper';
-import { StreamExportModal } from './StreamExportModal';
 
 interface SeriesCatalogProps {
   categories: XtreamCategory[];
@@ -59,7 +58,6 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
 }) => {
   const categoriesListRef = useRef<HTMLDivElement | null>(null);
   const seriesListRef = useRef<HTMLDivElement | null>(null);
-  const [downloadingEpisodeId, setDownloadingEpisodeId] = useState<string | number | null>(null);
   const isTv = isTvEnvironment();
 
   // Always default to the first category to avoid freezing with 4,000+ series
@@ -70,11 +68,6 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
   const [categorySearch, setCategorySearch] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [sortBy, setSortBy] = useState<'recent' | 'rating' | 'name' | 'id'>('recent');
-  const [exportTarget, setExportTarget] = useState<{
-    title: string;
-    streamUrl: string;
-    containerExtension: string;
-  } | null>(null);
   const [activeSeriesDetail, setActiveSeriesDetail] = useState<{
     series: XtreamSeries;
     info: XtreamSeriesInfo | null;
@@ -596,17 +589,12 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                                     ext,
                                     accountKey
                                   );
-                                  setExportTarget({
-                                    title,
-                                    streamUrl,
-                                    containerExtension: ext,
-                                  });
                                 }}
-                                title="Estrapola Link & Strumenti Download / VLC"
-                                className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-cyan-400 hover:text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+                                title="Scarica nella cartella locale dell’app"
+                                aria-label="Scarica episodio"
+                                className="p-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-cyan-400 hover:text-white transition cursor-pointer"
                               >
-                                <Download className="w-3.5 h-3.5" />
-                                <span>Link / VLC</span>
+                                <Download className="w-4 h-4" />
                               </button>
                             )}
 
@@ -635,17 +623,6 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
         </div>
       )}
 
-      {/* Stream Export & VLC Modal */}
-      {exportTarget && (
-        <StreamExportModal
-          isOpen={Boolean(exportTarget)}
-          onClose={() => setExportTarget(null)}
-          title={exportTarget.title}
-          streamUrl={exportTarget.streamUrl}
-          type="episode"
-          containerExtension={exportTarget.containerExtension}
-        />
-      )}
     </div>
   );
 };
