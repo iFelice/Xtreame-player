@@ -62,7 +62,6 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
   const [categorySearch, setCategorySearch] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [sortBy, setSortBy] = useState<'recent' | 'rating' | 'name' | 'id'>('recent');
-  const [visibleLimit, setVisibleLimit] = useState<number>(40);
   const [activeMovieDetail, setActiveMovieDetail] = useState<{
     stream: XtreamVodStream;
     details: XtreamVodDetails | null;
@@ -77,10 +76,6 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
       }
     }
   }, [categories, selectedCategory]);
-
-  useEffect(() => {
-    setVisibleLimit(40);
-  }, [selectedCategory, searchQuery, sortBy]);
 
   const scrollCategories = (direction: 'up' | 'down') => {
     if (categoriesListRef.current) {
@@ -128,10 +123,8 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
     return sortVodStreams(matched, sortBy);
   }, [streams, selectedCategory, searchQuery, sortBy]);
 
-  // Natural list order preserved
-  const visibleStreams = useMemo(() => {
-    return filteredStreams.slice(0, visibleLimit);
-  }, [filteredStreams, visibleLimit]);
+  // Natural list order preserved (all movies visible and naturally scrollable)
+  const visibleStreams = filteredStreams;
 
   const handleOpenDetails = async (stream: XtreamVodStream) => {
     setActiveMovieDetail({ stream, details: null, isLoading: true });
@@ -519,20 +512,6 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
             </div>
           )}
           </div>
-
-          {/* Load More Button */}
-          {filteredStreams.length > visibleLimit && (
-            <div className="pt-4 text-center">
-              <button
-                type="button"
-                onClick={() => setVisibleLimit((prev) => prev + 40)}
-                className="px-6 py-3 rounded-xl bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-sm font-bold text-zinc-200 hover:text-white transition cursor-pointer shadow-lg inline-flex items-center gap-2"
-              >
-                <span>Mostra altri film ({filteredStreams.length - visibleLimit} rimanenti)</span>
-                <ChevronRight className="w-4 h-4 text-emerald-400" />
-              </button>
-            </div>
-          )}
         </section>
       </div>
 

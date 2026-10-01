@@ -69,7 +69,6 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
   const [categorySearch, setCategorySearch] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [sortBy, setSortBy] = useState<'recent' | 'rating' | 'name' | 'id'>('recent');
-  const [visibleLimit, setVisibleLimit] = useState<number>(40);
   const [activeSeriesDetail, setActiveSeriesDetail] = useState<{
     series: XtreamSeries;
     info: XtreamSeriesInfo | null;
@@ -85,10 +84,6 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
       }
     }
   }, [categories, selectedCategory]);
-
-  useEffect(() => {
-    setVisibleLimit(40);
-  }, [selectedCategory, searchQuery, sortBy]);
 
   const scrollCategories = (direction: 'up' | 'down') => {
     if (categoriesListRef.current) {
@@ -146,10 +141,8 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
     return sortSeriesList(matched, sortBy);
   }, [seriesList, selectedCategory, searchQuery, sortBy]);
 
-  // Natural list order preserved
-  const visibleSeries = useMemo(() => {
-    return filteredSeries.slice(0, visibleLimit);
-  }, [filteredSeries, visibleLimit]);
+  // Natural list order preserved (all series visible and naturally scrollable)
+  const visibleSeries = filteredSeries;
 
   const handleOpenSeries = async (series: XtreamSeries) => {
     setActiveSeriesDetail({
@@ -475,20 +468,6 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
             </div>
           )}
           </div>
-
-          {/* Load More Button */}
-          {filteredSeries.length > visibleLimit && (
-            <div className="pt-4 text-center">
-              <button
-                type="button"
-                onClick={() => setVisibleLimit((prev) => prev + 40)}
-                className="px-6 py-3 rounded-xl bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-sm font-bold text-zinc-200 hover:text-white transition cursor-pointer shadow-lg inline-flex items-center gap-2"
-              >
-                <span>Mostra altre serie TV ({filteredSeries.length - visibleLimit} rimanenti)</span>
-                <ChevronRight className="w-4 h-4 text-blue-400" />
-              </button>
-            </div>
-          )}
         </section>
       </div>
 

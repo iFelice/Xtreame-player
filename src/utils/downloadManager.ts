@@ -78,48 +78,28 @@ export function startMediaDownload(options: {
     ? `${cloudProxyBase}${downloadUrl}`
     : downloadUrl;
 
-  if (isCapacitorNative) {
-    try {
-      const a = document.createElement('a');
-      a.href = effectiveDownloadUrl;
-      a.download = `${cleanFilename}.${containerExtension || 'mp4'}`;
-      a.target = '_blank';
-      a.rel = 'noopener noreferrer';
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => {
-        if (a.parentNode) a.parentNode.removeChild(a);
-      }, 1000);
-    } catch {
-      window.open(effectiveDownloadUrl, '_system');
-    }
-  } else {
-    // Web Browser on Mac (Safari, Chrome, etc.)
-    try {
-      const a = document.createElement('a');
-      a.href = downloadUrl;
-      a.download = `${cleanFilename}.${containerExtension || 'mp4'}`;
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => {
-        if (a.parentNode) a.parentNode.removeChild(a);
-      }, 1500);
+  // Trigger seamless background file download directly to ~/Downloads
+  try {
+    const a = document.createElement('a');
+    a.href = effectiveDownloadUrl;
+    a.download = `${cleanFilename}.${containerExtension || 'mp4'}`;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      if (a.parentNode) a.parentNode.removeChild(a);
+    }, 1500);
 
-      // Hidden iframe fallback
-      const iframe = document.createElement('iframe');
-      iframe.style.display = 'none';
-      iframe.src = downloadUrl;
-      document.body.appendChild(iframe);
-      setTimeout(() => {
-        if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
-      }, 60000);
-    } catch (err) {
-      console.error('Download error:', err);
-      try {
-        window.open(downloadUrl, '_blank');
-      } catch {}
-    }
+    // Hidden iframe fallback
+    const iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    iframe.src = effectiveDownloadUrl;
+    document.body.appendChild(iframe);
+    setTimeout(() => {
+      if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+    }, 60000);
+  } catch (err) {
+    console.error('Download error:', err);
   }
 
   return downloadRecord;

@@ -97,29 +97,9 @@ export function triggerMediaDownload(
     console.warn('Could not save download to local storage:', err);
   }
 
-  // Capacitor Native on Mac / iOS: trigger download via proxy attachment so browser downloads directly instead of playing
-  if (isCapacitorNative) {
-    try {
-      const a = document.createElement('a');
-      a.href = proxyDownloadUrl;
-      a.download = filename;
-      a.target = '_blank';
-      a.rel = 'noopener noreferrer';
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => {
-        if (a.parentNode) a.parentNode.removeChild(a);
-      }, 1000);
-      return true;
-    } catch {
-      window.open(proxyDownloadUrl, '_system');
-      return true;
-    }
-  }
-
-  // Web Browser on Mac (Safari, Chrome, etc.): trigger download to ~/Downloads
+  // Trigger seamless background file download directly to ~/Downloads
   try {
-    // 1. Direct anchor tag click with download attribute
+    // 1. Direct anchor tag click with download attribute (no new tab, no window.open)
     const a = document.createElement('a');
     a.href = proxyDownloadUrl;
     a.download = filename;
@@ -148,12 +128,6 @@ export function triggerMediaDownload(
     return true;
   } catch (err) {
     console.error('Download iframe trigger error:', err);
-    // Fallback: window.open in blank target
-    try {
-      window.open(proxyDownloadUrl, '_blank');
-      return true;
-    } catch {
-      return false;
-    }
+    return false;
   }
 }

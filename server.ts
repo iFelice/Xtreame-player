@@ -156,8 +156,18 @@ function proxyStream(targetUrl: string, req: Request, res: Response, redirectCou
             ? req.query.filename.trim()
             : 'video.mp4';
         const cleanFilename = rawFilename.replace(/[/\\?%*:|"<>]/g, '_').trim();
+        // Standard ASCII-only fallback for legacy filename parameter
+        const asciiFallback = cleanFilename
+          .replace(/[àáâãäå]/gi, 'a')
+          .replace(/[èéêë]/gi, 'e')
+          .replace(/[ìíîï]/gi, 'i')
+          .replace(/[òóôõö]/gi, 'o')
+          .replace(/[ùúûü]/gi, 'u')
+          .replace(/[^a-zA-Z0-9._ -]/g, '_')
+          .trim() || 'video.mp4';
+
         responseHeaders['Content-Type'] = 'application/octet-stream';
-        responseHeaders['Content-Disposition'] = `attachment; filename="${cleanFilename.replace(/"/g, '')}"; filename*=UTF-8''${encodeURIComponent(cleanFilename)}`;
+        responseHeaders['Content-Disposition'] = `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(cleanFilename)}`;
         responseHeaders['Cache-Control'] = 'no-cache, no-store, must-revalidate';
       }
 

@@ -67,7 +67,10 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   const [controlsVisible, setControlsVisible] = useState<boolean>(true);
   const [useProxy, setUseProxy] = useState<boolean>(() => {
     try {
-      return localStorage.getItem('xtream_use_proxy') === 'true';
+      const saved = localStorage.getItem('xtream_use_proxy');
+      if (saved !== null) return saved === 'true';
+      // Auto-enable proxy on HTTPS to prevent Mixed Content blocking of HTTP streams
+      return typeof window !== 'undefined' && window.location.protocol === 'https:';
     } catch {
       return false;
     }
@@ -559,6 +562,8 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
         preload="auto"
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
+        onLoadedData={() => setIsLoading(false)}
+        onCanPlay={() => setIsLoading(false)}
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
         onWaiting={() => setIsLoading(true)}
@@ -568,17 +573,16 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
             console.warn('HTML5 video onError ignored because video is actively playing');
             return;
           }
-          setIsLoading(false);
-          const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
-          if (isHttps && !useProxy) {
-            setErrorMessage(
-              'Il browser blocca i flussi video HTTP diretti ("Mixed Content"). Clicca su "Attiva Proxy HTTPS" per avviare il video.'
-            );
-          } else {
-            setErrorMessage(
-              'Errore di caricamento del flusso video. Verifica se il canale o server IPTV è attivo, oppure prova a cambiare formato (.ts / .m3u8).'
-            );
+          // If not using proxy and video fails to play, auto-fallback to proxy immediately
+          if (!useProxy) {
+            console.log('Video error on direct stream, auto-switching to proxy...');
+            setUseProxy(true);
+            return;
           }
+          setIsLoading(false);
+          setErrorMessage(
+            'Errore di caricamento del flusso video. Verifica se il canale o server IPTV è attivo, oppure prova a cambiare formato (.ts / .m3u8).'
+          );
         }}
         onClick={togglePlay}
         style={{

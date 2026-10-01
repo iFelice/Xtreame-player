@@ -92,7 +92,6 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
 
   const [categorySearch, setCategorySearch] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [visibleLimit, setVisibleLimit] = useState<number>(60);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
 
   // Ensure first category is selected if categories arrive asynchronously
@@ -103,11 +102,6 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
       }
     }
   }, [categories, selectedCategory]);
-
-  // Reset pagination limit when category or search changes
-  useEffect(() => {
-    setVisibleLimit(60);
-  }, [selectedCategory, searchQuery]);
 
   const handleToggleViewMode = (mode: 'grid' | 'list') => {
     setViewMode(mode);
@@ -161,10 +155,8 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
     });
   }, [streams, selectedCategory, searchQuery]);
 
-  // Natural list order preserved (never rearranged)
-  const visibleStreams = useMemo(() => {
-    return filteredStreams.slice(0, visibleLimit);
-  }, [filteredStreams, visibleLimit]);
+  // Natural list order preserved (all channels visible, scrollable naturally)
+  const visibleStreams = filteredStreams;
 
   // Auto-scroll selected channel to the top of the viewport without changing array order
   useEffect(() => {
@@ -572,20 +564,6 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
             </div>
           )}
           </div>
-
-          {/* Load More Button */}
-          {filteredStreams.length > visibleLimit && (
-            <div className="pt-4 text-center">
-              <button
-                type="button"
-                onClick={() => setVisibleLimit((prev) => prev + 60)}
-                className="px-6 py-3.5 rounded-2xl bg-zinc-900 hover:bg-zinc-850 border border-zinc-700 text-sm sm:text-base font-bold text-zinc-100 hover:text-white transition cursor-pointer shadow-xl inline-flex items-center gap-2"
-              >
-                <span>Mostra altri canali ({filteredStreams.length - visibleLimit} rimanenti)</span>
-                <ChevronRight className="w-5 h-5 text-rose-400" />
-              </button>
-            </div>
-          )}
         </section>
       </div>
     </div>
