@@ -25,6 +25,7 @@ import { storage } from '../services/storage';
 import { sortVodStreams } from '../utils/recentSorting';
 import { getSecureImageUrl } from '../utils/imageUrl';
 import { triggerMediaDownload, isTvEnvironment } from '../utils/downloadHelper';
+import { StreamExportModal } from './StreamExportModal';
 
 interface VodCatalogProps {
   categories: XtreamCategory[];
@@ -62,6 +63,11 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
   const [categorySearch, setCategorySearch] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [sortBy, setSortBy] = useState<'recent' | 'rating' | 'name' | 'id'>('recent');
+  const [exportTarget, setExportTarget] = useState<{
+    title: string;
+    streamUrl: string;
+    containerExtension: string;
+  } | null>(null);
   const [activeMovieDetail, setActiveMovieDetail] = useState<{
     stream: XtreamVodStream;
     details: XtreamVodDetails | null;
@@ -339,6 +345,7 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
 
                 const handleDirectDownload = (e: React.MouseEvent) => {
                   e.stopPropagation();
+                  e.preventDefault();
                   const ext = stream.container_extension || 'mp4';
                   const streamUrl = buildStreamUrl(
                     serverUrl,
@@ -357,8 +364,11 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                     ext,
                     accountKey
                   );
-                  setDownloadingMovieId(stream.stream_id);
-                  setTimeout(() => setDownloadingMovieId(null), 3500);
+                  setExportTarget({
+                    title: stream.name,
+                    streamUrl,
+                    containerExtension: ext,
+                  });
                 };
 
                 return (
@@ -597,22 +607,16 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                       ext,
                       accountKey
                     );
-                    setDownloadingMovieId(activeMovieDetail.stream.stream_id);
-                    setTimeout(() => setDownloadingMovieId(null), 3500);
+                    setExportTarget({
+                      title: activeMovieDetail.stream.name,
+                      streamUrl,
+                      containerExtension: ext,
+                    });
                   }}
-                  className="px-5 py-3 rounded-xl border border-zinc-700 hover:border-emerald-500 bg-zinc-900 hover:bg-zinc-800 text-zinc-200 hover:text-white text-sm font-bold flex items-center gap-2 transition cursor-pointer"
+                  className="px-5 py-3 rounded-xl border border-zinc-700 hover:border-cyan-500 bg-zinc-900 hover:bg-zinc-800 text-cyan-400 hover:text-white text-sm font-bold flex items-center gap-2 transition cursor-pointer"
                 >
-                  {downloadingMovieId === activeMovieDetail.stream.stream_id ? (
-                    <>
-                      <Check className="w-4 h-4 text-emerald-400" />
-                      <span>Download Avviato!</span>
-                    </>
-                  ) : (
-                    <>
-                      <Download className="w-4 h-4 text-emerald-400" />
-                      <span>Scarica su Mac</span>
-                    </>
-                  )}
+                  <Download className="w-4 h-4 text-cyan-400" />
+                  <span>Estrapola Link / VLC</span>
                 </button>
               )}
 
@@ -629,6 +633,18 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Stream Export Modal */}
+      {exportTarget && (
+        <StreamExportModal
+          isOpen={Boolean(exportTarget)}
+          onClose={() => setExportTarget(null)}
+          title={exportTarget.title}
+          streamUrl={exportTarget.streamUrl}
+          type="movie"
+          containerExtension={exportTarget.containerExtension}
+        />
       )}
     </div>
   );

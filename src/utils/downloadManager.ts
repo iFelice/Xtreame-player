@@ -2,7 +2,7 @@ import { storage, DownloadItem } from '../services/storage';
 import { buildDownloadUrl } from './parseXtreamUrl';
 
 /**
- * Triggers a native browser file download and registers it in the local download history.
+ * Registers media in the local download history and returns the direct record.
  */
 export function startMediaDownload(options: {
   serverUrl: string;
@@ -51,12 +51,16 @@ export function startMediaDownload(options: {
     cleanFilename
   );
 
+  const cleanServer = serverUrl.replace(/\/+$/, '');
+  const ext = containerExtension || 'mp4';
+  const directPath = `${cleanServer}/${xtreamType}/${encodeURIComponent(username)}/${encodeURIComponent(password)}/${streamId}.${ext}`;
+
   const downloadRecord: DownloadItem = {
     id: `${type}_${streamId}_${Date.now()}`,
     title,
     type,
-    streamUrl: downloadUrl.replace('&download=1', ''),
-    downloadUrl,
+    streamUrl: directPath,
+    downloadUrl: directPath,
     poster,
     containerExtension,
     seriesName,
@@ -67,40 +71,6 @@ export function startMediaDownload(options: {
 
   // Add to storage
   storage.addDownload(downloadRecord);
-
-  // Detect Capacitor native platform (Mac / iOS)
-  const isCapacitorNative =
-    typeof window !== 'undefined' &&
-    ((window as any).Capacitor?.isNativePlatform?.() || (window as any).Capacitor?.platform === 'ios');
-
-  const cloudProxyBase = 'https://ais-dev-dihbqwu76twglwk6fd3g6v-872512682555.europe-west2.run.app';
-  const effectiveDownloadUrl = isCapacitorNative
-    ? `${cloudProxyBase}${downloadUrl}`
-    : downloadUrl;
-
-  // Trigger seamless background file download directly to ~/Downloads
-  try {
-    const a = document.createElement('a');
-    a.href = effectiveDownloadUrl;
-    a.download = `${cleanFilename}.${containerExtension || 'mp4'}`;
-    a.style.display = 'none';
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => {
-      if (a.parentNode) a.parentNode.removeChild(a);
-    }, 1500);
-
-    // Hidden iframe fallback
-    const iframe = document.createElement('iframe');
-    iframe.style.display = 'none';
-    iframe.src = effectiveDownloadUrl;
-    document.body.appendChild(iframe);
-    setTimeout(() => {
-      if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
-    }, 60000);
-  } catch (err) {
-    console.error('Download error:', err);
-  }
 
   return downloadRecord;
 }

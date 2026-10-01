@@ -25,9 +25,11 @@ import {
 } from 'lucide-react';
 import Hls from 'hls.js';
 import mpegts from 'mpegts.js';
+import { Capacitor } from '@capacitor/core';
 import { PlayableMediaItem } from '../types/xtream';
 import { storage } from '../services/storage';
 import { triggerMediaDownload, isTvEnvironment } from '../utils/downloadHelper';
+import { StreamExportModal } from './StreamExportModal';
 
 interface MediaPlayerProps {
   media: PlayableMediaItem | null;
@@ -61,15 +63,20 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
   const [downloadToast, setDownloadToast] = useState<boolean>(false);
   const isTv = isTvEnvironment();
+  const isNative = typeof window !== 'undefined' && (Capacitor.isNativePlatform() || window.location.protocol === 'capacitor:');
   const [aspectRatio, setAspectRatio] = useState<'contain' | '16_9' | '4_3' | 'cover' | 'fill'>('contain');
   const [showSettings, setShowSettings] = useState<boolean>(false);
+  const [showExportModal, setShowExportModal] = useState<boolean>(false);
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
   const [controlsVisible, setControlsVisible] = useState<boolean>(true);
   const [useProxy, setUseProxy] = useState<boolean>(() => {
+    // In native app (Mac / iOS), never use web proxy
+    if (typeof window !== 'undefined' && (Capacitor.isNativePlatform() || window.location.protocol === 'capacitor:')) {
+      return false;
+    }
     try {
       const saved = localStorage.getItem('xtream_use_proxy');
       if (saved !== null) return saved === 'true';
-      // Auto-enable proxy on HTTPS to prevent Mixed Content blocking of HTTP streams
       return typeof window !== 'undefined' && window.location.protocol === 'https:';
     } catch {
       return false;
@@ -109,6 +116,17 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       }
     }
 
+    // In native Capacitor app on Mac / iOS, always play direct stream URL
+    if (isNative) {
+      if (target.startsWith('/api/proxy/stream?url=')) {
+        const match = target.match(/url=([^&]+)/);
+        if (match && match[1]) {
+          return decodeURIComponent(match[1]);
+        }
+      }
+      return target;
+    }
+
     if (useProxy) {
       if (target.startsWith('/api/proxy/stream')) {
         return target;
@@ -123,7 +141,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       }
     }
     return target;
-  }, [media, useProxy, liveFormat]);
+  }, [media, useProxy, liveFormat, isNative]);
 
   // Activity timer to hide controls during playback
   const showControlsTemporarily = useCallback(() => {
@@ -768,30 +786,19 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          {!isTv && media.type !== 'live' && (
+          {!isTv && (
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 e.preventDefault();
-                const ext = media.containerExtension || 'mp4';
-                const success = triggerMediaDownload(
-                  media.streamUrl,
-                  media.title,
-                  media.type === 'movie' ? 'movie' : 'episode',
-                  media.poster,
-                  ext,
-                  accountKey
-                );
-                if (success) {
-                  setDownloadToast(true);
-                  setTimeout(() => setDownloadToast(false), 3500);
-                }
+                setShowExportModal(true);
               }}
-              title="Scarica questo video nella cartella Download del Mac"
-              className="p-2 sm:p-2.5 text-zinc-300 hover:text-cyan-400 hover:bg-white/10 rounded-2xl transition cursor-pointer"
+              title="Estrapola Link Flusso & Strumenti Download / VLC"
+              className="px-3 py-1.5 sm:px-3.5 sm:py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-2xl text-xs sm:text-sm font-bold flex items-center gap-2 transition cursor-pointer shadow-lg"
             >
-              <Download className="w-5 h-5 sm:w-6 sm:h-6" />
+              <Download className="w-4 h-4" />
+              <span className="hidden sm:inline">Estrapola Link / VLC</span>
             </button>
           )}
 
@@ -1010,6 +1017,18 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Stream Export & VLC Modal */}
+      {media && (
+        <StreamExportModal
+          isOpen={showExportModal}
+          onClose={() => setShowExportModal(false)}
+          title={media.title}
+          streamUrl={media.streamUrl}
+          type={media.type === 'movie' ? 'movie' : media.type === 'series' ? 'episode' : 'live'}
+          containerExtension={media.containerExtension || 'mp4'}
+        />
+      )}
     </div>
   );
 };

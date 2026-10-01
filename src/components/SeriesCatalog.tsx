@@ -28,6 +28,7 @@ import { storage } from '../services/storage';
 import { sortSeriesList } from '../utils/recentSorting';
 import { getSecureImageUrl } from '../utils/imageUrl';
 import { triggerMediaDownload, isTvEnvironment } from '../utils/downloadHelper';
+import { StreamExportModal } from './StreamExportModal';
 
 interface SeriesCatalogProps {
   categories: XtreamCategory[];
@@ -69,6 +70,11 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
   const [categorySearch, setCategorySearch] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [sortBy, setSortBy] = useState<'recent' | 'rating' | 'name' | 'id'>('recent');
+  const [exportTarget, setExportTarget] = useState<{
+    title: string;
+    streamUrl: string;
+    containerExtension: string;
+  } | null>(null);
   const [activeSeriesDetail, setActiveSeriesDetail] = useState<{
     series: XtreamSeries;
     info: XtreamSeriesInfo | null;
@@ -570,6 +576,7 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
+                                  e.preventDefault();
                                   const ext = ep.container_extension || 'mp4';
                                   const streamUrl = buildStreamUrl(
                                     serverUrl,
@@ -589,17 +596,17 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                                     ext,
                                     accountKey
                                   );
-                                  setDownloadingEpisodeId(ep.id);
-                                  setTimeout(() => setDownloadingEpisodeId(null), 3500);
+                                  setExportTarget({
+                                    title,
+                                    streamUrl,
+                                    containerExtension: ext,
+                                  });
                                 }}
-                                title="Scarica episodio su Mac"
-                                className="p-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition cursor-pointer"
+                                title="Estrapola Link & Strumenti Download / VLC"
+                                className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-cyan-400 hover:text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
                               >
-                                {downloadingEpisodeId === ep.id ? (
-                                  <Check className="w-4 h-4 text-emerald-400" />
-                                ) : (
-                                  <Download className="w-4 h-4" />
-                                )}
+                                <Download className="w-3.5 h-3.5" />
+                                <span>Link / VLC</span>
                               </button>
                             )}
 
@@ -626,6 +633,18 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Stream Export & VLC Modal */}
+      {exportTarget && (
+        <StreamExportModal
+          isOpen={Boolean(exportTarget)}
+          onClose={() => setExportTarget(null)}
+          title={exportTarget.title}
+          streamUrl={exportTarget.streamUrl}
+          type="episode"
+          containerExtension={exportTarget.containerExtension}
+        />
       )}
     </div>
   );

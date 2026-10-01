@@ -35,11 +35,7 @@ export function isTvEnvironment(): boolean {
 }
 
 /**
- * Triggers a real file download directly to the Mac ~/Downloads folder (or user's default downloads)
- * using the backend proxy with Content-Disposition: attachment header.
- *
- * Uses an invisible iframe so the page NEVER navigates, the video player NEVER shrinks,
- * and the user stays seamlessly in their watching session.
+ * Extracts clean direct stream URL and registers item to "I Miei Download" for tracking.
  */
 export function triggerMediaDownload(
   streamUrl: string,
@@ -51,12 +47,7 @@ export function triggerMediaDownload(
 ): boolean {
   if (typeof window === 'undefined') return false;
 
-  // Clean filename for filesystem
-  const cleanName = (title || 'video').replace(/[/\\?%*:|"<>]/g, '_').trim();
-  const ext = (containerExtension || 'mp4').toLowerCase().replace(/^\./, '');
-  const filename = `${cleanName}.${ext}`;
-
-  // Extract raw stream target if it was already proxied
+  // Extract raw stream target if it was wrapped in proxy
   let rawUrl = streamUrl;
   if (rawUrl.includes('/api/proxy/stream?url=')) {
     const match = rawUrl.match(/url=([^&]+)/);
@@ -65,20 +56,10 @@ export function triggerMediaDownload(
     }
   }
 
-  // Detect Capacitor native platform
-  const isCapacitorNative =
-    typeof window !== 'undefined' &&
-    ((window as any).Capacitor?.isNativePlatform?.() || (window as any).Capacitor?.platform === 'ios');
+  const cleanName = (title || 'video').replace(/[/\\?%*:|"<>]/g, '_').trim();
+  const ext = (containerExtension || 'mp4').toLowerCase().replace(/^\./, '');
 
-  // Cloud Run proxy fallback for native Capacitor app (when origin is capacitor://)
-  const cloudProxyBase = 'https://ais-dev-dihbqwu76twglwk6fd3g6v-872512682555.europe-west2.run.app';
-  const origin =
-    typeof window !== 'undefined' && window.location.origin.startsWith('http')
-      ? window.location.origin
-      : cloudProxyBase;
-  const proxyDownloadUrl = `${origin}/api/proxy/stream?url=${encodeURIComponent(rawUrl)}&download=1&filename=${encodeURIComponent(filename)}`;
-
-  // Save to "I Miei Download" storage for in-app offline tracking
+  // Save to "I Miei Download" storage for in-app tracking
   try {
     storage.addDownload(
       {
@@ -86,7 +67,7 @@ export function triggerMediaDownload(
         title,
         type,
         streamUrl: rawUrl,
-        downloadUrl: proxyDownloadUrl,
+        downloadUrl: rawUrl,
         poster,
         containerExtension: ext,
         downloadedAt: Date.now(),
@@ -97,37 +78,5 @@ export function triggerMediaDownload(
     console.warn('Could not save download to local storage:', err);
   }
 
-  // Trigger seamless background file download directly to ~/Downloads
-  try {
-    // 1. Direct anchor tag click with download attribute (no new tab, no window.open)
-    const a = document.createElement('a');
-    a.href = proxyDownloadUrl;
-    a.download = filename;
-    a.style.display = 'none';
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => {
-      if (a.parentNode) a.parentNode.removeChild(a);
-    }, 1500);
-
-    // 2. Hidden iframe fallback without navigating page or shrinking video player
-    const iframe = document.createElement('iframe');
-    iframe.style.display = 'none';
-    iframe.src = proxyDownloadUrl;
-    document.body.appendChild(iframe);
-
-    // Clean up iframe after download has started
-    setTimeout(() => {
-      try {
-        if (iframe.parentNode) {
-          iframe.parentNode.removeChild(iframe);
-        }
-      } catch {}
-    }, 60000);
-
-    return true;
-  } catch (err) {
-    console.error('Download iframe trigger error:', err);
-    return false;
-  }
+  return true;
 }
