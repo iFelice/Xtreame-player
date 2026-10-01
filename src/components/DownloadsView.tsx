@@ -20,11 +20,13 @@ import { PlayableMediaItem } from '../types/xtream';
 interface DownloadsViewProps {
   onPlay: (item: PlayableMediaItem) => void;
   onExploreContent?: (tab: 'movies' | 'series') => void;
+  accountKey?: string;
 }
 
 export const DownloadsView: React.FC<DownloadsViewProps> = ({
   onPlay,
   onExploreContent,
+  accountKey,
 }) => {
   const [downloads, setDownloads] = useState<DownloadItem[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -32,12 +34,12 @@ export const DownloadsView: React.FC<DownloadsViewProps> = ({
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const loadDownloads = () => {
-    setDownloads(storage.getDownloads());
+    setDownloads(storage.getDownloads(accountKey));
   };
 
   useEffect(() => {
     loadDownloads();
-  }, []);
+  }, [accountKey]);
 
   const handleCopyLink = (item: DownloadItem) => {
     const fullUrl = new URL(item.downloadUrl, window.location.origin).toString();
@@ -47,13 +49,13 @@ export const DownloadsView: React.FC<DownloadsViewProps> = ({
   };
 
   const handleRemove = (id: string) => {
-    storage.removeDownload(id);
+    storage.removeDownload(id, accountKey);
     loadDownloads();
   };
 
   const handleClearAll = () => {
-    if (window.confirm('Sei sicuro di voler cancellare la cronologia dei download? (I file già scaricati rimarranno sul tuo computer)')) {
-      storage.clearDownloads();
+    if (window.confirm('Sei sicuro di voler cancellare la cronologia dei download? (I file già salvati rimarranno sul tuo dispositivo)')) {
+      storage.clearDownloads(accountKey);
       loadDownloads();
     }
   };
@@ -65,7 +67,7 @@ export const DownloadsView: React.FC<DownloadsViewProps> = ({
         ? `${item.seriesName} - S${String(item.seasonNum || 1).padStart(2, '0')}E${String(item.episodeNum || 1).padStart(2, '0')}: ${item.title}`
         : item.title,
       type: item.type === 'episode' ? 'series' : 'movie',
-      streamUrl: item.downloadUrl.replace('&download=1', ''),
+      streamUrl: item.streamUrl || item.downloadUrl.replace('&download=1', ''),
       poster: item.poster,
       containerExtension: item.containerExtension,
       categoryName: 'I Miei Download',
@@ -307,7 +309,7 @@ export const DownloadsView: React.FC<DownloadsViewProps> = ({
                   </button>
 
                   <a
-                    href={item.downloadUrl}
+                    href={item.streamUrl || item.downloadUrl}
                     download
                     className="p-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-cyan-400 border border-zinc-800 transition"
                     title="Riscarica file"

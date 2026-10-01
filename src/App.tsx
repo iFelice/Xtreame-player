@@ -35,7 +35,7 @@ import {
 import { xtreamClient } from './services/xtreamClient';
 import { storage, SavedAccount } from './services/storage';
 import { buildStreamUrl } from './utils/parseXtreamUrl';
-import { isTvEnvironment } from './utils/downloadHelper';
+import { cleanupLegacyNativeDownloads, isTvEnvironment } from './utils/downloadHelper';
 
 export default function App() {
   const isTv = isTvEnvironment();
@@ -62,6 +62,12 @@ export default function App() {
     return path.includes('remote-login') || search.get('page') === 'remote-login' || search.has('code');
   });
   const [savedAccounts, setSavedAccounts] = useState<SavedAccount[]>(() => storage.getAccounts());
+
+  // Remove the hidden persistent files created by the previous download
+  // implementation. This one-time migration immediately recovers that space.
+  useEffect(() => {
+    void cleanupLegacyNativeDownloads();
+  }, []);
 
   // Catalog data
   const [vodCategories, setVodCategories] = useState<XtreamCategory[]>([]);
@@ -578,6 +584,7 @@ export default function App() {
               <DownloadsView
                 onPlay={handlePlayDirect}
                 onExploreContent={(tab) => setActiveTab(tab)}
+                accountKey={currentAccountKey}
               />
             )}
 
