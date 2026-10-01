@@ -70,16 +70,12 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
   const [controlsVisible, setControlsVisible] = useState<boolean>(true);
   const [useProxy, setUseProxy] = useState<boolean>(() => {
-    // In native app (Mac / iOS), never use web proxy
-    if (typeof window !== 'undefined' && (Capacitor.isNativePlatform() || window.location.protocol === 'capacitor:')) {
-      return false;
-    }
     try {
       const saved = localStorage.getItem('xtream_use_proxy');
       if (saved !== null) return saved === 'true';
-      return typeof window !== 'undefined' && window.location.protocol === 'https:';
+      return true; // Always enable proxy by default for reliable playback like on Render
     } catch {
-      return false;
+      return true;
     }
   });
   const [liveFormat, setLiveFormat] = useState<'m3u8' | 'ts'>('m3u8');
@@ -116,17 +112,6 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       }
     }
 
-    // In native Capacitor app on Mac / iOS, always play direct stream URL
-    if (isNative) {
-      if (target.startsWith('/api/proxy/stream?url=')) {
-        const match = target.match(/url=([^&]+)/);
-        if (match && match[1]) {
-          return decodeURIComponent(match[1]);
-        }
-      }
-      return target;
-    }
-
     if (useProxy) {
       if (target.startsWith('/api/proxy/stream')) {
         return target;
@@ -141,7 +126,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       }
     }
     return target;
-  }, [media, useProxy, liveFormat, isNative]);
+  }, [media, useProxy, liveFormat]);
 
   // Activity timer to hide controls during playback
   const showControlsTemporarily = useCallback(() => {

@@ -35,7 +35,8 @@ export function isTvEnvironment(): boolean {
 }
 
 /**
- * Extracts clean direct stream URL and registers item to "I Miei Download" for tracking.
+ * Extracts clean stream URL, registers item to "I Miei Download",
+ * and triggers direct browser file download to ~/Downloads via proxy.
  */
 export function triggerMediaDownload(
   streamUrl: string,
@@ -58,6 +59,8 @@ export function triggerMediaDownload(
 
   const cleanName = (title || 'video').replace(/[/\\?%*:|"<>]/g, '_').trim();
   const ext = (containerExtension || 'mp4').toLowerCase().replace(/^\./, '');
+  const filename = `${cleanName}.${ext}`;
+  const downloadEndpoint = `/api/proxy/stream?url=${encodeURIComponent(rawUrl)}&download=1&filename=${encodeURIComponent(filename)}`;
 
   // Save to "I Miei Download" storage for in-app tracking
   try {
@@ -67,7 +70,7 @@ export function triggerMediaDownload(
         title,
         type,
         streamUrl: rawUrl,
-        downloadUrl: rawUrl,
+        downloadUrl: downloadEndpoint,
         poster,
         containerExtension: ext,
         downloadedAt: Date.now(),
@@ -76,6 +79,21 @@ export function triggerMediaDownload(
     );
   } catch (err) {
     console.warn('Could not save download to local storage:', err);
+  }
+
+  // Trigger browser direct file download without opening new tabs or windows
+  try {
+    const a = document.createElement('a');
+    a.href = downloadEndpoint;
+    a.download = filename;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      if (a.parentNode) a.parentNode.removeChild(a);
+    }, 1500);
+  } catch (e) {
+    console.warn('Could not trigger anchor download click:', e);
   }
 
   return true;
