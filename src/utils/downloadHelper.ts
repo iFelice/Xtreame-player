@@ -1,3 +1,6 @@
+import { Capacitor } from '@capacitor/core';
+import { Directory, Filesystem } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
 import { storage } from '../services/storage';
 
 /**
@@ -7,8 +10,7 @@ import { storage } from '../services/storage';
 export function isTvEnvironment(): boolean {
   if (typeof window === 'undefined') return false;
   const ua = (navigator.userAgent || '').toLowerCase();
-  
-  // Check common Smart TV and TV Box user agent strings
+
   const isTvUa =
     ua.includes('googletv') ||
     ua.includes('android tv') ||
@@ -21,12 +23,11 @@ export function isTvEnvironment(): boolean {
     ua.includes('bravia') ||
     ua.includes('hisense') ||
     ua.includes('hbbtv') ||
-    ua.includes('crkey') || // Chromecast
-    ua.includes('aft') ||   // Amazon Fire TV
+    ua.includes('crkey') ||
+    ua.includes('aft') ||
     ua.includes('roku') ||
     ua.includes('netcast');
 
-  // Check 10-foot UI TV screen characteristics (no hover, coarse pointer, 1080p/4k fixed viewport)
   const is10ftTv =
     window.matchMedia &&
     window.matchMedia('(hover: none) and (pointer: coarse) and (min-width: 1920px) and (min-height: 1080px)').matches;
@@ -34,39 +35,95 @@ export function isTvEnvironment(): boolean {
   return isTvUa || is10ftTv;
 }
 
+function unwrapProxyUrl(streamUrl: string): string {
+  if (!streamUrl.includes('/api/proxy/stream?url=')) return streamUrl;
+
+  try {
+    const query = streamUrl.split('?')[1] || '';
+    return new URLSearchParams(query).get('url') || streamUrl;
+  } catch {
+    return streamUrl;
+  }
+}
+
+function safeFilename(title: string, extension: string): string {
+  // Also remove control characters: they are invalid or problematic in native paths.
+  const cleanTitle = (title || 'video')
+    .replace(/[\u0000-\u001f/\\?%*:|"<>]/g, '_')
+    .trim() || 'video';
+  const cleanExtension = (extension || 'mp4').toLowerCase().replace(/[^a-z0-9]/g, '') || 'mp4';
+  return `${cleanTitle}.${cleanExtension}`;
+}
+
 /**
- * Extracts clean stream URL, registers item to "I Miei Download",
- * and triggers direct browser file download to ~/Downloads via proxy.
+ * Downloads media. On native platforms the Express proxy does not exist, so
+ * Capacitor Filesystem downloads the direct IPTV URL and Share exposes the
+ * completed file to Files/Downloads or another app. On web the existing
+ * Express download endpoint is retained.
  */
-export function triggerMediaDownload(
+export async function triggerMediaDownload(
   streamUrl: string,
   title: string,
   type: 'movie' | 'episode' = 'movie',
   poster?: string,
   containerExtension: string = 'mp4',
   accountKey?: string
-): boolean {
+): Promise<boolean> {
   if (typeof window === 'undefined') return false;
 
-  // Extract raw stream target if it was wrapped in proxy
-  let rawUrl = streamUrl;
-  if (rawUrl.includes('/api/proxy/stream?url=')) {
-    const match = rawUrl.match(/url=([^&]+)/);
-    if (match && match[1]) {
-      rawUrl = decodeURIComponent(match[1]);
+  const rawUrl = unwrapProxyUrl(streamUrl);
+  const filename = safeFilename(title, containerExtension);
+  const ext = filename.split('.').pop() || 'mp4';
+  const id = `${type}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+
+  if (Capacitor.isNativePlatform() || window.location.protocol === 'capacitor:') {
+    try {
+      // Documents is persistent and, on iOS, can be exposed in the Files app.
+      // A unique directory avoids overwriting an earlier download with the same title.
+      const result = await Filesystem.downloadFile({
+        url: rawUrl,
+        path: `Downloads/${id}/${filename}`,
+        directory: Directory.Documents,
+        recursive: true,
+      });
+
+      if (!result.path) throw new Error('Il download non ha restituito un percorso locale.');
+
+      storage.addDownload(
+        {
+          id,
+          title,
+          type,
+          streamUrl: rawUrl,
+          downloadUrl: result.path,
+          poster,
+          containerExtension: ext,
+          downloadedAt: Date.now(),
+        },
+        accountKey
+      );
+
+      await Share.share({
+        title: filename,
+        text: 'Salva il video in File o aprilo con un’altra app.',
+        files: [result.path],
+        dialogTitle: 'Salva o condividi il video',
+      });
+      return true;
+    } catch (error) {
+      console.error('Native media download failed:', error);
+      const message = error instanceof Error ? error.message : String(error);
+      window.alert(`Download non riuscito: ${message}`);
+      return false;
     }
   }
 
-  const cleanName = (title || 'video').replace(/[/\\?%*:|"<>]/g, '_').trim();
-  const ext = (containerExtension || 'mp4').toLowerCase().replace(/^\./, '');
-  const filename = `${cleanName}.${ext}`;
   const downloadEndpoint = `/api/proxy/stream?url=${encodeURIComponent(rawUrl)}&download=1&filename=${encodeURIComponent(filename)}`;
 
-  // Save to "I Miei Download" storage for in-app tracking
   try {
     storage.addDownload(
       {
-        id: `${type}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        id,
         title,
         type,
         streamUrl: rawUrl,
@@ -77,24 +134,17 @@ export function triggerMediaDownload(
       },
       accountKey
     );
-  } catch (err) {
-    console.warn('Could not save download to local storage:', err);
-  }
 
-  // Trigger browser direct file download without opening new tabs or windows
-  try {
     const a = document.createElement('a');
     a.href = downloadEndpoint;
     a.download = filename;
     a.style.display = 'none';
     document.body.appendChild(a);
     a.click();
-    setTimeout(() => {
-      if (a.parentNode) a.parentNode.removeChild(a);
-    }, 1500);
-  } catch (e) {
-    console.warn('Could not trigger anchor download click:', e);
+    setTimeout(() => a.remove(), 1500);
+    return true;
+  } catch (error) {
+    console.warn('Could not trigger browser download:', error);
+    return false;
   }
-
-  return true;
 }

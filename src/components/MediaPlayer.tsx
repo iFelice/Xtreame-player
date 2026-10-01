@@ -70,10 +70,13 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
   const [controlsVisible, setControlsVisible] = useState<boolean>(true);
   const [useProxy, setUseProxy] = useState<boolean>(() => {
+    // A Capacitor WebView has no Express server behind capacitor://localhost.
+    // Never restore a web proxy preference when running the native app.
+    if (isNative) return false;
     try {
       const saved = localStorage.getItem('xtream_use_proxy');
       if (saved !== null) return saved === 'true';
-      return true; // Always enable proxy by default for reliable playback like on Render
+      return true; // Web deployment uses the Express proxy by default.
     } catch {
       return true;
     }
@@ -112,6 +115,14 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       }
     }
 
+    // Native Capacitor builds cannot use relative Express routes. Unwrap any
+    // previously generated proxy URL and always connect to the IPTV host.
+    if (isNative && target.startsWith('/api/proxy/stream?url=')) {
+      const query = target.split('?')[1] || '';
+      return new URLSearchParams(query).get('url') || target;
+    }
+    if (isNative) return target;
+
     if (useProxy) {
       if (target.startsWith('/api/proxy/stream')) {
         return target;
@@ -120,13 +131,11 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     }
 
     if (target.startsWith('/api/proxy/stream?url=')) {
-      const match = target.match(/url=([^&]+)/);
-      if (match && match[1]) {
-        return decodeURIComponent(match[1]);
-      }
+      const query = target.split('?')[1] || '';
+      return new URLSearchParams(query).get('url') || target;
     }
     return target;
-  }, [media, useProxy, liveFormat]);
+  }, [media, useProxy, liveFormat, isNative]);
 
   // Activity timer to hide controls during playback
   const showControlsTemporarily = useCallback(() => {
@@ -576,8 +585,9 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
             console.warn('HTML5 video onError ignored because video is actively playing');
             return;
           }
-          // If not using proxy and video fails to play, auto-fallback to proxy immediately
-          if (!useProxy) {
+          // The fallback exists only on web: native Capacitor builds have no
+          // Express proxy available at capacitor://localhost.
+          if (!isNative && !useProxy) {
             console.log('Video error on direct stream, auto-switching to proxy...');
             setUseProxy(true);
             return;
@@ -652,24 +662,26 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
               </button>
             )}
 
-            <button
-              onClick={() => {
-                const nextVal = !useProxy;
-                setUseProxy(nextVal);
-                try {
-                  localStorage.setItem('xtream_use_proxy', String(nextVal));
-                } catch {}
-                setErrorMessage(null);
-                setIsLoading(true);
-              }}
-              className={`px-5 py-3 rounded-xl text-sm sm:text-base font-bold flex items-center gap-2 transition cursor-pointer shadow-lg ${
-                !useProxy
-                  ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-950/50'
-                  : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700'
-              }`}
-            >
-              {useProxy ? '⚡ Passa a Stream Diretto' : '🛡️ Attiva Proxy HTTPS'}
-            </button>
+            {!isNative && (
+              <button
+                onClick={() => {
+                  const nextVal = !useProxy;
+                  setUseProxy(nextVal);
+                  try {
+                    localStorage.setItem('xtream_use_proxy', String(nextVal));
+                  } catch {}
+                  setErrorMessage(null);
+                  setIsLoading(true);
+                }}
+                className={`px-5 py-3 rounded-xl text-sm sm:text-base font-bold flex items-center gap-2 transition cursor-pointer shadow-lg ${
+                  !useProxy
+                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-950/50'
+                    : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700'
+                }`}
+              >
+                {useProxy ? '⚡ Passa a Stream Diretto' : '🛡️ Attiva Proxy HTTPS'}
+              </button>
+            )}
 
             <button
               onClick={copyDirectStreamLink}
