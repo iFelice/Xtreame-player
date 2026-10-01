@@ -132,8 +132,14 @@ export async function triggerMediaDownload(
       );
       return true;
     } catch (error) {
-      console.error('Native media download failed:', error);
       const message = error instanceof Error ? error.message : String(error);
+      // Closing the Apple share sheet is a normal user action, not a download
+      // failure. Capacitor reports it as a rejected promise on iOS/macOS.
+      if (/share\s+canceled|cancelled|canceled/i.test(message)) {
+        console.info('Save dialog closed by the user.');
+        return false;
+      }
+      console.error('Native media download failed:', error);
       window.alert(`Download non riuscito: ${message}`);
       return false;
     } finally {
