@@ -161,27 +161,39 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
     });
   }, [streams, selectedCategory, searchQuery]);
 
-  // Active channel automatically scales to position #1 in the tab list
+  // Natural list order preserved (never rearranged)
   const visibleStreams = useMemo(() => {
-    const list = filteredStreams.slice(0, visibleLimit);
-    if (!activeMediaId || !activeMediaId.startsWith('live_')) return list;
+    return filteredStreams.slice(0, visibleLimit);
+  }, [filteredStreams, visibleLimit]);
+
+  // Auto-scroll selected channel to the top of the viewport without changing array order
+  useEffect(() => {
+    if (!activeMediaId || !activeMediaId.startsWith('live_')) return;
     const activeStreamId = activeMediaId.replace('live_', '');
-    const activeIndex = list.findIndex((s) => String(s.stream_id) === String(activeStreamId));
-    if (activeIndex > 0) {
-      const activeItem = list[activeIndex];
-      const remaining = list.filter((_, idx) => idx !== activeIndex);
-      return [activeItem, ...remaining];
-    }
-    if (activeIndex === -1) {
-      const activeInFull = filteredStreams.find((s) => String(s.stream_id) === String(activeStreamId));
-      if (activeInFull) {
-        return [activeInFull, ...list.slice(0, visibleLimit - 1)];
+    const timer = setTimeout(() => {
+      const elem = document.getElementById(`live-channel-${activeStreamId}`);
+      if (elem && channelsListRef.current) {
+        const container = channelsListRef.current;
+        const containerTop = container.getBoundingClientRect().top;
+        const elemTop = elem.getBoundingClientRect().top;
+        const targetScroll = container.scrollTop + (elemTop - containerTop);
+        container.scrollTo({ top: Math.max(0, targetScroll), behavior: 'smooth' });
       }
-    }
-    return list;
-  }, [filteredStreams, visibleLimit, activeMediaId]);
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [activeMediaId]);
 
   const handlePlayLive = (stream: XtreamLiveStream) => {
+    // Scroll selected channel to top of viewport immediately
+    const elem = document.getElementById(`live-channel-${stream.stream_id}`);
+    if (elem && channelsListRef.current) {
+      const container = channelsListRef.current;
+      const containerTop = container.getBoundingClientRect().top;
+      const elemTop = elem.getBoundingClientRect().top;
+      const targetScroll = container.scrollTop + (elemTop - containerTop);
+      container.scrollTo({ top: Math.max(0, targetScroll), behavior: 'smooth' });
+    }
+
     const streamUrl = buildStreamUrl(
       serverUrl,
       username,
@@ -230,10 +242,10 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
   return (
     <div className="space-y-4">
       {/* Master - Detail Dual Column Layout */}
-      <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 items-start">
-        {/* Left Column: Categories List (max ~10 visible + scroll with TV arrows) */}
-        <aside className="w-full lg:w-84 xl:w-96 shrink-0 bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 sm:p-5 flex flex-col space-y-4 shadow-xl">
-          <div className="flex items-center justify-between px-1">
+      <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 items-stretch">
+        {/* Left Column: Categories List (matching height with channels list) */}
+        <aside className="w-full lg:w-84 xl:w-96 shrink-0 bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 sm:p-5 flex flex-col shadow-xl h-[650px] lg:h-[720px]">
+          <div className="flex items-center justify-between px-1 shrink-0">
             <div className="flex items-center gap-2.5">
               <Layers className="w-6 h-6 text-rose-400" />
               <h3 className="text-base sm:text-lg font-black text-white tracking-wide uppercase">
@@ -261,8 +273,8 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
             </div>
           </div>
 
-          {/* Search Category (Larger as in screenshot 3) */}
-          <div className="relative">
+          {/* Search Category */}
+          <div className="relative shrink-0 mt-3">
             <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" />
             <input
               type="text"
@@ -273,10 +285,10 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
             />
           </div>
 
-          {/* Scrollable Categories List (Max 10 visible items) */}
+          {/* Scrollable Categories List taking full remaining height */}
           <div
             ref={categoriesListRef}
-            className="space-y-2 max-h-[540px] overflow-y-auto scroll-smooth pr-1.5"
+            className="flex-1 min-h-0 space-y-2 overflow-y-auto scroll-smooth pr-1.5 mt-3"
           >
             {filteredCategories.length === 0 ? (
               <div className="py-10 text-center text-zinc-500 text-sm sm:text-base font-medium">
@@ -316,10 +328,10 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
           </div>
         </aside>
 
-        {/* Right Column: Channels of the Selected Category */}
-        <section className="flex-1 w-full min-w-0 bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 sm:p-6 flex flex-col space-y-4 shadow-xl">
-          {/* Header of the Selected Category (Bigger as in screenshot 3) */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-800">
+        {/* Right Column: Channels of the Selected Category (matching height) */}
+        <section className="flex-1 w-full min-w-0 bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 sm:p-6 flex flex-col shadow-xl h-[650px] lg:h-[720px]">
+          {/* Header of the Selected Category */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-800 shrink-0">
             <div className="min-w-0">
               <h2 className="text-xl sm:text-2xl font-black text-white flex items-center gap-3 truncate">
                 <Tv className="w-7 h-7 text-rose-400 shrink-0" />
@@ -393,43 +405,45 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
             </div>
           </div>
 
-          {/* Channels Content (Max ~15 visible in viewport, scrollable) */}
-          {isLoading ? (
-            <div className="grid grid-cols-1 gap-3">
-              {Array.from({ length: 8 }).map((_, i) => (
-                <div key={i} className="h-16 bg-zinc-900 animate-pulse rounded-2xl border border-zinc-800"></div>
-              ))}
-            </div>
-          ) : filteredStreams.length === 0 ? (
-            <div className="py-24 text-center text-zinc-400 bg-zinc-950/40 rounded-3xl border border-dashed border-zinc-800">
-              <Tv className="w-16 h-16 mx-auto text-zinc-600 mb-3" />
-              <p className="text-lg font-bold text-zinc-300">Nessun canale trovato in questa categoria</p>
-              <p className="text-sm text-zinc-500 mt-1">
-                {searchQuery ? 'Prova a cercare un altro nome' : 'Scegli un\'altra categoria dalla colonna a sinistra'}
-              </p>
-            </div>
-          ) : (
-            <div
-              ref={channelsListRef}
-              className="max-h-[720px] overflow-y-auto scroll-smooth pr-1.5"
-            >
-              {viewMode === 'list' ? (
-                /* Lista Canali con Cornice sul Canale Attivo che scala in Posizione 1 */
-                <div className="space-y-2.5">
-                  {visibleStreams.map((stream, idx) => {
-                    const isFav = storage.isFavorite(`live_${stream.stream_id}`, accountKey);
-                    const isPlayingThis = activeMediaId === `live_${stream.stream_id}`;
+          {/* Channels Content (flex-1 taking remaining matching height) */}
+          <div
+            ref={channelsListRef}
+            className="flex-1 min-h-0 overflow-y-auto scroll-smooth pr-1.5 mt-3"
+          >
+            {isLoading ? (
+              <div className="grid grid-cols-1 gap-3">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="h-16 bg-zinc-900 animate-pulse rounded-2xl border border-zinc-800"></div>
+                ))}
+              </div>
+            ) : filteredStreams.length === 0 ? (
+              <div className="py-24 text-center text-zinc-400 bg-zinc-950/40 rounded-3xl border border-dashed border-zinc-800">
+                <Tv className="w-16 h-16 mx-auto text-zinc-600 mb-3" />
+                <p className="text-lg font-bold text-zinc-300">Nessun canale trovato in questa categoria</p>
+                <p className="text-sm text-zinc-500 mt-1">
+                  {searchQuery ? 'Prova a cercare un altro nome' : 'Scegli un\'altra categoria dalla colonna a sinistra'}
+                </p>
+              </div>
+            ) : (
+              <div>
+                {viewMode === 'list' ? (
+                  /* Lista Canali con Cornice sul Canale Attivo che scala con auto-scroll */
+                  <div className="space-y-2.5">
+                    {visibleStreams.map((stream, idx) => {
+                      const isFav = storage.isFavorite(`live_${stream.stream_id}`, accountKey);
+                      const isPlayingThis = activeMediaId === `live_${stream.stream_id}`;
 
-                    return (
-                      <div
-                        key={stream.stream_id}
-                        onClick={() => handlePlayLive(stream)}
-                        className={`group flex items-center justify-between p-3.5 sm:p-4 rounded-2xl transition-all cursor-pointer gap-3 sm:gap-5 shadow-sm ${
-                          isPlayingThis
-                            ? 'bg-rose-950/90 border-2 border-rose-500 ring-4 ring-rose-500/50 shadow-2xl shadow-rose-950/90 scale-[1.01]'
-                            : 'bg-zinc-950/60 hover:bg-zinc-850 border border-zinc-800/90 hover:border-rose-500/50'
-                        }`}
-                      >
+                      return (
+                        <div
+                          key={stream.stream_id}
+                          id={`live-channel-${stream.stream_id}`}
+                          onClick={() => handlePlayLive(stream)}
+                          className={`group flex items-center justify-between p-3.5 sm:p-4 rounded-2xl transition-all cursor-pointer gap-3 sm:gap-5 shadow-sm scroll-mt-2 ${
+                            isPlayingThis
+                              ? 'bg-rose-950/90 border-2 border-rose-500 ring-4 ring-rose-500/50 shadow-2xl shadow-rose-950/90 scale-[1.01]'
+                              : 'bg-zinc-950/60 hover:bg-zinc-850 border border-zinc-800/90 hover:border-rose-500/50'
+                          }`}
+                        >
                         <div className="flex items-center gap-3.5 sm:gap-5 min-w-0 flex-1">
                           <span className="font-mono text-sm sm:text-base font-bold text-zinc-400 w-8 sm:w-10 text-right shrink-0">
                             {idx + 1}
@@ -498,8 +512,9 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
                     return (
                       <div
                         key={stream.stream_id}
+                        id={`live-channel-${stream.stream_id}`}
                         onClick={() => handlePlayLive(stream)}
-                        className={`group relative rounded-3xl p-4 shadow-lg transition-all cursor-pointer flex flex-col justify-between ${
+                        className={`group relative rounded-3xl p-4 shadow-lg transition-all cursor-pointer flex flex-col justify-between scroll-mt-2 ${
                           isPlayingThis
                             ? 'bg-rose-950/90 border-2 border-rose-500 ring-4 ring-rose-500/50 shadow-2xl shadow-rose-950/90 scale-[1.02]'
                             : 'bg-zinc-950/70 border border-zinc-800 hover:border-rose-500/60 hover:-translate-y-1'
@@ -556,6 +571,7 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
               )}
             </div>
           )}
+          </div>
 
           {/* Load More Button */}
           {filteredStreams.length > visibleLimit && (

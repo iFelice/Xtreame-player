@@ -15,6 +15,8 @@ import {
   ChevronUp,
   ChevronDown,
   Radio,
+  Download,
+  Check,
 } from 'lucide-react';
 import { XtreamCategory, XtreamVodStream, XtreamVodDetails, PlayableMediaItem } from '../types/xtream';
 import { buildStreamUrl, formatDuration } from '../utils/parseXtreamUrl';
@@ -22,6 +24,7 @@ import { xtreamClient } from '../services/xtreamClient';
 import { storage } from '../services/storage';
 import { sortVodStreams } from '../utils/recentSorting';
 import { getSecureImageUrl } from '../utils/imageUrl';
+import { triggerMediaDownload, isTvEnvironment } from '../utils/downloadHelper';
 
 interface VodCatalogProps {
   categories: XtreamCategory[];
@@ -48,6 +51,8 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
 }) => {
   const categoriesListRef = useRef<HTMLDivElement | null>(null);
   const moviesListRef = useRef<HTMLDivElement | null>(null);
+  const [downloadingMovieId, setDownloadingMovieId] = useState<string | number | null>(null);
+  const isTv = isTvEnvironment();
 
   // Always default to the first category to avoid rendering 20,000 items at once
   const [selectedCategory, setSelectedCategory] = useState<string>(() => {
@@ -123,25 +128,10 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
     return sortVodStreams(matched, sortBy);
   }, [streams, selectedCategory, searchQuery, sortBy]);
 
-  // Active playing movie automatically scales to position #1 in the tab
+  // Natural list order preserved
   const visibleStreams = useMemo(() => {
-    const list = filteredStreams.slice(0, visibleLimit);
-    if (!activeMediaId || !activeMediaId.startsWith('movie_')) return list;
-    const activeStreamId = activeMediaId.replace('movie_', '');
-    const activeIndex = list.findIndex((s) => String(s.stream_id) === String(activeStreamId));
-    if (activeIndex > 0) {
-      const activeItem = list[activeIndex];
-      const remaining = list.filter((_, idx) => idx !== activeIndex);
-      return [activeItem, ...remaining];
-    }
-    if (activeIndex === -1) {
-      const activeInFull = filteredStreams.find((s) => String(s.stream_id) === String(activeStreamId));
-      if (activeInFull) {
-        return [activeInFull, ...list.slice(0, visibleLimit - 1)];
-      }
-    }
-    return list;
-  }, [filteredStreams, visibleLimit, activeMediaId]);
+    return filteredStreams.slice(0, visibleLimit);
+  }, [filteredStreams, visibleLimit]);
 
   const handleOpenDetails = async (stream: XtreamVodStream) => {
     setActiveMovieDetail({ stream, details: null, isLoading: true });
@@ -181,10 +171,10 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
   return (
     <div className="space-y-4">
       {/* Master - Detail Dual Column Layout */}
-      <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 items-start">
-        {/* Left Column: Categories List */}
-        <aside className="w-full lg:w-80 xl:w-96 shrink-0 bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 sm:p-5 flex flex-col space-y-4 shadow-xl">
-          <div className="flex items-center justify-between px-1">
+      <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 items-stretch">
+        {/* Left Column: Categories List (matching height with movies list) */}
+        <aside className="w-full lg:w-80 xl:w-96 shrink-0 bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 sm:p-5 flex flex-col shadow-xl h-[650px] lg:h-[720px]">
+          <div className="flex items-center justify-between px-1 shrink-0">
             <div className="flex items-center gap-2.5">
               <Layers className="w-6 h-6 text-emerald-400" />
               <h3 className="text-base sm:text-lg font-black text-white tracking-wide uppercase">
@@ -213,7 +203,7 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
           </div>
 
           {/* Search Category */}
-          <div className="relative">
+          <div className="relative shrink-0 mt-3">
             <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" />
             <input
               type="text"
@@ -224,10 +214,10 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
             />
           </div>
 
-          {/* Scrollable Categories List */}
+          {/* Scrollable Categories List taking full remaining height */}
           <div
             ref={categoriesListRef}
-            className="space-y-2 max-h-[540px] overflow-y-auto scroll-smooth pr-1.5"
+            className="flex-1 min-h-0 space-y-2 overflow-y-auto scroll-smooth pr-1.5 mt-3"
           >
             {filteredCategories.length === 0 ? (
               <div className="py-10 text-center text-zinc-500 text-sm sm:text-base font-medium">
@@ -267,10 +257,10 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
           </div>
         </aside>
 
-        {/* Right Column: Movies in the Selected Category */}
-        <section className="flex-1 w-full min-w-0 bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 sm:p-6 flex flex-col space-y-4 shadow-xl">
+        {/* Right Column: Movies in the Selected Category (matching height) */}
+        <section className="flex-1 w-full min-w-0 bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 sm:p-6 flex flex-col shadow-xl h-[650px] lg:h-[720px]">
           {/* Header of the Selected Category */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-800">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-800 shrink-0">
             <div className="min-w-0">
               <h2 className="text-xl sm:text-2xl font-black text-white flex items-center gap-3 truncate">
                 <Film className="w-7 h-7 text-emerald-400 shrink-0" />
@@ -331,8 +321,8 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
             </div>
           </div>
 
-          {/* Movie Grid */}
-          <div ref={moviesListRef} className="max-h-[720px] overflow-y-auto scroll-smooth pr-1.5">
+          {/* Movie Grid taking full remaining height */}
+          <div ref={moviesListRef} className="flex-1 min-h-0 overflow-y-auto scroll-smooth pr-1.5 mt-3">
             {isLoading ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
               {Array.from({ length: 10 }).map((_, i) => (
@@ -352,6 +342,31 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
               {visibleStreams.map((stream) => {
                 const isFav = storage.isFavorite(`movie_${stream.stream_id}`, accountKey);
                 const isPlayingThis = activeMediaId === `movie_${stream.stream_id}`;
+                const isDownloadingThis = downloadingMovieId === stream.stream_id;
+
+                const handleDirectDownload = (e: React.MouseEvent) => {
+                  e.stopPropagation();
+                  const ext = stream.container_extension || 'mp4';
+                  const streamUrl = buildStreamUrl(
+                    serverUrl,
+                    username,
+                    password,
+                    'movie',
+                    stream.stream_id,
+                    ext,
+                    false
+                  );
+                  triggerMediaDownload(
+                    streamUrl,
+                    stream.name,
+                    'movie',
+                    stream.stream_icon,
+                    ext,
+                    accountKey
+                  );
+                  setDownloadingMovieId(stream.stream_id);
+                  setTimeout(() => setDownloadingMovieId(null), 3500);
+                };
 
                 return (
                   <div
@@ -400,26 +415,46 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                         </div>
                       )}
 
-                      {/* Favorite button */}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const item: PlayableMediaItem = {
-                            id: `movie_${stream.stream_id}`,
-                            title: stream.name,
-                            type: 'movie',
-                            streamUrl: buildStreamUrl(serverUrl, username, password, 'movie', stream.stream_id, stream.container_extension || 'mp4', false),
-                            poster: stream.stream_icon,
-                            containerExtension: stream.container_extension,
-                          };
-                          storage.toggleFavorite(item, accountKey);
-                          setSelectedCategory((c) => c);
-                        }}
-                        aria-label={isFav ? "Rimuovi dai preferiti" : "Aggiungi ai preferiti"}
-                        className="absolute top-2 right-2 p-2 rounded-xl bg-black/80 hover:bg-black text-zinc-300 hover:text-amber-400 transition cursor-pointer"
-                      >
-                        <Star className={`w-4 h-4 ${isFav ? 'fill-amber-400 text-amber-400' : ''}`} />
-                      </button>
+                      {/* Top-Right Badges: Direct Download + Favorite directly on poster */}
+                      <div className="absolute top-2 right-2 flex items-center gap-1 z-10">
+                        {!isTv && (
+                          <button
+                            onClick={handleDirectDownload}
+                            title="Scarica questo film nella cartella Download del Mac"
+                            className={`p-2 rounded-xl backdrop-blur-md transition cursor-pointer shadow-lg ${
+                              isDownloadingThis
+                                ? 'bg-emerald-600 text-white animate-pulse'
+                                : 'bg-black/80 hover:bg-emerald-600 text-zinc-300 hover:text-white'
+                            }`}
+                          >
+                            {isDownloadingThis ? (
+                              <Check className="w-4 h-4 text-white" />
+                            ) : (
+                              <Download className="w-4 h-4" />
+                            )}
+                          </button>
+                        )}
+
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const item: PlayableMediaItem = {
+                              id: `movie_${stream.stream_id}`,
+                              title: stream.name,
+                              type: 'movie',
+                              streamUrl: buildStreamUrl(serverUrl, username, password, 'movie', stream.stream_id, stream.container_extension || 'mp4', false),
+                              poster: stream.stream_icon,
+                              containerExtension: stream.container_extension,
+                            };
+                            storage.toggleFavorite(item, accountKey);
+                            setSelectedCategory((c) => c);
+                          }}
+                          aria-label={isFav ? "Rimuovi dai preferiti" : "Aggiungi ai preferiti"}
+                          className="p-2 rounded-xl bg-black/80 hover:bg-black text-zinc-300 hover:text-amber-400 transition cursor-pointer shadow-lg backdrop-blur-md"
+                        >
+                          <Star className={`w-4 h-4 ${isFav ? 'fill-amber-400 text-amber-400' : ''}`} />
+                        </button>
+                      </div>
 
                       {/* Hover Overlay with Action Buttons */}
                       <div className="absolute inset-0 bg-black/75 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col items-center justify-center p-3 gap-2.5">
@@ -440,6 +475,30 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                             <Info className="w-4 h-4" />
                             Dettagli
                           </button>
+
+                          {!isTv && (
+                            <button
+                              onClick={handleDirectDownload}
+                              className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-md ${
+                                isDownloadingThis
+                                  ? 'bg-emerald-500 text-white'
+                                  : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                              }`}
+                              title="Scarica film su Mac"
+                            >
+                              {isDownloadingThis ? (
+                                <>
+                                  <Check className="w-3.5 h-3.5" />
+                                  <span>Avviato!</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Download className="w-3.5 h-3.5" />
+                                  <span>Scarica</span>
+                                </>
+                              )}
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -535,8 +594,49 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
               </div>
             </div>
 
-            {/* Footer with play button */}
+            {/* Footer with play and download buttons */}
             <div className="p-4 sm:p-5 border-t border-zinc-800 flex items-center justify-end gap-3 bg-zinc-900/50">
+              {!isTv && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const ext = activeMovieDetail.stream.container_extension || 'mp4';
+                    const streamUrl = buildStreamUrl(
+                      serverUrl,
+                      username,
+                      password,
+                      'movie',
+                      activeMovieDetail.stream.stream_id,
+                      ext,
+                      false
+                    );
+                    triggerMediaDownload(
+                      streamUrl,
+                      activeMovieDetail.stream.name,
+                      'movie',
+                      activeMovieDetail.stream.stream_icon,
+                      ext,
+                      accountKey
+                    );
+                    setDownloadingMovieId(activeMovieDetail.stream.stream_id);
+                    setTimeout(() => setDownloadingMovieId(null), 3500);
+                  }}
+                  className="px-5 py-3 rounded-xl border border-zinc-700 hover:border-emerald-500 bg-zinc-900 hover:bg-zinc-800 text-zinc-200 hover:text-white text-sm font-bold flex items-center gap-2 transition cursor-pointer"
+                >
+                  {downloadingMovieId === activeMovieDetail.stream.stream_id ? (
+                    <>
+                      <Check className="w-4 h-4 text-emerald-400" />
+                      <span>Download Avviato!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4 text-emerald-400" />
+                      <span>Scarica su Mac</span>
+                    </>
+                  )}
+                </button>
+              )}
+
               <button
                 onClick={() => {
                   handlePlayStream(activeMovieDetail.stream);

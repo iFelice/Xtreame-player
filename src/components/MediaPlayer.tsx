@@ -27,6 +27,7 @@ import Hls from 'hls.js';
 import mpegts from 'mpegts.js';
 import { PlayableMediaItem } from '../types/xtream';
 import { storage } from '../services/storage';
+import { triggerMediaDownload, isTvEnvironment } from '../utils/downloadHelper';
 
 interface MediaPlayerProps {
   media: PlayableMediaItem | null;
@@ -58,6 +59,8 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
+  const [downloadToast, setDownloadToast] = useState<boolean>(false);
+  const isTv = isTvEnvironment();
   const [aspectRatio, setAspectRatio] = useState<'contain' | '16_9' | '4_3' | 'cover' | 'fill'>('contain');
   const [showSettings, setShowSettings] = useState<boolean>(false);
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
@@ -545,8 +548,8 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       onMouseMove={showControlsTemporarily}
       className={`transition-all duration-300 ${
         isWindowFullscreen
-          ? 'fixed inset-0 z-[99999] w-screen h-screen bg-black flex flex-col justify-center items-center select-none overflow-hidden'
-          : 'relative w-full bg-black select-none overflow-hidden rounded-3xl shadow-2xl border border-zinc-800 min-h-[360px] sm:min-h-[520px] max-h-[85vh] flex flex-col justify-center items-center group'
+          ? 'fixed inset-0 z-[99999] w-screen h-screen bg-black flex items-center justify-center select-none overflow-hidden'
+          : 'relative w-full bg-black select-none overflow-hidden rounded-3xl shadow-2xl border border-zinc-800 aspect-video max-h-[72vh] flex items-center justify-center group mx-auto'
       }`}
     >
       {/* Video Element with exact aspect ratio & fit control (Guaranteed NO cropping with object-contain) */}
@@ -585,14 +588,19 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
               : aspectRatio === 'fill'
               ? 'fill'
               : 'contain',
-          aspectRatio:
-            aspectRatio === '16_9'
-              ? '16 / 9'
-              : aspectRatio === '4_3'
-              ? '4 / 3'
-              : undefined,
+          transform: aspectRatio === 'cover' ? 'scale(1.18)' : 'none',
         }}
-        className="w-full h-full max-h-full max-w-full cursor-pointer transition-all duration-200"
+        className={`cursor-pointer transition-all duration-200 ${
+          aspectRatio === 'fill'
+            ? 'w-full h-full object-fill'
+            : aspectRatio === 'cover'
+            ? 'w-full h-full min-w-full min-h-full object-cover'
+            : aspectRatio === '16_9'
+            ? 'w-full h-full max-w-full max-h-full aspect-video object-fill'
+            : aspectRatio === '4_3'
+            ? 'h-full aspect-[4/3] max-w-full object-fill mx-auto'
+            : 'w-full h-full max-w-full max-h-full object-contain'
+        }`}
       />
 
       {/* Loading Spinner */}
@@ -756,35 +764,27 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          {media.type !== 'live' && (
+          {!isTv && media.type !== 'live' && (
             <button
-              onClick={() => {
-                const currentStreamUrl = getEffectiveUrl();
-                const cleanName = media.title.replace(/[/\\?%*:|"<>]/g, '_');
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
                 const ext = media.containerExtension || 'mp4';
-                const cleanUrl = currentStreamUrl.includes('&download=1')
-                  ? currentStreamUrl
-                  : `${currentStreamUrl}&download=1&filename=${encodeURIComponent(`${cleanName}.${ext}`)}`;
-
-                const a = document.createElement('a');
-                a.href = cleanUrl;
-                a.download = `${cleanName}.${ext}`;
-                document.body.appendChild(a);
-                a.click();
-                setTimeout(() => document.body.removeChild(a), 1000);
-
-                storage.addDownload({
-                  id: `${media.type}_${media.id}_${Date.now()}`,
-                  title: media.title,
-                  type: media.type === 'movie' ? 'movie' : 'episode',
-                  streamUrl: cleanUrl.replace('&download=1', ''),
-                  downloadUrl: cleanUrl,
-                  poster: media.poster,
-                  containerExtension: ext,
-                  downloadedAt: Date.now(),
-                }, accountKey);
+                const success = triggerMediaDownload(
+                  media.streamUrl,
+                  media.title,
+                  media.type === 'movie' ? 'movie' : 'episode',
+                  media.poster,
+                  ext,
+                  accountKey
+                );
+                if (success) {
+                  setDownloadToast(true);
+                  setTimeout(() => setDownloadToast(false), 3500);
+                }
               }}
-              title="Scarica questo video sul tuo computer/dispositivo"
+              title="Scarica questo video nella cartella Download del Mac"
               className="p-2 sm:p-2.5 text-zinc-300 hover:text-cyan-400 hover:bg-white/10 rounded-2xl transition cursor-pointer"
             >
               <Download className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -807,6 +807,16 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Download Started Toast Notification */}
+      {downloadToast && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-30 px-5 py-3 rounded-2xl bg-emerald-950/95 border border-emerald-500/80 text-white shadow-2xl flex items-center gap-3 animate-in fade-in zoom-in-95">
+          <Check className="w-5 h-5 text-emerald-400 shrink-0" />
+          <span className="text-sm sm:text-base font-bold">
+            Download avviato! Il file verrà salvato nella cartella Download del Mac.
+          </span>
+        </div>
+      )}
 
       {/* Center Big Play Button (when paused) */}
       {!isPlaying && !isLoading && !errorMessage && (

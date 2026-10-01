@@ -12,6 +12,8 @@ import {
   ChevronDown,
   ArrowDownUp,
   Radio,
+  Download,
+  Check,
 } from 'lucide-react';
 import {
   XtreamCategory,
@@ -25,6 +27,7 @@ import { xtreamClient } from '../services/xtreamClient';
 import { storage } from '../services/storage';
 import { sortSeriesList } from '../utils/recentSorting';
 import { getSecureImageUrl } from '../utils/imageUrl';
+import { triggerMediaDownload, isTvEnvironment } from '../utils/downloadHelper';
 
 interface SeriesCatalogProps {
   categories: XtreamCategory[];
@@ -55,6 +58,8 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
 }) => {
   const categoriesListRef = useRef<HTMLDivElement | null>(null);
   const seriesListRef = useRef<HTMLDivElement | null>(null);
+  const [downloadingEpisodeId, setDownloadingEpisodeId] = useState<string | number | null>(null);
+  const isTv = isTvEnvironment();
 
   // Always default to the first category to avoid freezing with 4,000+ series
   const [selectedCategory, setSelectedCategory] = useState<string>(() => {
@@ -141,28 +146,10 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
     return sortSeriesList(matched, sortBy);
   }, [seriesList, selectedCategory, searchQuery, sortBy]);
 
-  // Active playing series automatically scales to position #1 in the tab
+  // Natural list order preserved
   const visibleSeries = useMemo(() => {
-    const list = filteredSeries.slice(0, visibleLimit);
-    if (!activeMediaId) return list;
-    const activeIndex = list.findIndex(
-      (s) => activeMediaId === `series_${s.series_id}` || activeMediaId.startsWith(`series_${s.series_id}_`)
-    );
-    if (activeIndex > 0) {
-      const activeItem = list[activeIndex];
-      const remaining = list.filter((_, idx) => idx !== activeIndex);
-      return [activeItem, ...remaining];
-    }
-    if (activeIndex === -1) {
-      const activeInFull = filteredSeries.find(
-        (s) => activeMediaId === `series_${s.series_id}` || activeMediaId.startsWith(`series_${s.series_id}_`)
-      );
-      if (activeInFull) {
-        return [activeInFull, ...list.slice(0, visibleLimit - 1)];
-      }
-    }
-    return list;
-  }, [filteredSeries, visibleLimit, activeMediaId]);
+    return filteredSeries.slice(0, visibleLimit);
+  }, [filteredSeries, visibleLimit]);
 
   const handleOpenSeries = async (series: XtreamSeries) => {
     setActiveSeriesDetail({
@@ -225,10 +212,10 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
   return (
     <div className="space-y-4">
       {/* Master - Detail Dual Column Layout */}
-      <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 items-start">
-        {/* Left Column: Categories List */}
-        <aside className="w-full lg:w-80 xl:w-96 shrink-0 bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 sm:p-5 flex flex-col space-y-4 shadow-xl">
-          <div className="flex items-center justify-between px-1">
+      <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 items-stretch">
+        {/* Left Column: Categories List (matching height with series list) */}
+        <aside className="w-full lg:w-80 xl:w-96 shrink-0 bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 sm:p-5 flex flex-col shadow-xl h-[650px] lg:h-[720px]">
+          <div className="flex items-center justify-between px-1 shrink-0">
             <div className="flex items-center gap-2.5">
               <Layers className="w-6 h-6 text-blue-400" />
               <h3 className="text-base sm:text-lg font-black text-white tracking-wide uppercase">
@@ -257,7 +244,7 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
           </div>
 
           {/* Search Category */}
-          <div className="relative">
+          <div className="relative shrink-0 mt-3">
             <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" />
             <input
               type="text"
@@ -268,10 +255,10 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
             />
           </div>
 
-          {/* Scrollable Categories List */}
+          {/* Scrollable Categories List taking full remaining height */}
           <div
             ref={categoriesListRef}
-            className="space-y-2 max-h-[540px] overflow-y-auto scroll-smooth pr-1.5"
+            className="flex-1 min-h-0 space-y-2 overflow-y-auto scroll-smooth pr-1.5 mt-3"
           >
             {filteredCategories.length === 0 ? (
               <div className="py-10 text-center text-zinc-500 text-sm sm:text-base font-medium">
@@ -311,10 +298,10 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
           </div>
         </aside>
 
-        {/* Right Column: Series in the Selected Category */}
-        <section className="flex-1 w-full min-w-0 bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 sm:p-6 flex flex-col space-y-4 shadow-xl">
+        {/* Right Column: Series in the Selected Category (matching height) */}
+        <section className="flex-1 w-full min-w-0 bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 sm:p-6 flex flex-col shadow-xl h-[650px] lg:h-[720px]">
           {/* Header of the Selected Category */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-800">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-800 shrink-0">
             <div className="min-w-0">
               <h2 className="text-xl sm:text-2xl font-black text-white flex items-center gap-3 truncate">
                 <Tv className="w-7 h-7 text-blue-400 shrink-0" />
@@ -375,8 +362,8 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
             </div>
           </div>
 
-          {/* Series Grid */}
-          <div ref={seriesListRef} className="max-h-[720px] overflow-y-auto scroll-smooth pr-1.5">
+          {/* Series Grid taking full remaining height */}
+          <div ref={seriesListRef} className="flex-1 min-h-0 overflow-y-auto scroll-smooth pr-1.5 mt-3">
             {isLoading ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
                 {Array.from({ length: 10 }).map((_, i) => (
@@ -598,15 +585,55 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                             )}
                           </div>
 
-                          <button
-                            onClick={() =>
-                              handlePlayEpisode(ep, activeSeriesDetail.selectedSeason)
-                            }
-                            className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs sm:text-sm font-bold flex items-center gap-1.5 transition shrink-0 cursor-pointer shadow-md"
-                          >
-                            <Play className="w-3.5 h-3.5 fill-white" />
-                            Guarda
-                          </button>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {!isTv && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const ext = ep.container_extension || 'mp4';
+                                  const streamUrl = buildStreamUrl(
+                                    serverUrl,
+                                    username,
+                                    password,
+                                    'series',
+                                    ep.id,
+                                    ext,
+                                    false
+                                  );
+                                  const title = `${activeSeriesDetail.series.name} - S${activeSeriesDetail.selectedSeason}E${ep.episode_num} - ${ep.title || 'Episodio'}`;
+                                  triggerMediaDownload(
+                                    streamUrl,
+                                    title,
+                                    'episode',
+                                    ep.info?.movie_image || activeSeriesDetail.series.cover,
+                                    ext,
+                                    accountKey
+                                  );
+                                  setDownloadingEpisodeId(ep.id);
+                                  setTimeout(() => setDownloadingEpisodeId(null), 3500);
+                                }}
+                                title="Scarica episodio su Mac"
+                                className="p-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition cursor-pointer"
+                              >
+                                {downloadingEpisodeId === ep.id ? (
+                                  <Check className="w-4 h-4 text-emerald-400" />
+                                ) : (
+                                  <Download className="w-4 h-4" />
+                                )}
+                              </button>
+                            )}
+
+                            <button
+                              onClick={() =>
+                                handlePlayEpisode(ep, activeSeriesDetail.selectedSeason)
+                              }
+                              className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs sm:text-sm font-bold flex items-center gap-1.5 transition shrink-0 cursor-pointer shadow-md"
+                            >
+                              <Play className="w-3.5 h-3.5 fill-white" />
+                              Guarda
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>

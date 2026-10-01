@@ -35,8 +35,10 @@ import {
 import { xtreamClient } from './services/xtreamClient';
 import { storage, SavedAccount } from './services/storage';
 import { buildStreamUrl } from './utils/parseXtreamUrl';
+import { isTvEnvironment } from './utils/downloadHelper';
 
 export default function App() {
+  const isTv = isTvEnvironment();
   const [serverUrl, setServerUrl] = useState<string>('');
   const [username, setUsername] = useState<string>('');
   const [password, setPassword] = useState<string>('');
@@ -449,18 +451,20 @@ export default function App() {
                 Novità & Recenti
               </button>
 
-              {/* 5. I Miei Download */}
-              <button
-                onClick={() => setActiveTab('downloads')}
-                className={`flex items-center gap-2.5 px-4 sm:px-5 py-2.5 rounded-2xl text-sm sm:text-base font-bold transition cursor-pointer shadow-md ${
-                  activeTab === 'downloads'
-                    ? 'bg-cyan-600 text-white shadow-cyan-950/60 scale-105'
-                    : 'bg-zinc-900 text-zinc-300 hover:text-white hover:bg-zinc-850 border border-zinc-800'
-                }`}
-              >
-                <Download className="w-5 h-5 text-cyan-400" />
-                I Miei Download
-              </button>
+              {/* 5. I Miei Download (disattivato su TV) */}
+              {!isTv && (
+                <button
+                  onClick={() => setActiveTab('downloads')}
+                  className={`flex items-center gap-2.5 px-4 sm:px-5 py-2.5 rounded-2xl text-sm sm:text-base font-bold transition cursor-pointer shadow-md ${
+                    activeTab === 'downloads'
+                      ? 'bg-cyan-600 text-white shadow-cyan-950/60 scale-105'
+                      : 'bg-zinc-900 text-zinc-300 hover:text-white hover:bg-zinc-850 border border-zinc-800'
+                  }`}
+                >
+                  <Download className="w-5 h-5 text-cyan-400" />
+                  I Miei Download
+                </button>
+              )}
 
               {/* 6. Preferiti & Continua a Guardare */}
               <button

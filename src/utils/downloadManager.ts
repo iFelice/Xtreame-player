@@ -68,16 +68,57 @@ export function startMediaDownload(options: {
   // Add to storage
   storage.addDownload(downloadRecord);
 
-  // Trigger browser download via anchor
-  const a = document.createElement('a');
-  a.href = downloadUrl;
-  a.download = `${cleanFilename}.${containerExtension || 'mp4'}`;
-  a.style.display = 'none';
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(() => {
-    document.body.removeChild(a);
-  }, 1000);
+  // Detect Capacitor native platform (Mac / iOS)
+  const isCapacitorNative =
+    typeof window !== 'undefined' &&
+    ((window as any).Capacitor?.isNativePlatform?.() || (window as any).Capacitor?.platform === 'ios');
+
+  if (isCapacitorNative) {
+    const cleanServer = serverUrl.replace(/\/+$/, '');
+    const ext = containerExtension || 'mp4';
+    const directPath = `${cleanServer}/${xtreamType}/${encodeURIComponent(username)}/${encodeURIComponent(password)}/${streamId}.${ext}`;
+    try {
+      const a = document.createElement('a');
+      a.href = directPath;
+      a.download = `${cleanFilename}.${ext}`;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        if (a.parentNode) a.parentNode.removeChild(a);
+      }, 1000);
+    } catch {
+      window.open(directPath, '_system');
+    }
+  } else {
+    // Web Browser on Mac (Safari, Chrome, etc.)
+    try {
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = `${cleanFilename}.${containerExtension || 'mp4'}`;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        if (a.parentNode) a.parentNode.removeChild(a);
+      }, 1500);
+
+      // Hidden iframe fallback
+      const iframe = document.createElement('iframe');
+      iframe.style.display = 'none';
+      iframe.src = downloadUrl;
+      document.body.appendChild(iframe);
+      setTimeout(() => {
+        if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+      }, 60000);
+    } catch (err) {
+      console.error('Download error:', err);
+      try {
+        window.open(downloadUrl, '_blank');
+      } catch {}
+    }
+  }
 
   return downloadRecord;
 }

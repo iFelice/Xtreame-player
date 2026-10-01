@@ -20,6 +20,7 @@ import { sortVodStreams, sortSeriesList, formatRecentDate } from '../utils/recen
 import { buildStreamUrl } from '../utils/parseXtreamUrl';
 import { storage } from '../services/storage';
 import { startMediaDownload } from '../utils/downloadManager';
+import { isTvEnvironment } from '../utils/downloadHelper';
 import { getSecureImageUrl } from '../utils/imageUrl';
 
 interface RecentProductsShelfProps {
@@ -43,6 +44,7 @@ export const RecentProductsShelf: React.FC<RecentProductsShelfProps> = ({
   onOpenSeries,
   onNavigateToTab,
 }) => {
+  const isTv = isTvEnvironment();
   const [activeType, setActiveType] = useState<'movies' | 'series'>('movies');
   const [displayCount, setDisplayCount] = useState<number>(18);
 
@@ -225,26 +227,28 @@ export const RecentProductsShelf: React.FC<RecentProductsShelfProps> = ({
                       <Play className="w-5 h-5 ml-0.5 fill-white" />
                     </div>
 
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        startMediaDownload({
-                          serverUrl,
-                          username,
-                          password,
-                          type: 'movie',
-                          streamId: movie.stream_id,
-                          title: movie.name,
-                          containerExtension: movie.container_extension || 'mp4',
-                          poster: movie.stream_icon,
-                        });
-                      }}
-                      className="px-2.5 py-1 rounded-lg bg-zinc-900/90 hover:bg-cyan-950 text-zinc-300 hover:text-cyan-300 text-[10px] font-medium border border-zinc-700 hover:border-cyan-700 flex items-center gap-1 transition"
-                      title="Scarica film"
-                    >
-                      <Download className="w-3 h-3" />
-                      Scarica
-                    </button>
+                    {!isTv && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          startMediaDownload({
+                            serverUrl,
+                            username,
+                            password,
+                            type: 'movie',
+                            streamId: movie.stream_id,
+                            title: movie.name,
+                            containerExtension: movie.container_extension || 'mp4',
+                            poster: movie.stream_icon,
+                          });
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-zinc-900/90 hover:bg-cyan-950 text-zinc-300 hover:text-cyan-300 text-[10px] font-medium border border-zinc-700 hover:border-cyan-700 flex items-center gap-1 transition"
+                        title="Scarica film"
+                      >
+                        <Download className="w-3 h-3" />
+                        Scarica
+                      </button>
+                    )}
                   </div>
                 </div>
 
