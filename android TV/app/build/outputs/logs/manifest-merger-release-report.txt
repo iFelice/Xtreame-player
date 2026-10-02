@@ -1,0 +1,303 @@
+-- Merging decision tree log ---
+manifest
+ADDED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml:2:1-48:12
+INJECTED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml:2:1-48:12
+INJECTED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml:2:1-48:12
+INJECTED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml:2:1-48:12
+MERGED from [:capacitor-android] /Users/felicemanga/node_modules/@capacitor/android/capacitor/build/intermediates/merged_manifest/release/processReleaseManifest/AndroidManifest.xml:2:1-7:12
+MERGED from [:capacitor-cordova-android-plugins] /Users/felicemanga/android/capacitor-cordova-android-plugins/build/intermediates/merged_manifest/release/processReleaseManifest/AndroidManifest.xml:2:1-11:12
+MERGED from [org.apache.cordova:framework:14.0.1] /Users/felicemanga/.gradle/caches/9.6.0/transforms/5e4249449d052fdc04f11c81cf0f45cb/transformed/framework-14.0.1/AndroidManifest.xml:20:1-27:12
+MERGED from [androidx.core:core-splashscreen:1.2.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/96a332c029dd2201e0bde69d77388cde/transformed/core-splashscreen-1.2.0/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.appcompat:appcompat-resources:1.7.1] /Users/felicemanga/.gradle/caches/9.6.0/transforms/f83eeb933c96f6e111336fb1430ed4c3/transformed/appcompat-resources-1.7.1/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.appcompat:appcompat:1.7.1] /Users/felicemanga/.gradle/caches/9.6.0/transforms/588edde7b9cb92e380ae9fee6dcb8a27/transformed/appcompat-1.7.1/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.coordinatorlayout:coordinatorlayout:1.3.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/66bbb9b3d57167efb17dbadb5eff8b84/transformed/coordinatorlayout-1.3.0/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.fragment:fragment:1.8.9] /Users/felicemanga/.gradle/caches/9.6.0/transforms/6090c8dbae64bd931ee5832194d13fad/transformed/fragment-1.8.9/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.activity:activity:1.11.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/c70bc4cdc07e12832559e94daf792f26/transformed/activity-1.11.0/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.cursoradapter:cursoradapter:1.0.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/17ad070285e9e2c6e54efdd84252b680/transformed/cursoradapter-1.0.0/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.drawerlayout:drawerlayout:1.0.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/fd247b9d1c7c43b490f69ef261ecaa02/transformed/drawerlayout-1.0.0/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.emoji2:emoji2-views-helper:1.3.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/4f998111e00ccc2dbe97a4cbc17dc4a7/transformed/emoji2-views-helper-1.3.0/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.emoji2:emoji2:1.3.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/aec02a7c0500205275bcb72262228fb3/transformed/emoji2-1.3.0/AndroidManifest.xml:17:1-35:12
+MERGED from [androidx.viewpager:viewpager:1.0.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/ee4f4e648f073d18c0e838d1b5b388ce/transformed/viewpager-1.0.0/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.customview:customview:1.0.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/dc5073b50d42460ce0aa4e0a02b1ae60/transformed/customview-1.0.0/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.webkit:webkit:1.14.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/f160beafeaa3266a43c7cb55b86febd9/transformed/webkit-1.14.0/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.vectordrawable:vectordrawable-animated:1.1.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/da0ab8402953d6d7e8e2530a395d9f26/transformed/vectordrawable-animated-1.1.0/AndroidManifest.xml:17:1-24:12
+MERGED from [androidx.vectordrawable:vectordrawable:1.1.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/165fcc6c6cea6980c57b1806a8414619/transformed/vectordrawable-1.1.0/AndroidManifest.xml:17:1-24:12
+MERGED from [androidx.core:core-ktx:1.17.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/a0808b0c84ba05af2735953c1c8020b9/transformed/core-ktx-1.17.0/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.loader:loader:1.0.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/131ba52c117b2219f1673a75f5091ba0/transformed/loader-1.0.0/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.core:core:1.17.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/e2af85f11d0cff6da404dcce2232c55f/transformed/core-1.17.0/AndroidManifest.xml:17:1-30:12
+MERGED from [androidx.lifecycle:lifecycle-livedata:2.6.2] /Users/felicemanga/.gradle/caches/9.6.0/transforms/a66777e312958557fae7ca4afb7d6f9d/transformed/lifecycle-livedata-2.6.2/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.lifecycle:lifecycle-viewmodel:2.6.2] /Users/felicemanga/.gradle/caches/9.6.0/transforms/828a529844d80aa94f2effe53feb25f8/transformed/lifecycle-viewmodel-2.6.2/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.lifecycle:lifecycle-process:2.6.2] /Users/felicemanga/.gradle/caches/9.6.0/transforms/a80e5045c3e3d8177307ed4b7633f34a/transformed/lifecycle-process-2.6.2/AndroidManifest.xml:17:1-35:12
+MERGED from [androidx.lifecycle:lifecycle-livedata-core:2.6.2] /Users/felicemanga/.gradle/caches/9.6.0/transforms/7565786dd7f1f27ccf0ab5563639a726/transformed/lifecycle-livedata-core-2.6.2/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.lifecycle:lifecycle-runtime:2.6.2] /Users/felicemanga/.gradle/caches/9.6.0/transforms/a915c907faff9035f7ca422e47f68131/transformed/lifecycle-runtime-2.6.2/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-savedstate:2.6.2] /Users/felicemanga/.gradle/caches/9.6.0/transforms/54a0213239ce182b7a680fb0e8172ddd/transformed/lifecycle-viewmodel-savedstate-2.6.2/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.savedstate:savedstate:1.2.1] /Users/felicemanga/.gradle/caches/9.6.0/transforms/cba1f73cc5889f33f5421b46b40eba38/transformed/savedstate-1.2.1/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.arch.core:core-runtime:2.2.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/e05780d7346baa6b7d22ae3e6313c652/transformed/core-runtime-2.2.0/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:17:1-55:12
+MERGED from [androidx.startup:startup-runtime:1.1.1] /Users/felicemanga/.gradle/caches/9.6.0/transforms/9e96fb5f22912072384f59366449a414/transformed/startup-runtime-1.1.1/AndroidManifest.xml:17:1-33:12
+MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] /Users/felicemanga/.gradle/caches/9.6.0/transforms/3fb866c167485886779810b90d57770d/transformed/versionedparcelable-1.1.1/AndroidManifest.xml:17:1-27:12
+MERGED from [androidx.interpolator:interpolator:1.0.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/90c87176af3c20219c06e9ef6aaa4325/transformed/interpolator-1.0.0/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.tracing:tracing:1.2.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/c6669eb6fcfbbdd1d3e564784e0d08da/transformed/tracing-1.2.0/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.annotation:annotation-experimental:1.4.1] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2fc0ceadbd70256092dc920210223651/transformed/annotation-experimental-1.4.1/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.core:core-viewtree:1.0.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/14f1a987abffd684350ec29c1880225c/transformed/core-viewtree-1.0.0/AndroidManifest.xml:2:1-7:12
+	package
+		INJECTED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml
+	android:versionName
+		INJECTED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml
+	android:versionCode
+		INJECTED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml
+	xmlns:android
+		ADDED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml:2:11-69
+uses-feature#android.hardware.touchscreen
+ADDED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml:5:5-7:36
+	android:required
+		ADDED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml:7:9-33
+	android:name
+		ADDED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml:6:9-52
+uses-feature#android.software.leanback
+ADDED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml:10:5-12:36
+	android:required
+		ADDED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml:12:9-33
+	android:name
+		ADDED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml:11:9-49
+uses-permission#android.permission.INTERNET
+ADDED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml:15:5-67
+	android:name
+		ADDED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml:15:22-64
+uses-permission#android.permission.ACCESS_NETWORK_STATE
+ADDED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml:16:5-79
+	android:name
+		ADDED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml:16:22-76
+application
+ADDED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml:18:5-47:19
+INJECTED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml:18:5-47:19
+MERGED from [:capacitor-cordova-android-plugins] /Users/felicemanga/android/capacitor-cordova-android-plugins/build/intermediates/merged_manifest/release/processReleaseManifest/AndroidManifest.xml:8:5-9:19
+MERGED from [:capacitor-cordova-android-plugins] /Users/felicemanga/android/capacitor-cordova-android-plugins/build/intermediates/merged_manifest/release/processReleaseManifest/AndroidManifest.xml:8:5-9:19
+MERGED from [androidx.emoji2:emoji2:1.3.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/aec02a7c0500205275bcb72262228fb3/transformed/emoji2-1.3.0/AndroidManifest.xml:23:5-33:19
+MERGED from [androidx.emoji2:emoji2:1.3.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/aec02a7c0500205275bcb72262228fb3/transformed/emoji2-1.3.0/AndroidManifest.xml:23:5-33:19
+MERGED from [androidx.core:core:1.17.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/e2af85f11d0cff6da404dcce2232c55f/transformed/core-1.17.0/AndroidManifest.xml:28:5-89
+MERGED from [androidx.core:core:1.17.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/e2af85f11d0cff6da404dcce2232c55f/transformed/core-1.17.0/AndroidManifest.xml:28:5-89
+MERGED from [androidx.lifecycle:lifecycle-process:2.6.2] /Users/felicemanga/.gradle/caches/9.6.0/transforms/a80e5045c3e3d8177307ed4b7633f34a/transformed/lifecycle-process-2.6.2/AndroidManifest.xml:23:5-33:19
+MERGED from [androidx.lifecycle:lifecycle-process:2.6.2] /Users/felicemanga/.gradle/caches/9.6.0/transforms/a80e5045c3e3d8177307ed4b7633f34a/transformed/lifecycle-process-2.6.2/AndroidManifest.xml:23:5-33:19
+MERGED from [androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:23:5-53:19
+MERGED from [androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:23:5-53:19
+MERGED from [androidx.startup:startup-runtime:1.1.1] /Users/felicemanga/.gradle/caches/9.6.0/transforms/9e96fb5f22912072384f59366449a414/transformed/startup-runtime-1.1.1/AndroidManifest.xml:25:5-31:19
+MERGED from [androidx.startup:startup-runtime:1.1.1] /Users/felicemanga/.gradle/caches/9.6.0/transforms/9e96fb5f22912072384f59366449a414/transformed/startup-runtime-1.1.1/AndroidManifest.xml:25:5-31:19
+MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] /Users/felicemanga/.gradle/caches/9.6.0/transforms/3fb866c167485886779810b90d57770d/transformed/versionedparcelable-1.1.1/AndroidManifest.xml:24:5-25:19
+MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] /Users/felicemanga/.gradle/caches/9.6.0/transforms/3fb866c167485886779810b90d57770d/transformed/versionedparcelable-1.1.1/AndroidManifest.xml:24:5-25:19
+	android:extractNativeLibs
+		INJECTED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml
+	android:appComponentFactory
+		ADDED from [androidx.core:core:1.17.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/e2af85f11d0cff6da404dcce2232c55f/transformed/core-1.17.0/AndroidManifest.xml:28:18-86
+	android:supportsRtl
+		ADDED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml:23:9-35
+	android:label
+		ADDED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml:21:9-38
+	android:roundIcon
+		ADDED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml:22:9-54
+	android:icon
+		ADDED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml:20:9-43
+	android:allowBackup
+		ADDED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml:19:9-35
+	android:banner
+		ADDED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml:24:9-45
+	android:theme
+		ADDED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml:26:9-40
+	android:usesCleartextTraffic
+		ADDED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml:25:9-44
+activity#com.xtream.streamplayer.MainActivity
+ADDED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml:28:9-45:20
+	android:screenOrientation
+		ADDED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml:32:13-56
+	android:label
+		ADDED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml:31:13-42
+	android:exported
+		ADDED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml:33:13-36
+	android:configChanges
+		ADDED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml:29:13-129
+	android:name
+		ADDED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml:30:13-41
+intent-filter#action:name:android.intent.action.MAIN+category:name:android.intent.category.LAUNCHER+category:name:android.intent.category.LEANBACK_LAUNCHER
+ADDED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml:35:13-43:29
+action#android.intent.action.MAIN
+ADDED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml:36:17-69
+	android:name
+		ADDED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml:36:25-66
+category#android.intent.category.LAUNCHER
+ADDED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml:39:17-77
+	android:name
+		ADDED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml:39:27-74
+category#android.intent.category.LEANBACK_LAUNCHER
+ADDED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml:42:17-86
+	android:name
+		ADDED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml:42:27-83
+uses-sdk
+INJECTED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml reason: use-sdk injection requested
+INJECTED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml
+INJECTED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml
+MERGED from [:capacitor-android] /Users/felicemanga/node_modules/@capacitor/android/capacitor/build/intermediates/merged_manifest/release/processReleaseManifest/AndroidManifest.xml:5:5-44
+MERGED from [:capacitor-android] /Users/felicemanga/node_modules/@capacitor/android/capacitor/build/intermediates/merged_manifest/release/processReleaseManifest/AndroidManifest.xml:5:5-44
+MERGED from [:capacitor-cordova-android-plugins] /Users/felicemanga/android/capacitor-cordova-android-plugins/build/intermediates/merged_manifest/release/processReleaseManifest/AndroidManifest.xml:6:5-44
+MERGED from [:capacitor-cordova-android-plugins] /Users/felicemanga/android/capacitor-cordova-android-plugins/build/intermediates/merged_manifest/release/processReleaseManifest/AndroidManifest.xml:6:5-44
+MERGED from [org.apache.cordova:framework:14.0.1] /Users/felicemanga/.gradle/caches/9.6.0/transforms/5e4249449d052fdc04f11c81cf0f45cb/transformed/framework-14.0.1/AndroidManifest.xml:25:5-44
+MERGED from [org.apache.cordova:framework:14.0.1] /Users/felicemanga/.gradle/caches/9.6.0/transforms/5e4249449d052fdc04f11c81cf0f45cb/transformed/framework-14.0.1/AndroidManifest.xml:25:5-44
+MERGED from [androidx.core:core-splashscreen:1.2.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/96a332c029dd2201e0bde69d77388cde/transformed/core-splashscreen-1.2.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.core:core-splashscreen:1.2.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/96a332c029dd2201e0bde69d77388cde/transformed/core-splashscreen-1.2.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.appcompat:appcompat-resources:1.7.1] /Users/felicemanga/.gradle/caches/9.6.0/transforms/f83eeb933c96f6e111336fb1430ed4c3/transformed/appcompat-resources-1.7.1/AndroidManifest.xml:5:5-44
+MERGED from [androidx.appcompat:appcompat-resources:1.7.1] /Users/felicemanga/.gradle/caches/9.6.0/transforms/f83eeb933c96f6e111336fb1430ed4c3/transformed/appcompat-resources-1.7.1/AndroidManifest.xml:5:5-44
+MERGED from [androidx.appcompat:appcompat:1.7.1] /Users/felicemanga/.gradle/caches/9.6.0/transforms/588edde7b9cb92e380ae9fee6dcb8a27/transformed/appcompat-1.7.1/AndroidManifest.xml:5:5-44
+MERGED from [androidx.appcompat:appcompat:1.7.1] /Users/felicemanga/.gradle/caches/9.6.0/transforms/588edde7b9cb92e380ae9fee6dcb8a27/transformed/appcompat-1.7.1/AndroidManifest.xml:5:5-44
+MERGED from [androidx.coordinatorlayout:coordinatorlayout:1.3.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/66bbb9b3d57167efb17dbadb5eff8b84/transformed/coordinatorlayout-1.3.0/AndroidManifest.xml:5:5-44
+MERGED from [androidx.coordinatorlayout:coordinatorlayout:1.3.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/66bbb9b3d57167efb17dbadb5eff8b84/transformed/coordinatorlayout-1.3.0/AndroidManifest.xml:5:5-44
+MERGED from [androidx.fragment:fragment:1.8.9] /Users/felicemanga/.gradle/caches/9.6.0/transforms/6090c8dbae64bd931ee5832194d13fad/transformed/fragment-1.8.9/AndroidManifest.xml:5:5-44
+MERGED from [androidx.fragment:fragment:1.8.9] /Users/felicemanga/.gradle/caches/9.6.0/transforms/6090c8dbae64bd931ee5832194d13fad/transformed/fragment-1.8.9/AndroidManifest.xml:5:5-44
+MERGED from [androidx.activity:activity:1.11.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/c70bc4cdc07e12832559e94daf792f26/transformed/activity-1.11.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.activity:activity:1.11.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/c70bc4cdc07e12832559e94daf792f26/transformed/activity-1.11.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.cursoradapter:cursoradapter:1.0.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/17ad070285e9e2c6e54efdd84252b680/transformed/cursoradapter-1.0.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.cursoradapter:cursoradapter:1.0.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/17ad070285e9e2c6e54efdd84252b680/transformed/cursoradapter-1.0.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.drawerlayout:drawerlayout:1.0.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/fd247b9d1c7c43b490f69ef261ecaa02/transformed/drawerlayout-1.0.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.drawerlayout:drawerlayout:1.0.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/fd247b9d1c7c43b490f69ef261ecaa02/transformed/drawerlayout-1.0.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.emoji2:emoji2-views-helper:1.3.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/4f998111e00ccc2dbe97a4cbc17dc4a7/transformed/emoji2-views-helper-1.3.0/AndroidManifest.xml:5:5-44
+MERGED from [androidx.emoji2:emoji2-views-helper:1.3.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/4f998111e00ccc2dbe97a4cbc17dc4a7/transformed/emoji2-views-helper-1.3.0/AndroidManifest.xml:5:5-44
+MERGED from [androidx.emoji2:emoji2:1.3.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/aec02a7c0500205275bcb72262228fb3/transformed/emoji2-1.3.0/AndroidManifest.xml:21:5-44
+MERGED from [androidx.emoji2:emoji2:1.3.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/aec02a7c0500205275bcb72262228fb3/transformed/emoji2-1.3.0/AndroidManifest.xml:21:5-44
+MERGED from [androidx.viewpager:viewpager:1.0.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/ee4f4e648f073d18c0e838d1b5b388ce/transformed/viewpager-1.0.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.viewpager:viewpager:1.0.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/ee4f4e648f073d18c0e838d1b5b388ce/transformed/viewpager-1.0.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.customview:customview:1.0.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/dc5073b50d42460ce0aa4e0a02b1ae60/transformed/customview-1.0.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.customview:customview:1.0.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/dc5073b50d42460ce0aa4e0a02b1ae60/transformed/customview-1.0.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.webkit:webkit:1.14.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/f160beafeaa3266a43c7cb55b86febd9/transformed/webkit-1.14.0/AndroidManifest.xml:5:5-44
+MERGED from [androidx.webkit:webkit:1.14.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/f160beafeaa3266a43c7cb55b86febd9/transformed/webkit-1.14.0/AndroidManifest.xml:5:5-44
+MERGED from [androidx.vectordrawable:vectordrawable-animated:1.1.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/da0ab8402953d6d7e8e2530a395d9f26/transformed/vectordrawable-animated-1.1.0/AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.vectordrawable:vectordrawable-animated:1.1.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/da0ab8402953d6d7e8e2530a395d9f26/transformed/vectordrawable-animated-1.1.0/AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.vectordrawable:vectordrawable:1.1.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/165fcc6c6cea6980c57b1806a8414619/transformed/vectordrawable-1.1.0/AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.vectordrawable:vectordrawable:1.1.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/165fcc6c6cea6980c57b1806a8414619/transformed/vectordrawable-1.1.0/AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.core:core-ktx:1.17.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/a0808b0c84ba05af2735953c1c8020b9/transformed/core-ktx-1.17.0/AndroidManifest.xml:5:5-44
+MERGED from [androidx.core:core-ktx:1.17.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/a0808b0c84ba05af2735953c1c8020b9/transformed/core-ktx-1.17.0/AndroidManifest.xml:5:5-44
+MERGED from [androidx.loader:loader:1.0.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/131ba52c117b2219f1673a75f5091ba0/transformed/loader-1.0.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.loader:loader:1.0.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/131ba52c117b2219f1673a75f5091ba0/transformed/loader-1.0.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.core:core:1.17.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/e2af85f11d0cff6da404dcce2232c55f/transformed/core-1.17.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.core:core:1.17.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/e2af85f11d0cff6da404dcce2232c55f/transformed/core-1.17.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-livedata:2.6.2] /Users/felicemanga/.gradle/caches/9.6.0/transforms/a66777e312958557fae7ca4afb7d6f9d/transformed/lifecycle-livedata-2.6.2/AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-livedata:2.6.2] /Users/felicemanga/.gradle/caches/9.6.0/transforms/a66777e312958557fae7ca4afb7d6f9d/transformed/lifecycle-livedata-2.6.2/AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-viewmodel:2.6.2] /Users/felicemanga/.gradle/caches/9.6.0/transforms/828a529844d80aa94f2effe53feb25f8/transformed/lifecycle-viewmodel-2.6.2/AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-viewmodel:2.6.2] /Users/felicemanga/.gradle/caches/9.6.0/transforms/828a529844d80aa94f2effe53feb25f8/transformed/lifecycle-viewmodel-2.6.2/AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-process:2.6.2] /Users/felicemanga/.gradle/caches/9.6.0/transforms/a80e5045c3e3d8177307ed4b7633f34a/transformed/lifecycle-process-2.6.2/AndroidManifest.xml:21:5-44
+MERGED from [androidx.lifecycle:lifecycle-process:2.6.2] /Users/felicemanga/.gradle/caches/9.6.0/transforms/a80e5045c3e3d8177307ed4b7633f34a/transformed/lifecycle-process-2.6.2/AndroidManifest.xml:21:5-44
+MERGED from [androidx.lifecycle:lifecycle-livedata-core:2.6.2] /Users/felicemanga/.gradle/caches/9.6.0/transforms/7565786dd7f1f27ccf0ab5563639a726/transformed/lifecycle-livedata-core-2.6.2/AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-livedata-core:2.6.2] /Users/felicemanga/.gradle/caches/9.6.0/transforms/7565786dd7f1f27ccf0ab5563639a726/transformed/lifecycle-livedata-core-2.6.2/AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-runtime:2.6.2] /Users/felicemanga/.gradle/caches/9.6.0/transforms/a915c907faff9035f7ca422e47f68131/transformed/lifecycle-runtime-2.6.2/AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-runtime:2.6.2] /Users/felicemanga/.gradle/caches/9.6.0/transforms/a915c907faff9035f7ca422e47f68131/transformed/lifecycle-runtime-2.6.2/AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-savedstate:2.6.2] /Users/felicemanga/.gradle/caches/9.6.0/transforms/54a0213239ce182b7a680fb0e8172ddd/transformed/lifecycle-viewmodel-savedstate-2.6.2/AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-savedstate:2.6.2] /Users/felicemanga/.gradle/caches/9.6.0/transforms/54a0213239ce182b7a680fb0e8172ddd/transformed/lifecycle-viewmodel-savedstate-2.6.2/AndroidManifest.xml:20:5-44
+MERGED from [androidx.savedstate:savedstate:1.2.1] /Users/felicemanga/.gradle/caches/9.6.0/transforms/cba1f73cc5889f33f5421b46b40eba38/transformed/savedstate-1.2.1/AndroidManifest.xml:20:5-44
+MERGED from [androidx.savedstate:savedstate:1.2.1] /Users/felicemanga/.gradle/caches/9.6.0/transforms/cba1f73cc5889f33f5421b46b40eba38/transformed/savedstate-1.2.1/AndroidManifest.xml:20:5-44
+MERGED from [androidx.arch.core:core-runtime:2.2.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/e05780d7346baa6b7d22ae3e6313c652/transformed/core-runtime-2.2.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.arch.core:core-runtime:2.2.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/e05780d7346baa6b7d22ae3e6313c652/transformed/core-runtime-2.2.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:21:5-44
+MERGED from [androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:21:5-44
+MERGED from [androidx.startup:startup-runtime:1.1.1] /Users/felicemanga/.gradle/caches/9.6.0/transforms/9e96fb5f22912072384f59366449a414/transformed/startup-runtime-1.1.1/AndroidManifest.xml:21:5-23:41
+MERGED from [androidx.startup:startup-runtime:1.1.1] /Users/felicemanga/.gradle/caches/9.6.0/transforms/9e96fb5f22912072384f59366449a414/transformed/startup-runtime-1.1.1/AndroidManifest.xml:21:5-23:41
+MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] /Users/felicemanga/.gradle/caches/9.6.0/transforms/3fb866c167485886779810b90d57770d/transformed/versionedparcelable-1.1.1/AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] /Users/felicemanga/.gradle/caches/9.6.0/transforms/3fb866c167485886779810b90d57770d/transformed/versionedparcelable-1.1.1/AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.interpolator:interpolator:1.0.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/90c87176af3c20219c06e9ef6aaa4325/transformed/interpolator-1.0.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.interpolator:interpolator:1.0.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/90c87176af3c20219c06e9ef6aaa4325/transformed/interpolator-1.0.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.tracing:tracing:1.2.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/c6669eb6fcfbbdd1d3e564784e0d08da/transformed/tracing-1.2.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.tracing:tracing:1.2.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/c6669eb6fcfbbdd1d3e564784e0d08da/transformed/tracing-1.2.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.annotation:annotation-experimental:1.4.1] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2fc0ceadbd70256092dc920210223651/transformed/annotation-experimental-1.4.1/AndroidManifest.xml:5:5-44
+MERGED from [androidx.annotation:annotation-experimental:1.4.1] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2fc0ceadbd70256092dc920210223651/transformed/annotation-experimental-1.4.1/AndroidManifest.xml:5:5-44
+MERGED from [androidx.core:core-viewtree:1.0.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/14f1a987abffd684350ec29c1880225c/transformed/core-viewtree-1.0.0/AndroidManifest.xml:5:5-44
+MERGED from [androidx.core:core-viewtree:1.0.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/14f1a987abffd684350ec29c1880225c/transformed/core-viewtree-1.0.0/AndroidManifest.xml:5:5-44
+	android:targetSdkVersion
+		INJECTED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml
+	android:minSdkVersion
+		INJECTED from /Users/felicemanga/android/app/src/main/AndroidManifest.xml
+provider#androidx.startup.InitializationProvider
+ADDED from [androidx.emoji2:emoji2:1.3.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/aec02a7c0500205275bcb72262228fb3/transformed/emoji2-1.3.0/AndroidManifest.xml:24:9-32:20
+MERGED from [androidx.lifecycle:lifecycle-process:2.6.2] /Users/felicemanga/.gradle/caches/9.6.0/transforms/a80e5045c3e3d8177307ed4b7633f34a/transformed/lifecycle-process-2.6.2/AndroidManifest.xml:24:9-32:20
+MERGED from [androidx.lifecycle:lifecycle-process:2.6.2] /Users/felicemanga/.gradle/caches/9.6.0/transforms/a80e5045c3e3d8177307ed4b7633f34a/transformed/lifecycle-process-2.6.2/AndroidManifest.xml:24:9-32:20
+MERGED from [androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:24:9-32:20
+MERGED from [androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:24:9-32:20
+MERGED from [androidx.startup:startup-runtime:1.1.1] /Users/felicemanga/.gradle/caches/9.6.0/transforms/9e96fb5f22912072384f59366449a414/transformed/startup-runtime-1.1.1/AndroidManifest.xml:26:9-30:34
+MERGED from [androidx.startup:startup-runtime:1.1.1] /Users/felicemanga/.gradle/caches/9.6.0/transforms/9e96fb5f22912072384f59366449a414/transformed/startup-runtime-1.1.1/AndroidManifest.xml:26:9-30:34
+	tools:node
+		ADDED from [androidx.emoji2:emoji2:1.3.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/aec02a7c0500205275bcb72262228fb3/transformed/emoji2-1.3.0/AndroidManifest.xml:28:13-31
+	android:authorities
+		ADDED from [androidx.emoji2:emoji2:1.3.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/aec02a7c0500205275bcb72262228fb3/transformed/emoji2-1.3.0/AndroidManifest.xml:26:13-68
+	android:exported
+		ADDED from [androidx.emoji2:emoji2:1.3.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/aec02a7c0500205275bcb72262228fb3/transformed/emoji2-1.3.0/AndroidManifest.xml:27:13-37
+	android:name
+		ADDED from [androidx.emoji2:emoji2:1.3.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/aec02a7c0500205275bcb72262228fb3/transformed/emoji2-1.3.0/AndroidManifest.xml:25:13-67
+meta-data#androidx.emoji2.text.EmojiCompatInitializer
+ADDED from [androidx.emoji2:emoji2:1.3.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/aec02a7c0500205275bcb72262228fb3/transformed/emoji2-1.3.0/AndroidManifest.xml:29:13-31:52
+	android:value
+		ADDED from [androidx.emoji2:emoji2:1.3.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/aec02a7c0500205275bcb72262228fb3/transformed/emoji2-1.3.0/AndroidManifest.xml:31:17-49
+	android:name
+		ADDED from [androidx.emoji2:emoji2:1.3.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/aec02a7c0500205275bcb72262228fb3/transformed/emoji2-1.3.0/AndroidManifest.xml:30:17-75
+permission#${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+ADDED from [androidx.core:core:1.17.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/e2af85f11d0cff6da404dcce2232c55f/transformed/core-1.17.0/AndroidManifest.xml:22:5-24:47
+	android:protectionLevel
+		ADDED from [androidx.core:core:1.17.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/e2af85f11d0cff6da404dcce2232c55f/transformed/core-1.17.0/AndroidManifest.xml:24:9-44
+	android:name
+		ADDED from [androidx.core:core:1.17.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/e2af85f11d0cff6da404dcce2232c55f/transformed/core-1.17.0/AndroidManifest.xml:23:9-81
+permission#com.xtream.streamplayer.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+ADDED from [androidx.core:core:1.17.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/e2af85f11d0cff6da404dcce2232c55f/transformed/core-1.17.0/AndroidManifest.xml:22:5-24:47
+	android:protectionLevel
+		ADDED from [androidx.core:core:1.17.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/e2af85f11d0cff6da404dcce2232c55f/transformed/core-1.17.0/AndroidManifest.xml:24:9-44
+	android:name
+		ADDED from [androidx.core:core:1.17.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/e2af85f11d0cff6da404dcce2232c55f/transformed/core-1.17.0/AndroidManifest.xml:23:9-81
+uses-permission#${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+ADDED from [androidx.core:core:1.17.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/e2af85f11d0cff6da404dcce2232c55f/transformed/core-1.17.0/AndroidManifest.xml:26:5-97
+	android:name
+		ADDED from [androidx.core:core:1.17.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/e2af85f11d0cff6da404dcce2232c55f/transformed/core-1.17.0/AndroidManifest.xml:26:22-94
+uses-permission#com.xtream.streamplayer.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+ADDED from [androidx.core:core:1.17.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/e2af85f11d0cff6da404dcce2232c55f/transformed/core-1.17.0/AndroidManifest.xml:26:5-97
+	android:name
+		ADDED from [androidx.core:core:1.17.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/e2af85f11d0cff6da404dcce2232c55f/transformed/core-1.17.0/AndroidManifest.xml:26:22-94
+meta-data#androidx.lifecycle.ProcessLifecycleInitializer
+ADDED from [androidx.lifecycle:lifecycle-process:2.6.2] /Users/felicemanga/.gradle/caches/9.6.0/transforms/a80e5045c3e3d8177307ed4b7633f34a/transformed/lifecycle-process-2.6.2/AndroidManifest.xml:29:13-31:52
+	android:value
+		ADDED from [androidx.lifecycle:lifecycle-process:2.6.2] /Users/felicemanga/.gradle/caches/9.6.0/transforms/a80e5045c3e3d8177307ed4b7633f34a/transformed/lifecycle-process-2.6.2/AndroidManifest.xml:31:17-49
+	android:name
+		ADDED from [androidx.lifecycle:lifecycle-process:2.6.2] /Users/felicemanga/.gradle/caches/9.6.0/transforms/a80e5045c3e3d8177307ed4b7633f34a/transformed/lifecycle-process-2.6.2/AndroidManifest.xml:30:17-78
+meta-data#androidx.profileinstaller.ProfileInstallerInitializer
+ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:29:13-31:52
+	android:value
+		ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:31:17-49
+	android:name
+		ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:30:17-85
+receiver#androidx.profileinstaller.ProfileInstallReceiver
+ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:34:9-52:20
+	android:enabled
+		ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:37:13-35
+	android:exported
+		ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:38:13-36
+	android:permission
+		ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:39:13-57
+	android:directBootAware
+		ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:36:13-44
+	android:name
+		ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:35:13-76
+intent-filter#action:name:androidx.profileinstaller.action.INSTALL_PROFILE
+ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:40:13-42:29
+action#androidx.profileinstaller.action.INSTALL_PROFILE
+ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:41:17-91
+	android:name
+		ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:41:25-88
+intent-filter#action:name:androidx.profileinstaller.action.SKIP_FILE
+ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:43:13-45:29
+action#androidx.profileinstaller.action.SKIP_FILE
+ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:44:17-85
+	android:name
+		ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:44:25-82
+intent-filter#action:name:androidx.profileinstaller.action.SAVE_PROFILE
+ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:46:13-48:29
+action#androidx.profileinstaller.action.SAVE_PROFILE
+ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:47:17-88
+	android:name
+		ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:47:25-85
+intent-filter#action:name:androidx.profileinstaller.action.BENCHMARK_OPERATION
+ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:49:13-51:29
+action#androidx.profileinstaller.action.BENCHMARK_OPERATION
+ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:50:17-95
+	android:name
+		ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:50:25-92
