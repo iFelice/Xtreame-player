@@ -325,6 +325,12 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
         mpegtsRef.current.destroy();
         mpegtsRef.current = null;
       }
+
+      // Stop WebKit/AVFoundation from continuing to buffer a multi-GB VOD
+      // after the player is closed or another title is selected.
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
     };
   }, [media, getEffectiveUrl, liveFormat]);
 
@@ -542,7 +548,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       <video
         ref={videoRef}
         playsInline
-        preload="auto"
+        preload="metadata"
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
         onLoadedData={() => setIsLoading(false)}

@@ -1,13 +1,35 @@
 import UIKit
 import Capacitor
+import WebKit
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
 
     var window: UIWindow?
 
+    /// IPTV VOD files can be several gigabytes. They are streams, not offline
+    /// app data, so neither URLSession nor WKWebView should retain them on disk.
+    func clearStreamingCaches() {
+        URLCache.shared.removeAllCachedResponses()
+        let cacheTypes: Set<String> = [
+            WKWebsiteDataTypeDiskCache,
+            WKWebsiteDataTypeMemoryCache
+        ]
+        WKWebsiteDataStore.default().removeData(
+            ofTypes: cacheTypes,
+            modifiedSince: Date.distantPast,
+            completionHandler: {}
+        )
+    }
+
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
+        // Do not let URLSession persist multi-GB media responses.
+        URLCache.shared = URLCache(
+            memoryCapacity: 4 * 1024 * 1024,
+            diskCapacity: 0,
+            diskPath: nil
+        )
+        clearStreamingCaches()
         return true
     }
 
@@ -17,8 +39,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func applicationDidEnterBackground(_ application: UIApplication) {
-        // Use this method to release shared resources, save user data, invalidate timers, and store enough application state information to restore your application to its current state in case it is terminated later.
-        // If your application supports background execution, this method is called instead of applicationWillTerminate: when the user quits.
+        // User-saved files are outside this cache and are not affected.
+        clearStreamingCaches()
     }
 
     func applicationWillEnterForeground(_ application: UIApplication) {
