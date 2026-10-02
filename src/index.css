@@ -47,27 +47,28 @@ body.tv-mode input {
 
 /* Keep the complete TV login inside a 720p/1080p viewport. */
 body.tv-mode .tv-login-shell {
-  position: fixed;
-  z-index: 30;
-  inset: 12px 18px;
-  width: auto;
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 1080px;
   height: auto;
-  max-width: none;
   min-height: 0;
-  padding: 0;
+  padding: 4px 10px;
+  margin: 0 auto;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
 }
 
 body.tv-mode .tv-login-card {
-  width: min(1180px, 100%);
-  height: min(680px, 100%);
-  padding: 18px 28px;
+  width: 100%;
+  height: 500px;
+  max-height: calc(100vh - 128px);
+  padding: 16px 26px;
   display: grid;
-  grid-template-columns: minmax(400px, 1fr) minmax(360px, 1fr);
+  grid-template-columns: minmax(380px, 1fr) minmax(340px, 1fr);
   grid-template-rows: auto minmax(0, 1fr);
-  column-gap: 30px;
+  column-gap: 28px;
   overflow: hidden;
 }
 
@@ -78,9 +79,7 @@ body.tv-mode .tv-login-brand {
 }
 
 body.tv-mode .tv-login-brand > div:first-child {
-  width: 58px;
-  height: 58px;
-  margin-bottom: 7px;
+  display: none;
 }
 
 body.tv-mode .tv-login-brand h1 {
@@ -156,12 +155,10 @@ body.tv-mode .tv-pairing-panel img[alt="QR Code per accoppiamento TV"] {
 }
 
 @media (max-height: 650px) {
-  body.tv-mode .tv-login-shell {
-    inset: 8px 14px;
-  }
   body.tv-mode .tv-login-card {
-    padding-top: 12px;
-    padding-bottom: 12px;
+    height: 470px;
+    padding-top: 10px;
+    padding-bottom: 10px;
   }
   body.tv-mode .tv-login-brand > div:first-child,
   body.tv-mode .tv-login-brand p {

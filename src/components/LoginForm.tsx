@@ -27,10 +27,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, isLoading = false
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [showPairing, setShowPairing] = useState<boolean>(false);
   const [pairingReceived, setPairingReceived] = useState<boolean>(false);
-  const [editingField, setEditingField] = useState<'server' | 'username' | 'password' | 'pairing' | null>(null);
-  const [pairingServer, setPairingServer] = useState<string>(() =>
-    localStorage.getItem('xtream_pairing_server') || 'https://login-extream-neyt.onrender.com'
-  );
+  const [editingField, setEditingField] = useState<'server' | 'username' | 'password' | null>(null);
   const [savedAccounts, setSavedAccounts] = useState<SavedAccount[]>(() => storage.getAccounts());
   const isTv = isTvEnvironment();
 
@@ -51,7 +48,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, isLoading = false
   };
 
   const activateTvInput = (
-    field: 'server' | 'username' | 'password' | 'pairing',
+    field: 'server' | 'username' | 'password',
     input: HTMLInputElement
   ) => {
     if (!isTv || editingField === field) return;
@@ -170,14 +167,16 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, isLoading = false
                 required
                 className="w-full pl-11 pr-12 py-3 sm:py-3.5 bg-zinc-950 border border-zinc-700/90 rounded-2xl text-white placeholder-zinc-500 text-sm sm:text-base font-mono focus:outline-hidden focus:border-emerald-500 transition shadow-inner"
               />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 cursor-pointer p-1.5"
-                title={showPassword ? 'Nascondi password' : 'Mostra password'}
-              >
-                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-              </button>
+              {!isTv && (
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 cursor-pointer p-1.5"
+                  title={showPassword ? 'Nascondi password' : 'Mostra password'}
+                >
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              )}
             </div>
           </div>
 
@@ -207,28 +206,6 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, isLoading = false
         <div className="tv-login-side">
         {isTv && (
           <div className="tv-pairing-entry mt-7 pt-6 border-t border-zinc-800">
-            <label className="block text-sm font-bold text-zinc-300 mb-2">
-              Server collegamento smartphone
-            </label>
-            <input
-              type="text"
-              value={pairingServer}
-              readOnly={editingField !== 'pairing'}
-              inputMode={editingField !== 'pairing' ? 'none' : 'url'}
-              onChange={(event) => {
-                setPairingServer(event.target.value);
-                localStorage.setItem('xtream_pairing_server', event.target.value.trim());
-              }}
-              onClick={(event) => activateTvInput('pairing', event.currentTarget)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && editingField !== 'pairing') {
-                  event.preventDefault();
-                  activateTvInput('pairing', event.currentTarget);
-                }
-              }}
-              onBlur={() => setEditingField(null)}
-              className="tv-pairing-server w-full px-4 py-2.5 mb-4 bg-zinc-950 border border-zinc-700 rounded-xl text-sm text-emerald-300 font-mono"
-            />
             <div className="flex items-center gap-3 mb-4">
               <div className="h-px bg-zinc-800 flex-1" />
               <span className="text-sm font-bold text-zinc-400">OPPURE</span>
