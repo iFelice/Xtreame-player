@@ -1,7 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import { Directory, Filesystem } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
-import { storage } from '../services/storage';
 
 /**
  * Detects if the current client is a Smart TV / TV Box environment
@@ -46,22 +45,32 @@ function unwrapProxyUrl(streamUrl: string): string {
   }
 }
 
+export type NativeDownloadStatus = 'started' | 'exporting' | 'finished' | 'cancelled' | 'error';
+
+function notifyDownloadStatus(status: NativeDownloadStatus, title: string): void {
+  window.dispatchEvent(new CustomEvent('xtream-download-status', { detail: { status, title } }));
+}
+
 export async function cleanupLegacyNativeDownloads(): Promise<void> {
   if (typeof window === 'undefined' || !Capacitor.isNativePlatform()) return;
-  const migrationKey = 'xtream_legacy_downloads_cleaned_v1';
-  if (localStorage.getItem(migrationKey) === 'true') return;
 
-  try {
-    await Filesystem.rmdir({
-      path: 'Downloads',
-      directory: Directory.Documents,
-      recursive: true,
-    });
-  } catch {
-    // The directory does not exist on clean installations.
-  } finally {
-    localStorage.setItem(migrationKey, 'true');
-  }
+  // Clean both the old persistent implementation and temporary exports left
+  // behind if the app was terminated while downloading or while the picker was open.
+  const locations = [
+    { path: 'Downloads', directory: Directory.Documents },
+    { path: 'XtreamDownloads', directory: Directory.Documents },
+    { path: 'XtreamDownloads', directory: Directory.Temporary },
+  ];
+
+  await Promise.all(
+    locations.map(async ({ path, directory }) => {
+      try {
+        await Filesystem.rmdir({ path, directory, recursive: true });
+      } catch {
+        // Missing directories are expected on clean installations.
+      }
+    })
+  );
 }
 
 function safeFilename(title: string, extension: string): string {
@@ -96,7 +105,10 @@ export async function triggerMediaDownload(
   const id = `${type}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
   if (Capacitor.isNativePlatform() || window.location.protocol === 'capacitor:') {
-    const temporaryPath = `XtreamDownloads/${id}/${filename}`;
+    const temporaryDirectory = `XtreamDownloads/${id}`;
+    const temporaryPath = `${temporaryDirectory}/${filename}`;
+    let downloadedPath: string | undefined;
+    notifyDownloadStatus('started', title);
     try {
       const result = await Filesystem.downloadFile({
         url: rawUrl,
@@ -106,6 +118,8 @@ export async function triggerMediaDownload(
       });
 
       if (!result.path) throw new Error('Il download non ha restituito un percorso temporaneo.');
+      downloadedPath = result.path;
+      notifyDownloadStatus('exporting', title);
 
       // Apple does not allow an iOS app to write silently into ~/Downloads.
       // The system sheet is where the user chooses "Salva su File" and the
@@ -116,20 +130,7 @@ export async function triggerMediaDownload(
         dialogTitle: 'Salva il video',
       });
 
-      storage.addDownload(
-        {
-          id,
-          title,
-          type,
-          streamUrl: rawUrl,
-          // Keep the remote URL in history: the temporary file is removed.
-          downloadUrl: rawUrl,
-          poster,
-          containerExtension: ext,
-          downloadedAt: Date.now(),
-        },
-        accountKey
-      );
+      notifyDownloadStatus('finished', title);
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -137,19 +138,33 @@ export async function triggerMediaDownload(
       // failure. Capacitor reports it as a rejected promise on iOS/macOS.
       if (/share\s+canceled|cancelled|canceled/i.test(message)) {
         console.info('Save dialog closed by the user.');
+        notifyDownloadStatus('cancelled', title);
         return false;
       }
       console.error('Native media download failed:', error);
+      notifyDownloadStatus('error', title);
       window.alert(`Download non riuscito: ${message}`);
       return false;
     } finally {
-      try {
-        await Filesystem.deleteFile({
-          path: temporaryPath,
-          directory: Directory.Temporary,
-        });
-      } catch {
-        // Nothing to clean when the download failed before creating the file.
+      // Prefer the absolute path returned by the native plugin. This avoids a
+      // platform-specific Directory mapping leaving a multi-GB copy behind.
+      if (downloadedPath) {
+        try {
+          await Filesystem.deleteFile({ path: downloadedPath });
+        } catch {
+          // Fall through to recursive directory cleanup below.
+        }
+      }
+      for (const directory of [Directory.Temporary, Directory.Documents]) {
+        try {
+          await Filesystem.rmdir({
+            path: temporaryDirectory,
+            directory,
+            recursive: true,
+          });
+        } catch {
+          // The directory may map elsewhere or may already have been removed.
+        }
       }
     }
   }
@@ -157,19 +172,7 @@ export async function triggerMediaDownload(
   const downloadEndpoint = `/api/proxy/stream?url=${encodeURIComponent(rawUrl)}&download=1&filename=${encodeURIComponent(filename)}`;
 
   try {
-    storage.addDownload(
-      {
-        id,
-        title,
-        type,
-        streamUrl: rawUrl,
-        downloadUrl: downloadEndpoint,
-        poster,
-        containerExtension: ext,
-        downloadedAt: Date.now(),
-      },
-      accountKey
-    );
+
 
     const a = document.createElement('a');
     a.href = downloadEndpoint;

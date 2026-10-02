@@ -8,7 +8,7 @@ import {
   AlertCircle,
   RefreshCw,
   CheckCircle2,
-  Download,
+  LoaderCircle,
 } from 'lucide-react';
 import { Navbar } from './components/Navbar';
 import { LoginForm } from './components/LoginForm';
@@ -19,7 +19,6 @@ import { SeriesCatalog } from './components/SeriesCatalog';
 import { FavoritesView } from './components/FavoritesView';
 import { ServerInfoModal } from './components/ServerInfoModal';
 import { RecentProductsShelf } from './components/RecentProductsShelf';
-import { DownloadsView } from './components/DownloadsView';
 import { SettingsSyncModal } from './components/SettingsSyncModal';
 import { RemoteLoginView } from './components/RemoteLoginView';
 
@@ -44,7 +43,7 @@ export default function App() {
   const [password, setPassword] = useState<string>('');
   const [authData, setAuthData] = useState<XtreamAuthResponse | null>(null);
 
-  const [activeTab, setActiveTab] = useState<'live' | 'movies' | 'series' | 'recent' | 'downloads' | 'favorites'>('live');
+  const [activeTab, setActiveTab] = useState<'live' | 'movies' | 'series' | 'recent' | 'favorites'>('live');
   const [activeMedia, setActiveMedia] = useState<PlayableMediaItem | null>(null);
   const [selectedSeriesForModal, setSelectedSeriesForModal] = useState<string | number | null>(null);
 
@@ -62,11 +61,36 @@ export default function App() {
     return path.includes('remote-login') || search.get('page') === 'remote-login' || search.has('code');
   });
   const [savedAccounts, setSavedAccounts] = useState<SavedAccount[]>(() => storage.getAccounts());
+  const [downloadFeedback, setDownloadFeedback] = useState<{
+    status: 'started' | 'exporting' | 'finished';
+    title: string;
+  } | null>(null);
 
   // Remove the hidden persistent files created by the previous download
   // implementation. This one-time migration immediately recovers that space.
   useEffect(() => {
     void cleanupLegacyNativeDownloads();
+  }, []);
+
+  useEffect(() => {
+    let hideTimer: ReturnType<typeof setTimeout> | undefined;
+    const handleDownloadStatus = (event: Event) => {
+      const { status, title } = (event as CustomEvent<{ status: string; title: string }>).detail;
+      if (hideTimer) clearTimeout(hideTimer);
+      if (status === 'cancelled' || status === 'error') {
+        setDownloadFeedback(null);
+      } else if (status === 'finished') {
+        setDownloadFeedback({ status: 'finished', title });
+        hideTimer = setTimeout(() => setDownloadFeedback(null), 3000);
+      } else {
+        setDownloadFeedback({ status: status as 'started' | 'exporting', title });
+      }
+    };
+    window.addEventListener('xtream-download-status', handleDownloadStatus);
+    return () => {
+      window.removeEventListener('xtream-download-status', handleDownloadStatus);
+      if (hideTimer) clearTimeout(hideTimer);
+    };
   }, []);
 
   // Catalog data
@@ -331,6 +355,26 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col selection:bg-emerald-500/30 selection:text-emerald-200 w-full max-w-full overflow-x-hidden">
+      {downloadFeedback && (
+        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[100] max-w-[90vw] px-5 py-3 rounded-2xl bg-zinc-900/95 border border-cyan-500/70 text-white shadow-2xl flex items-center gap-3">
+          {downloadFeedback.status === 'finished' ? (
+            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+          ) : (
+            <LoaderCircle className="w-5 h-5 text-cyan-400 shrink-0 animate-spin" />
+          )}
+          <div className="min-w-0">
+            <p className="text-sm font-bold">
+              {downloadFeedback.status === 'started'
+                ? 'Download in corso…'
+                : downloadFeedback.status === 'exporting'
+                  ? 'Download completato — scegli dove salvare'
+                  : 'File salvato'}
+            </p>
+            <p className="text-xs text-zinc-400 truncate">{downloadFeedback.title}</p>
+          </div>
+        </div>
+      )}
+
       {/* Top Navbar */}
       <Navbar
         serverUrl={serverUrl}
@@ -457,22 +501,7 @@ export default function App() {
                 Novità & Recenti
               </button>
 
-              {/* 5. I Miei Download (disattivato su TV) */}
-              {!isTv && (
-                <button
-                  onClick={() => setActiveTab('downloads')}
-                  className={`flex items-center gap-2.5 px-4 sm:px-5 py-2.5 rounded-2xl text-sm sm:text-base font-bold transition cursor-pointer shadow-md ${
-                    activeTab === 'downloads'
-                      ? 'bg-cyan-600 text-white shadow-cyan-950/60 scale-105'
-                      : 'bg-zinc-900 text-zinc-300 hover:text-white hover:bg-zinc-850 border border-zinc-800'
-                  }`}
-                >
-                  <Download className="w-5 h-5 text-cyan-400" />
-                  I Miei Download
-                </button>
-              )}
-
-              {/* 6. Preferiti & Continua a Guardare */}
+              {/* 5. Preferiti & Continua a Guardare */}
               <button
                 onClick={() => setActiveTab('favorites')}
                 className={`flex items-center gap-2.5 px-4 sm:px-5 py-2.5 rounded-2xl text-sm sm:text-base font-bold transition cursor-pointer shadow-md ${
@@ -577,14 +606,6 @@ export default function App() {
                   setActiveTab('series');
                 }}
                 onNavigateToTab={(tab) => setActiveTab(tab)}
-              />
-            )}
-
-            {activeTab === 'downloads' && (
-              <DownloadsView
-                onPlay={handlePlayDirect}
-                onExploreContent={(tab) => setActiveTab(tab)}
-                accountKey={currentAccountKey}
               />
             )}
 
