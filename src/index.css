@@ -50,7 +50,7 @@ body.tv-mode .tv-login-shell {
   position: relative;
   z-index: 1;
   width: 100%;
-  max-width: 1080px;
+  max-width: 1040px;
   height: auto;
   min-height: 0;
   padding: 4px 10px;
@@ -62,7 +62,7 @@ body.tv-mode .tv-login-shell {
 
 body.tv-mode .tv-login-card {
   width: 100%;
-  height: 500px;
+  height: 480px;
   max-height: calc(100vh - 128px);
   padding: 16px 26px;
   display: grid;
@@ -156,7 +156,7 @@ body.tv-mode .tv-pairing-panel img[alt="QR Code per accoppiamento TV"] {
 
 @media (max-height: 650px) {
   body.tv-mode .tv-login-card {
-    height: 470px;
+    height: 450px;
     padding-top: 10px;
     padding-bottom: 10px;
   }
@@ -173,4 +173,75 @@ body.tv-mode .tv-pairing-panel img[alt="QR Code per accoppiamento TV"] {
   body.tv-mode .group:hover {
     transform: none;
   }
+}
+
+/* Stable TV layout: Android WebView width must not trigger the mobile stack. */
+body.tv-mode .media-browser-layout {
+  display: grid !important;
+  grid-template-columns: clamp(220px, 24vw, 280px) minmax(0, 1fr) !important;
+  align-items: stretch !important;
+  gap: 14px !important;
+  width: 100%;
+}
+
+body.tv-mode .media-category-panel,
+body.tv-mode .media-content-panel {
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  height: clamp(320px, calc(100vh - 210px), 680px) !important;
+  max-height: calc(100vh - 180px) !important;
+}
+
+body.tv-mode .media-category-panel {
+  grid-column: 1;
+}
+
+body.tv-mode .media-content-panel {
+  grid-column: 2;
+}
+
+/* Denser 10-foot home: keep all three destinations comfortably in one view. */
+body.tv-mode .tv-home {
+  min-height: calc(100vh - 120px) !important;
+  padding-top: 12px !important;
+  padding-bottom: 22px !important;
+}
+
+body.tv-mode .tv-home > div:first-child {
+  margin-bottom: 24px !important;
+}
+
+body.tv-mode .tv-home h2 {
+  font-size: 30px !important;
+  line-height: 1.15 !important;
+}
+
+body.tv-mode .tv-home h2 + p {
+  margin-top: 7px !important;
+  font-size: 16px !important;
+}
+
+body.tv-mode .tv-home > div:last-child {
+  max-width: 940px !important;
+  gap: 20px !important;
+}
+
+body.tv-mode .tv-home-card {
+  min-height: 178px !important;
+  gap: 10px !important;
+  border-radius: 20px !important;
+}
+
+body.tv-mode .tv-home-card svg {
+  width: 52px !important;
+  height: 52px !important;
+}
+
+body.tv-mode .tv-home-card span:nth-of-type(1) {
+  font-size: 23px !important;
+}
+
+body.tv-mode .tv-home-card span:nth-of-type(2) {
+  font-size: 15px !important;
 }

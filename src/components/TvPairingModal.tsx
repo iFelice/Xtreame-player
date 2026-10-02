@@ -168,12 +168,13 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
     };
   }, [isOpen, mode, pinCode, onConnectAccount, onClose]);
 
-  // Initial generation on modal open
+  // Pre-create the TV session while the login screen is visible. By the time
+  // the user opens QR/PIN, both values are normally already available.
   useEffect(() => {
-    if (isOpen && mode === 'tv' && !pinCode) {
-      generateNewSession();
+    if (mode === 'tv' && !pinCode) {
+      void generateNewSession();
     }
-  }, [isOpen, mode]);
+  }, [mode]);
 
   // Handle remote form paste link
   const handlePastedLinkChange = (value: string) => {
