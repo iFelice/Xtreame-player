@@ -1,0 +1,9 @@
+com.xtream.streamplayer.app-pngs-0 /Users/felicemanga/android/app/build/generated/res/pngs/release
+com.xtream.streamplayer.app-resValues-1 /Users/felicemanga/android/app/build/generated/res/resValues/release
+com.xtream.streamplayer.app-updated_navigation_xml-2 /Users/felicemanga/android/app/build/generated/updated_navigation_xml/release
+com.xtream.streamplayer.app-packageReleaseResources-3 /Users/felicemanga/android/app/build/intermediates/incremental/release/packageReleaseResources/merged.dir
+com.xtream.streamplayer.app-packageReleaseResources-4 /Users/felicemanga/android/app/build/intermediates/incremental/release/packageReleaseResources/stripped.dir
+com.xtream.streamplayer.app-release-5 /Users/felicemanga/android/app/build/intermediates/merged_res/release/mergeReleaseResources
+com.xtream.streamplayer.app-main-6 /Users/felicemanga/android/app/src/main/res
+com.xtream.streamplayer.app-release-7 /Users/felicemanga/android/app/src/release/res
+gradleHome-0 /Users/felicemanga/.gradle
