@@ -1,0 +1,54 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Top Dots -->
+    <path
+        android:fillColor="#10B981"
+        android:pathData="M 46,31 A 2,2 0 1,1 42,31 A 2,2 0 1,1 46,31 Z" />
+    <path
+        android:fillColor="#00E676"
+        android:pathData="M 57.5,28 A 3.5,3.5 0 1,1 50.5,28 A 3.5,3.5 0 1,1 57.5,28 Z" />
+    <path
+        android:fillColor="#10B981"
+        android:pathData="M 66,31 A 2,2 0 1,1 62,31 A 2,2 0 1,1 66,31 Z" />
+
+    <!-- Sound Waves (Left) -->
+    <path
+        android:pathData="M 29,42 C 24,49 24,59 29,66"
+        android:strokeColor="#047857"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
+    <path
+        android:pathData="M 35,46 C 31,51 31,57 35,62"
+        android:strokeColor="#10B981"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
+
+    <!-- Geometric Play Button (Top Facet) -->
+    <path
+        android:pathData="M 43,38 L 74,54 L 43,54 Z"
+        android:fillColor="#34D399" />
+
+    <!-- Geometric Play Button (Bottom Facet) -->
+    <path
+        android:pathData="M 43,54 L 74,54 L 43,70 Z"
+        android:fillColor="#059669" />
+
+    <!-- Outer Contour -->
+    <path
+        android:pathData="M 43,38 L 43,70 L 74,54 Z"
+        android:strokeColor="#10B981"
+        android:strokeWidth="1.5"
+        android:fillColor="#00000000" />
+
+    <!-- White Tip Dot -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 77,54 A 3,3 0 1,1 71,54 A 3,3 0 1,1 77,54 Z" />
+
+</vector>
