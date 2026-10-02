@@ -500,7 +500,7 @@ export default function App() {
 
         {/* Connected Catalog Navigation Tabs */}
         {isConnected && !isLoadingCatalog && (!isTv || !showTvHome) && (
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-zinc-800/90 pb-4">
+          <div className="tv-catalog-nav flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-zinc-800/90 pb-4">
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               {isTv && (
                 <button

@@ -245,3 +245,185 @@ body.tv-mode .tv-home-card span:nth-of-type(1) {
 body.tv-mode .tv-home-card span:nth-of-type(2) {
   font-size: 15px !important;
 }
+
+/* Compact TV catalogue density: designed for a 1280x720 ten-foot screen. */
+body.tv-mode {
+  font-size: 14px;
+}
+
+body.tv-mode main {
+  padding: 10px 18px !important;
+  row-gap: 10px !important;
+}
+
+body.tv-mode input,
+body.tv-mode button,
+body.tv-mode [tabindex="0"] {
+  min-height: 36px;
+}
+
+body.tv-mode .tv-catalog-nav {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  flex-wrap: nowrap !important;
+  gap: 8px !important;
+  padding-bottom: 9px !important;
+}
+
+body.tv-mode .tv-catalog-nav > div {
+  gap: 6px !important;
+  flex-wrap: nowrap !important;
+}
+
+body.tv-mode .tv-catalog-nav button {
+  min-height: 38px !important;
+  padding: 6px 11px !important;
+  gap: 6px !important;
+  border-radius: 10px !important;
+  font-size: 12px !important;
+  white-space: nowrap;
+}
+
+body.tv-mode .tv-catalog-nav button svg {
+  width: 16px !important;
+  height: 16px !important;
+}
+
+body.tv-mode .media-catalog {
+  margin-top: 0 !important;
+}
+
+body.tv-mode .media-browser-layout {
+  grid-template-columns: clamp(190px, 20vw, 230px) minmax(0, 1fr) !important;
+  gap: 10px !important;
+}
+
+body.tv-mode .media-category-panel,
+body.tv-mode .media-content-panel {
+  height: calc(100vh - 145px) !important;
+  max-height: calc(100vh - 145px) !important;
+  padding: 10px !important;
+  border-radius: 16px !important;
+}
+
+body.tv-mode .media-category-panel > div:first-child {
+  padding: 0 !important;
+}
+
+body.tv-mode .media-category-panel h2,
+body.tv-mode .media-category-panel h3,
+body.tv-mode .media-content-panel h2 {
+  font-size: 17px !important;
+  line-height: 1.15 !important;
+  gap: 7px !important;
+}
+
+body.tv-mode .media-category-panel h2 svg,
+body.tv-mode .media-category-panel h3 svg,
+body.tv-mode .media-content-panel h2 svg {
+  width: 19px !important;
+  height: 19px !important;
+}
+
+body.tv-mode .media-category-panel input,
+body.tv-mode .media-content-panel input {
+  min-height: 38px !important;
+  padding: 7px 10px 7px 34px !important;
+  border-radius: 10px !important;
+  font-size: 12px !important;
+}
+
+body.tv-mode .media-category-panel .relative,
+body.tv-mode .media-category-panel [class*="mt-3"],
+body.tv-mode .media-content-panel [class*="mt-3"] {
+  margin-top: 7px !important;
+}
+
+body.tv-mode .media-category-panel .space-y-2 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 5px !important;
+}
+
+body.tv-mode .media-category-panel .space-y-2 button,
+body.tv-mode .media-category-panel div[role="button"] {
+  min-height: 38px !important;
+  padding: 6px 9px !important;
+  border-radius: 10px !important;
+  font-size: 12px !important;
+}
+
+body.tv-mode .media-category-panel button span[class*="rounded-full"] {
+  padding: 1px 6px !important;
+  font-size: 10px !important;
+}
+
+body.tv-mode .media-content-panel > div:first-child {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  flex-wrap: nowrap !important;
+  gap: 10px !important;
+  padding-bottom: 8px !important;
+}
+
+body.tv-mode .media-content-panel > div:first-child > div:last-child {
+  gap: 6px !important;
+  flex-wrap: nowrap !important;
+}
+
+body.tv-mode .media-content-panel > div:first-child .relative {
+  width: clamp(190px, 27vw, 310px) !important;
+}
+
+body.tv-mode .media-content-panel > div:first-child button {
+  min-height: 34px !important;
+  padding: 6px !important;
+  border-radius: 8px !important;
+}
+
+body.tv-mode .media-content-panel > div:first-child svg {
+  width: 16px !important;
+  height: 16px !important;
+}
+
+body.tv-mode .media-content-panel .space-y-2\.5 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 5px !important;
+}
+
+body.tv-mode .media-content-panel .space-y-2\.5 > div {
+  min-height: 54px !important;
+  padding: 6px 9px !important;
+  gap: 8px !important;
+  border-radius: 10px !important;
+}
+
+body.tv-mode .media-content-panel .space-y-2\.5 > div > div:first-child {
+  gap: 9px !important;
+}
+
+body.tv-mode .media-content-panel .space-y-2\.5 > div div[class*="w-12"],
+body.tv-mode .media-content-panel .space-y-2\.5 > div div[class*="w-14"] {
+  width: 38px !important;
+  height: 38px !important;
+  border-radius: 8px !important;
+}
+
+body.tv-mode .media-content-panel .space-y-2\.5 h4 {
+  font-size: 13px !important;
+  line-height: 1.15 !important;
+}
+
+body.tv-mode .media-content-panel .space-y-2\.5 button {
+  min-height: 34px !important;
+  padding: 5px 10px !important;
+  border-radius: 8px !important;
+  font-size: 11px !important;
+}
+
+body.tv-mode .media-content-panel .grid {
+  gap: 9px !important;
+}
+
+body.tv-mode footer {
+  display: none !important;
+}
