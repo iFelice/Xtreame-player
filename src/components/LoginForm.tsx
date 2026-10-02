@@ -26,6 +26,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, isLoading = false
   const [password, setPassword] = useState<string>('');
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [showPairing, setShowPairing] = useState<boolean>(false);
+  const [pairingReceived, setPairingReceived] = useState<boolean>(false);
   const [editingField, setEditingField] = useState<'server' | 'username' | 'password' | 'pairing' | null>(null);
   const [pairingServer, setPairingServer] = useState<string>(() =>
     localStorage.getItem('xtream_pairing_server') || 'https://login-extream-neyt.onrender.com'
@@ -83,6 +84,11 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, isLoading = false
 
         {/* Login Form */}
         <form onSubmit={handleSubmit} className="tv-login-form space-y-4 sm:space-y-5">
+          {pairingReceived && (
+            <div className="tv-pairing-received rounded-xl border border-emerald-600/60 bg-emerald-950/70 px-3 py-2 text-sm font-bold text-emerald-300">
+              Credenziali ricevute. Premi “Accedi al Catalogo”.
+            </div>
+          )}
           {/* Server URL */}
           <div>
             <label className="block text-sm sm:text-base font-bold text-zinc-200 mb-1.5">
@@ -178,6 +184,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, isLoading = false
           {/* Login Submit Button */}
           <div className="pt-2 sm:pt-3">
             <button
+              id="tv-login-submit"
               type="submit"
               disabled={isLoading}
               className="w-full py-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold rounded-2xl text-base sm:text-lg transition flex items-center justify-center gap-2.5 shadow-xl shadow-emerald-950/60 cursor-pointer disabled:opacity-60"
@@ -292,7 +299,16 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, isLoading = false
     <TvPairingModal
       isOpen={showPairing}
       onClose={() => setShowPairing(false)}
-      onConnectAccount={(server, user, pass) => onLogin(server, user, pass)}
+      onConnectAccount={(server, user, pass) => {
+        // Match the original Android TV flow: receive and fill the fields,
+        // then let the user confirm with the focused Login button.
+        setServerUrl(server);
+        setUsername(user);
+        setPassword(pass);
+        setPairingReceived(true);
+        setShowPairing(false);
+        window.setTimeout(() => document.getElementById('tv-login-submit')?.focus(), 200);
+      }}
     />
     </>
   );

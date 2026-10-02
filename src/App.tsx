@@ -397,16 +397,19 @@ export default function App() {
         </div>
       )}
 
-      {/* Top Navbar */}
-      <Navbar
-        serverUrl={serverUrl}
-        username={username}
-        authData={authData}
-        onSelectAccount={handleSelectSavedAccount}
-        onOpenServerInfo={() => setShowServerInfo(true)}
-        onDisconnect={handleDisconnect}
-        onOpenSettingsSync={() => setShowSettingsSyncModal(true)}
-      />
+      {/* On the TV login screen the compact login card already contains the
+          brand. Hiding the desktop navbar leaves the full 720p viewport available. */}
+      {(!isTv || isConnected) && (
+        <Navbar
+          serverUrl={serverUrl}
+          username={username}
+          authData={authData}
+          onSelectAccount={handleSelectSavedAccount}
+          onOpenServerInfo={() => setShowServerInfo(true)}
+          onDisconnect={handleDisconnect}
+          onOpenSettingsSync={() => setShowSettingsSyncModal(true)}
+        />
+      )}
 
       {/* Main Content Area */}
       <main className="flex-1 w-full max-w-[2400px] mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-6 overflow-x-hidden">

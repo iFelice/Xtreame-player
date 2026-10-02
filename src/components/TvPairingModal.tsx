@@ -296,7 +296,7 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
                 </div>
                 <h4 className="text-2xl font-bold text-white">Credenziali Ricevute con Successo!</h4>
                 <p className="text-sm text-zinc-300 max-w-md mx-auto">
-                  Lo smartphone ha configurato la TV. Connessione al server Xtream in corso...
+                  Lo smartphone ha configurato la TV. Le credenziali saranno riportate nella schermata di accesso.
                 </p>
                 <div className="w-8 h-8 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mt-4"></div>
               </div>
