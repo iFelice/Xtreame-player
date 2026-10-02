@@ -26,7 +26,10 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, isLoading = false
   const [password, setPassword] = useState<string>('');
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [showPairing, setShowPairing] = useState<boolean>(false);
-  const [editingField, setEditingField] = useState<'server' | 'username' | 'password' | null>(null);
+  const [editingField, setEditingField] = useState<'server' | 'username' | 'password' | 'pairing' | null>(null);
+  const [pairingServer, setPairingServer] = useState<string>(() =>
+    localStorage.getItem('xtream_pairing_server') || 'https://login-extream-neyt.onrender.com'
+  );
   const [savedAccounts, setSavedAccounts] = useState<SavedAccount[]>(() => storage.getAccounts());
   const isTv = isTvEnvironment();
 
@@ -47,7 +50,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, isLoading = false
   };
 
   const activateTvInput = (
-    field: 'server' | 'username' | 'password',
+    field: 'server' | 'username' | 'password' | 'pairing',
     input: HTMLInputElement
   ) => {
     if (!isTv || editingField === field) return;
@@ -92,6 +95,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, isLoading = false
                 value={serverUrl}
                 onChange={(e) => setServerUrl(e.target.value)}
                 readOnly={isTv && editingField !== 'server'}
+                inputMode={isTv && editingField !== 'server' ? 'none' : 'url'}
                 onClick={(e) => activateTvInput('server', e.currentTarget)}
                 onKeyDown={(e) => {
                   if (isTv && e.key === 'Enter' && editingField !== 'server') {
@@ -119,6 +123,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, isLoading = false
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 readOnly={isTv && editingField !== 'username'}
+                inputMode={isTv && editingField !== 'username' ? 'none' : 'text'}
                 onClick={(e) => activateTvInput('username', e.currentTarget)}
                 onKeyDown={(e) => {
                   if (isTv && e.key === 'Enter' && editingField !== 'username') {
@@ -146,6 +151,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, isLoading = false
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 readOnly={isTv && editingField !== 'password'}
+                inputMode={isTv && editingField !== 'password' ? 'none' : 'text'}
                 onClick={(e) => activateTvInput('password', e.currentTarget)}
                 onKeyDown={(e) => {
                   if (isTv && e.key === 'Enter' && editingField !== 'password') {
@@ -194,6 +200,28 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, isLoading = false
         <div className="tv-login-side">
         {isTv && (
           <div className="tv-pairing-entry mt-7 pt-6 border-t border-zinc-800">
+            <label className="block text-sm font-bold text-zinc-300 mb-2">
+              Server collegamento smartphone
+            </label>
+            <input
+              type="text"
+              value={pairingServer}
+              readOnly={editingField !== 'pairing'}
+              inputMode={editingField !== 'pairing' ? 'none' : 'url'}
+              onChange={(event) => {
+                setPairingServer(event.target.value);
+                localStorage.setItem('xtream_pairing_server', event.target.value.trim());
+              }}
+              onClick={(event) => activateTvInput('pairing', event.currentTarget)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && editingField !== 'pairing') {
+                  event.preventDefault();
+                  activateTvInput('pairing', event.currentTarget);
+                }
+              }}
+              onBlur={() => setEditingField(null)}
+              className="tv-pairing-server w-full px-4 py-2.5 mb-4 bg-zinc-950 border border-zinc-700 rounded-xl text-sm text-emerald-300 font-mono"
+            />
             <div className="flex items-center gap-3 mb-4">
               <div className="h-px bg-zinc-800 flex-1" />
               <span className="text-sm font-bold text-zinc-400">OPPURE</span>

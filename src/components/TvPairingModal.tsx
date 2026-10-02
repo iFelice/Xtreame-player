@@ -112,7 +112,10 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
       setQrDataUrl(qrUrl);
     } catch (err: any) {
       console.error('TV Session create error:', err);
-      setPollError('Errore durante la creazione del codice TV. Clicca su Riprova.');
+      const base = pairingWebUrl();
+      setPollError(
+        `Server di collegamento non raggiungibile (${base}). Verifica l’indirizzo nella schermata di login e premi Riprova.`
+      );
     }
   };
 
