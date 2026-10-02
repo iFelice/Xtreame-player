@@ -45,6 +45,129 @@ body.tv-mode input {
   font-size: 18px;
 }
 
+/* Keep the complete TV login inside a 720p/1080p viewport. */
+body.tv-mode .tv-login-shell {
+  max-width: 1180px;
+  height: calc(100vh - 112px);
+  min-height: 560px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+}
+
+body.tv-mode .tv-login-card {
+  width: 100%;
+  max-height: 100%;
+  padding: 20px 28px;
+  display: grid;
+  grid-template-columns: minmax(420px, 1.08fr) minmax(360px, 0.92fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  column-gap: 32px;
+  overflow: hidden;
+}
+
+body.tv-mode .tv-login-brand {
+  grid-column: 1;
+  grid-row: 1;
+  margin-bottom: 12px;
+}
+
+body.tv-mode .tv-login-brand > div:first-child {
+  width: 58px;
+  height: 58px;
+  margin-bottom: 7px;
+}
+
+body.tv-mode .tv-login-brand h1 {
+  font-size: 26px;
+}
+
+body.tv-mode .tv-login-brand p {
+  display: none;
+}
+
+body.tv-mode .tv-login-form {
+  grid-column: 1;
+  grid-row: 2;
+  min-height: 0;
+}
+
+body.tv-mode .tv-login-form > * + * {
+  margin-top: 9px;
+}
+
+body.tv-mode .tv-login-form label {
+  margin-bottom: 4px;
+  font-size: 15px;
+}
+
+body.tv-mode .tv-login-form input {
+  min-height: 50px;
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+
+body.tv-mode .tv-login-form button[type="submit"] {
+  min-height: 54px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+body.tv-mode .tv-login-side {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  overflow: hidden;
+  border-left: 1px solid #27272a;
+  padding-left: 32px;
+}
+
+body.tv-mode .tv-pairing-entry {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+body.tv-mode .tv-login-side .max-h-60 {
+  max-height: 190px;
+}
+
+body.tv-mode .tv-pairing-modal {
+  overflow: hidden;
+  padding: 16px 28px;
+}
+
+body.tv-mode .tv-pairing-panel {
+  max-width: 1000px;
+  max-height: calc(100vh - 32px);
+}
+
+body.tv-mode .tv-pairing-panel img[alt="QR Code per accoppiamento TV"] {
+  width: 190px;
+  height: 190px;
+}
+
+@media (max-height: 650px) {
+  body.tv-mode .tv-login-shell {
+    height: calc(100vh - 86px);
+    min-height: 500px;
+  }
+  body.tv-mode .tv-login-card {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+  body.tv-mode .tv-login-brand > div:first-child,
+  body.tv-mode .tv-login-brand p {
+    display: none;
+  }
+  body.tv-mode .tv-login-brand {
+    margin-bottom: 5px;
+  }
+}
+
 @media (hover: none) and (pointer: coarse) {
   body.tv-mode .group:hover {
     transform: none;

@@ -78,6 +78,14 @@ export function useTvNavigation(enabled: boolean): void {
       if (!direction) return;
 
       const current = document.activeElement as HTMLElement | null;
+      if (
+        current instanceof HTMLInputElement &&
+        !current.readOnly
+      ) {
+        // While the software keyboard/text editing mode is active, arrow keys
+        // belong to the input rather than to spatial TV navigation.
+        return;
+      }
       if (!current || current === document.body) {
         focusFirst();
         event.preventDefault();

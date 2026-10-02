@@ -26,6 +26,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, isLoading = false
   const [password, setPassword] = useState<string>('');
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [showPairing, setShowPairing] = useState<boolean>(false);
+  const [editingField, setEditingField] = useState<'server' | 'username' | 'password' | null>(null);
   const [savedAccounts, setSavedAccounts] = useState<SavedAccount[]>(() => storage.getAccounts());
   const isTv = isTvEnvironment();
 
@@ -45,13 +46,27 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, isLoading = false
     setSavedAccounts(storage.getAccounts());
   };
 
+  const activateTvInput = (
+    field: 'server' | 'username' | 'password',
+    input: HTMLInputElement
+  ) => {
+    if (!isTv || editingField === field) return;
+    setEditingField(field);
+    // Wait for React to remove readonly, then explicitly refocus. Android TV
+    // opens its keyboard only after the user has pressed OK on the field.
+    window.setTimeout(() => {
+      input.focus();
+      input.click();
+    }, 0);
+  };
+
   return (
     <>
-    <div className="w-full max-w-xl mx-auto py-8 sm:py-14 px-3">
+    <div className="tv-login-shell w-full max-w-xl mx-auto py-8 sm:py-14 px-3">
       {/* Main Login Card */}
-      <div className="bg-zinc-900/95 border border-zinc-800 rounded-3xl p-6 sm:p-9 shadow-2xl backdrop-blur-xl">
+      <div className="tv-login-card bg-zinc-900/95 border border-zinc-800 rounded-3xl p-6 sm:p-9 shadow-2xl backdrop-blur-xl">
         {/* Brand Header */}
-        <div className="flex flex-col items-center text-center mb-6 sm:mb-8">
+        <div className="tv-login-brand flex flex-col items-center text-center mb-6 sm:mb-8">
           <div className="w-18 h-18 rounded-2xl bg-zinc-950 border border-emerald-500/40 p-2.5 flex items-center justify-center shadow-xl shadow-emerald-950/40 mb-3">
             <Tv className="w-10 h-10 text-emerald-400" />
           </div>
@@ -64,7 +79,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, isLoading = false
         </div>
 
         {/* Login Form */}
-        <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
+        <form onSubmit={handleSubmit} className="tv-login-form space-y-4 sm:space-y-5">
           {/* Server URL */}
           <div>
             <label className="block text-sm sm:text-base font-bold text-zinc-200 mb-1.5">
@@ -76,6 +91,15 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, isLoading = false
                 type="text"
                 value={serverUrl}
                 onChange={(e) => setServerUrl(e.target.value)}
+                readOnly={isTv && editingField !== 'server'}
+                onClick={(e) => activateTvInput('server', e.currentTarget)}
+                onKeyDown={(e) => {
+                  if (isTv && e.key === 'Enter' && editingField !== 'server') {
+                    e.preventDefault();
+                    activateTvInput('server', e.currentTarget);
+                  }
+                }}
+                onBlur={() => isTv && setEditingField(null)}
                 placeholder="http://server.iptv.com:8080"
                 required
                 className="w-full pl-11 pr-4 py-3 sm:py-3.5 bg-zinc-950 border border-zinc-700/90 rounded-2xl text-white placeholder-zinc-500 text-sm sm:text-base font-mono focus:outline-hidden focus:border-emerald-500 transition shadow-inner"
@@ -94,6 +118,15 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, isLoading = false
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
+                readOnly={isTv && editingField !== 'username'}
+                onClick={(e) => activateTvInput('username', e.currentTarget)}
+                onKeyDown={(e) => {
+                  if (isTv && e.key === 'Enter' && editingField !== 'username') {
+                    e.preventDefault();
+                    activateTvInput('username', e.currentTarget);
+                  }
+                }}
+                onBlur={() => isTv && setEditingField(null)}
                 placeholder="Nome utente"
                 required
                 className="w-full pl-11 pr-4 py-3 sm:py-3.5 bg-zinc-950 border border-zinc-700/90 rounded-2xl text-white placeholder-zinc-500 text-sm sm:text-base font-mono focus:outline-hidden focus:border-emerald-500 transition shadow-inner"
@@ -112,6 +145,15 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, isLoading = false
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                readOnly={isTv && editingField !== 'password'}
+                onClick={(e) => activateTvInput('password', e.currentTarget)}
+                onKeyDown={(e) => {
+                  if (isTv && e.key === 'Enter' && editingField !== 'password') {
+                    e.preventDefault();
+                    activateTvInput('password', e.currentTarget);
+                  }
+                }}
+                onBlur={() => isTv && setEditingField(null)}
                 placeholder="Password"
                 required
                 className="w-full pl-11 pr-12 py-3 sm:py-3.5 bg-zinc-950 border border-zinc-700/90 rounded-2xl text-white placeholder-zinc-500 text-sm sm:text-base font-mono focus:outline-hidden focus:border-emerald-500 transition shadow-inner"
@@ -149,8 +191,9 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, isLoading = false
           </div>
         </form>
 
+        <div className="tv-login-side">
         {isTv && (
-          <div className="mt-7 pt-6 border-t border-zinc-800">
+          <div className="tv-pairing-entry mt-7 pt-6 border-t border-zinc-800">
             <div className="flex items-center gap-3 mb-4">
               <div className="h-px bg-zinc-800 flex-1" />
               <span className="text-sm font-bold text-zinc-400">OPPURE</span>
@@ -215,6 +258,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, isLoading = false
             </div>
           </div>
         )}
+        </div>
       </div>
     </div>
     <TvPairingModal
