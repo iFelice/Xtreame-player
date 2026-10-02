@@ -23,6 +23,7 @@ import { xtreamClient } from '../services/xtreamClient';
 import { storage } from '../services/storage';
 import { sortVodStreams } from '../utils/recentSorting';
 import { getSecureImageUrl } from '../utils/imageUrl';
+import { VirtualizedMediaGrid } from './VirtualizedMediaGrid';
 import { triggerMediaDownload, isTvEnvironment } from '../utils/downloadHelper';
 
 interface VodCatalogProps {
@@ -329,8 +330,11 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 sm:gap-5">
-              {visibleStreams.map((stream) => {
+            <VirtualizedMediaGrid
+              items={visibleStreams}
+              scrollRef={moviesListRef}
+              getKey={(stream) => stream.stream_id}
+              renderItem={(stream) => {
                 const isFav = storage.isFavorite(`movie_${stream.stream_id}`, accountKey);
                 const isPlayingThis = activeMediaId === `movie_${stream.stream_id}`;
 
@@ -374,6 +378,7 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                           alt={stream.name}
                           referrerPolicy="no-referrer"
                           loading="lazy"
+                          decoding="async"
                           onError={(e) => {
                             (e.target as HTMLElement).style.display = 'none';
                           }}
@@ -474,8 +479,8 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                     </div>
                   </div>
                 );
-              })}
-            </div>
+              }}
+            />
           )}
           </div>
         </section>

@@ -27,6 +27,7 @@ import { xtreamClient } from '../services/xtreamClient';
 import { storage } from '../services/storage';
 import { sortSeriesList } from '../utils/recentSorting';
 import { getSecureImageUrl } from '../utils/imageUrl';
+import { VirtualizedMediaGrid } from './VirtualizedMediaGrid';
 import { triggerMediaDownload, isTvEnvironment } from '../utils/downloadHelper';
 
 interface SeriesCatalogProps {
@@ -371,8 +372,11 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 sm:gap-5">
-                {visibleSeries.map((series) => {
+              <VirtualizedMediaGrid
+                items={visibleSeries}
+                scrollRef={seriesListRef}
+                getKey={(series) => series.series_id}
+                renderItem={(series) => {
                   const isFav = storage.isFavorite(`series_${series.series_id}`, accountKey);
                   const isPlayingThis =
                     activeMediaId === `series_${series.series_id}` ||
@@ -396,6 +400,7 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                           alt={series.name}
                           referrerPolicy="no-referrer"
                           loading="lazy"
+                          decoding="async"
                           onError={(e) => {
                             (e.target as HTMLElement).style.display = 'none';
                           }}
@@ -463,8 +468,8 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                     </div>
                   </div>
                 );
-              })}
-            </div>
+              }}
+            />
           )}
           </div>
         </section>
