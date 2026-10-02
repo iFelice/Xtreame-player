@@ -385,6 +385,7 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                   return (
                     <div
                       key={series.series_id}
+                      tabIndex={0}
                       onClick={() => handleOpenSeries(series)}
                       className={`group relative rounded-2xl overflow-hidden shadow-lg transition-all duration-300 flex flex-col cursor-pointer ${
                         isPlayingThis

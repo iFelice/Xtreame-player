@@ -152,7 +152,12 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, isLoading = false
               {savedAccounts.map((acc) => (
                 <div
                   key={acc.id}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => handleSelectAccount(acc)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') handleSelectAccount(acc);
+                  }}
                   className="p-3.5 rounded-2xl bg-zinc-950 hover:bg-zinc-850 border border-zinc-800 hover:border-emerald-500/60 flex items-center justify-between transition cursor-pointer group shadow-sm"
                 >
                   <div className="min-w-0 flex-1">

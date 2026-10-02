@@ -10,3 +10,43 @@ body,
   max-width: 100vw;
   overflow-x: hidden !important;
 }
+
+/* Android TV / Google TV 10-foot interface */
+body.tv-mode {
+  font-size: 18px;
+  overscroll-behavior: none;
+}
+
+body.tv-mode *:focus-visible {
+  outline: 4px solid #34d399 !important;
+  outline-offset: 4px !important;
+  box-shadow: 0 0 0 7px rgba(16, 185, 129, 0.35), 0 14px 34px rgba(0, 0, 0, 0.65) !important;
+  position: relative;
+  z-index: 20;
+}
+
+body.tv-mode .tv-home-card {
+  transition: transform 160ms ease, border-color 160ms ease, background-color 160ms ease;
+}
+
+body.tv-mode .tv-home-card:focus-visible {
+  transform: scale(1.07);
+  border-color: #34d399;
+  background-color: #18181b;
+}
+
+body.tv-mode input,
+body.tv-mode button,
+body.tv-mode [tabindex="0"] {
+  min-height: 52px;
+}
+
+body.tv-mode input {
+  font-size: 18px;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  body.tv-mode .group:hover {
+    transform: none;
+  }
+}

@@ -429,6 +429,7 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
                         <div
                           key={stream.stream_id}
                           id={`live-channel-${stream.stream_id}`}
+                          tabIndex={0}
                           onClick={() => handlePlayLive(stream)}
                           className={`group flex items-center justify-between p-3.5 sm:p-4 rounded-2xl transition-all cursor-pointer gap-3 sm:gap-5 shadow-sm scroll-mt-2 ${
                             isPlayingThis
@@ -505,6 +506,7 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
                       <div
                         key={stream.stream_id}
                         id={`live-channel-${stream.stream_id}`}
+                        tabIndex={0}
                         onClick={() => handlePlayLive(stream)}
                         className={`group relative rounded-3xl p-4 shadow-lg transition-all cursor-pointer flex flex-col justify-between scroll-mt-2 ${
                           isPlayingThis

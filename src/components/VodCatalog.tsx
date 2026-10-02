@@ -364,6 +364,10 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                 return (
                   <div
                     key={stream.stream_id}
+                    tabIndex={0}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') handleOpenDetails(stream);
+                    }}
                     className={`group relative rounded-2xl overflow-hidden shadow-lg transition-all duration-300 flex flex-col ${
                       isPlayingThis
                         ? 'bg-emerald-950/80 border-2 border-emerald-400 ring-4 ring-emerald-500/50 shadow-2xl shadow-emerald-950/90 scale-[1.02]'
