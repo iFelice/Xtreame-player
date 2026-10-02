@@ -8,8 +8,12 @@ import {
   LogIn,
   Tv,
   Trash2,
+  Smartphone,
+  QrCode,
 } from 'lucide-react';
 import { SavedAccount, storage } from '../services/storage';
+import { isTvEnvironment } from '../utils/downloadHelper';
+import { TvPairingModal } from './TvPairingModal';
 
 interface LoginFormProps {
   onLogin: (serverUrl: string, username: string, password: string) => void;
@@ -21,7 +25,9 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, isLoading = false
   const [username, setUsername] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [showPassword, setShowPassword] = useState<boolean>(false);
+  const [showPairing, setShowPairing] = useState<boolean>(false);
   const [savedAccounts, setSavedAccounts] = useState<SavedAccount[]>(() => storage.getAccounts());
+  const isTv = isTvEnvironment();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,6 +46,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, isLoading = false
   };
 
   return (
+    <>
     <div className="w-full max-w-xl mx-auto py-8 sm:py-14 px-3">
       {/* Main Login Card */}
       <div className="bg-zinc-900/95 border border-zinc-800 rounded-3xl p-6 sm:p-9 shadow-2xl backdrop-blur-xl">
@@ -142,6 +149,28 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, isLoading = false
           </div>
         </form>
 
+        {isTv && (
+          <div className="mt-7 pt-6 border-t border-zinc-800">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="h-px bg-zinc-800 flex-1" />
+              <span className="text-sm font-bold text-zinc-400">OPPURE</span>
+              <div className="h-px bg-zinc-800 flex-1" />
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowPairing(true)}
+              className="w-full min-h-16 px-6 py-4 rounded-2xl bg-zinc-950 border-2 border-emerald-700 text-white flex items-center justify-center gap-4 font-extrabold text-lg transition"
+            >
+              <QrCode className="w-7 h-7 text-emerald-400" />
+              <span>Configura con QR Code e PIN</span>
+              <Smartphone className="w-7 h-7 text-cyan-400" />
+            </button>
+            <p className="text-sm text-zinc-500 text-center mt-3">
+              Inquadra il codice con lo smartphone per inviare le credenziali alla TV.
+            </p>
+          </div>
+        )}
+
         {/* Saved Accounts section */}
         {savedAccounts.length > 0 && (
           <div className="mt-8 pt-6 border-t border-zinc-800 space-y-3">
@@ -188,5 +217,11 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, isLoading = false
         )}
       </div>
     </div>
+    <TvPairingModal
+      isOpen={showPairing}
+      onClose={() => setShowPairing(false)}
+      onConnectAccount={(server, user, pass) => onLogin(server, user, pass)}
+    />
+    </>
   );
 };

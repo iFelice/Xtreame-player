@@ -18,6 +18,22 @@ import {
 } from 'lucide-react';
 import { storage } from '../services/storage';
 import { parseXtreamUrl } from '../utils/parseXtreamUrl';
+import { Capacitor } from '@capacitor/core';
+
+const DEFAULT_PAIRING_SERVER = 'https://login-extream-neyt.onrender.com';
+
+function pairingApiUrl(path: string): string {
+  if (!Capacitor.isNativePlatform()) return path;
+  const base = (localStorage.getItem('xtream_pairing_server') || DEFAULT_PAIRING_SERVER).replace(/\/+$/, '');
+  return `${base}${path}`;
+}
+
+function pairingWebUrl(code?: string): string {
+  const base = Capacitor.isNativePlatform()
+    ? (localStorage.getItem('xtream_pairing_server') || DEFAULT_PAIRING_SERVER).replace(/\/+$/, '')
+    : window.location.origin;
+  return code ? `${base}/?code=${encodeURIComponent(code)}` : base;
+}
 
 interface TvPairingModalProps {
   isOpen: boolean;
@@ -74,7 +90,7 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
       setIsWaitingForPhone(true);
       setExpiresIn(600);
 
-      const res = await fetch('/api/session/create');
+      const res = await fetch(pairingApiUrl('/api/session/create'));
       if (!res.ok) {
         throw new Error('Impossibile creare sessione TV');
       }
@@ -83,8 +99,7 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
       setPinCode(code);
 
       // Create QR Code containing direct pairing URL
-      const origin = typeof window !== 'undefined' ? window.location.origin : '';
-      const pairUrl = `${origin}/?pair=${code}`;
+      const pairUrl = pairingWebUrl(code);
 
       const qrUrl = await QRCode.toDataURL(pairUrl, {
         width: 320,
@@ -123,7 +138,7 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
     // Polling every 2.5 seconds
     pollIntervalRef.current = setInterval(async () => {
       try {
-        const res = await fetch(`/api/session/status/${pinCode}`);
+        const res = await fetch(pairingApiUrl(`/api/session/status/${pinCode}`));
         if (!res.ok) return;
 
         const data = await res.json();
@@ -191,7 +206,7 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
 
     try {
       setIsSending(true);
-      const res = await fetch('/api/session/submit', {
+      const res = await fetch(pairingApiUrl('/api/session/submit'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code, server, username, password }),
@@ -219,8 +234,7 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
 
   const copyPairLink = () => {
     if (!pinCode) return;
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    navigator.clipboard.writeText(`${origin}/?pair=${pinCode}`);
+    navigator.clipboard.writeText(pairingWebUrl(pinCode));
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2000);
   };
@@ -322,7 +336,7 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
                       Oppure inserisci questo PIN
                     </span>
                     <h4 className="text-sm text-zinc-300">
-                      Vai su <strong className="text-white font-mono">{typeof window !== 'undefined' ? window.location.host : 'xtream-player'}</strong> da smartphone o PC e digita:
+                      Vai su <strong className="text-white font-mono">{pairingWebUrl()}</strong> da smartphone o PC e digita:
                     </h4>
                   </div>
 
