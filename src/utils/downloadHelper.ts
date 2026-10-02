@@ -1,6 +1,11 @@
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 import { Directory, Filesystem } from '@capacitor/filesystem';
-import { Share } from '@capacitor/share';
+
+interface DocumentExporterPlugin {
+  exportFile(options: { path: string }): Promise<{ path: string }>;
+}
+
+const DocumentExporter = registerPlugin<DocumentExporterPlugin>('DocumentExporter');
 
 /**
  * Detects if the current client is a Smart TV / TV Box environment
@@ -121,14 +126,9 @@ export async function triggerMediaDownload(
       downloadedPath = result.path;
       notifyDownloadStatus('exporting', title);
 
-      // Apple does not allow an iOS app to write silently into ~/Downloads.
-      // The system sheet is where the user chooses "Salva su File" and the
-      // actual Downloads folder (or any other destination).
-      await Share.share({
-        title: filename,
-        files: [result.path],
-        dialogTitle: 'Salva il video',
-      });
+      // Open Apple's save-location picker directly (without the intermediate
+      // share sheet). The picker grants access to the chosen destination.
+      await DocumentExporter.exportFile({ path: result.path });
 
       notifyDownloadStatus('finished', title);
       return true;
