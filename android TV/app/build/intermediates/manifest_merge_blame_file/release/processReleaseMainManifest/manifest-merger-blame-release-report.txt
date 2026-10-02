@@ -1,0 +1,168 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="com.xtream.streamplayer"
+4    android:versionCode="1"
+5    android:versionName="1.0" >
+6
+7    <uses-sdk
+7-->INJECTED
+8        android:minSdkVersion="24"
+8-->INJECTED
+9        android:targetSdkVersion="36" />
+9-->INJECTED
+10
+11    <!-- Rende l'app compatibile con telecomando (senza obbligo di touchscreen) -->
+12    <uses-feature
+12-->/Users/felicemanga/android/app/src/main/AndroidManifest.xml:5:5-7:36
+13        android:name="android.hardware.touchscreen"
+13-->/Users/felicemanga/android/app/src/main/AndroidManifest.xml:6:9-52
+14        android:required="false" />
+14-->/Users/felicemanga/android/app/src/main/AndroidManifest.xml:7:9-33
+15
+16    <!-- Abilita la modalità TV Leanback -->
+17    <uses-feature
+17-->/Users/felicemanga/android/app/src/main/AndroidManifest.xml:10:5-12:36
+18        android:name="android.software.leanback"
+18-->/Users/felicemanga/android/app/src/main/AndroidManifest.xml:11:9-49
+19        android:required="false" />
+19-->/Users/felicemanga/android/app/src/main/AndroidManifest.xml:12:9-33
+20
+21    <!-- Permessi Internet necessari per lo streaming -->
+22    <uses-permission android:name="android.permission.INTERNET" />
+22-->/Users/felicemanga/android/app/src/main/AndroidManifest.xml:15:5-67
+22-->/Users/felicemanga/android/app/src/main/AndroidManifest.xml:15:22-64
+23    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+23-->/Users/felicemanga/android/app/src/main/AndroidManifest.xml:16:5-79
+23-->/Users/felicemanga/android/app/src/main/AndroidManifest.xml:16:22-76
+24
+25    <permission
+25-->[androidx.core:core:1.17.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/e2af85f11d0cff6da404dcce2232c55f/transformed/core-1.17.0/AndroidManifest.xml:22:5-24:47
+26        android:name="com.xtream.streamplayer.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+26-->[androidx.core:core:1.17.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/e2af85f11d0cff6da404dcce2232c55f/transformed/core-1.17.0/AndroidManifest.xml:23:9-81
+27        android:protectionLevel="signature" />
+27-->[androidx.core:core:1.17.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/e2af85f11d0cff6da404dcce2232c55f/transformed/core-1.17.0/AndroidManifest.xml:24:9-44
+28
+29    <uses-permission android:name="com.xtream.streamplayer.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+29-->[androidx.core:core:1.17.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/e2af85f11d0cff6da404dcce2232c55f/transformed/core-1.17.0/AndroidManifest.xml:26:5-97
+29-->[androidx.core:core:1.17.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/e2af85f11d0cff6da404dcce2232c55f/transformed/core-1.17.0/AndroidManifest.xml:26:22-94
+30
+31    <application
+31-->/Users/felicemanga/android/app/src/main/AndroidManifest.xml:18:5-47:19
+32        android:allowBackup="true"
+32-->/Users/felicemanga/android/app/src/main/AndroidManifest.xml:19:9-35
+33        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+33-->[androidx.core:core:1.17.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/e2af85f11d0cff6da404dcce2232c55f/transformed/core-1.17.0/AndroidManifest.xml:28:18-86
+34        android:banner="@mipmap/ic_launcher"
+34-->/Users/felicemanga/android/app/src/main/AndroidManifest.xml:24:9-45
+35        android:extractNativeLibs="false"
+35-->INJECTED
+36        android:icon="@mipmap/ic_launcher"
+36-->/Users/felicemanga/android/app/src/main/AndroidManifest.xml:20:9-43
+37        android:label="Xtream Player"
+37-->/Users/felicemanga/android/app/src/main/AndroidManifest.xml:21:9-38
+38        android:roundIcon="@mipmap/ic_launcher_round"
+38-->/Users/felicemanga/android/app/src/main/AndroidManifest.xml:22:9-54
+39        android:supportsRtl="true"
+39-->/Users/felicemanga/android/app/src/main/AndroidManifest.xml:23:9-35
+40        android:theme="@style/AppTheme"
+40-->/Users/felicemanga/android/app/src/main/AndroidManifest.xml:26:9-40
+41        android:usesCleartextTraffic="true" >
+41-->/Users/felicemanga/android/app/src/main/AndroidManifest.xml:25:9-44
+42        <activity
+42-->/Users/felicemanga/android/app/src/main/AndroidManifest.xml:28:9-45:20
+43            android:name="com.xtream.streamplayer.MainActivity"
+43-->/Users/felicemanga/android/app/src/main/AndroidManifest.xml:30:13-41
+44            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode"
+44-->/Users/felicemanga/android/app/src/main/AndroidManifest.xml:29:13-129
+45            android:exported="true"
+45-->/Users/felicemanga/android/app/src/main/AndroidManifest.xml:33:13-36
+46            android:label="Xtream Player"
+46-->/Users/felicemanga/android/app/src/main/AndroidManifest.xml:31:13-42
+47            android:screenOrientation="sensorLandscape" >
+47-->/Users/felicemanga/android/app/src/main/AndroidManifest.xml:32:13-56
+48            <intent-filter>
+48-->/Users/felicemanga/android/app/src/main/AndroidManifest.xml:35:13-43:29
+49                <action android:name="android.intent.action.MAIN" />
+49-->/Users/felicemanga/android/app/src/main/AndroidManifest.xml:36:17-69
+49-->/Users/felicemanga/android/app/src/main/AndroidManifest.xml:36:25-66
+50
+51                <!-- Launcher per Tablet/Smartphone -->
+52                <category android:name="android.intent.category.LAUNCHER" />
+52-->/Users/felicemanga/android/app/src/main/AndroidManifest.xml:39:17-77
+52-->/Users/felicemanga/android/app/src/main/AndroidManifest.xml:39:27-74
+53
+54                <!-- Launcher per Google TV e Android TV -->
+55                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+55-->/Users/felicemanga/android/app/src/main/AndroidManifest.xml:42:17-86
+55-->/Users/felicemanga/android/app/src/main/AndroidManifest.xml:42:27-83
+56            </intent-filter>
+57        </activity>
+58
+59        <provider
+59-->[androidx.emoji2:emoji2:1.3.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/aec02a7c0500205275bcb72262228fb3/transformed/emoji2-1.3.0/AndroidManifest.xml:24:9-32:20
+60            android:name="androidx.startup.InitializationProvider"
+60-->[androidx.emoji2:emoji2:1.3.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/aec02a7c0500205275bcb72262228fb3/transformed/emoji2-1.3.0/AndroidManifest.xml:25:13-67
+61            android:authorities="com.xtream.streamplayer.androidx-startup"
+61-->[androidx.emoji2:emoji2:1.3.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/aec02a7c0500205275bcb72262228fb3/transformed/emoji2-1.3.0/AndroidManifest.xml:26:13-68
+62            android:exported="false" >
+62-->[androidx.emoji2:emoji2:1.3.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/aec02a7c0500205275bcb72262228fb3/transformed/emoji2-1.3.0/AndroidManifest.xml:27:13-37
+63            <meta-data
+63-->[androidx.emoji2:emoji2:1.3.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/aec02a7c0500205275bcb72262228fb3/transformed/emoji2-1.3.0/AndroidManifest.xml:29:13-31:52
+64                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+64-->[androidx.emoji2:emoji2:1.3.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/aec02a7c0500205275bcb72262228fb3/transformed/emoji2-1.3.0/AndroidManifest.xml:30:17-75
+65                android:value="androidx.startup" />
+65-->[androidx.emoji2:emoji2:1.3.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/aec02a7c0500205275bcb72262228fb3/transformed/emoji2-1.3.0/AndroidManifest.xml:31:17-49
+66            <meta-data
+66-->[androidx.lifecycle:lifecycle-process:2.6.2] /Users/felicemanga/.gradle/caches/9.6.0/transforms/a80e5045c3e3d8177307ed4b7633f34a/transformed/lifecycle-process-2.6.2/AndroidManifest.xml:29:13-31:52
+67                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+67-->[androidx.lifecycle:lifecycle-process:2.6.2] /Users/felicemanga/.gradle/caches/9.6.0/transforms/a80e5045c3e3d8177307ed4b7633f34a/transformed/lifecycle-process-2.6.2/AndroidManifest.xml:30:17-78
+68                android:value="androidx.startup" />
+68-->[androidx.lifecycle:lifecycle-process:2.6.2] /Users/felicemanga/.gradle/caches/9.6.0/transforms/a80e5045c3e3d8177307ed4b7633f34a/transformed/lifecycle-process-2.6.2/AndroidManifest.xml:31:17-49
+69            <meta-data
+69-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:29:13-31:52
+70                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+70-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:30:17-85
+71                android:value="androidx.startup" />
+71-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:31:17-49
+72        </provider>
+73
+74        <receiver
+74-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:34:9-52:20
+75            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+75-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:35:13-76
+76            android:directBootAware="false"
+76-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:36:13-44
+77            android:enabled="true"
+77-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:37:13-35
+78            android:exported="true"
+78-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:38:13-36
+79            android:permission="android.permission.DUMP" >
+79-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:39:13-57
+80            <intent-filter>
+80-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:40:13-42:29
+81                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+81-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:41:17-91
+81-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:41:25-88
+82            </intent-filter>
+83            <intent-filter>
+83-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:43:13-45:29
+84                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+84-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:44:17-85
+84-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:44:25-82
+85            </intent-filter>
+86            <intent-filter>
+86-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:46:13-48:29
+87                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+87-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:47:17-88
+87-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:47:25-85
+88            </intent-filter>
+89            <intent-filter>
+89-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:49:13-51:29
+90                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+90-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:50:17-95
+90-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/felicemanga/.gradle/caches/9.6.0/transforms/2ccea321f91f4804903e88806c02fca9/transformed/profileinstaller-1.4.0/AndroidManifest.xml:50:25-92
+91            </intent-filter>
+92        </receiver>
+93    </application>
+94
+95</manifest>
