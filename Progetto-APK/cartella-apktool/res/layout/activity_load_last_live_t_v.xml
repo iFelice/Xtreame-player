@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout android:layout_width="match_parent" android:layout_height="match_parent"
+  xmlns:android="http://schemas.android.com/apk/res/android">
+    <ImageView android:id="@id/imageView47" android:background="@drawable/bg2" android:layout_width="match_parent" android:layout_height="match_parent" />
+    <LinearLayout android:layout_gravity="center" android:orientation="vertical" android:layout_width="wrap_content" android:layout_height="wrap_content">
+        <ImageView android:layout_gravity="center" android:id="@id/img_splash_logo" android:background="@drawable/logo" android:layout_width="200.0dp" android:layout_height="200.0dp" android:alpha="0.7" />
+        <ProgressBar android:layout_gravity="center" android:id="@id/progress_bar" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="15.0dp" style="?android:progressBarStyle" />
+    </LinearLayout>
+    <TextView android:textSize="24.0sp" android:gravity="center" android:layout_gravity="bottom" android:id="@id/textView30" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="10.0dp" android:text="Loading last channel..." android:fontFamily="@font/quicksand_medium" />
+</FrameLayout>

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout android:background="@color/orplayer_bg_color" android:layout_width="match_parent" android:layout_height="match_parent"
+  xmlns:android="http://schemas.android.com/apk/res/android">
+    <ImageView android:id="@id/img_bg" android:background="@drawable/corner_shadow" android:layout_width="match_parent" android:layout_height="match_parent" />
+    <FrameLayout android:background="@color/orplayer_header_color" android:layout_width="match_parent" android:layout_height="60.0dp">
+        <TextView android:textSize="20.0sp" android:textColor="@color/lb_browse_header_color" android:layout_gravity="right|center" android:id="@id/textView26" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginRight="15.0dp" android:text="Program Reminders" android:fontFamily="@font/quicksand_light" />
+        <ImageView android:layout_gravity="center" android:id="@id/imageView43" android:background="@drawable/logo" android:layout_width="40.0dp" android:layout_height="40.0dp" />
+    </FrameLayout>
+    <LinearLayout android:orientation="vertical" android:background="#8b151515" android:layout_width="match_parent" android:layout_height="match_parent" android:layout_marginLeft="15.0dp" android:layout_marginTop="60.0dp" android:layout_marginRight="15.0dp">
+        <ListView android:id="@id/listView" android:layout_width="match_parent" android:layout_height="match_parent" android:layout_marginLeft="5.0dp" android:layout_marginRight="5.0dp" />
+    </LinearLayout>
+</FrameLayout>

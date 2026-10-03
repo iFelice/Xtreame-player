@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout android:orientation="vertical" android:background="@drawable/round_layout_with_shadow_light_black" android:layout_width="match_parent" android:layout_height="match_parent"
+  xmlns:android="http://schemas.android.com/apk/res/android">
+    <androidx.viewpager.widget.ViewPager android:id="@id/track_selection_dialog_view_pager" android:layout_width="match_parent" android:layout_height="match_parent">
+        <com.google.android.material.tabs.TabLayout android:id="@id/track_selection_dialog_tab_layout" android:layout_width="match_parent" android:layout_height="wrap_content" />
+    </androidx.viewpager.widget.ViewPager>
+    <LinearLayout android:gravity="end" android:layout_gravity="bottom" android:orientation="horizontal" android:layout_width="match_parent" android:layout_height="wrap_content">
+        <Button android:id="@id/track_selection_dialog_cancel_button" android:background="@drawable/btn_red" android:layout_width="150.0dp" android:layout_height="35.0dp" android:layout_marginRight="20.0dp" android:text="@string/xc_cancel_str" android:fontFamily="@font/quicksand_regular" />
+        <Button android:id="@id/track_selection_dialog_ok_button" android:background="@drawable/btn_green" android:layout_width="150.0dp" android:layout_height="35.0dp" android:text="@android:string/ok" android:fontFamily="@font/quicksand_regular" />
+    </LinearLayout>
+</FrameLayout>

@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout android:layout_width="match_parent" android:layout_height="match_parent"
+  xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto">
+    <ImageView android:id="@id/imageView36" android:background="@drawable/bg2" android:layout_width="match_parent" android:layout_height="match_parent" />
+    <Button android:id="@id/btn_action_p1" android:background="@null" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+    <Button android:id="@id/btn_action_p3" android:background="@null" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+    <Button android:id="@id/btn_action_p2" android:background="@null" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+    <Button android:id="@id/btn_action_p4" android:background="@null" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+    <FrameLayout android:background="#9f000000" android:layout_width="match_parent" android:layout_height="match_parent" />
+    <FrameLayout android:id="@id/layout_p1" android:background="#6300bcd4" android:layout_width="478.0dp" android:layout_height="268.0dp" android:layout_marginLeft="1.0dp" android:layout_marginTop="1.0dp">
+        <SurfaceView android:id="@id/player_vlc_1" android:visibility="gone" android:layout_width="match_parent" android:layout_height="match_parent" android:layout_margin="0.5dp" />
+        <androidx.media3.ui.PlayerView android:id="@id/player_v1" android:background="#000000" android:focusable="true" android:visibility="gone" android:layout_width="match_parent" android:layout_height="match_parent" android:layout_margin="0.5dp" app:use_controller="true" />
+        <FrameLayout android:id="@id/layout_btn_p1" android:background="#bf000000" android:layout_width="match_parent" android:layout_height="match_parent" android:layout_margin="0.5dp">
+            <TextView android:textSize="20.0sp" android:gravity="center" android:layout_gravity="center_horizontal" android:id="@id/txt_ch_name_p1" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="15.0dp" android:layout_weight="0.33" android:fontFamily="@font/quicksand" />
+            <ImageButton android:layout_gravity="center|bottom" android:id="@id/btn_close_p1" android:background="@drawable/multi_close" android:nextFocusRight="@id/btn_action_p3" android:layout_width="65.0dp" android:layout_height="65.0dp" android:layout_marginBottom="20.0dp" android:layout_weight="1.0" />
+            <LinearLayout android:layout_gravity="center" android:orientation="horizontal" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginBottom="20.0dp">
+                <ImageButton android:layout_gravity="center" android:id="@id/btn_add_p1" android:background="@drawable/multi_plus" android:layout_width="65.0dp" android:layout_height="65.0dp" android:layout_marginLeft="4.0dp" android:layout_marginRight="5.0dp" />
+                <ImageButton android:layout_gravity="center" android:id="@id/btn_zoom_p1" android:background="@drawable/multi_layout" android:layout_width="65.0dp" android:layout_height="65.0dp" android:layout_marginLeft="4.0dp" android:layout_marginRight="5.0dp" android:layout_weight="1.0" />
+                <ImageButton android:layout_gravity="center" android:id="@id/btn_play_pause_p1" android:background="@drawable/multi_play" android:layout_width="65.0dp" android:layout_height="65.0dp" android:layout_marginLeft="4.0dp" android:layout_marginRight="5.0dp" android:layout_weight="1.0" />
+                <ImageButton android:layout_gravity="center" android:id="@id/btn_sound_p1" android:background="@drawable/multi_mute" android:nextFocusRight="@id/btn_action_p2" android:layout_width="65.0dp" android:layout_height="65.0dp" android:layout_marginLeft="4.0dp" android:layout_weight="1.0" />
+            </LinearLayout>
+        </FrameLayout>
+    </FrameLayout>
+    <FrameLayout android:id="@id/layout_p2" android:background="#6300bcd4" android:layout_width="479.0dp" android:layout_height="268.0dp" android:layout_marginLeft="480.0dp" android:layout_marginTop="1.0dp">
+        <SurfaceView android:id="@id/player_vlc_2" android:visibility="gone" android:layout_width="match_parent" android:layout_height="match_parent" android:layout_margin="0.5dp" />
+        <androidx.media3.ui.PlayerView android:id="@id/player_v2" android:background="#000000" android:focusable="true" android:visibility="gone" android:layout_width="match_parent" android:layout_height="match_parent" android:layout_margin="0.5dp" app:use_controller="true" />
+        <FrameLayout android:id="@id/layout_btn_p2" android:background="#bf000000" android:layout_width="match_parent" android:layout_height="match_parent" android:layout_margin="0.5dp">
+            <TextView android:textSize="20.0sp" android:gravity="center" android:layout_gravity="center_horizontal" android:id="@id/txt_ch_name_p2" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="15.0dp" android:layout_weight="0.33" android:fontFamily="@font/quicksand" />
+            <ImageButton android:layout_gravity="center|bottom" android:id="@id/btn_close_p2" android:background="@drawable/multi_close" android:nextFocusRight="@id/btn_action_p3" android:layout_width="65.0dp" android:layout_height="65.0dp" android:layout_marginBottom="20.0dp" android:layout_weight="1.0" />
+            <LinearLayout android:layout_gravity="center" android:orientation="horizontal" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginBottom="20.0dp">
+                <ImageButton android:layout_gravity="center" android:id="@id/btn_add_p2" android:background="@drawable/multi_plus" android:nextFocusLeft="@id/btn_action_p1" android:layout_width="65.0dp" android:layout_height="65.0dp" android:layout_marginLeft="4.0dp" android:layout_marginRight="5.0dp" />
+                <ImageButton android:layout_gravity="center" android:id="@id/btn_zoom_p2" android:background="@drawable/multi_layout" android:layout_width="65.0dp" android:layout_height="65.0dp" android:layout_marginLeft="4.0dp" android:layout_marginRight="5.0dp" android:layout_weight="1.0" />
+                <ImageButton android:layout_gravity="center" android:id="@id/btn_play_pause_p2" android:background="@drawable/multi_play" android:layout_width="65.0dp" android:layout_height="65.0dp" android:layout_marginLeft="4.0dp" android:layout_marginRight="5.0dp" android:layout_weight="1.0" />
+                <ImageButton android:layout_gravity="center" android:id="@id/btn_sound_p2" android:background="@drawable/multi_mute" android:nextFocusRight="@id/btn_action_p3" android:layout_width="65.0dp" android:layout_height="65.0dp" android:layout_marginLeft="4.0dp" android:layout_weight="1.0" />
+            </LinearLayout>
+        </FrameLayout>
+    </FrameLayout>
+    <FrameLayout android:id="@id/layout_p3" android:background="#6300bcd4" android:layout_width="478.0dp" android:layout_height="269.0dp" android:layout_marginLeft="1.0dp" android:layout_marginTop="270.0dp">
+        <SurfaceView android:id="@id/player_vlc_3" android:visibility="gone" android:layout_width="match_parent" android:layout_height="match_parent" android:layout_margin="0.5dp" />
+        <androidx.media3.ui.PlayerView android:id="@id/player_v3" android:background="#000000" android:focusable="true" android:visibility="gone" android:layout_width="match_parent" android:layout_height="match_parent" android:layout_margin="0.5dp" app:use_controller="true" />
+        <FrameLayout android:id="@id/layout_btn_p3" android:background="#bf000000" android:layout_width="match_parent" android:layout_height="match_parent" android:layout_margin="0.5dp">
+            <TextView android:textSize="20.0sp" android:gravity="center" android:layout_gravity="center_horizontal" android:id="@id/txt_ch_name_p3" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="15.0dp" android:layout_weight="0.33" android:fontFamily="@font/quicksand" />
+            <ImageButton android:layout_gravity="center|bottom" android:id="@id/btn_close_p3" android:background="@drawable/multi_close" android:nextFocusRight="@id/btn_action_p3" android:layout_width="65.0dp" android:layout_height="65.0dp" android:layout_marginBottom="20.0dp" android:layout_weight="1.0" />
+            <LinearLayout android:layout_gravity="center" android:orientation="horizontal" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginBottom="20.0dp">
+                <ImageButton android:layout_gravity="center" android:id="@id/btn_add_p3" android:background="@drawable/multi_plus" android:layout_width="65.0dp" android:layout_height="65.0dp" android:layout_marginLeft="4.0dp" android:layout_marginRight="5.0dp" />
+                <ImageButton android:layout_gravity="center" android:id="@id/btn_zoom_p3" android:background="@drawable/multi_layout" android:layout_width="65.0dp" android:layout_height="65.0dp" android:layout_marginLeft="4.0dp" android:layout_marginRight="5.0dp" android:layout_weight="1.0" />
+                <ImageButton android:layout_gravity="center" android:id="@id/btn_play_pause_p3" android:background="@drawable/multi_play" android:layout_width="65.0dp" android:layout_height="65.0dp" android:layout_marginLeft="4.0dp" android:layout_marginRight="5.0dp" android:layout_weight="1.0" />
+                <ImageButton android:layout_gravity="center" android:id="@id/btn_sound_p3" android:background="@drawable/multi_mute" android:nextFocusRight="@id/btn_action_p4" android:layout_width="65.0dp" android:layout_height="65.0dp" android:layout_marginLeft="4.0dp" android:layout_weight="1.0" />
+            </LinearLayout>
+        </FrameLayout>
+    </FrameLayout>
+    <FrameLayout android:id="@id/layout_p4" android:background="#6300bcd4" android:layout_width="479.0dp" android:layout_height="269.0dp" android:layout_marginLeft="480.0dp" android:layout_marginTop="270.0dp">
+        <SurfaceView android:id="@id/player_vlc_4" android:visibility="gone" android:layout_width="match_parent" android:layout_height="match_parent" android:layout_margin="0.5dp" />
+        <androidx.media3.ui.PlayerView android:id="@id/player_v4" android:background="#000000" android:focusable="true" android:visibility="gone" android:layout_width="match_parent" android:layout_height="match_parent" android:layout_margin="0.5dp" app:use_controller="true" />
+        <FrameLayout android:id="@id/layout_btn_p4" android:background="#bf000000" android:layout_width="match_parent" android:layout_height="match_parent" android:layout_margin="0.5dp">
+            <TextView android:textSize="20.0sp" android:gravity="center" android:layout_gravity="center_horizontal" android:id="@id/txt_ch_name_p4" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="15.0dp" android:layout_weight="0.33" android:fontFamily="@font/quicksand" />
+            <ImageButton android:layout_gravity="center|bottom" android:id="@id/btn_close_p4" android:background="@drawable/multi_close" android:nextFocusRight="@id/btn_action_p3" android:layout_width="65.0dp" android:layout_height="65.0dp" android:layout_marginBottom="20.0dp" android:layout_weight="1.0" />
+            <LinearLayout android:layout_gravity="center" android:orientation="horizontal" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginBottom="20.0dp">
+                <ImageButton android:layout_gravity="center" android:id="@id/btn_add_p4" android:background="@drawable/multi_plus" android:layout_width="65.0dp" android:layout_height="65.0dp" android:layout_marginLeft="4.0dp" android:layout_marginRight="5.0dp" />
+                <ImageButton android:layout_gravity="center" android:id="@id/btn_zoom_p4" android:background="@drawable/multi_layout" android:layout_width="65.0dp" android:layout_height="65.0dp" android:layout_marginLeft="4.0dp" android:layout_marginRight="5.0dp" android:layout_weight="1.0" />
+                <ImageButton android:layout_gravity="center" android:id="@id/btn_play_pause_p4" android:background="@drawable/multi_play" android:layout_width="65.0dp" android:layout_height="65.0dp" android:layout_marginLeft="4.0dp" android:layout_marginRight="5.0dp" android:layout_weight="1.0" />
+                <ImageButton android:layout_gravity="center" android:id="@id/btn_sound_p4" android:background="@drawable/multi_mute" android:layout_width="65.0dp" android:layout_height="65.0dp" android:layout_marginLeft="4.0dp" android:layout_weight="1.0" />
+            </LinearLayout>
+        </FrameLayout>
+    </FrameLayout>
+    <FrameLayout android:id="@id/layout_selector" android:background="#000000" android:layout_width="match_parent" android:layout_height="match_parent">
+        <ImageButton android:layout_gravity="center|bottom" android:id="@id/btn_close_selector" android:background="@drawable/multi_close" android:layout_width="80.0dp" android:layout_height="80.0dp" android:layout_marginBottom="25.0dp" />
+        <FrameLayout android:layout_gravity="center" android:layout_width="wrap_content" android:layout_height="wrap_content">
+            <LinearLayout android:orientation="horizontal" android:layout_width="wrap_content" android:layout_height="wrap_content">
+                <ImageButton android:layout_gravity="center_vertical" android:id="@id/btn_layout_type1" android:background="@drawable/multi_four_equal" android:nextFocusLeft="@id/btn_layout_type3" android:nextFocusRight="@id/btn_layout_type2" android:nextFocusUp="@id/btn_layout_type3" android:nextFocusDown="@id/btn_close_selector" android:layout_width="160.0dp" android:layout_height="160.0dp" android:layout_marginLeft="30.0dp" android:layout_marginTop="30.0dp" android:layout_marginRight="15.0dp" android:layout_marginBottom="30.0dp" android:layout_weight="1.0" android:nextFocusForward="@id/btn_layout_type3" />
+                <ImageButton android:layout_gravity="center_vertical" android:id="@id/btn_layout_type2" android:background="@drawable/multi_two_equal" android:nextFocusLeft="@id/btn_layout_type1" android:nextFocusRight="@id/btn_layout_type3" android:nextFocusUp="@id/btn_layout_type3" android:nextFocusDown="@id/btn_close_selector" android:layout_width="160.0dp" android:layout_height="160.0dp" android:layout_marginLeft="15.0dp" android:layout_marginTop="30.0dp" android:layout_marginRight="15.0dp" android:layout_marginBottom="30.0dp" android:layout_weight="1.0" android:nextFocusForward="@id/btn_layout_type3" />
+                <ImageButton android:layout_gravity="center_vertical" android:id="@id/btn_layout_type3" android:background="@drawable/multi_onelarge_three_small" android:nextFocusLeft="@id/btn_layout_type2" android:nextFocusRight="@id/btn_layout_type1" android:nextFocusUp="@id/btn_layout_type1" android:nextFocusDown="@id/btn_close_selector" android:layout_width="160.0dp" android:layout_height="160.0dp" android:layout_marginLeft="15.0dp" android:layout_marginTop="30.0dp" android:layout_marginRight="15.0dp" android:layout_marginBottom="30.0dp" android:layout_weight="1.0" android:nextFocusForward="@id/btn_layout_type1" />
+            </LinearLayout>
+        </FrameLayout>
+    </FrameLayout>
+    <FrameLayout android:id="@id/layout_channel_selector" android:background="#99000000" android:layout_width="match_parent" android:layout_height="match_parent">
+        <LinearLayout android:orientation="vertical" android:layout_width="match_parent" android:layout_height="match_parent">
+            <LinearLayout android:orientation="horizontal" android:background="#48867f7f" android:padding="5.0dp" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginLeft="10.0dp" android:layout_marginTop="10.0dp" android:layout_marginRight="10.0dp" android:layout_marginBottom="2.0dp">
+                <TextView android:textSize="20.0sp" android:textStyle="bold" android:gravity="center" android:id="@id/textView17" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="CATEGORY" android:layout_weight="0.33" android:fontFamily="@font/quicksand" />
+                <TextView android:textSize="20.0sp" android:textStyle="bold" android:gravity="center" android:id="@id/textView16" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="LIVE TV CHANNEL" android:layout_weight="0.33" android:fontFamily="@font/quicksand" />
+            </LinearLayout>
+            <LinearLayout android:orientation="horizontal" android:background="#9f000000" android:layout_width="match_parent" android:layout_height="match_parent" android:layout_marginLeft="10.0dp" android:layout_marginRight="10.0dp">
+                <ListView android:layout_gravity="center" android:id="@id/listViewCat" android:background="#222424" android:nextFocusLeft="@id/listViewChVod" android:nextFocusRight="@id/listViewChVod" android:nextFocusUp="@id/listViewCat" android:nextFocusDown="@id/listViewCat" android:layout_width="wrap_content" android:layout_height="match_parent" android:layout_weight="0.33" />
+                <ListView android:id="@id/listViewChVod" android:nextFocusLeft="@id/listViewCat" android:nextFocusRight="@id/listViewCat" android:nextFocusUp="@id/listViewChVod" android:nextFocusDown="@id/listViewChVod" android:layout_width="match_parent" android:layout_height="match_parent" android:layout_weight="0.33" />
+            </LinearLayout>
+        </LinearLayout>
+        <ProgressBar android:layout_gravity="center" android:id="@id/progress_bar" android:layout_width="wrap_content" android:layout_height="wrap_content" style="?android:progressBarStyle" />
+    </FrameLayout>
+</FrameLayout>

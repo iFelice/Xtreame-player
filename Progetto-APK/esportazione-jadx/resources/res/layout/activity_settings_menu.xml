@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:background="@color/orplayer_bg_color"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+    <ImageView
+        android:id="@+id/img_bg"
+        android:background="@drawable/corner_shadow"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"/>
+    <LinearLayout
+        android:orientation="vertical"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+        <FrameLayout
+            android:background="#97000000"
+            android:layout_width="match_parent"
+            android:layout_height="50dp">
+            <TextView
+                android:textSize="18sp"
+                android:textColor="@color/orplayer_litegray_font_color"
+                android:gravity="left"
+                android:layout_gravity="center"
+                android:paddingTop="10dp"
+                android:paddingBottom="10dp"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="S E T T I N G S"
+                android:fontFamily="@font/quicksand_light"/>
+        </FrameLayout>
+        <GridView
+            android:id="@+id/giveView"
+            android:fitsSystemWindows="true"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_marginLeft="10dp"
+            android:layout_marginTop="5dp"
+            android:layout_marginRight="10dp"
+            android:listSelector="@color/orplayer_focuse_item_color"
+            android:drawSelectorOnTop="false"
+            android:verticalSpacing="10dp"
+            android:numColumns="6"/>
+    </LinearLayout>
+</FrameLayout>
