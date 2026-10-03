@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core';
+import { fetchJson } from './httpClient';
 import {
   XtreamAuthResponse,
   XtreamCategory,
@@ -11,25 +12,10 @@ import {
 
 async function fetchFromXtream<T>(url: string): Promise<T> {
   const isNative = Capacitor.isNativePlatform();
-  // Su app nativa iOS / Android si chiama direttamente il server IPTV senza passare da proxy web
+  // Il desktop passa dal proxy locale per CORS. I vecchi prototipi Capacitor,
+  // conservati nel backup, continuano a poter contattare direttamente il server.
   const requestUrl = isNative ? url : `/api/proxy/api?url=${encodeURIComponent(url)}`;
-  const res = await fetch(requestUrl);
-  if (!res.ok) {
-    const errorText = await res.text();
-    let msg = `HTTP ${res.status}`;
-    try {
-      const parsed = JSON.parse(errorText);
-      if (parsed.error) msg = parsed.error;
-    } catch {
-      if (res.status === 530) {
-        msg = 'HTTP 530: Il server IPTV non è raggiungibile o ha bloccato la connessione DNS/Cloudflare. Verifica se il link include la porta (es. :8080) o prova con http:// invece di https://.';
-      } else if (res.status === 502 || res.status === 504) {
-        msg = `HTTP ${res.status}: Il server IPTV risulta offline o non raggiungibile.`;
-      }
-    }
-    throw new Error(msg);
-  }
-  return res.json();
+  return fetchJson<T>(requestUrl);
 }
 
 export const xtreamClient = {
