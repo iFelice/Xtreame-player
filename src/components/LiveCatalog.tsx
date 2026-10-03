@@ -232,11 +232,11 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="media-catalog space-y-4">
       {/* Master - Detail Dual Column Layout */}
-      <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 items-stretch">
+      <div className="media-browser-layout flex flex-col lg:flex-row gap-4 sm:gap-6 items-stretch">
         {/* Left Column: Categories List (extended down to bottom of page) */}
-        <aside className="w-full lg:w-84 xl:w-96 shrink-0 bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 sm:p-5 flex flex-col shadow-xl h-[calc(100vh-210px)] min-h-[680px]">
+        <aside className="media-category-panel w-full lg:w-84 xl:w-96 shrink-0 bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 sm:p-5 flex flex-col shadow-xl h-[calc(100vh-210px)] min-h-[680px]">
           <div className="flex items-center justify-between px-1 shrink-0">
             <div className="flex items-center gap-2.5">
               <Layers className="w-6 h-6 text-rose-400" />
@@ -321,7 +321,7 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
         </aside>
 
         {/* Right Column: Channels of the Selected Category (extended down to bottom of page) */}
-        <section className="flex-1 w-full min-w-0 bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 sm:p-6 flex flex-col shadow-xl h-[calc(100vh-210px)] min-h-[680px]">
+        <section className="media-content-panel flex-1 w-full min-w-0 bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 sm:p-6 flex flex-col shadow-xl h-[calc(100vh-210px)] min-h-[680px]">
           {/* Header of the Selected Category */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-800 shrink-0">
             <div className="min-w-0">
@@ -429,6 +429,7 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
                         <div
                           key={stream.stream_id}
                           id={`live-channel-${stream.stream_id}`}
+                          tabIndex={0}
                           onClick={() => handlePlayLive(stream)}
                           className={`group flex items-center justify-between p-3.5 sm:p-4 rounded-2xl transition-all cursor-pointer gap-3 sm:gap-5 shadow-sm scroll-mt-2 ${
                             isPlayingThis
@@ -505,6 +506,7 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
                       <div
                         key={stream.stream_id}
                         id={`live-channel-${stream.stream_id}`}
+                        tabIndex={0}
                         onClick={() => handlePlayLive(stream)}
                         className={`group relative rounded-3xl p-4 shadow-lg transition-all cursor-pointer flex flex-col justify-between scroll-mt-2 ${
                           isPlayingThis

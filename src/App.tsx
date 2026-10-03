@@ -35,15 +35,18 @@ import { xtreamClient } from './services/xtreamClient';
 import { storage, SavedAccount } from './services/storage';
 import { buildStreamUrl } from './utils/parseXtreamUrl';
 import { cleanupLegacyNativeDownloads, isTvEnvironment } from './utils/downloadHelper';
+import { useTvNavigation } from './utils/tvNavigation';
 
 export default function App() {
   const isTv = isTvEnvironment();
+  useTvNavigation(isTv);
   const [serverUrl, setServerUrl] = useState<string>('');
   const [username, setUsername] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [authData, setAuthData] = useState<XtreamAuthResponse | null>(null);
 
   const [activeTab, setActiveTab] = useState<'live' | 'movies' | 'series' | 'recent' | 'favorites'>('live');
+  const [showTvHome, setShowTvHome] = useState<boolean>(true);
   const [activeMedia, setActiveMedia] = useState<PlayableMediaItem | null>(null);
   const [selectedSeriesForModal, setSelectedSeriesForModal] = useState<string | number | null>(null);
 
@@ -92,6 +95,25 @@ export default function App() {
       if (hideTimer) clearTimeout(hideTimer);
     };
   }, []);
+
+  useEffect(() => {
+    if (!isTv) return;
+    const handleTvBack = () => {
+      if (activeMedia) {
+        setActiveMedia(null);
+      } else if (showServerInfo) {
+        setShowServerInfo(false);
+      } else if (showSettingsSyncModal) {
+        setShowSettingsSyncModal(false);
+      } else if (selectedSeriesForModal) {
+        setSelectedSeriesForModal(null);
+      } else if (!showTvHome) {
+        setShowTvHome(true);
+      }
+    };
+    window.addEventListener('android-tv-back', handleTvBack);
+    return () => window.removeEventListener('android-tv-back', handleTvBack);
+  }, [isTv, activeMedia, showServerInfo, showSettingsSyncModal, selectedSeriesForModal, showTvHome]);
 
   // Catalog data
   const [vodCategories, setVodCategories] = useState<XtreamCategory[]>([]);
@@ -375,7 +397,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Top Navbar */}
+      {/* Top banner remains visible on TV, matching the original TV layout. */}
       <Navbar
         serverUrl={serverUrl}
         username={username}
@@ -436,10 +458,59 @@ export default function App() {
           </div>
         )}
 
+        {/* Android TV home: large, remote-friendly entry points. */}
+        {isTv && isConnected && !isLoadingCatalog && showTvHome && !activeMedia && (
+          <section className="tv-home min-h-[68vh] flex flex-col justify-center py-8">
+            <div className="text-center mb-10">
+              <h2 className="text-4xl font-black text-white">Cosa vuoi guardare?</h2>
+              <p className="text-xl text-zinc-400 mt-3">Usa le frecce del telecomando e premi OK</p>
+            </div>
+            <div className="grid grid-cols-3 gap-8 max-w-6xl mx-auto w-full">
+              <button
+                type="button"
+                autoFocus
+                onClick={() => { setActiveTab('live'); setShowTvHome(false); }}
+                className="tv-home-card min-h-64 rounded-3xl bg-zinc-900 border-2 border-zinc-700 flex flex-col items-center justify-center gap-5 text-white"
+              >
+                <Tv className="w-20 h-20 text-rose-400" />
+                <span className="text-3xl font-black">LIVE TV</span>
+                <span className="text-lg text-zinc-400">{liveStreams.length} canali</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setActiveTab('movies'); setShowTvHome(false); }}
+                className="tv-home-card min-h-64 rounded-3xl bg-zinc-900 border-2 border-zinc-700 flex flex-col items-center justify-center gap-5 text-white"
+              >
+                <Film className="w-20 h-20 text-emerald-400" />
+                <span className="text-3xl font-black">FILM</span>
+                <span className="text-lg text-zinc-400">{vodStreams.length} titoli</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setActiveTab('series'); setShowTvHome(false); }}
+                className="tv-home-card min-h-64 rounded-3xl bg-zinc-900 border-2 border-zinc-700 flex flex-col items-center justify-center gap-5 text-white"
+              >
+                <Layers className="w-20 h-20 text-blue-400" />
+                <span className="text-3xl font-black">SERIE TV</span>
+                <span className="text-lg text-zinc-400">{seriesList.length} serie</span>
+              </button>
+            </div>
+          </section>
+        )}
+
         {/* Connected Catalog Navigation Tabs */}
-        {isConnected && !isLoadingCatalog && (
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-zinc-800/90 pb-4">
+        {isConnected && !isLoadingCatalog && (!isTv || !showTvHome) && (
+          <div className="tv-catalog-nav flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-zinc-800/90 pb-4">
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              {isTv && (
+                <button
+                  type="button"
+                  onClick={() => setShowTvHome(true)}
+                  className="flex items-center gap-2.5 px-5 py-3 rounded-2xl text-base font-bold bg-zinc-900 text-emerald-300 border border-emerald-700"
+                >
+                  Home TV
+                </button>
+              )}
               {/* 1. Live TV */}
               <button
                 onClick={() => setActiveTab('live')}
@@ -548,6 +619,7 @@ export default function App() {
             </p>
           </div>
         ) : isConnected ? (
+          isTv && showTvHome ? null : (
           <div className="mt-4">
             {activeTab === 'live' && (
               <LiveCatalog
@@ -616,6 +688,7 @@ export default function App() {
               />
             )}
           </div>
+          )
         ) : (
           /* Clean Dedicated Login Form when not logged in (zero links/favorites before login) */
           <LoginForm
