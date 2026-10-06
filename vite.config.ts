@@ -12,6 +12,8 @@ export default defineConfig(() => {
       },
     },
     server: {
+      // Arena and local network previews use dynamic hostnames.
+      allowedHosts: true,
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modify—file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
