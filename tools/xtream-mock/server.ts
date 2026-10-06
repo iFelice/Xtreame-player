@@ -1,10 +1,12 @@
 import express, { Request, Response } from 'express';
+import { buildCatalog, buildGeneratedSeriesInfo, parseProfile } from './catalog';
 
 const app = express();
 const port = Number(process.env.XTREAM_MOCK_PORT || 3333);
 const host = process.env.XTREAM_MOCK_HOST || '0.0.0.0';
 const DEMO_USER = 'demo';
 const DEMO_PASSWORD = 'demo';
+const profile = parseProfile(process.env.XTREAM_MOCK_PROFILE);
 
 const publicBase = (req: Request) => `${req.protocol}://${req.get('host')}`;
 const isAuthorized = (req: Request) =>
@@ -31,7 +33,8 @@ app.get('/assets/poster/:id.svg', (req, res) => {
     '301': ['#4c1d95', '#c084fc'],
     live: ['#881337', '#fb7185'],
   };
-  const [background, accent] = colors[label] || ['#18181b', '#a1a1aa'];
+  const hue = [...label].reduce((sum, char) => sum + char.charCodeAt(0), 0) % 360;
+  const [background, accent] = colors[label] || [`hsl(${hue} 55% 18%)`, `hsl(${hue} 80% 68%)`];
   res.type('image/svg+xml').send(`
     <svg xmlns="http://www.w3.org/2000/svg" width="600" height="900" viewBox="0 0 600 900">
       <rect width="600" height="900" fill="${background}"/>
@@ -78,10 +81,12 @@ app.get('/player_api.php', (req, res) => {
     });
   }
 
+  const generated = buildCatalog(profile, base);
+
   if (action === 'get_live_categories') {
     return res.json([
-      { category_id: '1', category_name: 'Canali demo', parent_id: 0 },
-      { category_id: '2', category_name: 'Test errori', parent_id: 0 },
+      { category_id: '1', category_name: 'Canali demo player', parent_id: 0 },
+      ...generated.categories,
     ]);
   }
 
@@ -102,15 +107,16 @@ app.get('/player_api.php', (req, res) => {
         stream_type: 'live',
         stream_id: 103,
         stream_icon: `${base}/assets/poster/203.svg`,
-        category_id: '2',
+        category_id: '1',
       },
+      ...generated.live,
     ]);
   }
 
   if (action === 'get_vod_categories') {
     return res.json([
-      { category_id: '10', category_name: 'Film demo', parent_id: 0 },
-      { category_id: '11', category_name: 'Test resilienza', parent_id: 0 },
+      { category_id: '10', category_name: 'Test del player', parent_id: 0 },
+      ...generated.categories,
     ]);
   }
 
@@ -134,7 +140,7 @@ app.get('/player_api.php', (req, res) => {
         stream_id: 202,
         stream_icon: `${base}/assets/poster/202.svg`,
         rating: '7.0',
-        category_id: '11',
+        category_id: '10',
         container_extension: 'mp4',
         year: '2026',
       },
@@ -144,10 +150,11 @@ app.get('/player_api.php', (req, res) => {
         stream_type: 'movie',
         stream_id: 203,
         stream_icon: `${base}/assets/poster/203.svg`,
-        category_id: '11',
+        category_id: '10',
         container_extension: 'mp4',
         year: '2026',
       },
+      ...generated.vod,
     ]);
   }
 
@@ -179,7 +186,10 @@ app.get('/player_api.php', (req, res) => {
   }
 
   if (action === 'get_series_categories') {
-    return res.json([{ category_id: '20', category_name: 'Serie demo', parent_id: 0 }]);
+    return res.json([
+      { category_id: '20', category_name: 'Test del player', parent_id: 0 },
+      ...generated.categories,
+    ]);
   }
 
   if (action === 'get_series') {
@@ -195,10 +205,13 @@ app.get('/player_api.php', (req, res) => {
         rating: '9.0',
         category_id: '20',
       },
+      ...generated.series,
     ]);
   }
 
   if (action === 'get_series_info') {
+    const requestedSeriesId = String(req.query.series_id || '301');
+    if (requestedSeriesId !== '301') return res.json(buildGeneratedSeriesInfo(requestedSeriesId, base));
     return res.json({
       seasons: [
         { season_number: 1, name: 'Stagione 1', episode_count: 2, cover: `${base}/assets/poster/301.svg` },
@@ -264,5 +277,6 @@ app.get('/live/:user/:password/:file', (req, res) => {
 app.listen(port, host, () => {
   console.log(`\nXtream Mock Server attivo su http://localhost:${port}`);
   console.log(`Credenziali: ${DEMO_USER} / ${DEMO_PASSWORD}`);
+  console.log(`Profilo catalogo: ${profile}`);
   console.log('Per arrestarlo premi Control + C.\n');
 });

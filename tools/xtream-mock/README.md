@@ -54,7 +54,19 @@ http://192.168.1.50:3333
 
 Non aprire porte sulla Iliadbox. Il server è destinato esclusivamente allo sviluppo nella rete locale.
 
-## Catalogo simulato
+## Profili del catalogo
+
+Il profilo predefinito è `visual`:
+
+```bash
+npm run mock:xtream:small   # 12 film, 16 canali, 5 serie
+npm run mock:xtream:visual  # 144 film, 220 canali, 42 serie
+npm run mock:xtream:stress  # 5.000 film, 8.000 canali, 1.000 serie
+```
+
+Il catalogo visuale genera localmente copertine di colori differenti, titoli corti e lunghi, caratteri internazionali, immagini mancanti, molte categorie, stagioni ed episodi. Il profilo stress serve a verificare virtualizzazione, ricerca e fluidità con migliaia di elementi.
+
+## Scenari player simulati
 
 - Live HLS funzionante.
 - Live intenzionalmente non disponibile.
