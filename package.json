@@ -12,6 +12,7 @@
     "lint": "tsc --noEmit",
     "test": "vitest run",
     "check": "npm run lint && npm run test && npm run build",
+    "mock:xtream": "tsx tools/xtream-mock/server.ts",
     "cap:build": "npm run build && cap sync",
     "cap:add:android": "cap add android",
     "cap:add:ios": "cap add ios",
