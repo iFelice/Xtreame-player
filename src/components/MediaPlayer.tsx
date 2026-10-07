@@ -28,6 +28,7 @@ import { PlayableMediaItem } from '../types/xtream';
 import { storage } from '../services/storage';
 import { triggerMediaDownload, isTvEnvironment } from '../utils/downloadHelper';
 import { initialPlaybackState, isPlaybackLoading, playbackReducer } from '../player/playbackState';
+import { destroyMediaEngines, releaseVideoElement } from '../player/mediaEngine';
 
 interface MediaPlayerProps {
   media: PlayableMediaItem | null;
@@ -48,6 +49,11 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const hlsRef = useRef<Hls | null>(null);
   const mpegtsRef = useRef<any>(null);
+  const destroyEngines = useCallback(() => {
+    destroyMediaEngines({ hls: hlsRef.current, mpegts: mpegtsRef.current });
+    hlsRef.current = null;
+    mpegtsRef.current = null;
+  }, []);
 
   const [playback, dispatchPlayback] = useReducer(playbackReducer, initialPlaybackState);
   const isPlaying = playback.status === 'playing';
@@ -180,24 +186,14 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     startupTimeoutRef.current = setTimeout(() => {
       if (hasStartedPlaybackRef.current || video.currentTime > 0 || video.readyState >= 3) return;
       video.pause();
-      hlsRef.current?.destroy();
-      hlsRef.current = null;
-      mpegtsRef.current?.destroy();
-      mpegtsRef.current = null;
+      destroyEngines();
       setIsPlaying(false);
       setIsLoading(false);
       setErrorMessage('Il contenuto non ha risposto entro 20 secondi. Riprova oppure torna al catalogo.');
     }, 20_000);
 
-    // Destroy existing HLS / mpegts instances if any
-    if (hlsRef.current) {
-      hlsRef.current.destroy();
-      hlsRef.current = null;
-    }
-    if (mpegtsRef.current) {
-      mpegtsRef.current.destroy();
-      mpegtsRef.current = null;
-    }
+    // Engine cleanup is centralized and idempotent.
+    destroyEngines();
 
     const isLive = media.type === 'live';
 
@@ -355,22 +351,13 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
 
     return () => {
       clearPlaybackWatchdogs();
-      if (hlsRef.current) {
-        hlsRef.current.destroy();
-        hlsRef.current = null;
-      }
-      if (mpegtsRef.current) {
-        mpegtsRef.current.destroy();
-        mpegtsRef.current = null;
-      }
+      destroyEngines();
 
       // Stop WebKit/AVFoundation from continuing to buffer a multi-GB VOD
       // after the player is closed or another title is selected.
-      video.pause();
-      video.removeAttribute('src');
-      video.load();
+      releaseVideoElement(video);
     };
-  }, [media, getEffectiveUrl, liveFormat, playbackAttempt, clearPlaybackWatchdogs]);
+  }, [media, getEffectiveUrl, liveFormat, playbackAttempt, clearPlaybackWatchdogs, destroyEngines]);
 
   // Video event handlers
   const handlePlaybackReady = () => {

@@ -10,6 +10,7 @@
 - [ ] Separazione del motore player dalla UI.
   - [x] Watchdog di avvio, limite buffering, retry pulito e ritorno al catalogo.
   - [x] Macchina a stati testata per caricamento, riproduzione, pausa, buffering ed errore.
+  - [x] Selezione e distruzione dei motori isolate in un modulo testabile.
 - [ ] Separazione dello stato cataloghi da `App.tsx`.
 - [ ] Test dei parser e della costruzione URL.
 - [ ] Rimozione controllata del codice TV/mobile dalla UI desktop.
