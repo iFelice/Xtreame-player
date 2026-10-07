@@ -49,3 +49,8 @@ export async function loadPublicTestStreams(limit = 200): Promise<PublicLiveStre
   cache = { expiresAt: Date.now() + CACHE_MS, streams };
   return streams;
 }
+
+export async function publicStreamUrl(streamId: string): Promise<string | null> {
+  const streams = await loadPublicTestStreams();
+  return streams.find((stream) => stream.stream_id === streamId)?.direct_source || null;
+}

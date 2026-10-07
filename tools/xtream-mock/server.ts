@@ -1,6 +1,6 @@
 import express, { Request, Response } from 'express';
 import { buildCatalog, buildGeneratedSeriesInfo, parseProfile } from './catalog';
-import { loadPublicTestStreams } from './publicPlaylist';
+import { loadPublicTestStreams, publicStreamUrl } from './publicPlaylist';
 
 const app = express();
 const port = Number(process.env.XTREAM_MOCK_PORT || 3333);
@@ -120,7 +120,7 @@ app.get('/player_api.php', async (req, res) => {
         stream_icon: `${base}/assets/poster/203.svg`,
         category_id: '1',
       },
-      ...publicStreams,
+      ...publicStreams.map(({ direct_source: _source, ...stream }) => stream),
       ...generated.live,
     ]);
   }
@@ -279,10 +279,21 @@ app.get('/series/:user/:password/:file', async (req, res) => {
   return res.redirect(302, sampleMovie);
 });
 
-app.get('/live/:user/:password/:file', (req, res) => {
+app.get('/live/:user/:password/:file', async (req, res) => {
   if (!validPathCredentials(req, res)) return;
-  const id = req.params.file.split('.')[0];
+  const id = req.params.file.replace(/\.(m3u8|ts)$/i, '');
   if (id === '103') return res.status(503).json({ error: 'Canale demo intenzionalmente non disponibile' });
+  if (id.startsWith('public_')) {
+    try {
+      const source = await publicStreamUrl(id);
+      if (source) return res.redirect(302, source);
+      return res.status(404).json({ error: 'Canale pubblico non trovato nella playlist corrente' });
+    } catch (error) {
+      return res.status(502).json({
+        error: error instanceof Error ? error.message : 'Playlist pubblica non raggiungibile',
+      });
+    }
+  }
   return res.redirect(302, sampleLive);
 });
 
