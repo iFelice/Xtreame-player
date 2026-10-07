@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useReducer } from 'react';
 import {
   Play,
   Pause,
@@ -27,6 +27,7 @@ import { Capacitor } from '@capacitor/core';
 import { PlayableMediaItem } from '../types/xtream';
 import { storage } from '../services/storage';
 import { triggerMediaDownload, isTvEnvironment } from '../utils/downloadHelper';
+import { initialPlaybackState, isPlaybackLoading, playbackReducer } from '../player/playbackState';
 
 interface MediaPlayerProps {
   media: PlayableMediaItem | null;
@@ -48,15 +49,25 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   const hlsRef = useRef<Hls | null>(null);
   const mpegtsRef = useRef<any>(null);
 
-  const [isPlaying, setIsPlaying] = useState<boolean>(false);
+  const [playback, dispatchPlayback] = useReducer(playbackReducer, initialPlaybackState);
+  const isPlaying = playback.status === 'playing';
+  const isLoading = isPlaybackLoading(playback);
+  const errorMessage = playback.error;
+  const setIsPlaying = useCallback((playing: boolean) => {
+    dispatchPlayback({ type: playing ? 'PLAYING' : 'PAUSE' });
+  }, []);
+  const setIsLoading = useCallback((loading: boolean) => {
+    dispatchPlayback({ type: loading ? 'WAITING' : 'READY' });
+  }, []);
+  const setErrorMessage = useCallback((message: string | null) => {
+    dispatchPlayback(message ? { type: 'FAIL', message } : { type: 'RESET_ERROR' });
+  }, []);
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [duration, setDuration] = useState<number>(0);
   const [volume, setVolume] = useState<number>(1);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [isWindowFullscreen, setIsWindowFullscreen] = useState<boolean>(false);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
   const isTv = isTvEnvironment();
   const isNative = typeof window !== 'undefined' && (Capacitor.isNativePlatform() || window.location.protocol === 'capacitor:');
@@ -80,7 +91,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   const startupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bufferingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasStartedPlaybackRef = useRef(false);
-  const [playbackAttempt, setPlaybackAttempt] = useState(0);
+  const playbackAttempt = playback.attempt;
 
   const clearPlaybackWatchdogs = useCallback(() => {
     if (startupTimeoutRef.current) clearTimeout(startupTimeoutRef.current);
@@ -160,9 +171,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
 
     const video = videoRef.current;
     const url = getEffectiveUrl();
-    setIsLoading(true);
-    setErrorMessage(null);
-    setIsPlaying(false);
+    dispatchPlayback({ type: 'LOAD' });
     hasStartedPlaybackRef.current = false;
     clearPlaybackWatchdogs();
 
@@ -670,9 +679,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
           <div className="flex flex-wrap items-center justify-center gap-3">
             <button
               onClick={() => {
-                setErrorMessage(null);
-                setIsLoading(true);
-                setPlaybackAttempt((attempt) => attempt + 1);
+                dispatchPlayback({ type: 'RETRY' });
               }}
               className="px-5 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm sm:text-base font-bold flex items-center gap-2 transition cursor-pointer shadow-lg"
             >

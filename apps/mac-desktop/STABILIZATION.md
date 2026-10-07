@@ -9,6 +9,7 @@
 - [x] Versionamento, migrazione e validazione dell'archiviazione locale.
 - [ ] Separazione del motore player dalla UI.
   - [x] Watchdog di avvio, limite buffering, retry pulito e ritorno al catalogo.
+  - [x] Macchina a stati testata per caricamento, riproduzione, pausa, buffering ed errore.
 - [ ] Separazione dello stato cataloghi da `App.tsx`.
 - [ ] Test dei parser e della costruzione URL.
 - [ ] Rimozione controllata del codice TV/mobile dalla UI desktop.
