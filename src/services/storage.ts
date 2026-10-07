@@ -1,4 +1,5 @@
 import { PlayableMediaItem, XtreamParsedUrl } from '../types/xtream';
+import { isString, isUnknownArray, readVersioned, writeVersioned } from './versionedStorage';
 
 export interface SavedAccount {
   id: string;
@@ -86,11 +87,28 @@ const LAST_ACCOUNT_KEY = 'xtream_last_account';
 const DOWNLOADS_KEY = 'xtream_downloads';
 const APP_ICON_KEY = 'xtream_app_icon';
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
+function readObjectArray<T>(key: string): T[] {
+  return readVersioned(localStorage, key, [], isUnknownArray).filter(isRecord) as T[];
+}
+
+function writeData<T>(key: string, data: T): void {
+  writeVersioned(localStorage, key, data);
+}
+
+function isSavedAccount(value: unknown): value is SavedAccount {
+  if (!isRecord(value)) return false;
+  return ['id', 'name', 'serverUrl', 'username', 'password'].every(
+    (field) => typeof value[field] === 'string'
+  );
+}
+
 export const storage = {
   getAccounts(): SavedAccount[] {
     try {
-      const data = localStorage.getItem(ACCOUNTS_KEY);
-      return data ? JSON.parse(data) : [];
+      return readObjectArray<SavedAccount>(ACCOUNTS_KEY).filter(isSavedAccount);
     } catch {
       return [];
     }
@@ -107,8 +125,8 @@ export const storage = {
           )
       );
       filtered.unshift({ ...account, lastUsed: Date.now() });
-      localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(filtered.slice(0, 10)));
-      localStorage.setItem(LAST_ACCOUNT_KEY, JSON.stringify(account));
+      writeData(ACCOUNTS_KEY, filtered.slice(0, 10));
+      writeData(LAST_ACCOUNT_KEY, account);
     } catch (e) {
       console.error('Failed to save account:', e);
     }
@@ -116,8 +134,7 @@ export const storage = {
 
   getLastAccount(): SavedAccount | null {
     try {
-      const data = localStorage.getItem(LAST_ACCOUNT_KEY);
-      return data ? JSON.parse(data) : null;
+      return readVersioned(localStorage, LAST_ACCOUNT_KEY, null, (value): value is SavedAccount | null => value === null || isSavedAccount(value));
     } catch {
       return null;
     }
@@ -134,7 +151,7 @@ export const storage = {
   deleteAccount(id: string): void {
     try {
       const existing = this.getAccounts().filter((a) => a.id !== id);
-      localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(existing));
+      writeData(ACCOUNTS_KEY, existing);
     } catch (e) {
       console.error('Failed to delete account:', e);
     }
@@ -143,8 +160,7 @@ export const storage = {
   getFavorites(accountKey?: string): PlayableMediaItem[] {
     try {
       const key = accountKey ? `${FAVORITES_KEY}_${accountKey}` : FAVORITES_KEY;
-      const data = localStorage.getItem(key);
-      return data ? JSON.parse(data) : [];
+      return readObjectArray<PlayableMediaItem>(key);
     } catch {
       return [];
     }
@@ -168,7 +184,7 @@ export const storage = {
         favs.unshift(item);
         isFav = true;
       }
-      localStorage.setItem(key, JSON.stringify(favs.slice(0, 100)));
+      writeData(key, favs.slice(0, 100));
       return isFav;
     } catch {
       return false;
@@ -178,8 +194,7 @@ export const storage = {
   getHistory(accountKey?: string): WatchHistoryItem[] {
     try {
       const key = accountKey ? `${HISTORY_KEY}_${accountKey}` : HISTORY_KEY;
-      const data = localStorage.getItem(key);
-      return data ? JSON.parse(data) : [];
+      return readObjectArray<WatchHistoryItem>(key);
     } catch {
       return [];
     }
@@ -196,7 +211,7 @@ export const storage = {
         duration,
         timestamp: Date.now(),
       });
-      localStorage.setItem(key, JSON.stringify(list.slice(0, 50)));
+      writeData(key, list.slice(0, 50));
     } catch (e) {
       console.error('Failed to save history:', e);
     }
@@ -210,8 +225,7 @@ export const storage = {
   getDownloads(accountKey?: string): DownloadItem[] {
     try {
       const key = accountKey ? `${DOWNLOADS_KEY}_${accountKey}` : DOWNLOADS_KEY;
-      const data = localStorage.getItem(key);
-      return data ? JSON.parse(data) : [];
+      return readObjectArray<DownloadItem>(key);
     } catch {
       return [];
     }
@@ -222,7 +236,7 @@ export const storage = {
       const key = accountKey ? `${DOWNLOADS_KEY}_${accountKey}` : DOWNLOADS_KEY;
       const list = this.getDownloads(accountKey).filter((d) => d.id !== item.id);
       list.unshift(item);
-      localStorage.setItem(key, JSON.stringify(list.slice(0, 200)));
+      writeData(key, list.slice(0, 200));
     } catch (e) {
       console.error('Failed to add download record:', e);
     }
@@ -232,7 +246,7 @@ export const storage = {
     try {
       const key = accountKey ? `${DOWNLOADS_KEY}_${accountKey}` : DOWNLOADS_KEY;
       const list = this.getDownloads(accountKey).filter((d) => d.id !== id);
-      localStorage.setItem(key, JSON.stringify(list));
+      writeData(key, list);
     } catch (e) {
       console.error('Failed to remove download:', e);
     }
@@ -245,7 +259,7 @@ export const storage = {
 
   getAppIcon(): string {
     try {
-      return localStorage.getItem(APP_ICON_KEY) || '/favicon.svg';
+      return readVersioned(localStorage, APP_ICON_KEY, '/favicon.svg', isString);
     } catch {
       return '/favicon.svg';
     }
@@ -253,7 +267,7 @@ export const storage = {
 
   setAppIcon(iconPath: string): void {
     try {
-      localStorage.setItem(APP_ICON_KEY, iconPath);
+      writeData(APP_ICON_KEY, iconPath);
       // Update link[rel="icon"] dynamically
       const link = document.querySelector("link[rel='icon']") as HTMLLinkElement | null;
       if (link) link.href = iconPath;

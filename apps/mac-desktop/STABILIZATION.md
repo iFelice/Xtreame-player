@@ -6,7 +6,7 @@
 - [x] Prima infrastruttura di test automatici.
 - [x] Client HTTP con timeout, annullamento ed errori uniformi.
 - [x] Server Xtream locale con cataloghi e scenari di errore, privo di dati privati.
-- [ ] Versionamento e validazione dell'archiviazione locale.
+- [x] Versionamento, migrazione e validazione dell'archiviazione locale.
 - [ ] Separazione del motore player dalla UI.
 - [ ] Separazione dello stato cataloghi da `App.tsx`.
 - [ ] Test dei parser e della costruzione URL.
