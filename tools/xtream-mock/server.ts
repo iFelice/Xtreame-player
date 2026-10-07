@@ -1,5 +1,6 @@
 import express, { Request, Response } from 'express';
 import { buildCatalog, buildGeneratedSeriesInfo, parseProfile } from './catalog';
+import { loadPublicTestStreams } from './publicPlaylist';
 
 const app = express();
 const port = Number(process.env.XTREAM_MOCK_PORT || 3333);
@@ -7,6 +8,7 @@ const host = process.env.XTREAM_MOCK_HOST || '0.0.0.0';
 const DEMO_USER = 'demo';
 const DEMO_PASSWORD = 'demo';
 const profile = parseProfile(process.env.XTREAM_MOCK_PROFILE);
+const includePublicPlaylist = process.env.XTREAM_MOCK_PUBLIC_PLAYLIST === '1';
 
 const publicBase = (req: Request) => `${req.protocol}://${req.get('host')}`;
 const isAuthorized = (req: Request) =>
@@ -46,7 +48,7 @@ app.get('/assets/poster/:id.svg', (req, res) => {
     </svg>`);
 });
 
-app.get('/player_api.php', (req, res) => {
+app.get('/player_api.php', async (req, res) => {
   if (!isAuthorized(req)) {
     return res.status(200).json({
       user_info: { auth: 0, status: 'Disabled', message: 'Credenziali demo non valide' },
@@ -86,11 +88,20 @@ app.get('/player_api.php', (req, res) => {
   if (action === 'get_live_categories') {
     return res.json([
       { category_id: '1', category_name: 'Canali demo player', parent_id: 0 },
+      ...(includePublicPlaylist ? [{ category_id: '900', category_name: 'IPTV-org — test pubblico', parent_id: 0 }] : []),
       ...generated.categories,
     ]);
   }
 
   if (action === 'get_live_streams') {
+    let publicStreams: Awaited<ReturnType<typeof loadPublicTestStreams>> = [];
+    if (includePublicPlaylist) {
+      try {
+        publicStreams = await loadPublicTestStreams();
+      } catch (error) {
+        console.warn('Playlist pubblica non caricata:', error instanceof Error ? error.message : error);
+      }
+    }
     return res.json([
       {
         num: 1,
@@ -109,6 +120,7 @@ app.get('/player_api.php', (req, res) => {
         stream_icon: `${base}/assets/poster/203.svg`,
         category_id: '1',
       },
+      ...publicStreams,
       ...generated.live,
     ]);
   }

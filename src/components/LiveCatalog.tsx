@@ -186,7 +186,7 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
       container.scrollTo({ top: Math.max(0, targetScroll), behavior: 'smooth' });
     }
 
-    const streamUrl = buildStreamUrl(
+    const streamUrl = stream.direct_source || buildStreamUrl(
       serverUrl,
       username,
       password,

@@ -15,6 +15,7 @@
     "mock:xtream": "tsx tools/xtream-mock/server.ts",
     "mock:xtream:small": "XTREAM_MOCK_PROFILE=small tsx tools/xtream-mock/server.ts",
     "mock:xtream:visual": "XTREAM_MOCK_PROFILE=visual tsx tools/xtream-mock/server.ts",
+    "mock:xtream:public": "XTREAM_MOCK_PROFILE=visual XTREAM_MOCK_PUBLIC_PLAYLIST=1 tsx tools/xtream-mock/server.ts",
     "mock:xtream:stress": "XTREAM_MOCK_PROFILE=stress tsx tools/xtream-mock/server.ts",
     "cap:build": "npm run build && cap sync",
     "cap:add:android": "cap add android",
