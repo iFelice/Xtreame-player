@@ -77,6 +77,17 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   });
   const [liveFormat, setLiveFormat] = useState<'m3u8' | 'ts'>('m3u8');
   const hideControlsTimerRef = useRef<any>(null);
+  const startupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const bufferingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasStartedPlaybackRef = useRef(false);
+  const [playbackAttempt, setPlaybackAttempt] = useState(0);
+
+  const clearPlaybackWatchdogs = useCallback(() => {
+    if (startupTimeoutRef.current) clearTimeout(startupTimeoutRef.current);
+    if (bufferingTimeoutRef.current) clearTimeout(bufferingTimeoutRef.current);
+    startupTimeoutRef.current = null;
+    bufferingTimeoutRef.current = null;
+  }, []);
 
   // Sync fullscreen state with native browser events
   useEffect(() => {
@@ -151,6 +162,23 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     const url = getEffectiveUrl();
     setIsLoading(true);
     setErrorMessage(null);
+    setIsPlaying(false);
+    hasStartedPlaybackRef.current = false;
+    clearPlaybackWatchdogs();
+
+    // A stream must produce playable media within 20 seconds. Browsers can
+    // otherwise leave a fetch pending forever without dispatching an error.
+    startupTimeoutRef.current = setTimeout(() => {
+      if (hasStartedPlaybackRef.current || video.currentTime > 0 || video.readyState >= 3) return;
+      video.pause();
+      hlsRef.current?.destroy();
+      hlsRef.current = null;
+      mpegtsRef.current?.destroy();
+      mpegtsRef.current = null;
+      setIsPlaying(false);
+      setIsLoading(false);
+      setErrorMessage('Il contenuto non ha risposto entro 20 secondi. Riprova oppure torna al catalogo.');
+    }, 20_000);
 
     // Destroy existing HLS / mpegts instances if any
     if (hlsRef.current) {
@@ -317,6 +345,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     }
 
     return () => {
+      clearPlaybackWatchdogs();
       if (hlsRef.current) {
         hlsRef.current.destroy();
         hlsRef.current = null;
@@ -332,9 +361,32 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       video.removeAttribute('src');
       video.load();
     };
-  }, [media, getEffectiveUrl, liveFormat]);
+  }, [media, getEffectiveUrl, liveFormat, playbackAttempt, clearPlaybackWatchdogs]);
 
   // Video event handlers
+  const handlePlaybackReady = () => {
+    hasStartedPlaybackRef.current = true;
+    if (startupTimeoutRef.current) clearTimeout(startupTimeoutRef.current);
+    if (bufferingTimeoutRef.current) clearTimeout(bufferingTimeoutRef.current);
+    startupTimeoutRef.current = null;
+    bufferingTimeoutRef.current = null;
+    setIsLoading(false);
+  };
+
+  const handleWaiting = () => {
+    setIsLoading(true);
+    if (!hasStartedPlaybackRef.current || bufferingTimeoutRef.current) return;
+    bufferingTimeoutRef.current = setTimeout(() => {
+      const video = videoRef.current;
+      if (!video || video.readyState >= 3) return;
+      video.pause();
+      hlsRef.current?.stopLoad();
+      setIsPlaying(false);
+      setIsLoading(false);
+      setErrorMessage('La riproduzione è rimasta in buffering per oltre 15 secondi. Controlla la connessione e riprova.');
+    }, 15_000);
+  };
+
   const handleTimeUpdate = () => {
     if (videoRef.current) {
       setCurrentTime(videoRef.current.currentTime);
@@ -347,7 +399,6 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   const handleLoadedMetadata = () => {
     if (videoRef.current) {
       setDuration(videoRef.current.duration || 0);
-      setIsLoading(false);
     }
   };
 
@@ -552,13 +603,14 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
         preload="metadata"
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
-        onLoadedData={() => setIsLoading(false)}
-        onCanPlay={() => setIsLoading(false)}
+        onLoadedData={handlePlaybackReady}
+        onCanPlay={handlePlaybackReady}
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
-        onWaiting={() => setIsLoading(true)}
-        onPlaying={() => setIsLoading(false)}
+        onWaiting={handleWaiting}
+        onPlaying={handlePlaybackReady}
         onError={() => {
+          clearPlaybackWatchdogs();
           if (videoRef.current && (videoRef.current.currentTime > 1 || videoRef.current.readyState >= 3 || videoRef.current.videoWidth > 0)) {
             console.warn('HTML5 video onError ignored because video is actively playing');
             return;
@@ -620,15 +672,20 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
               onClick={() => {
                 setErrorMessage(null);
                 setIsLoading(true);
-                if (videoRef.current) {
-                  videoRef.current.load();
-                  videoRef.current.play().catch(() => {});
-                }
+                setPlaybackAttempt((attempt) => attempt + 1);
               }}
               className="px-5 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm sm:text-base font-bold flex items-center gap-2 transition cursor-pointer shadow-lg"
             >
               <RefreshCw className="w-4 h-4" />
               Riprova
+            </button>
+
+            <button
+              onClick={onClose}
+              className="px-5 py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl text-sm sm:text-base font-bold flex items-center gap-2 transition cursor-pointer border border-zinc-700"
+            >
+              <X className="w-4 h-4" />
+              Torna al catalogo
             </button>
 
             {media.type === 'live' && (
