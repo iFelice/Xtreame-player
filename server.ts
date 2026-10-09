@@ -5,12 +5,22 @@ import { URL } from 'url';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
+import { isSafeDevelopmentTarget, safeProxyEnabled } from './server/safeProxy';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+const SAFE_MODE = safeProxyEnabled();
+
+function rejectUnsafeProxyTarget(targetUrl: string, res: Response): boolean {
+  if (!SAFE_MODE || isSafeDevelopmentTarget(targetUrl)) return false;
+  res.status(403).json({
+    error: 'Modalità sviluppo sicura: sono consentiti soltanto localhost e il mock Xtream locale.',
+  });
+  return true;
+}
 
 app.use(express.json({ limit: '10mb' }));
 
@@ -279,6 +289,7 @@ app.get('/api/proxy/stream', (req, res) => {
   if (!targetUrl) {
     return res.status(400).send('Missing url parameter');
   }
+  if (rejectUnsafeProxyTarget(targetUrl, res)) return;
   proxyStream(targetUrl, req, res);
 });
 
@@ -288,6 +299,7 @@ app.get('/api/proxy/api', async (req, res) => {
   if (!targetUrl) {
     return res.status(400).json({ error: 'Missing url parameter' });
   }
+  if (rejectUnsafeProxyTarget(targetUrl, res)) return;
 
   const urlsToTry = [targetUrl];
   if (targetUrl.startsWith('https://')) {
@@ -505,6 +517,7 @@ async function startServer() {
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server Xtream Player avviato su http://0.0.0.0:${PORT}`);
+    if (SAFE_MODE) console.log('Modalità sicura attiva: proxy limitato al mock locale.');
   });
 }
 
