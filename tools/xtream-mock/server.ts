@@ -260,7 +260,8 @@ function validPathCredentials(req: Request, res: Response): boolean {
   return true;
 }
 
-const sampleMovie = 'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
+// Stable, openly licensed W3C media fixture used by both VOD and episodes.
+const sampleMovie = 'https://media.w3.org/2010/05/bunny/trailer.mp4';
 const sampleLive = 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8';
 
 app.get('/movie/:user/:password/:file', async (req, res) => {
