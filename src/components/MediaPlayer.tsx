@@ -30,7 +30,7 @@ import { triggerMediaDownload, isTvEnvironment } from '../utils/downloadHelper';
 import { initialPlaybackState, isPlaybackLoading, playbackReducer } from '../player/playbackState';
 import { destroyMediaEngines, releaseVideoElement, selectMediaEngine } from '../player/mediaEngine';
 import { HLS_CONFIG, MPEGTS_CONFIG } from '../player/engineConfig';
-import { isPublicMockStream, normalizeLiveStreamUrl } from '../player/streamFormat';
+import { canFallbackToMpegTs, isPublicMockStream, normalizeLiveStreamUrl } from '../player/streamFormat';
 
 interface MediaPlayerProps {
   media: PlayableMediaItem | null;
@@ -197,9 +197,9 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     destroyEngines();
 
     const isLive = media.type === 'live';
-    const canFallbackToMpegTs = isLive && !isPublicMockStream(media.streamUrl);
+    const allowsMpegTsFallback = canFallbackToMpegTs(media.type, media.streamUrl);
     const failOrFallback = (message: string) => {
-      if (canFallbackToMpegTs) {
+      if (allowsMpegTsFallback) {
         setLiveFormat('ts');
       } else {
         setIsLoading(false);
