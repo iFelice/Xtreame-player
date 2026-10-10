@@ -50,6 +50,10 @@ if (SAFE_MODE) {
   });
 }
 
+app.get('/api/runtime-config', (_req, res) => {
+  res.json({ safeMode: SAFE_MODE });
+});
+
 // Set CORS for all local requests
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');

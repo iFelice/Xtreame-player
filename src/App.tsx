@@ -249,34 +249,47 @@ export default function App() {
     []
   );
 
-  // On app startup: check URL query parameters or auto-connect to last saved account
+  // Safe development always selects the local mock and never restores real accounts.
   useEffect(() => {
-    try {
-      const searchParams = new URLSearchParams(window.location.search);
-      const paramServer = searchParams.get('server') || searchParams.get('url');
-      const paramUser = searchParams.get('user') || searchParams.get('username');
-      const paramPass = searchParams.get('pass') || searchParams.get('password');
-      const paramSettings = searchParams.get('settings') || searchParams.get('setup');
+    let cancelled = false;
 
-      if (paramServer && paramUser && paramPass) {
-        connectToServer(paramServer, paramUser, paramPass);
+    const restoreSession = async () => {
+      try {
+        const response = await fetch('/api/runtime-config');
+        const runtime = (await response.json()) as { safeMode?: boolean };
+        if (cancelled) return;
+        if (runtime.safeMode) {
+          connectToServer('http://localhost:3333', 'demo', 'demo');
+          return;
+        }
+
+        const searchParams = new URLSearchParams(window.location.search);
+        const paramServer = searchParams.get('server') || searchParams.get('url');
+        const paramUser = searchParams.get('user') || searchParams.get('username');
+        const paramPass = searchParams.get('pass') || searchParams.get('password');
+        const paramSettings = searchParams.get('settings') || searchParams.get('setup');
+
+        if (paramServer && paramUser && paramPass) {
+          connectToServer(paramServer, paramUser, paramPass);
+          return;
+        }
+        if (paramSettings) setShowSettingsSyncModal(true);
+      } catch (e) {
+        console.error('Error restoring app session:', e);
         return;
       }
 
-      if (paramSettings) {
-        setShowSettingsSyncModal(true);
+      const last = storage.getLastAccount();
+      if (last?.serverUrl && last.username && last.password) {
+        setServerUrl(last.serverUrl);
+        setUsername(last.username);
+        setPassword(last.password);
+        connectToServer(last.serverUrl, last.username, last.password, last.originalLink);
       }
-    } catch (e) {
-      console.error('Error reading URL params:', e);
-    }
+    };
 
-    const last = storage.getLastAccount();
-    if (last && last.serverUrl && last.username && last.password) {
-      setServerUrl(last.serverUrl);
-      setUsername(last.username);
-      setPassword(last.password);
-      connectToServer(last.serverUrl, last.username, last.password, last.originalLink);
-    }
+    void restoreSession();
+    return () => { cancelled = true; };
   }, [connectToServer]);
 
   const handlePlayDirect = (media: PlayableMediaItem) => {
