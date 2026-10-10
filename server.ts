@@ -6,7 +6,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import { createHmac, timingSafeEqual, randomBytes } from 'crypto';
-import { isSafeDevelopmentTarget, safeProxyEnabled } from './server/safeProxy';
+import { isSafeDevelopmentTarget, SAFE_CONNECT_POLICY, safeProxyEnabled } from './server/safeProxy';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -41,6 +41,14 @@ function rejectUnsafeProxyTarget(targetUrl: string, res: Response, signature?: u
 }
 
 app.use(express.json({ limit: '10mb' }));
+
+if (SAFE_MODE) {
+  app.use((_req, res, next) => {
+    res.setHeader('Content-Security-Policy', `connect-src ${SAFE_CONNECT_POLICY}`);
+    res.setHeader('X-Xtream-Safe-Mode', '1');
+    next();
+  });
+}
 
 // Set CORS for all local requests
 app.use((req, res, next) => {
