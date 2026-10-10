@@ -197,6 +197,15 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     destroyEngines();
 
     const isLive = media.type === 'live';
+    const canFallbackToMpegTs = isLive && !isPublicMockStream(media.streamUrl);
+    const failOrFallback = (message: string) => {
+      if (canFallbackToMpegTs) {
+        setLiveFormat('ts');
+      } else {
+        setIsLoading(false);
+        setErrorMessage(message);
+      }
+    };
     const engine = selectMediaEngine({
       isLive,
       liveFormat,
@@ -286,7 +295,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
                 );
                 setIsLoading(false);
               } else {
-                setLiveFormat('ts');
+                failOrFallback('Impossibile scaricare la playlist HLS. Verifica la connessione e riprova.');
               }
             }
             break;
@@ -299,13 +308,13 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
                 hls.recoverMediaError();
               } catch {
                 hls.destroy();
-                setLiveFormat('ts');
+                failOrFallback('Il browser non è riuscito a decodificare il flusso HLS.');
               }
             }
             break;
           default:
             hls.destroy();
-            setLiveFormat('ts');
+            failOrFallback('Errore HLS non recuperabile. Riprova oppure torna al catalogo.');
             break;
         }
       });
