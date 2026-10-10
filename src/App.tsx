@@ -44,6 +44,7 @@ export default function App() {
   const [username, setUsername] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [authData, setAuthData] = useState<XtreamAuthResponse | null>(null);
+  const [safeMode, setSafeMode] = useState(false);
 
   const [activeTab, setActiveTab] = useState<'live' | 'movies' | 'series' | 'recent' | 'favorites'>('live');
   const [showTvHome, setShowTvHome] = useState<boolean>(true);
@@ -258,6 +259,7 @@ export default function App() {
         const response = await fetch('/api/runtime-config');
         const runtime = (await response.json()) as { safeMode?: boolean };
         if (cancelled) return;
+        setSafeMode(Boolean(runtime.safeMode));
         if (runtime.safeMode) {
           connectToServer('http://localhost:3333', 'demo', 'demo');
           return;
@@ -390,6 +392,12 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col selection:bg-emerald-500/30 selection:text-emerald-200 w-full max-w-full overflow-x-hidden">
+      {safeMode && (
+        <div className="sticky top-0 z-[110] flex items-center justify-center gap-2 border-b border-emerald-400/40 bg-emerald-950 px-3 py-1.5 text-xs font-bold tracking-[0.16em] text-emerald-200 shadow-lg" role="status">
+          <span className="h-2 w-2 rounded-full bg-emerald-400" aria-hidden="true" />
+          MODALITÀ SICURA · MOCK LOCALE
+        </div>
+      )}
       {downloadFeedback && (
         <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[100] max-w-[90vw] px-5 py-3 rounded-2xl bg-zinc-900/95 border border-cyan-500/70 text-white shadow-2xl flex items-center gap-3">
           {downloadFeedback.status === 'finished' ? (
