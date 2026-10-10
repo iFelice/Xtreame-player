@@ -142,7 +142,7 @@ app.get('/player_api.php', async (req, res) => {
         stream_icon: `${base}/assets/poster/201.svg`,
         rating: '8.0',
         category_id: '10',
-        container_extension: 'mp4',
+        container_extension: 'm3u8',
         year: '2008',
       },
       {
@@ -153,7 +153,7 @@ app.get('/player_api.php', async (req, res) => {
         stream_icon: `${base}/assets/poster/202.svg`,
         rating: '7.0',
         category_id: '10',
-        container_extension: 'mp4',
+        container_extension: 'm3u8',
         year: '2026',
       },
       {
@@ -163,7 +163,7 @@ app.get('/player_api.php', async (req, res) => {
         stream_id: 203,
         stream_icon: `${base}/assets/poster/203.svg`,
         category_id: '10',
-        container_extension: 'mp4',
+        container_extension: 'm3u8',
         year: '2026',
       },
       ...generated.vod,
@@ -192,7 +192,7 @@ app.get('/player_api.php', async (req, res) => {
       movie_data: {
         stream_id: id,
         name: names[id] || 'Film demo',
-        container_extension: 'mp4',
+        container_extension: 'm3u8',
       },
     });
   }
@@ -239,11 +239,11 @@ app.get('/player_api.php', async (req, res) => {
       },
       episodes: {
         '1': [
-          { id: '401', episode_num: 1, title: 'Episodio funzionante', container_extension: 'mp4', info: { duration: '00:09:56', movie_image: `${base}/assets/poster/301.svg` } },
-          { id: '402', episode_num: 2, title: 'Episodio lento', container_extension: 'mp4', info: { duration: '00:09:56', movie_image: `${base}/assets/poster/202.svg` } },
+          { id: '401', episode_num: 1, title: 'Episodio funzionante', container_extension: 'm3u8', info: { duration: '00:09:56', movie_image: `${base}/assets/poster/301.svg` } },
+          { id: '402', episode_num: 2, title: 'Episodio lento', container_extension: 'm3u8', info: { duration: '00:09:56', movie_image: `${base}/assets/poster/202.svg` } },
         ],
         '2': [
-          { id: '403', episode_num: 1, title: 'Episodio non disponibile', container_extension: 'mp4', info: { duration: '00:09:56', movie_image: `${base}/assets/poster/203.svg` } },
+          { id: '403', episode_num: 1, title: 'Episodio non disponibile', container_extension: 'm3u8', info: { duration: '00:09:56', movie_image: `${base}/assets/poster/203.svg` } },
         ],
       },
     });
@@ -261,7 +261,7 @@ function validPathCredentials(req: Request, res: Response): boolean {
 }
 
 // Stable, openly licensed W3C media fixture used by both VOD and episodes.
-const sampleMovie = 'https://media.w3.org/2010/05/bunny/trailer.mp4';
+const sampleMovie = 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8';
 const sampleLive = 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8';
 
 app.get('/movie/:user/:password/:file', async (req, res) => {

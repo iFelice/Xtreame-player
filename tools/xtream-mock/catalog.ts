@@ -45,7 +45,7 @@ export function buildCatalog(profile: MockProfile, base: string) {
         : `${base}/assets/poster/${1_000 + index}.svg`,
     rating: index % 6 === 0 ? undefined : (5 + (index % 46) / 10).toFixed(1),
     category_id: categories[index % categories.length].category_id,
-    container_extension: 'mp4',
+    container_extension: 'm3u8',
     year: index % 9 === 0 ? undefined : String(1980 + (index % 47)),
   }));
 
@@ -93,7 +93,7 @@ export function buildGeneratedSeriesInfo(seriesId: string, base: string) {
       title: index % 4 === 0
         ? `Episodio ${index + 1} con un titolo molto lungo per collaudare la disposizione`
         : `Episodio ${index + 1}`,
-      container_extension: 'mp4',
+      container_extension: 'm3u8',
       info: {
         duration: `00:${String(20 + (index % 35)).padStart(2, '0')}:00`,
         movie_image: index % 6 === 0 ? '' : `${base}/assets/poster/${numericId + index}.svg`,
