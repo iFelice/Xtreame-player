@@ -29,6 +29,7 @@ import { storage } from '../services/storage';
 import { triggerMediaDownload, isTvEnvironment } from '../utils/downloadHelper';
 import { initialPlaybackState, isPlaybackLoading, playbackReducer } from '../player/playbackState';
 import { destroyMediaEngines, releaseVideoElement } from '../player/mediaEngine';
+import { HLS_CONFIG, MPEGTS_CONFIG } from '../player/engineConfig';
 
 interface MediaPlayerProps {
   media: PlayableMediaItem | null;
@@ -206,18 +207,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
             isLive: true,
             url,
           },
-          {
-            enableWorker: true,
-            lazyLoad: false,
-            liveBufferLatencyChasing: false,
-            liveBufferLatencyMaxLatency: 12.0,
-            liveBufferLatencyMinRemain: 2.0,
-            autoCleanupSourceBuffer: true,
-            autoCleanupMaxBackwardDuration: 40,
-            autoCleanupMinBackwardDuration: 20,
-            fixAudioTimestampGap: true,
-            accurateSeek: false,
-          }
+          MPEGTS_CONFIG
         );
         mpegtsRef.current = player;
         player.attachMediaElement(video);
@@ -255,16 +245,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       }
     } else if (isLive && liveFormat === 'm3u8' && Hls.isSupported()) {
       // Enhanced HLS.js streaming configuration for smooth and stable playback
-      const hls = new Hls({
-        enableWorker: true,
-        lowLatencyMode: false,
-        backBufferLength: 60,
-        maxBufferLength: 60,
-        maxMaxBufferLength: 120,
-        maxBufferSize: 60 * 1000 * 1000,
-        highBufferWatchdogPeriod: 2,
-        nudgeMaxRetry: 10,
-      });
+      const hls = new Hls(HLS_CONFIG);
 
       hlsRef.current = hls;
       hls.loadSource(url);
