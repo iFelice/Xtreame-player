@@ -30,7 +30,7 @@ import { triggerMediaDownload, isTvEnvironment } from '../utils/downloadHelper';
 import { initialPlaybackState, isPlaybackLoading, playbackReducer } from '../player/playbackState';
 import { destroyMediaEngines, releaseVideoElement, selectMediaEngine } from '../player/mediaEngine';
 import { HLS_CONFIG, MPEGTS_CONFIG } from '../player/engineConfig';
-import { normalizeLiveStreamUrl } from '../player/streamFormat';
+import { isPublicMockStream, normalizeLiveStreamUrl } from '../player/streamFormat';
 
 interface MediaPlayerProps {
   media: PlayableMediaItem | null;
@@ -79,6 +79,8 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
   const isTv = isTvEnvironment();
   const isNative = typeof window !== 'undefined' && (Capacitor.isNativePlatform() || window.location.protocol === 'capacitor:');
+  const isSafeMode = typeof window !== 'undefined' && !isNative && sessionStorage.getItem('xtream_safe_mode') === '1';
+  const canSwitchLiveFormat = Boolean(media?.type === 'live' && !isPublicMockStream(media.streamUrl));
   const [aspectRatio, setAspectRatio] = useState<'contain' | '16_9' | '4_3' | 'cover' | 'fill'>('contain');
   const [showSettings, setShowSettings] = useState<boolean>(false);
   const [controlsVisible, setControlsVisible] = useState<boolean>(true);
@@ -669,7 +671,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
               Torna al catalogo
             </button>
 
-            {media.type === 'live' && (
+            {canSwitchLiveFormat && (
               <button
                 onClick={() => setLiveFormat(liveFormat === 'm3u8' ? 'ts' : 'm3u8')}
                 className="px-5 py-3 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-sm sm:text-base font-bold flex items-center gap-2 transition cursor-pointer shadow-lg"
@@ -678,7 +680,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
               </button>
             )}
 
-            {!isNative && (
+            {!isNative && !isSafeMode && (
               <button
                 onClick={() => {
                   const nextVal = !useProxy;
