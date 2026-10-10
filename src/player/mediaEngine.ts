@@ -12,14 +12,17 @@ export type MediaEngineKind = 'mpegts' | 'hls-js' | 'native-hls' | 'native-video
 export function selectMediaEngine(options: {
   isLive: boolean;
   liveFormat: 'm3u8' | 'ts';
+  mediaExtension?: string;
   supportsMpegTs: boolean;
   supportsHlsJs: boolean;
   supportsNativeHls: boolean;
 }): MediaEngineKind {
-  if (!options.isLive) return 'native-video';
-  if (options.liveFormat === 'ts' && options.supportsMpegTs) return 'mpegts';
-  if (options.liveFormat === 'm3u8' && options.supportsHlsJs) return 'hls-js';
-  if (options.supportsNativeHls) return 'native-hls';
+  const isHls = options.isLive
+    ? options.liveFormat === 'm3u8'
+    : options.mediaExtension?.toLowerCase() === 'm3u8';
+  if (options.isLive && !isHls && options.supportsMpegTs) return 'mpegts';
+  if (isHls && options.supportsHlsJs) return 'hls-js';
+  if (isHls && options.supportsNativeHls) return 'native-hls';
   return 'native-video';
 }
 

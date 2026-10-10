@@ -28,7 +28,7 @@ import { PlayableMediaItem } from '../types/xtream';
 import { storage } from '../services/storage';
 import { triggerMediaDownload, isTvEnvironment } from '../utils/downloadHelper';
 import { initialPlaybackState, isPlaybackLoading, playbackReducer } from '../player/playbackState';
-import { destroyMediaEngines, releaseVideoElement } from '../player/mediaEngine';
+import { destroyMediaEngines, releaseVideoElement, selectMediaEngine } from '../player/mediaEngine';
 import { HLS_CONFIG, MPEGTS_CONFIG } from '../player/engineConfig';
 
 interface MediaPlayerProps {
@@ -203,8 +203,16 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     destroyEngines();
 
     const isLive = media.type === 'live';
+    const engine = selectMediaEngine({
+      isLive,
+      liveFormat,
+      mediaExtension: media.containerExtension,
+      supportsMpegTs: mpegts.isSupported(),
+      supportsHlsJs: Hls.isSupported(),
+      supportsNativeHls: Boolean(video.canPlayType('application/vnd.apple.mpegurl')),
+    });
 
-    if (isLive && liveFormat === 'ts' && mpegts.isSupported()) {
+    if (engine === 'mpegts') {
       // Enhanced Real-time MPEG-TS streaming with higher buffer & latency protection
       try {
         const player = mpegts.createPlayer(
@@ -249,7 +257,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
         console.error('MPEG-TS init failed, falling back to HLS:', err);
         setLiveFormat('m3u8');
       }
-    } else if (((isLive && liveFormat === 'm3u8') || (!isLive && media.containerExtension === 'm3u8')) && Hls.isSupported()) {
+    } else if (engine === 'hls-js') {
       // Enhanced HLS.js streaming configuration for smooth and stable playback
       const hls = new Hls(HLS_CONFIG);
 
@@ -307,7 +315,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
             break;
         }
       });
-    } else if (isLive && video.canPlayType('application/vnd.apple.mpegurl')) {
+    } else if (engine === 'native-hls') {
       // Native Apple HLS (iOS Safari, macOS Safari / Catalyst)
       video.src = url;
       video.load();
