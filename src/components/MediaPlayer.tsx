@@ -30,6 +30,7 @@ import { triggerMediaDownload, isTvEnvironment } from '../utils/downloadHelper';
 import { initialPlaybackState, isPlaybackLoading, playbackReducer } from '../player/playbackState';
 import { destroyMediaEngines, releaseVideoElement, selectMediaEngine } from '../player/mediaEngine';
 import { HLS_CONFIG, MPEGTS_CONFIG } from '../player/engineConfig';
+import { normalizeLiveStreamUrl } from '../player/streamFormat';
 
 interface MediaPlayerProps {
   media: PlayableMediaItem | null;
@@ -131,17 +132,8 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     if (!media) return '';
     let target = media.streamUrl;
 
-    // Public mock channels are sourced from an HLS-only playlist and must not
-    // be reinterpreted as MPEG-TS merely by changing the URL extension.
-    const isPublicHls = media.type === 'live' && /\/public_[^/?]+(?:\.|[/?]|$)/i.test(target);
-
-    // Handle live stream format conversion (m3u8 vs ts)
     if (media.type === 'live') {
-      if (isPublicHls || liveFormat === 'm3u8') {
-        target = target.replace(/\.ts(\?|$)/i, '.m3u8$1');
-      } else {
-        target = target.replace(/\.m3u8(\?|$)/i, '.ts$1');
-      }
+      target = normalizeLiveStreamUrl(target, liveFormat);
     }
 
     // Native Capacitor builds cannot use relative Express routes. Unwrap any
