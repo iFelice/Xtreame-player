@@ -260,7 +260,9 @@ export default function App() {
         const runtime = (await response.json()) as { safeMode?: boolean };
         if (cancelled) return;
         setSafeMode(Boolean(runtime.safeMode));
+        if (!runtime.safeMode) sessionStorage.removeItem('xtream_safe_mode');
         if (runtime.safeMode) {
+          sessionStorage.setItem('xtream_safe_mode', '1');
           connectToServer('http://localhost:3333', 'demo', 'demo');
           return;
         }

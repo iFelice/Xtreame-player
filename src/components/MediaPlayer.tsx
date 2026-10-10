@@ -86,6 +86,8 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     // Never restore a web proxy preference when running the native app.
     if (isNative) return false;
     try {
+      // Safe development must never inherit a previous "direct stream" choice.
+      if (sessionStorage.getItem('xtream_safe_mode') === '1') return true;
       const saved = localStorage.getItem('xtream_use_proxy');
       if (saved !== null) return saved === 'true';
       return true; // Web deployment uses the Express proxy by default.
