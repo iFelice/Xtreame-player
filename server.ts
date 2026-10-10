@@ -5,6 +5,7 @@ import { URL } from 'url';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
+import { createHmac, timingSafeEqual, randomBytes } from 'crypto';
 import { isSafeDevelopmentTarget, safeProxyEnabled } from './server/safeProxy';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -13,8 +14,25 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 const SAFE_MODE = safeProxyEnabled();
+const SAFE_PROXY_SECRET = randomBytes(32);
 
-function rejectUnsafeProxyTarget(targetUrl: string, res: Response): boolean {
+function signProxyTarget(targetUrl: string): string {
+  return createHmac('sha256', SAFE_PROXY_SECRET).update(targetUrl).digest('hex');
+}
+
+function validProxySignature(targetUrl: string, signature: unknown): boolean {
+  if (typeof signature !== 'string') return false;
+  const expected = signProxyTarget(targetUrl);
+  return signature.length === expected.length && timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+}
+
+function proxyPath(targetUrl: string): string {
+  const signature = SAFE_MODE ? `&safe=${signProxyTarget(targetUrl)}` : '';
+  return `/api/proxy/stream?url=${encodeURIComponent(targetUrl)}${signature}`;
+}
+
+function rejectUnsafeProxyTarget(targetUrl: string, res: Response, signature?: unknown): boolean {
+  if (SAFE_MODE && validProxySignature(targetUrl, signature)) return false;
   if (!SAFE_MODE || isSafeDevelopmentTarget(targetUrl)) return false;
   res.status(403).json({
     error: 'Modalità sviluppo sicura: sono consentiti soltanto localhost e il mock Xtream locale.',
@@ -54,7 +72,7 @@ function rewriteM3u8(content: string, baseUrl: string): string {
       const modifiedTag = line.replace(/URI=["']([^"']+)["']/g, (match, uri) => {
         try {
           const resolved = new URL(uri, baseUrl).toString();
-          return `URI="/api/proxy/stream?url=${encodeURIComponent(resolved)}"`;
+          return `URI="${proxyPath(resolved)}"`;
         } catch {
           return match;
         }
@@ -64,7 +82,7 @@ function rewriteM3u8(content: string, baseUrl: string): string {
       // Segment or child playlist URL
       try {
         const resolved = new URL(trimmed, baseUrl).toString();
-        rewrittenLines.push(`/api/proxy/stream?url=${encodeURIComponent(resolved)}`);
+        rewrittenLines.push(proxyPath(resolved));
       } catch {
         rewrittenLines.push(trimmed);
       }
@@ -289,7 +307,7 @@ app.get('/api/proxy/stream', (req, res) => {
   if (!targetUrl) {
     return res.status(400).send('Missing url parameter');
   }
-  if (rejectUnsafeProxyTarget(targetUrl, res)) return;
+  if (rejectUnsafeProxyTarget(targetUrl, res, req.query.safe)) return;
   proxyStream(targetUrl, req, res);
 });
 
