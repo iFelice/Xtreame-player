@@ -249,7 +249,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
         console.error('MPEG-TS init failed, falling back to HLS:', err);
         setLiveFormat('m3u8');
       }
-    } else if (isLive && liveFormat === 'm3u8' && Hls.isSupported()) {
+    } else if (((isLive && liveFormat === 'm3u8') || (!isLive && media.containerExtension === 'm3u8')) && Hls.isSupported()) {
       // Enhanced HLS.js streaming configuration for smooth and stable playback
       const hls = new Hls(HLS_CONFIG);
 
