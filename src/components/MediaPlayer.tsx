@@ -104,6 +104,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   const bufferingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastHistoryWriteRef = useRef(0);
   const seekPlaybackIntentRef = useRef<boolean | null>(null);
+  const desiredPlayingRef = useRef(true);
   const hasStartedPlaybackRef = useRef(false);
   const playbackAttempt = playback.attempt;
 
@@ -185,6 +186,8 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     const video = videoRef.current;
     const url = getEffectiveUrl();
     lastHistoryWriteRef.current = 0;
+    desiredPlayingRef.current = true;
+    seekPlaybackIntentRef.current = null;
     dispatchPlayback({ type: 'LOAD' });
     hasStartedPlaybackRef.current = false;
     clearPlaybackWatchdogs();
@@ -407,14 +410,18 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
 
   const togglePlay = () => {
     if (!videoRef.current) return;
-    if (isPlaying) {
+    if (desiredPlayingRef.current) {
+      desiredPlayingRef.current = false;
       videoRef.current.pause();
       setIsPlaying(false);
     } else {
-      // A completed range drag may leave a delayed paused-seek intent. An
-      // explicit Play click always supersedes it.
+      // An explicit Play click supersedes every delayed event from the seek.
+      desiredPlayingRef.current = true;
       seekPlaybackIntentRef.current = null;
-      videoRef.current.play().catch(() => setIsPlaying(false));
+      videoRef.current.play().catch(() => {
+        desiredPlayingRef.current = false;
+        setIsPlaying(false);
+      });
       setIsPlaying(true);
     }
   };
@@ -428,7 +435,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     // Some browsers emit a transient play event while seeking HLS. Preserve
     // the user's state from before the seek instead of trusting that event.
     if (seekPlaybackIntentRef.current === null) {
-      seekPlaybackIntentRef.current = isPlaying && !video.paused;
+      seekPlaybackIntentRef.current = desiredPlayingRef.current && !video.paused;
     }
     video.currentTime = time;
     if (seekPlaybackIntentRef.current === false) video.pause();
@@ -448,6 +455,13 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   };
 
   const handleVideoPlay = () => {
+    // HLS/Chrome may emit play while a paused seek is settling. The visual
+    // state follows the user's explicit intent, never that transient event.
+    if (!desiredPlayingRef.current) {
+      videoRef.current?.pause();
+      setIsPlaying(false);
+      return;
+    }
     setIsPlaying(true);
   };
 
