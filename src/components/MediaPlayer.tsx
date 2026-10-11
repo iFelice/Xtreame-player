@@ -102,6 +102,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   const hideControlsTimerRef = useRef<any>(null);
   const startupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bufferingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const bufferingIndicatorRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastHistoryWriteRef = useRef(0);
   const seekPlaybackIntentRef = useRef<boolean | null>(null);
   const desiredPlayingRef = useRef(true);
@@ -111,8 +112,10 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   const clearPlaybackWatchdogs = useCallback(() => {
     if (startupTimeoutRef.current) clearTimeout(startupTimeoutRef.current);
     if (bufferingTimeoutRef.current) clearTimeout(bufferingTimeoutRef.current);
+    if (bufferingIndicatorRef.current) clearTimeout(bufferingIndicatorRef.current);
     startupTimeoutRef.current = null;
     bufferingTimeoutRef.current = null;
+    bufferingIndicatorRef.current = null;
   }, []);
 
   useEffect(() => () => {
@@ -372,14 +375,29 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     hasStartedPlaybackRef.current = true;
     if (startupTimeoutRef.current) clearTimeout(startupTimeoutRef.current);
     if (bufferingTimeoutRef.current) clearTimeout(bufferingTimeoutRef.current);
+    if (bufferingIndicatorRef.current) clearTimeout(bufferingIndicatorRef.current);
     startupTimeoutRef.current = null;
     bufferingTimeoutRef.current = null;
+    bufferingIndicatorRef.current = null;
     setIsLoading(false);
   };
 
   const handleWaiting = () => {
-    setIsLoading(true);
-    if (!hasStartedPlaybackRef.current || bufferingTimeoutRef.current) return;
+    if (!hasStartedPlaybackRef.current) {
+      setIsLoading(true);
+      return;
+    }
+
+    // HLS commonly emits very short `waiting` events between adjacent
+    // segments. Only show the blocking overlay for a perceptible stall.
+    if (!bufferingIndicatorRef.current) {
+      bufferingIndicatorRef.current = setTimeout(() => {
+        bufferingIndicatorRef.current = null;
+        if (videoRef.current && videoRef.current.readyState < 3) setIsLoading(true);
+      }, 750);
+    }
+
+    if (bufferingTimeoutRef.current) return;
     bufferingTimeoutRef.current = setTimeout(() => {
       const video = videoRef.current;
       if (!video || video.readyState >= 3) return;
