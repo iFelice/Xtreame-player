@@ -418,8 +418,16 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const time = parseFloat(e.target.value);
     setCurrentTime(time);
-    if (videoRef.current) {
-      videoRef.current.currentTime = time;
+    if (videoRef.current) videoRef.current.currentTime = time;
+  };
+
+  const handleSeeked = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (isPlaying) {
+      void video.play().catch(() => setIsPlaying(false));
+    } else {
+      video.pause();
     }
   };
 
@@ -609,6 +617,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
         onCanPlay={handlePlaybackReady}
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
+        onSeeked={handleSeeked}
         onWaiting={handleWaiting}
         onPlaying={handlePlaybackReady}
         onError={() => {

@@ -709,6 +709,10 @@ export default function App() {
             {activeTab === 'favorites' && (
               <FavoritesView
                 onPlay={handlePlayDirect}
+                onOpenSeries={(seriesId) => {
+                  setSelectedSeriesForModal(seriesId);
+                  setActiveTab('series');
+                }}
                 accountKey={currentAccountKey}
               />
             )}

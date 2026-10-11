@@ -6,10 +6,11 @@ import { getSecureImageUrl } from '../utils/imageUrl';
 
 interface FavoritesViewProps {
   onPlay: (item: PlayableMediaItem) => void;
+  onOpenSeries: (seriesId: string | number) => void;
   accountKey?: string;
 }
 
-export const FavoritesView: React.FC<FavoritesViewProps> = ({ onPlay, accountKey }) => {
+export const FavoritesView: React.FC<FavoritesViewProps> = ({ onPlay, onOpenSeries, accountKey }) => {
   const [favorites, setFavorites] = useState<PlayableMediaItem[]>([]);
   const [history, setHistory] = useState<WatchHistoryItem[]>([]);
 
@@ -141,7 +142,9 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({ onPlay, accountKey
             {favorites.map((item) => (
               <div
                 key={item.id}
-                onClick={() => onPlay(item)}
+                onClick={() => item.type === 'series'
+                  ? onOpenSeries(item.id.replace(/^series_/, ''))
+                  : onPlay(item)}
                 className="group relative bg-zinc-900 border border-zinc-800 hover:border-amber-500/60 rounded-2xl overflow-hidden shadow-lg transition-all cursor-pointer flex flex-col justify-between hover:-translate-y-1"
               >
                 <div className="relative aspect-2/3 bg-zinc-950 flex items-center justify-center overflow-hidden">
@@ -161,7 +164,7 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({ onPlay, accountKey
 
                   <button
                     onClick={(e) => handleRemoveFavorite(item.id, e)}
-                    className="absolute top-2 right-2 p-2 rounded-xl bg-black/80 hover:bg-rose-950 text-amber-400 hover:text-rose-400 transition shadow-lg cursor-pointer"
+                    className="absolute z-20 top-2 right-2 p-2 rounded-xl bg-black/80 hover:bg-rose-950 text-amber-400 hover:text-rose-400 transition shadow-lg cursor-pointer"
                     title="Rimuovi dai preferiti"
                   >
                     <Star className="w-4 h-4 fill-amber-400" />
