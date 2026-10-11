@@ -27,6 +27,7 @@ import { Capacitor } from '@capacitor/core';
 import { PlayableMediaItem } from '../types/xtream';
 import { storage } from '../services/storage';
 import { triggerMediaDownload, isDirectFileDownload, isTvEnvironment } from '../utils/downloadHelper';
+import { getSecureImageUrl } from '../utils/imageUrl';
 import { initialPlaybackState, isPlaybackLoading, playbackReducer } from '../player/playbackState';
 import { destroyMediaEngines, releaseVideoElement, selectMediaEngine } from '../player/mediaEngine';
 import { HLS_CONFIG, MPEGTS_CONFIG } from '../player/engineConfig';
@@ -73,6 +74,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [duration, setDuration] = useState<number>(0);
   const [showBufferingIndicator, setShowBufferingIndicator] = useState(false);
+  const [startupSeconds, setStartupSeconds] = useState(0);
   const [volume, setVolume] = useState<number>(1);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
@@ -121,6 +123,16 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     if (hideControlsTimerRef.current) clearTimeout(hideControlsTimerRef.current);
     if (bufferingUiDelayRef.current) clearTimeout(bufferingUiDelayRef.current);
   }, []);
+
+  useEffect(() => {
+    if (playback.status !== 'loading') {
+      setStartupSeconds(0);
+      return;
+    }
+    setStartupSeconds(0);
+    const timer = window.setInterval(() => setStartupSeconds((value) => value + 1), 1000);
+    return () => window.clearInterval(timer);
+  }, [playback.status, media?.id]);
 
   // Sync fullscreen state with native browser events
   useEffect(() => {
@@ -722,11 +734,29 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
 
       {/* Loading Spinner */}
       {(playback.status === 'loading' || showBufferingIndicator) && !errorMessage && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 pointer-events-none backdrop-blur-xs">
-          <div className="w-14 h-14 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin mb-3"></div>
-          <span className="text-zinc-200 text-sm sm:text-base font-bold tracking-wide">
-            Caricamento stream multimediale...
-          </span>
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 pointer-events-none overflow-hidden">
+          {(media.backdrop || media.poster) && (
+            <img
+              src={getSecureImageUrl(media.backdrop || media.poster || '')}
+              alt=""
+              aria-hidden="true"
+              className="absolute inset-0 h-full w-full object-cover opacity-25 blur-sm scale-105"
+            />
+          )}
+          <div className="absolute inset-0 bg-linear-to-t from-black via-black/55 to-black/70" />
+          <div className="relative z-10 flex flex-col items-center px-6 text-center">
+            <div className="w-14 h-14 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin mb-4"></div>
+            <span className="text-zinc-100 text-sm sm:text-base font-bold tracking-wide">
+              {showBufferingIndicator
+                ? 'Buffering del flusso…'
+                : startupSeconds < 3
+                  ? 'Connessione al server…'
+                  : startupSeconds < 7
+                    ? 'Preparazione del video…'
+                    : 'Il canale sta rispondendo, ancora un momento…'}
+            </span>
+            <span className="mt-2 max-w-md truncate text-xs text-zinc-400">{media.title}</span>
+          </div>
         </div>
       )}
 
