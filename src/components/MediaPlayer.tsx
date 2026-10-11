@@ -103,6 +103,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   const startupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bufferingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastHistoryWriteRef = useRef(0);
+  const seekPlaybackIntentRef = useRef<boolean | null>(null);
   const hasStartedPlaybackRef = useRef(false);
   const playbackAttempt = playback.attempt;
 
@@ -416,19 +417,40 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   };
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const video = videoRef.current;
     const time = parseFloat(e.target.value);
     setCurrentTime(time);
-    if (videoRef.current) videoRef.current.currentTime = time;
+    if (!video) return;
+
+    // Some browsers emit a transient play event while seeking HLS. Preserve
+    // the user's state from before the seek instead of trusting that event.
+    if (seekPlaybackIntentRef.current === null) {
+      seekPlaybackIntentRef.current = isPlaying && !video.paused;
+    }
+    video.currentTime = time;
+    if (seekPlaybackIntentRef.current === false) video.pause();
   };
 
   const handleSeeked = () => {
     const video = videoRef.current;
     if (!video) return;
-    if (isPlaying) {
+    const shouldResume = seekPlaybackIntentRef.current ?? isPlaying;
+    seekPlaybackIntentRef.current = null;
+    if (shouldResume) {
       void video.play().catch(() => setIsPlaying(false));
     } else {
       video.pause();
+      setIsPlaying(false);
     }
+  };
+
+  const handleVideoPlay = () => {
+    if (seekPlaybackIntentRef.current === false) {
+      videoRef.current?.pause();
+      setIsPlaying(false);
+      return;
+    }
+    setIsPlaying(true);
   };
 
   const handleSkip = (seconds: number) => {
@@ -615,7 +637,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
         onLoadedMetadata={handleLoadedMetadata}
         onLoadedData={handlePlaybackReady}
         onCanPlay={handlePlaybackReady}
-        onPlay={() => setIsPlaying(true)}
+        onPlay={handleVideoPlay}
         onPause={() => setIsPlaying(false)}
         onSeeked={handleSeeked}
         onWaiting={handleWaiting}
