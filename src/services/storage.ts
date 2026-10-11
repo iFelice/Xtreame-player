@@ -20,20 +20,6 @@ export interface WatchHistoryItem {
   timestamp: number;
 }
 
-export interface DownloadItem {
-  id: string; // e.g. movie_123 or series_456_s1_e2
-  title: string;
-  type: 'movie' | 'episode' | 'series';
-  streamUrl: string;
-  downloadUrl: string;
-  poster?: string;
-  containerExtension?: string;
-  seriesName?: string;
-  seasonNum?: number;
-  episodeNum?: number;
-  downloadedAt: number;
-}
-
 export interface AppIconTheme {
   id: string;
   name: string;
@@ -84,7 +70,6 @@ const ACCOUNTS_KEY = 'xtream_saved_accounts';
 const FAVORITES_KEY = 'xtream_favorites';
 const HISTORY_KEY = 'xtream_watch_history';
 const LAST_ACCOUNT_KEY = 'xtream_last_account';
-const DOWNLOADS_KEY = 'xtream_downloads';
 const APP_ICON_KEY = 'xtream_app_icon';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -219,41 +204,6 @@ export const storage = {
 
   clearHistory(accountKey?: string): void {
     const key = accountKey ? `${HISTORY_KEY}_${accountKey}` : HISTORY_KEY;
-    localStorage.removeItem(key);
-  },
-
-  getDownloads(accountKey?: string): DownloadItem[] {
-    try {
-      const key = accountKey ? `${DOWNLOADS_KEY}_${accountKey}` : DOWNLOADS_KEY;
-      return readObjectArray<DownloadItem>(key);
-    } catch {
-      return [];
-    }
-  },
-
-  addDownload(item: DownloadItem, accountKey?: string): void {
-    try {
-      const key = accountKey ? `${DOWNLOADS_KEY}_${accountKey}` : DOWNLOADS_KEY;
-      const list = this.getDownloads(accountKey).filter((d) => d.id !== item.id);
-      list.unshift(item);
-      writeData(key, list.slice(0, 200));
-    } catch (e) {
-      console.error('Failed to add download record:', e);
-    }
-  },
-
-  removeDownload(id: string, accountKey?: string): void {
-    try {
-      const key = accountKey ? `${DOWNLOADS_KEY}_${accountKey}` : DOWNLOADS_KEY;
-      const list = this.getDownloads(accountKey).filter((d) => d.id !== id);
-      writeData(key, list);
-    } catch (e) {
-      console.error('Failed to remove download:', e);
-    }
-  },
-
-  clearDownloads(accountKey?: string): void {
-    const key = accountKey ? `${DOWNLOADS_KEY}_${accountKey}` : DOWNLOADS_KEY;
     localStorage.removeItem(key);
   },
 
