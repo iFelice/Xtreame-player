@@ -441,11 +441,19 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     if (seekPlaybackIntentRef.current === false) video.pause();
   };
 
+  const finishSeekInteraction = () => {
+    if (seekPlaybackIntentRef.current === false) {
+      desiredPlayingRef.current = false;
+      videoRef.current?.pause();
+      setIsPlaying(false);
+    }
+  };
+
   const handleSeeked = () => {
     const video = videoRef.current;
     if (!video) return;
-    const shouldResume = seekPlaybackIntentRef.current ?? isPlaying;
-    seekPlaybackIntentRef.current = null;
+    const shouldResume = seekPlaybackIntentRef.current ?? desiredPlayingRef.current;
+    if (shouldResume) seekPlaybackIntentRef.current = null;
     if (shouldResume) {
       void video.play().catch(() => setIsPlaying(false));
     } else {
@@ -918,6 +926,8 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
                 step={0.1}
                 value={currentTime}
                 onChange={handleSeek}
+                onPointerUp={finishSeekInteraction}
+                onKeyUp={finishSeekInteraction}
                 className="w-full h-2 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-emerald-500 focus:outline-hidden hover:h-2.5 transition-all"
               />
             </div>
