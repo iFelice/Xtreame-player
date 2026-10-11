@@ -57,6 +57,7 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
   onClearSelectedSeries,
   accountKey,
 }) => {
+  const [, refreshFavorites] = useState(0);
   const categoriesListRef = useRef<HTMLDivElement | null>(null);
   const seriesListRef = useRef<HTMLDivElement | null>(null);
   const isTv = isTvEnvironment();
@@ -437,10 +438,10 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                             poster: series.cover,
                           };
                           storage.toggleFavorite(item, accountKey);
-                          setSelectedCategory((c) => c);
+                          refreshFavorites((value) => value + 1);
                         }}
                         aria-label={isFav ? "Rimuovi dai preferiti" : "Aggiungi ai preferiti"}
-                        className="absolute top-2 right-2 p-2 rounded-xl bg-black/80 hover:bg-black text-zinc-300 hover:text-amber-400 transition cursor-pointer"
+                        className="absolute z-30 top-2 right-2 p-2 rounded-xl bg-black/80 hover:bg-black text-zinc-300 hover:text-amber-400 transition cursor-pointer"
                       >
                         <Star className={`w-4 h-4 ${isFav ? 'fill-amber-400 text-amber-400' : ''}`} />
                       </button>

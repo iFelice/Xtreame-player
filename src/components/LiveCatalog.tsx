@@ -82,6 +82,7 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
   isLoading = false,
   accountKey,
 }) => {
+  const [, refreshFavorites] = useState(0);
   const categoriesListRef = useRef<HTMLDivElement | null>(null);
   const channelsListRef = useRef<HTMLDivElement | null>(null);
 
@@ -229,6 +230,7 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
       containerExtension: 'm3u8',
     };
     storage.toggleFavorite(item, accountKey);
+    refreshFavorites((value) => value + 1);
   };
 
   return (

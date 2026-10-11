@@ -49,6 +49,7 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
   isLoading = false,
   accountKey,
 }) => {
+  const [, refreshFavorites] = useState(0);
   const categoriesListRef = useRef<HTMLDivElement | null>(null);
   const moviesListRef = useRef<HTMLDivElement | null>(null);
   const isTv = isTvEnvironment();
@@ -438,10 +439,10 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                               containerExtension: stream.container_extension,
                             };
                             storage.toggleFavorite(item, accountKey);
-                            setSelectedCategory((c) => c);
+                            refreshFavorites((value) => value + 1);
                           }}
                           aria-label={isFav ? "Rimuovi dai preferiti" : "Aggiungi ai preferiti"}
-                          className="p-2 rounded-xl bg-black/80 hover:bg-black text-zinc-300 hover:text-amber-400 transition cursor-pointer shadow-lg backdrop-blur-md"
+                          className="relative z-30 p-2 rounded-xl bg-black/80 hover:bg-black text-zinc-300 hover:text-amber-400 transition cursor-pointer shadow-lg backdrop-blur-md"
                         >
                           <Star className={`w-4 h-4 ${isFav ? 'fill-amber-400 text-amber-400' : ''}`} />
                         </button>
