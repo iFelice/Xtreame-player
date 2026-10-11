@@ -72,6 +72,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   }, []);
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [duration, setDuration] = useState<number>(0);
+  const [showBufferingIndicator, setShowBufferingIndicator] = useState(false);
   const [volume, setVolume] = useState<number>(1);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
@@ -102,6 +103,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   const hideControlsTimerRef = useRef<any>(null);
   const startupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bufferingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const bufferingUiDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastHistoryWriteRef = useRef(0);
   const seekPlaybackIntentRef = useRef<boolean | null>(null);
   const desiredPlayingRef = useRef(true);
@@ -117,6 +119,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
 
   useEffect(() => () => {
     if (hideControlsTimerRef.current) clearTimeout(hideControlsTimerRef.current);
+    if (bufferingUiDelayRef.current) clearTimeout(bufferingUiDelayRef.current);
   }, []);
 
   // Sync fullscreen state with native browser events
@@ -185,6 +188,9 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
 
     const video = videoRef.current;
     const url = getEffectiveUrl();
+    if (bufferingUiDelayRef.current) clearTimeout(bufferingUiDelayRef.current);
+    bufferingUiDelayRef.current = null;
+    setShowBufferingIndicator(false);
     lastHistoryWriteRef.current = 0;
     desiredPlayingRef.current = true;
     seekPlaybackIntentRef.current = null;
@@ -374,11 +380,22 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     if (bufferingTimeoutRef.current) clearTimeout(bufferingTimeoutRef.current);
     startupTimeoutRef.current = null;
     bufferingTimeoutRef.current = null;
+    if (bufferingUiDelayRef.current) clearTimeout(bufferingUiDelayRef.current);
+    bufferingUiDelayRef.current = null;
+    setShowBufferingIndicator(false);
     setIsLoading(false);
   };
 
   const handleWaiting = () => {
     setIsLoading(true);
+    if (hasStartedPlaybackRef.current && !bufferingUiDelayRef.current) {
+      bufferingUiDelayRef.current = setTimeout(() => {
+        bufferingUiDelayRef.current = null;
+        if (videoRef.current?.readyState !== undefined && videoRef.current.readyState < 3) {
+          setShowBufferingIndicator(true);
+        }
+      }, 1000);
+    }
     if (!hasStartedPlaybackRef.current || bufferingTimeoutRef.current) return;
     bufferingTimeoutRef.current = setTimeout(() => {
       const video = videoRef.current;
@@ -704,7 +721,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       />
 
       {/* Loading Spinner */}
-      {isLoading && !errorMessage && (
+      {(playback.status === 'loading' || showBufferingIndicator) && !errorMessage && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 pointer-events-none backdrop-blur-xs">
           <div className="w-14 h-14 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin mb-3"></div>
           <span className="text-zinc-200 text-sm sm:text-base font-bold tracking-wide">
