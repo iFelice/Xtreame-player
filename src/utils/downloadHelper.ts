@@ -39,7 +39,7 @@ export function isTvEnvironment(): boolean {
   return isTvUa || is10ftTv;
 }
 
-function unwrapProxyUrl(streamUrl: string): string {
+export function unwrapProxyUrl(streamUrl: string): string {
   if (!streamUrl.includes('/api/proxy/stream?url=')) return streamUrl;
 
   try {
@@ -78,7 +78,7 @@ export async function cleanupLegacyNativeDownloads(): Promise<void> {
   );
 }
 
-function safeFilename(title: string, extension: string): string {
+export function safeFilename(title: string, extension: string): string {
   // Also remove control characters: they are invalid or problematic in native paths.
   const cleanTitle = (title || 'video')
     .replace(/[\u0000-\u001f/\\?%*:|"<>]/g, '_')
