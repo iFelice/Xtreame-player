@@ -200,6 +200,10 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
       containerExtension: ext,
     };
 
+    // Close the season/episode dialog before handing control to the player.
+    // Also clear externally requested series so the dialog cannot reopen on render.
+    setActiveSeriesDetail(null);
+    onClearSelectedSeries?.();
     onPlay(mediaItem);
   };
 
