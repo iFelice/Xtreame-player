@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { lazy, Suspense, useState, useEffect, useCallback } from 'react';
 import {
   Film,
   Tv,
@@ -12,11 +12,6 @@ import {
 } from 'lucide-react';
 import { Navbar } from './components/Navbar';
 import { LoginForm } from './components/LoginForm';
-import { MediaPlayer } from './components/MediaPlayer';
-import { VodCatalog } from './components/VodCatalog';
-import { LiveCatalog } from './components/LiveCatalog';
-import { SeriesCatalog } from './components/SeriesCatalog';
-import { FavoritesView } from './components/FavoritesView';
 import { ServerInfoModal } from './components/ServerInfoModal';
 import { RecentProductsShelf } from './components/RecentProductsShelf';
 import { SettingsSyncModal } from './components/SettingsSyncModal';
@@ -36,6 +31,12 @@ import { storage, SavedAccount } from './services/storage';
 import { buildStreamUrl } from './utils/parseXtreamUrl';
 import { cleanupLegacyNativeDownloads, isTvEnvironment } from './utils/downloadHelper';
 import { useTvNavigation } from './utils/tvNavigation';
+
+const MediaPlayer = lazy(() => import('./components/MediaPlayer').then((module) => ({ default: module.MediaPlayer })));
+const VodCatalog = lazy(() => import('./components/VodCatalog').then((module) => ({ default: module.VodCatalog })));
+const LiveCatalog = lazy(() => import('./components/LiveCatalog').then((module) => ({ default: module.LiveCatalog })));
+const SeriesCatalog = lazy(() => import('./components/SeriesCatalog').then((module) => ({ default: module.SeriesCatalog })));
+const FavoritesView = lazy(() => import('./components/FavoritesView').then((module) => ({ default: module.FavoritesView })));
 
 export default function App() {
   const isTv = isTvEnvironment();
@@ -393,6 +394,7 @@ export default function App() {
   }
 
   return (
+    <Suspense fallback={<div className="min-h-screen bg-zinc-950 text-zinc-300 flex items-center justify-center">Caricamento…</div>}>
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col selection:bg-emerald-500/30 selection:text-emerald-200 w-full max-w-full overflow-x-hidden">
       {safeMode && (
         <div className="sticky top-0 z-[110] flex items-center justify-center gap-2 border-b border-emerald-400/40 bg-emerald-950 px-3 py-1.5 text-xs font-bold tracking-[0.16em] text-emerald-200 shadow-lg" role="status">
@@ -753,5 +755,6 @@ export default function App() {
         Xtream Player &bull; Riproduttore multimediale per server Xtream Codes
       </footer>
     </div>
+    </Suspense>
   );
 }
