@@ -411,7 +411,10 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       videoRef.current.pause();
       setIsPlaying(false);
     } else {
-      videoRef.current.play().catch(() => {});
+      // A completed range drag may leave a delayed paused-seek intent. An
+      // explicit Play click always supersedes it.
+      seekPlaybackIntentRef.current = null;
+      videoRef.current.play().catch(() => setIsPlaying(false));
       setIsPlaying(true);
     }
   };
@@ -445,11 +448,6 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   };
 
   const handleVideoPlay = () => {
-    if (seekPlaybackIntentRef.current === false) {
-      videoRef.current?.pause();
-      setIsPlaying(false);
-      return;
-    }
     setIsPlaying(true);
   };
 
