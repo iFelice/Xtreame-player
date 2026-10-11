@@ -10,7 +10,8 @@ const DEMO_USER = 'demo';
 const DEMO_PASSWORD = 'demo';
 const profile = parseProfile(process.env.XTREAM_MOCK_PROFILE);
 const includePublicPlaylist = process.env.XTREAM_MOCK_PUBLIC_PLAYLIST === '1';
-const downloadFixture = normalizeDownloadFixture(process.env.XTREAM_MOCK_DOWNLOAD_URL);
+const PUBLIC_DOWNLOAD_FIXTURE = 'https://drive.google.com/file/d/1vwRIbOfBBJGUrS7fzs4TezQoYpzC_p0x/view?usp=sharing';
+const downloadFixture = normalizeDownloadFixture(process.env.XTREAM_MOCK_DOWNLOAD_URL || PUBLIC_DOWNLOAD_FIXTURE);
 
 const publicBase = (req: Request) => `${req.protocol}://${req.get('host')}`;
 const isAuthorized = (req: Request) =>
