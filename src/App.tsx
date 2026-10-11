@@ -645,6 +645,7 @@ export default function App() {
           </div>
         ) : isConnected ? (
           isTv && showTvHome ? null : (
+          <Suspense fallback={<div className="mt-4 py-16 text-center text-zinc-400">Caricamento sezione…</div>}>
           <div className="mt-4">
             {activeTab === 'live' && (
               <LiveCatalog
@@ -717,6 +718,7 @@ export default function App() {
               />
             )}
           </div>
+          </Suspense>
           )
         ) : (
           /* Clean Dedicated Login Form when not logged in (zero links/favorites before login) */
