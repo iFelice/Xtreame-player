@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { safeFilename, unwrapProxyUrl } from './downloadHelper';
+import { isDirectFileDownload, safeFilename, unwrapProxyUrl } from './downloadHelper';
 
 describe('desktop download preparation', () => {
+  it('offers direct download only for actual media files, never HLS playlists', () => {
+    expect(isDirectFileDownload('mp4')).toBe(true);
+    expect(isDirectFileDownload('.MKV')).toBe(true);
+    expect(isDirectFileDownload('m3u8')).toBe(false);
+    expect(isDirectFileDownload('ts')).toBe(false);
+    expect(isDirectFileDownload(undefined)).toBe(false);
+  });
+
   it('creates filesystem-safe names without accepting extension injection', () => {
     expect(safeFilename('Film: prova/episodio?', '.MP4<script>')).toBe('Film_ prova_episodio_.mp4script');
     expect(safeFilename('', '')).toBe('video.mp4');

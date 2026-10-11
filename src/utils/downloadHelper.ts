@@ -52,6 +52,12 @@ export function unwrapProxyUrl(streamUrl: string): string {
 
 export type NativeDownloadStatus = 'started' | 'exporting' | 'finished' | 'cancelled' | 'error';
 
+const DIRECT_FILE_EXTENSIONS = new Set(['mp4', 'mkv', 'webm', 'avi', 'mov', 'm4v']);
+
+export function isDirectFileDownload(extension?: string): boolean {
+  return DIRECT_FILE_EXTENSIONS.has((extension || '').toLowerCase().replace(/^\./, ''));
+}
+
 function notifyDownloadStatus(status: NativeDownloadStatus, title: string): void {
   window.dispatchEvent(new CustomEvent('xtream-download-status', { detail: { status, title } }));
 }

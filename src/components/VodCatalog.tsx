@@ -24,7 +24,7 @@ import { storage } from '../services/storage';
 import { sortVodStreams } from '../utils/recentSorting';
 import { getSecureImageUrl } from '../utils/imageUrl';
 import { VirtualizedMediaGrid } from './VirtualizedMediaGrid';
-import { triggerMediaDownload, isTvEnvironment } from '../utils/downloadHelper';
+import { triggerMediaDownload, isDirectFileDownload, isTvEnvironment } from '../utils/downloadHelper';
 
 interface VodCatalogProps {
   categories: XtreamCategory[];
@@ -416,7 +416,7 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
 
                       {/* Top-Right Badges: Direct Download + Favorite directly on poster */}
                       <div className="absolute top-2 right-2 flex items-center gap-1 z-10">
-                        {!isTv && (
+                        {!isTv && isDirectFileDownload(stream.container_extension) && (
                           <button
                             onClick={handleDirectDownload}
                             title="Scarica questo film nella cartella Download del Mac"
@@ -551,7 +551,7 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
 
             {/* Footer with play and download buttons */}
             <div className="p-4 sm:p-5 border-t border-zinc-800 flex items-center justify-end gap-3 bg-zinc-900/50">
-              {!isTv && (
+              {!isTv && isDirectFileDownload(activeMovieDetail.stream.container_extension) && (
                 <button
                   type="button"
                   onClick={() => {

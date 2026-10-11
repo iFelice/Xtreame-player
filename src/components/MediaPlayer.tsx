@@ -26,7 +26,7 @@ import mpegts from 'mpegts.js';
 import { Capacitor } from '@capacitor/core';
 import { PlayableMediaItem } from '../types/xtream';
 import { storage } from '../services/storage';
-import { triggerMediaDownload, isTvEnvironment } from '../utils/downloadHelper';
+import { triggerMediaDownload, isDirectFileDownload, isTvEnvironment } from '../utils/downloadHelper';
 import { initialPlaybackState, isPlaybackLoading, playbackReducer } from '../player/playbackState';
 import { destroyMediaEngines, releaseVideoElement, selectMediaEngine } from '../player/mediaEngine';
 import { HLS_CONFIG, MPEGTS_CONFIG } from '../player/engineConfig';
@@ -862,7 +862,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          {!isTv && media.type !== 'live' && (
+          {!isTv && media.type !== 'live' && isDirectFileDownload(media.containerExtension) && (
             <button
               type="button"
               onClick={(e) => {
