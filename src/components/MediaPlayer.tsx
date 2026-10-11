@@ -102,6 +102,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   const hideControlsTimerRef = useRef<any>(null);
   const startupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bufferingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastHistoryWriteRef = useRef(0);
   const hasStartedPlaybackRef = useRef(false);
   const playbackAttempt = playback.attempt;
 
@@ -110,6 +111,10 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     if (bufferingTimeoutRef.current) clearTimeout(bufferingTimeoutRef.current);
     startupTimeoutRef.current = null;
     bufferingTimeoutRef.current = null;
+  }, []);
+
+  useEffect(() => () => {
+    if (hideControlsTimerRef.current) clearTimeout(hideControlsTimerRef.current);
   }, []);
 
   // Sync fullscreen state with native browser events
@@ -178,6 +183,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
 
     const video = videoRef.current;
     const url = getEffectiveUrl();
+    lastHistoryWriteRef.current = 0;
     dispatchPlayback({ type: 'LOAD' });
     hasStartedPlaybackRef.current = false;
     clearPlaybackWatchdogs();
@@ -384,8 +390,10 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   const handleTimeUpdate = () => {
     if (videoRef.current) {
       setCurrentTime(videoRef.current.currentTime);
-      if (media && videoRef.current.duration > 0 && Math.floor(videoRef.current.currentTime) % 5 === 0) {
-        storage.saveHistory(media, videoRef.current.currentTime, videoRef.current.duration, accountKey);
+      const elapsed = videoRef.current.currentTime;
+      if (media && videoRef.current.duration > 0 && Math.abs(elapsed - lastHistoryWriteRef.current) >= 5) {
+        lastHistoryWriteRef.current = elapsed;
+        storage.saveHistory(media, elapsed, videoRef.current.duration, accountKey);
       }
     }
   };
