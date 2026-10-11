@@ -943,9 +943,9 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
             <button
               onClick={togglePlay}
               className="p-2 sm:p-2.5 text-white hover:text-emerald-400 hover:bg-white/10 rounded-2xl transition cursor-pointer"
-              title={isPlaying ? 'Pausa (Spazio)' : 'Riproduci (Spazio)'}
+              title={desiredPlayingRef.current ? 'Pausa (Spazio)' : 'Riproduci (Spazio)'}
             >
-              {isPlaying ? <Pause className="w-6 h-6 fill-current" /> : <Play className="w-6 h-6 fill-current" />}
+              {desiredPlayingRef.current ? <Pause className="w-6 h-6 fill-current" /> : <Play className="w-6 h-6 fill-current" />}
             </button>
 
             {/* Live TV Previous & Next Channel buttons */}
