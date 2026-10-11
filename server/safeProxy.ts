@@ -1,4 +1,20 @@
+import { createHmac, timingSafeEqual } from 'crypto';
+
 const SAFE_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
+
+export function createSafeProxySigner(secret: Buffer) {
+  const sign = (targetUrl: string): string =>
+    createHmac('sha256', secret).update(targetUrl).digest('hex');
+
+  const verify = (targetUrl: string, signature: unknown): boolean => {
+    if (typeof signature !== 'string') return false;
+    const expected = sign(targetUrl);
+    return signature.length === expected.length &&
+      timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+  };
+
+  return { sign, verify };
+}
 
 export function isSafeDevelopmentTarget(rawUrl: string): boolean {
   try {

@@ -5,8 +5,8 @@ import { URL } from 'url';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
-import { createHmac, timingSafeEqual, randomBytes } from 'crypto';
-import { isSafeDevelopmentTarget, SAFE_CONNECT_POLICY, safeProxyEnabled } from './server/safeProxy';
+import { randomBytes } from 'crypto';
+import { createSafeProxySigner, isSafeDevelopmentTarget, SAFE_CONNECT_POLICY, safeProxyEnabled } from './server/safeProxy';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -14,25 +14,15 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 const SAFE_MODE = safeProxyEnabled();
-const SAFE_PROXY_SECRET = randomBytes(32);
-
-function signProxyTarget(targetUrl: string): string {
-  return createHmac('sha256', SAFE_PROXY_SECRET).update(targetUrl).digest('hex');
-}
-
-function validProxySignature(targetUrl: string, signature: unknown): boolean {
-  if (typeof signature !== 'string') return false;
-  const expected = signProxyTarget(targetUrl);
-  return signature.length === expected.length && timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
-}
+const safeProxySigner = createSafeProxySigner(randomBytes(32));
 
 function proxyPath(targetUrl: string): string {
-  const signature = SAFE_MODE ? `&safe=${signProxyTarget(targetUrl)}` : '';
+  const signature = SAFE_MODE ? `&safe=${safeProxySigner.sign(targetUrl)}` : '';
   return `/api/proxy/stream?url=${encodeURIComponent(targetUrl)}${signature}`;
 }
 
 function rejectUnsafeProxyTarget(targetUrl: string, res: Response, signature?: unknown): boolean {
-  if (SAFE_MODE && validProxySignature(targetUrl, signature)) return false;
+  if (SAFE_MODE && safeProxySigner.verify(targetUrl, signature)) return false;
   if (!SAFE_MODE || isSafeDevelopmentTarget(targetUrl)) return false;
   res.status(403).json({
     error: 'Modalità sviluppo sicura: sono consentiti soltanto localhost e il mock Xtream locale.',
