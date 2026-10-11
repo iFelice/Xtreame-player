@@ -10,8 +10,8 @@ const DEMO_USER = 'demo';
 const DEMO_PASSWORD = 'demo';
 const profile = parseProfile(process.env.XTREAM_MOCK_PROFILE);
 const includePublicPlaylist = process.env.XTREAM_MOCK_PUBLIC_PLAYLIST === '1';
-const PUBLIC_DOWNLOAD_FIXTURE = 'https://drive.google.com/file/d/1vwRIbOfBBJGUrS7fzs4TezQoYpzC_p0x/view?usp=sharing';
-const downloadFixture = normalizeDownloadFixture(process.env.XTREAM_MOCK_DOWNLOAD_URL || PUBLIC_DOWNLOAD_FIXTURE);
+const PUBLIC_DOWNLOAD_FIXTURE = 'https://drive.usercontent.google.com/download?id=1vwRIbOfBBJGUrS7fzs4TezQoYpzC_p0x&export=download&confirm=t';
+const downloadFixture = normalizeDownloadFixture(process.env.XTREAM_MOCK_DOWNLOAD_URL) || PUBLIC_DOWNLOAD_FIXTURE;
 
 const publicBase = (req: Request) => `${req.protocol}://${req.get('host')}`;
 const isAuthorized = (req: Request) =>
@@ -169,7 +169,7 @@ app.get('/player_api.php', async (req, res) => {
         container_extension: 'm3u8',
         year: '2026',
       },
-      ...(downloadFixture ? [{
+      ...[{
         num: 4,
         name: 'File MP4 — Test download',
         stream_type: 'movie',
@@ -179,7 +179,7 @@ app.get('/player_api.php', async (req, res) => {
         category_id: '10',
         container_extension: 'mp4',
         year: '2026',
-      }] : []),
+      }],
       ...generated.vod,
     ]);
   }
@@ -281,7 +281,7 @@ const sampleLive = 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8';
 app.get('/movie/:user/:password/:file', async (req, res) => {
   if (!validPathCredentials(req, res)) return;
   const id = req.params.file.split('.')[0];
-  if (id === '204' && downloadFixture) return res.redirect(302, downloadFixture);
+  if (id === '204') return res.redirect(302, downloadFixture);
   if (id === '202') await new Promise((resolve) => setTimeout(resolve, 8_000));
   if (id === '203') return res.status(503).json({ error: 'Contenuto demo intenzionalmente non disponibile' });
   return res.redirect(302, sampleMovie);
