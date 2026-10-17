@@ -55,6 +55,9 @@ export async function fetchJson<T>(url: string, options: JsonRequestOptions = {}
 
     if (!response.ok) {
       const responseBody = await response.text();
+      if (response.status === 401 && responseBody.includes('ACCESS_REQUIRED') && typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('xtream-access-required'));
+      }
       throw new HttpError(
         publicHttpMessage(response.status, responseBody),
         response.status,

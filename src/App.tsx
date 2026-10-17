@@ -101,6 +101,12 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const requireAccess = () => setAccessRequired(true);
+    window.addEventListener('xtream-access-required', requireAccess);
+    return () => window.removeEventListener('xtream-access-required', requireAccess);
+  }, []);
+
+  useEffect(() => {
     if (!isTv) return;
     const handleTvBack = () => {
       if (activeMedia) {
