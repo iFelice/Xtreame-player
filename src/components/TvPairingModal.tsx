@@ -19,15 +19,19 @@ import {
 import { storage } from '../services/storage';
 import { parseXtreamUrl } from '../utils/parseXtreamUrl';
 import { Capacitor } from '@capacitor/core';
+import { buildPairingCreateRequest, buildPairingStatusRequest } from '../services/pairingRequests';
 
 const DEFAULT_PAIRING_SERVER = 'https://login-extream-neyt.onrender.com';
 
 // Native platforms use the separate pairing service. Pointing
 // xtream_pairing_server at this same-origin-only instance is unsupported.
+function nativePairingServer(): string {
+  return (localStorage.getItem('xtream_pairing_server') || DEFAULT_PAIRING_SERVER).replace(/\/+$/, '');
+}
+
 function pairingApiUrl(path: string): string {
   if (!Capacitor.isNativePlatform()) return path;
-  const base = (localStorage.getItem('xtream_pairing_server') || DEFAULT_PAIRING_SERVER).replace(/\/+$/, '');
-  return `${base}${path}`;
+  return `${nativePairingServer()}${path}`;
 }
 
 function pairingWebUrl(code?: string): string {
@@ -55,6 +59,7 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
 
   // TV receiver state
   const [pinCode, setPinCode] = useState<string>('');
+  const [pollToken, setPollToken] = useState<string | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const [expiresIn, setExpiresIn] = useState<number>(600);
   const [isWaitingForPhone, setIsWaitingForPhone] = useState<boolean>(true);
@@ -74,6 +79,7 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
 
   const pollIntervalRef = useRef<any>(null);
   const timerIntervalRef = useRef<any>(null);
+  const expiresAtRef = useRef<number>(0);
   const savedAccounts = storage.getAccounts();
 
   // If initialCode changes, set remotePin and switch mode
@@ -90,15 +96,27 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
       setPollError(null);
       setReceivedSuccess(false);
       setIsWaitingForPhone(true);
-      setExpiresIn(600);
+      setPinCode('');
+      setPollToken(null);
 
-      const res = await fetch(pairingApiUrl('/api/session/create'));
+      const native = Capacitor.isNativePlatform();
+      const request = buildPairingCreateRequest({
+        native,
+        nativeServer: nativePairingServer(),
+      });
+      const res = await fetch(request.url, { headers: request.headers });
       if (!res.ok) {
         throw new Error('Impossibile creare sessione TV');
       }
       const data = await res.json();
       const code = data.code;
+      const lifetime = !native && typeof data.expiresInSeconds === 'number'
+        ? data.expiresInSeconds
+        : 600;
       setPinCode(code);
+      setPollToken(native ? null : data.pollToken);
+      setExpiresIn(lifetime);
+      expiresAtRef.current = Date.now() + lifetime * 1000;
 
       // Create QR Code containing direct pairing URL
       const pairUrl = pairingWebUrl(code);
@@ -143,8 +161,22 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
     // Polling every 2.5 seconds
     pollIntervalRef.current = setInterval(async () => {
       try {
-        const res = await fetch(pairingApiUrl(`/api/session/status/${pinCode}`));
-        if (!res.ok) return;
+        const native = Capacitor.isNativePlatform();
+        const request = buildPairingStatusRequest(pinCode, {
+          native,
+          nativeServer: nativePairingServer(),
+          pollToken,
+        });
+        const res = await fetch(request.url, { headers: request.headers });
+        if (!res.ok) {
+          if (!native && res.status === 404 && Date.now() >= expiresAtRef.current) {
+            clearInterval(pollIntervalRef.current);
+            clearInterval(timerIntervalRef.current);
+            setIsWaitingForPhone(false);
+            setPollError('Sessione scaduta. Genera un nuovo codice PIN.');
+          }
+          return;
+        }
 
         const data = await res.json();
         if (data.status === 'completed' && data.data) {
@@ -168,7 +200,7 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     };
-  }, [isOpen, mode, pinCode, onConnectAccount, onClose]);
+  }, [isOpen, mode, pinCode, pollToken, onConnectAccount, onClose]);
 
   // Pre-create the TV session while the login screen is visible. By the time
   // the user opens QR/PIN, both values are normally already available.
