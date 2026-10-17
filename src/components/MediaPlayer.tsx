@@ -1,3 +1,4 @@
+import { RemoteImage } from './RemoteImage';
 import React, { useEffect, useRef, useState, useCallback, useReducer } from 'react';
 import {
   Play,
@@ -736,7 +737,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       {(playback.status === 'loading' || showBufferingIndicator) && !errorMessage && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 pointer-events-none overflow-hidden">
           {(media.backdrop || media.poster) && (
-            <img
+            <RemoteImage
               src={getSecureImageUrl(media.backdrop || media.poster || '')}
               alt=""
               aria-hidden="true"

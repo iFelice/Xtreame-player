@@ -1,3 +1,4 @@
+import { RemoteImage } from './RemoteImage';
 import React, { useState, useMemo } from 'react';
 import {
   Sparkles,
@@ -155,7 +156,7 @@ export const RecentProductsShelf: React.FC<RecentProductsShelfProps> = ({
                 {/* Poster */}
                 <div className="relative aspect-2/3 bg-zinc-900 overflow-hidden">
                   {movie.stream_icon ? (
-                    <img
+                    <RemoteImage
                       src={getSecureImageUrl(movie.stream_icon)}
                       alt={movie.name}
                       referrerPolicy="no-referrer"
@@ -289,7 +290,7 @@ export const RecentProductsShelf: React.FC<RecentProductsShelfProps> = ({
                 {/* Cover */}
                 <div className="relative aspect-2/3 bg-zinc-900 overflow-hidden">
                   {series.cover ? (
-                    <img
+                    <RemoteImage
                       src={getSecureImageUrl(series.cover)}
                       alt={series.name}
                       referrerPolicy="no-referrer"

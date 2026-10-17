@@ -1,3 +1,4 @@
+import { RemoteImage } from './RemoteImage';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Search,
@@ -401,7 +402,7 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                     {/* Cover Container */}
                     <div className="relative aspect-2/3 bg-zinc-950 overflow-hidden">
                       {series.cover ? (
-                        <img
+                        <RemoteImage
                           src={getSecureImageUrl(series.cover)}
                           alt={series.name}
                           referrerPolicy="no-referrer"

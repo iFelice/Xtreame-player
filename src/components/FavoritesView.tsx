@@ -1,3 +1,4 @@
+import { RemoteImage } from './RemoteImage';
 import React, { useState, useEffect } from 'react';
 import { Star, Clock, Play, Trash2, Film, Tv, Radio } from 'lucide-react';
 import { PlayableMediaItem } from '../types/xtream';
@@ -84,7 +85,7 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({ onPlay, onOpenSeri
                 >
                   <div className="w-24 h-16 bg-zinc-950 rounded-xl overflow-hidden shrink-0 relative flex items-center justify-center border border-zinc-800">
                     {h.media.poster ? (
-                      <img
+                      <RemoteImage
                         src={getSecureImageUrl(h.media.poster)}
                         alt={h.media.title}
                         referrerPolicy="no-referrer"
@@ -149,7 +150,7 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({ onPlay, onOpenSeri
               >
                 <div className="relative aspect-2/3 bg-zinc-950 flex items-center justify-center overflow-hidden">
                   {item.poster ? (
-                    <img
+                    <RemoteImage
                       src={getSecureImageUrl(item.poster)}
                       alt={item.title}
                       referrerPolicy="no-referrer"

@@ -1,3 +1,4 @@
+import { RemoteImage } from './RemoteImage';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Search,
@@ -48,12 +49,13 @@ const ChannelLogo: React.FC<{ icon?: string; name: string; size?: 'sm' | 'md' }>
   }
 
   return (
-    <img
+    <RemoteImage
       src={getSecureImageUrl(icon)}
       alt={name}
       referrerPolicy="no-referrer"
       loading="lazy"
       onError={() => setHasError(true)}
+      onRemoteError={() => setHasError(true)}
       className="w-full h-full object-contain"
     />
   );

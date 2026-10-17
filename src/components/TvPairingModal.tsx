@@ -1,3 +1,4 @@
+import { RemoteImage } from './RemoteImage';
 import React, { useState, useEffect, useRef } from 'react';
 import QRCode from 'qrcode';
 import {
@@ -352,7 +353,7 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
                 <div className="flex flex-col items-center justify-center bg-zinc-950/80 p-5 rounded-2xl border border-zinc-800/90 text-center">
                   <div className="bg-white p-3 rounded-2xl shadow-xl shadow-black/50">
                     {qrDataUrl ? (
-                      <img
+                      <RemoteImage
                         src={qrDataUrl}
                         alt="QR Code per accoppiamento TV"
                         className="w-48 h-48 sm:w-52 sm:h-52 object-contain rounded-lg"

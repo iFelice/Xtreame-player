@@ -1,3 +1,4 @@
+import { RemoteImage } from './RemoteImage';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Search,
@@ -378,7 +379,7 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                     {/* Poster Container */}
                     <div className="relative aspect-2/3 bg-zinc-950 overflow-hidden">
                       {stream.stream_icon ? (
-                        <img
+                        <RemoteImage
                           src={getSecureImageUrl(stream.stream_icon)}
                           alt={stream.name}
                           referrerPolicy="no-referrer"
@@ -512,7 +513,7 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
             <div className="p-5 sm:p-6 overflow-y-auto space-y-4">
               <div className="flex flex-col sm:flex-row gap-5">
                 {activeMovieDetail.stream.stream_icon && (
-                  <img
+                  <RemoteImage
                     src={getSecureImageUrl(activeMovieDetail.stream.stream_icon)}
                     alt={activeMovieDetail.stream.name}
                     className="w-36 sm:w-44 aspect-2/3 object-cover rounded-2xl shadow-xl shrink-0"
