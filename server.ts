@@ -1,5 +1,5 @@
 import express, { Request, Response } from 'express';
-import http from 'http';
+import http, { type ClientRequest, type IncomingMessage } from 'http';
 import https from 'https';
 import { URL } from 'url';
 import path from 'path';
@@ -16,7 +16,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 requireProductionToken(process.env);
-const app = express();
+export const app = express();
 if (process.env.TRUST_PROXY === '1') app.set('trust proxy', 1);
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 const SAFE_MODE = safeProxyEnabled();
@@ -61,7 +61,7 @@ app.use('/api', (req, res, next) => {
 const DEFAULT_USER_AGENT = 'IPTVSmartersPro/3.1.5.1 (Linux; Android 11; Smart TV)';
 
 // Helper to make HTTP/HTTPS request following redirects
-async function proxyStream(targetUrl: string, req: Request, res: Response, redirectCount = 0) {
+export async function proxyStream(targetUrl: string, req: Request, res: Response, redirectCount = 0) {
   if (redirectCount > 5) {
     res.status(502).send('Too many redirects');
     return;
@@ -96,7 +96,20 @@ async function proxyStream(targetUrl: string, req: Request, res: Response, redir
     headers['Range'] = req.headers.range as string;
   }
 
-  const proxyReq = client.request(
+  let proxyReq: ClientRequest | undefined;
+  let proxyRes: IncomingMessage | undefined;
+  let manifestTimeout: ReturnType<typeof setTimeout> | undefined;
+  let cleanedUp = false;
+  const cleanup = () => {
+    if (cleanedUp) return;
+    cleanedUp = true;
+    if (manifestTimeout) clearTimeout(manifestTimeout);
+    proxyReq?.destroy();
+    proxyRes?.destroy();
+  };
+  req.once('close', cleanup);
+
+  proxyReq = client.request(
     targetUrl,
     {
       method: req.method === 'HEAD' ? 'HEAD' : 'GET',
@@ -104,12 +117,13 @@ async function proxyStream(targetUrl: string, req: Request, res: Response, redir
       lookup,
       timeout: 15000, // Initial connect timeout only
     },
-    (proxyRes) => {
+    (upstreamResponse) => {
+      proxyRes = upstreamResponse;
       // Clear timeout immediately upon response arrival so continuous live streams never get killed
-      proxyReq.setTimeout(0);
-      if (proxyRes.socket) {
-        proxyRes.socket.setTimeout(0);
-        proxyRes.socket.setKeepAlive(true, 10000);
+      proxyReq?.setTimeout(0);
+      if (upstreamResponse.socket) {
+        upstreamResponse.socket.setTimeout(0);
+        upstreamResponse.socket.setKeepAlive(true, 10000);
       }
       if (req.socket) {
         req.socket.setTimeout(0);
@@ -121,14 +135,15 @@ async function proxyStream(targetUrl: string, req: Request, res: Response, redir
 
       // Handle redirects (301, 302, 303, 307, 308)
       if (
-        proxyRes.statusCode &&
-        [301, 302, 303, 307, 308].includes(proxyRes.statusCode) &&
-        proxyRes.headers.location
+        upstreamResponse.statusCode &&
+        [301, 302, 303, 307, 308].includes(upstreamResponse.statusCode) &&
+        upstreamResponse.headers.location
       ) {
-        let redirectLocation = proxyRes.headers.location;
+        let redirectLocation = upstreamResponse.headers.location;
         if (!redirectLocation.startsWith('http://') && !redirectLocation.startsWith('https://')) {
           redirectLocation = new URL(redirectLocation, targetUrl).toString();
         }
+        upstreamResponse.resume();
         proxyStream(redirectLocation, req, res, redirectCount + 1);
         return;
       }
@@ -137,14 +152,14 @@ async function proxyStream(targetUrl: string, req: Request, res: Response, redir
         'Accept-Ranges': 'bytes',
       };
 
-      if (proxyRes.headers['content-range']) {
-        responseHeaders['Content-Range'] = proxyRes.headers['content-range'];
+      if (upstreamResponse.headers['content-range']) {
+        responseHeaders['Content-Range'] = upstreamResponse.headers['content-range'];
       }
-      if (proxyRes.headers['content-length']) {
-        responseHeaders['Content-Length'] = proxyRes.headers['content-length'];
+      if (upstreamResponse.headers['content-length']) {
+        responseHeaders['Content-Length'] = upstreamResponse.headers['content-length'];
       }
-      if (proxyRes.headers['content-type']) {
-        responseHeaders['Content-Type'] = proxyRes.headers['content-type'];
+      if (upstreamResponse.headers['content-type']) {
+        responseHeaders['Content-Type'] = upstreamResponse.headers['content-type'];
       } else {
         // Fallback content type based on URL extension
         if (targetUrl.endsWith('.mp4')) responseHeaders['Content-Type'] = 'video/mp4';
@@ -176,43 +191,43 @@ async function proxyStream(targetUrl: string, req: Request, res: Response, redir
       }
 
       if (req.method === 'HEAD') {
-        res.writeHead(proxyRes.statusCode || 200, responseHeaders);
+        res.writeHead(upstreamResponse.statusCode || 200, responseHeaders);
         res.end();
         return;
       }
 
       const declaredM3u8 = targetUrl.toLowerCase().includes('.m3u8');
       const isMpegUrlHeader = Boolean(
-        proxyRes.headers['content-type'] &&
-          (proxyRes.headers['content-type'].includes('mpegurl') ||
-            proxyRes.headers['content-type'].includes('application/x-mpegurl'))
+        upstreamResponse.headers['content-type'] &&
+          (upstreamResponse.headers['content-type'].includes('mpegurl') ||
+            upstreamResponse.headers['content-type'].includes('application/x-mpegurl'))
       );
 
       const isExplicitBinary = Boolean(
         targetUrl.toLowerCase().includes('.ts') ||
-          (proxyRes.headers['content-type'] &&
-            (proxyRes.headers['content-type'].includes('mp2t') ||
-              proxyRes.headers['content-type'].includes('octet-stream') ||
-              proxyRes.headers['content-type'].includes('video/mp2t')))
+          (upstreamResponse.headers['content-type'] &&
+            (upstreamResponse.headers['content-type'].includes('mp2t') ||
+              upstreamResponse.headers['content-type'].includes('octet-stream') ||
+              upstreamResponse.headers['content-type'].includes('video/mp2t')))
       );
 
       if ((declaredM3u8 || isMpegUrlHeader) && !isExplicitBinary) {
         let manifestData = '';
         let headersSent = false;
-        proxyRes.setEncoding('utf8');
+        upstreamResponse.setEncoding('utf8');
 
         // Safety timeout: if manifest doesn't finish within 2 seconds, it's not a text manifest, it's an active stream
-        const manifestTimeout = setTimeout(() => {
+        manifestTimeout = setTimeout(() => {
           if (!headersSent && !res.headersSent) {
             headersSent = true;
             responseHeaders['Content-Type'] = 'video/mp2t';
-            res.writeHead(proxyRes.statusCode || 200, responseHeaders);
+            res.writeHead(upstreamResponse.statusCode || 200, responseHeaders);
             res.write(manifestData);
-            proxyRes.pipe(res);
+            upstreamResponse.pipe(res);
           }
         }, 2000);
 
-        proxyRes.on('data', (chunk) => {
+        upstreamResponse.on('data', (chunk) => {
           if (headersSent) return;
           manifestData += chunk;
 
@@ -224,13 +239,13 @@ async function proxyStream(targetUrl: string, req: Request, res: Response, redir
             clearTimeout(manifestTimeout);
             headersSent = true;
             responseHeaders['Content-Type'] = 'video/mp2t';
-            res.writeHead(proxyRes.statusCode || 200, responseHeaders);
+            res.writeHead(upstreamResponse.statusCode || 200, responseHeaders);
             res.write(manifestData);
-            proxyRes.pipe(res);
+            upstreamResponse.pipe(res);
           }
         });
 
-        proxyRes.on('end', () => {
+        upstreamResponse.on('end', () => {
           clearTimeout(manifestTimeout);
           if (headersSent || res.headersSent) return;
           if (manifestData.includes('#EXTM3U')) {
@@ -239,23 +254,18 @@ async function proxyStream(targetUrl: string, req: Request, res: Response, redir
             responseHeaders['Content-Length'] = Buffer.byteLength(rewritten, 'utf8').toString();
             responseHeaders['Cache-Control'] = 'no-cache, no-store, must-revalidate';
             delete responseHeaders['Content-Range'];
-            res.writeHead(proxyRes.statusCode || 200, responseHeaders);
+            res.writeHead(upstreamResponse.statusCode || 200, responseHeaders);
             res.end(rewritten);
           } else {
             responseHeaders['Content-Length'] = Buffer.byteLength(manifestData, 'utf8').toString();
-            res.writeHead(proxyRes.statusCode || 200, responseHeaders);
+            res.writeHead(upstreamResponse.statusCode || 200, responseHeaders);
             res.end(manifestData);
           }
         });
       } else {
         // Binary media stream (TS, MP4, MKV)
-        res.writeHead(proxyRes.statusCode || 200, responseHeaders);
-        proxyRes.pipe(res);
-
-        req.on('close', () => {
-          proxyReq.destroy();
-          proxyRes.destroy();
-        });
+        res.writeHead(upstreamResponse.statusCode || 200, responseHeaders);
+        upstreamResponse.pipe(res);
       }
     }
   );
@@ -268,6 +278,7 @@ async function proxyStream(targetUrl: string, req: Request, res: Response, redir
   });
 
   proxyReq.on('error', (err) => {
+    if (cleanedUp) return;
     console.error('Proxy stream error:', err.message);
     if (!res.headersSent) {
       res.status(502).send(`Stream proxy error: ${err.message}`);
@@ -299,54 +310,52 @@ app.get('/api/proxy/api', async (req, res) => {
     catch { return res.status(403).json({ error: 'TARGET_BLOCKED' }); }
   }
 
-  const urlsToTry = [targetUrl];
-  if (targetUrl.startsWith('https://')) {
-    urlsToTry.push(targetUrl.replace(/^https:\/\//i, 'http://'));
-  } else if (targetUrl.startsWith('http://')) {
-    urlsToTry.push(targetUrl.replace(/^http:\/\//i, 'https://'));
-  }
-
-  const userAgents = [
-    DEFAULT_USER_AGENT,
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-    'VLC/3.0.18 LibVLC/3.0.18',
+  const alternateUrl = targetUrl.startsWith('https://')
+    ? targetUrl.replace(/^https:\/\//i, 'http://')
+    : targetUrl.replace(/^http:\/\//i, 'https://');
+  const attempts = [
+    { url: targetUrl, userAgent: DEFAULT_USER_AGENT },
+    {
+      url: alternateUrl,
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36',
+    },
   ];
 
   let lastStatus = 502;
   let lastText = '';
 
-  for (const currentUrl of urlsToTry) {
-    for (const ua of userAgents) {
-      try {
-        const response = await guardedRequest(currentUrl, {
-          headers: { 'User-Agent': ua, 'Accept': 'application/json, text/plain, */*' },
-          timeout: 12000,
-          allowPrivate: process.env.NODE_ENV !== 'production' || process.env.ALLOW_PRIVATE_TARGETS === '1',
-        });
-        lastStatus = response.status;
-        const text = response.body.toString('utf8');
-        lastText = text;
+  for (const attempt of attempts) {
+    try {
+      const response = await guardedRequest(attempt.url, {
+        headers: {
+          'User-Agent': attempt.userAgent,
+          'Accept': 'application/json, text/plain, */*',
+        },
+        timeout: 12000,
+        allowPrivate: process.env.NODE_ENV !== 'production' || process.env.ALLOW_PRIVATE_TARGETS === '1',
+      });
+      lastStatus = response.status;
+      lastText = response.body.toString('utf8');
 
-        if (response.status >= 200 && response.status < 300) {
-          try {
-            const data = JSON.parse(text);
-            return res.json(data);
-          } catch {
-            res.header('Content-Type', 'text/plain');
-            return res.send(text);
-          }
+      if (response.status >= 200 && response.status < 300) {
+        try {
+          return res.json(JSON.parse(lastText));
+        } catch {
+          res.header('Content-Type', 'text/plain');
+          return res.send(lastText);
         }
-
-        if (response.status === 401) {
-          try {
-            return res.status(401).json(JSON.parse(text));
-          } catch {
-            return res.status(401).send(text);
-          }
-        }
-      } catch (err: any) {
-        lastText = err?.message || String(err);
       }
+
+      if (response.status >= 400 && response.status < 500) {
+        try {
+          return res.status(response.status).json(JSON.parse(lastText));
+        } catch {
+          return res.status(response.status).send(lastText);
+        }
+      }
+      break;
+    } catch (err: any) {
+      lastText = err?.message || String(err);
     }
   }
 
@@ -454,4 +463,4 @@ async function startServer() {
   });
 }
 
-startServer();
+if (process.env.NODE_ENV !== 'test') void startServer();

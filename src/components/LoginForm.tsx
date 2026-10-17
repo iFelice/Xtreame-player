@@ -18,9 +18,14 @@ import { TvPairingModal } from './TvPairingModal';
 interface LoginFormProps {
   onLogin: (serverUrl: string, username: string, password: string) => void;
   isLoading?: boolean;
+  pairingEnabled?: boolean;
 }
 
-export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, isLoading = false }) => {
+export const LoginForm: React.FC<LoginFormProps> = ({
+  onLogin,
+  isLoading = false,
+  pairingEnabled = false,
+}) => {
   const [serverUrl, setServerUrl] = useState<string>('');
   const [username, setUsername] = useState<string>('');
   const [password, setPassword] = useState<string>('');
@@ -275,6 +280,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLogin, isLoading = false
     </div>
     <TvPairingModal
       isOpen={showPairing}
+      pairingEnabled={pairingEnabled}
       onClose={() => setShowPairing(false)}
       onConnectAccount={(server, user, pass) => {
         // Match the original Android TV flow: receive and fill the fields,

@@ -43,6 +43,7 @@ function pairingWebUrl(code?: string): string {
 
 interface TvPairingModalProps {
   isOpen: boolean;
+  pairingEnabled?: boolean;
   onClose: () => void;
   onConnectAccount: (server: string, username: string, pass: string) => void;
   initialCode?: string | null;
@@ -50,6 +51,7 @@ interface TvPairingModalProps {
 
 export const TvPairingModal: React.FC<TvPairingModalProps> = ({
   isOpen,
+  pairingEnabled = false,
   onClose,
   onConnectAccount,
   initialCode = null,
@@ -80,6 +82,7 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
   const pollIntervalRef = useRef<any>(null);
   const timerIntervalRef = useRef<any>(null);
   const expiresAtRef = useRef<number>(0);
+  const creationStartedRef = useRef<boolean>(false);
   const savedAccounts = storage.getAccounts();
 
   // If initialCode changes, set remotePin and switch mode
@@ -92,6 +95,9 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
 
   // Generate PIN and QR Code when opening TV mode
   const generateNewSession = async () => {
+    const native = Capacitor.isNativePlatform();
+    if (!native && !pairingEnabled) return;
+
     try {
       setPollError(null);
       setReceivedSuccess(false);
@@ -99,7 +105,6 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
       setPinCode('');
       setPollToken(null);
 
-      const native = Capacitor.isNativePlatform();
       const request = buildPairingCreateRequest({
         native,
         nativeServer: nativePairingServer(),
@@ -202,13 +207,19 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
     };
   }, [isOpen, mode, pinCode, pollToken, onConnectAccount, onClose]);
 
-  // Pre-create the TV session while the login screen is visible. By the time
-  // the user opens QR/PIN, both values are normally already available.
+  // Create at most once per modal opening. The ref also prevents React
+  // StrictMode's development effect replay from consuming a second session.
   useEffect(() => {
-    if (mode === 'tv' && !pinCode) {
-      void generateNewSession();
+    if (!isOpen) {
+      creationStartedRef.current = false;
+      return;
     }
-  }, [mode]);
+    const native = Capacitor.isNativePlatform();
+    if (mode !== 'tv' || pinCode || creationStartedRef.current) return;
+    if (!native && !pairingEnabled) return;
+    creationStartedRef.current = true;
+    void generateNewSession();
+  }, [isOpen, mode, pinCode, pairingEnabled]);
 
   // Handle remote form paste link
   const handlePastedLinkChange = (value: string) => {

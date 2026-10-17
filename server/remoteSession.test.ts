@@ -145,14 +145,48 @@ describe('remote TV sessions', () => {
     expect(duplicate.statusCode).toBe(409);
   });
 
-  it('limits active sessions to five per IP', () => {
+  it('replaces the oldest pending session when an IP creates a sixth session', () => {
     let pin = 100000;
-    const service = createRemoteSessionService({ createPin: () => String(pin++) });
-    for (let count = 0; count < 5; count += 1) {
-      expect(createSession(service).statusCode).toBe(200);
-    }
+    let timestamp = 1_000;
+    const service = createRemoteSessionService({
+      createPin: () => String(pin++),
+      now: () => timestamp++,
+    });
+    const oldest = createSession(service);
+    for (let count = 1; count < 5; count += 1) createSession(service);
 
-    expect(createSession(service).statusCode).toBe(429);
+    const sixth = createSession(service);
+    const removed = response();
+    service.status(request({
+      code: oldest.body.code,
+      pollToken: oldest.body.pollToken,
+    }), removed);
+
+    expect(sixth.statusCode).toBe(200);
+    expect(service.sessions.size).toBe(5);
+    expect(removed.statusCode).toBe(404);
+  });
+
+  it('never replaces a completed session when enforcing the per-IP limit', () => {
+    let pin = 100000;
+    let timestamp = 1_000;
+    const service = createRemoteSessionService({
+      createPin: () => String(pin++),
+      now: () => timestamp++,
+    });
+    const completed = createSession(service);
+    service.submit(request({ body: validCredentials(completed.body.code) }), response());
+    for (let count = 1; count < 5; count += 1) createSession(service);
+
+    expect(createSession(service).statusCode).toBe(200);
+    const read = response();
+    service.status(request({
+      code: completed.body.code,
+      pollToken: completed.body.pollToken,
+    }), read);
+
+    expect(read.statusCode).toBe(200);
+    expect(read.body.status).toBe('completed');
   });
 
   it('limits active sessions to one hundred in total', () => {

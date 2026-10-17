@@ -48,6 +48,7 @@ export default function App() {
   const [authData, setAuthData] = useState<XtreamAuthResponse | null>(null);
   const [safeMode, setSafeMode] = useState(false);
   const [accessRequired, setAccessRequired] = useState(false);
+  const [accessResolved, setAccessResolved] = useState(false);
 
   const [activeTab, setActiveTab] = useState<'live' | 'movies' | 'series' | 'recent' | 'favorites'>('live');
   const [showTvHome, setShowTvHome] = useState<boolean>(true);
@@ -101,7 +102,10 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const requireAccess = () => setAccessRequired(true);
+    const requireAccess = () => {
+      setAccessResolved(true);
+      setAccessRequired(true);
+    };
     window.addEventListener('xtream-access-required', requireAccess);
     return () => window.removeEventListener('xtream-access-required', requireAccess);
   }, []);
@@ -269,6 +273,7 @@ export default function App() {
         const runtime = (await response.json()) as { safeMode?: boolean; accessRequired?: boolean };
         if (cancelled) return;
         setSafeMode(Boolean(runtime.safeMode));
+        setAccessResolved(true);
         if (isRemoteLoginPage) return;
         setAccessRequired(Boolean(runtime.accessRequired));
         if (runtime.accessRequired) return;
@@ -738,6 +743,7 @@ export default function App() {
           <LoginForm
             onLogin={(targetServer, user, pass) => connectToServer(targetServer, user, pass)}
             isLoading={isLoadingCatalog}
+            pairingEnabled={accessResolved && !accessRequired}
           />
         )}
       </main>

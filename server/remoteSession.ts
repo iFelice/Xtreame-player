@@ -103,9 +103,20 @@ export function createRemoteSessionService(options: RemoteSessionOptions = {}) {
     const timestamp = now();
     deleteExpired(timestamp);
     const ip = requestIp(req);
-    const sessionsForIp = [...sessions.values()].filter((session) => session.ip === ip).length;
-    if (sessions.size >= MAX_SESSIONS || sessionsForIp >= MAX_SESSIONS_PER_IP) {
+    if (sessions.size >= MAX_SESSIONS) {
       return res.status(429).json({ error: 'TOO_MANY_SESSIONS' });
+    }
+
+    const sessionsForIp = [...sessions.entries()]
+      .filter(([, session]) => session.ip === ip);
+    if (sessionsForIp.length >= MAX_SESSIONS_PER_IP) {
+      const oldestPending = sessionsForIp
+        .filter(([, session]) => !session.credentials)
+        .sort((left, right) => left[1].createdAt - right[1].createdAt)[0];
+      if (!oldestPending) {
+        return res.status(429).json({ error: 'TOO_MANY_SESSIONS' });
+      }
+      sessions.delete(oldestPending[0]);
     }
 
     const code = uniquePin();
