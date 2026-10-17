@@ -41,11 +41,21 @@ describe('access auth', () => {
     expect(status).toBe(429);
   });
 
-  it('publishes only the explicit authentication, runtime and session paths', () => {
-    for (const path of ['/auth/unlock', '/runtime-config', '/session', '/session/create', '/session/status/123']) {
+  it('publishes only unlock, runtime config and session submission', () => {
+    for (const path of ['/auth/unlock', '/runtime-config', '/session/submit']) {
       expect(isPublicApiPath(path), path).toBe(true);
     }
-    for (const path of ['/AUTH/unlock', '/Runtime-config', '/Session', '/SESSION/create', '/proxy/api', '/xtream/test']) {
+    for (const path of [
+      '/session',
+      '/session/create',
+      '/session/status/123456',
+      '/Session/submit',
+      '/SESSION/create',
+      '/AUTH/unlock',
+      '/Runtime-config',
+      '/proxy/api',
+      '/xtream/test',
+    ]) {
       expect(isPublicApiPath(path), path).toBe(false);
     }
   });

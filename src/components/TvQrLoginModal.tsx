@@ -10,6 +10,7 @@ interface TvQrLoginModalProps {
 
 export const TvQrLoginModal: React.FC<TvQrLoginModalProps> = ({ isOpen, onClose, onSuccess }) => {
   const [pinCode, setPinCode] = useState<string | null>(null);
+  const [pollToken, setPollToken] = useState<string | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [remoteUrl, setRemoteUrl] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -22,6 +23,7 @@ export const TvQrLoginModal: React.FC<TvQrLoginModalProps> = ({ isOpen, onClose,
   const initSession = async () => {
     setIsLoading(true);
     setStatus('waiting');
+    setPollToken(null);
     setSecondsRemaining(600);
 
     try {
@@ -30,6 +32,8 @@ export const TvQrLoginModal: React.FC<TvQrLoginModalProps> = ({ isOpen, onClose,
       const data = await res.json();
       const code = data.code;
       setPinCode(code);
+      setPollToken(data.pollToken);
+      setSecondsRemaining(data.expiresInSeconds);
 
       // Generate the URL the user will open on their phone
       const origin = window.location.origin;
@@ -71,11 +75,13 @@ export const TvQrLoginModal: React.FC<TvQrLoginModalProps> = ({ isOpen, onClose,
 
   // Polling for session status
   useEffect(() => {
-    if (!isOpen || !pinCode || status !== 'waiting') return;
+    if (!isOpen || !pinCode || !pollToken || status !== 'waiting') return;
 
     pollIntervalRef.current = setInterval(async () => {
       try {
-        const res = await fetch(`/api/session/status/${pinCode}`);
+        const res = await fetch(`/api/session/status/${pinCode}`, {
+          headers: { 'X-Poll-Token': pollToken },
+        });
         if (!res.ok) return;
         const session = await res.json();
 
@@ -110,7 +116,7 @@ export const TvQrLoginModal: React.FC<TvQrLoginModalProps> = ({ isOpen, onClose,
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
       if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
     };
-  }, [isOpen, pinCode, status, onSuccess, onClose]);
+  }, [isOpen, pinCode, pollToken, status, onSuccess, onClose]);
 
   if (!isOpen) return null;
 

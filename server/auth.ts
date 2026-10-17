@@ -23,8 +23,7 @@ export function isPublicApiPath(pathname: string): boolean {
   return (
     pathname === '/auth/unlock' ||
     pathname === '/runtime-config' ||
-    pathname === '/session' ||
-    pathname.startsWith('/session/')
+    pathname === '/session/submit'
   );
 }
 
