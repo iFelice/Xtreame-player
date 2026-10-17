@@ -7,13 +7,19 @@ import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import { randomBytes } from 'crypto';
 import { createSafeProxySigner, isSafeDevelopmentTarget, SAFE_CONNECT_POLICY, safeProxyEnabled } from './server/safeProxy';
+import { createAccessAuth, requireProductionToken } from './server/auth';
+import { resolvePublicTarget } from './server/targetGuard';
+import { guardedRequest, rewriteM3u8 } from './server/proxy';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+requireProductionToken(process.env);
 const app = express();
+app.set('trust proxy', 1);
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 const SAFE_MODE = safeProxyEnabled();
+const accessAuth = createAccessAuth(process.env.APP_ACCESS_TOKEN, process.env.NODE_ENV === 'production');
 const safeProxySigner = createSafeProxySigner(randomBytes(32));
 
 function proxyPath(targetUrl: string): string {
@@ -40,62 +46,20 @@ if (SAFE_MODE) {
   });
 }
 
-app.get('/api/runtime-config', (_req, res) => {
-  res.json({ safeMode: SAFE_MODE });
+app.post('/api/auth/unlock', accessAuth.unlock);
+app.get('/api/runtime-config', (req, res) => {
+  const cookie = req.headers.cookie?.split(';').map(v => v.trim()).find(v => v.startsWith('xtream_access='))?.slice(14);
+  res.json({ safeMode: SAFE_MODE, accessRequired: accessAuth.enabled && !accessAuth.verify(cookie) });
 });
-
-// Set CORS for all local requests
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, HEAD');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Range');
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(200);
-  }
-  next();
+app.use('/api', (req, res, next) => {
+  if (req.path === '/auth/unlock' || req.path === '/runtime-config' || req.path.startsWith('/session/')) return next();
+  return accessAuth.middleware(req, res, next);
 });
 
 const DEFAULT_USER_AGENT = 'IPTVSmartersPro/3.1.5.1 (Linux; Android 11; Smart TV)';
 
-// Helper function to rewrite M3U8 manifests for HLS playback through proxy
-function rewriteM3u8(content: string, baseUrl: string): string {
-  const lines = content.split(/\r?\n/);
-  const rewrittenLines: string[] = [];
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed) {
-      rewrittenLines.push(line);
-      continue;
-    }
-
-    if (trimmed.startsWith('#')) {
-      // Check for URI in tags like #EXT-X-KEY:METHOD=...,URI="..." or #EXT-X-MAP:URI="..."
-      const modifiedTag = line.replace(/URI=["']([^"']+)["']/g, (match, uri) => {
-        try {
-          const resolved = new URL(uri, baseUrl).toString();
-          return `URI="${proxyPath(resolved)}"`;
-        } catch {
-          return match;
-        }
-      });
-      rewrittenLines.push(modifiedTag);
-    } else {
-      // Segment or child playlist URL
-      try {
-        const resolved = new URL(trimmed, baseUrl).toString();
-        rewrittenLines.push(proxyPath(resolved));
-      } catch {
-        rewrittenLines.push(trimmed);
-      }
-    }
-  }
-
-  return rewrittenLines.join('\n');
-}
-
 // Helper to make HTTP/HTTPS request following redirects
-function proxyStream(targetUrl: string, req: Request, res: Response, redirectCount = 0) {
+async function proxyStream(targetUrl: string, req: Request, res: Response, redirectCount = 0) {
   if (redirectCount > 5) {
     res.status(502).send('Too many redirects');
     return;
@@ -109,6 +73,15 @@ function proxyStream(targetUrl: string, req: Request, res: Response, redirectCou
     return;
   }
 
+  let lookup: import('net').LookupFunction | undefined;
+  if (process.env.NODE_ENV === 'production') {
+    try {
+      lookup = (await resolvePublicTarget(targetUrl, process.env.ALLOW_PRIVATE_TARGETS === '1')).lookup;
+    } catch {
+      res.status(403).json({ error: 'TARGET_BLOCKED' });
+      return;
+    }
+  }
   const client = parsedUrl.protocol === 'https:' ? https : http;
 
   const headers: Record<string, string> = {
@@ -126,6 +99,7 @@ function proxyStream(targetUrl: string, req: Request, res: Response, redirectCou
     {
       method: req.method === 'HEAD' ? 'HEAD' : 'GET',
       headers,
+      lookup,
       timeout: 15000, // Initial connect timeout only
     },
     (proxyRes) => {
@@ -159,8 +133,6 @@ function proxyStream(targetUrl: string, req: Request, res: Response, redirectCou
 
       const responseHeaders: Record<string, string | string[] | undefined> = {
         'Accept-Ranges': 'bytes',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Expose-Headers': 'Content-Range, Content-Length, Accept-Ranges, Content-Type',
       };
 
       if (proxyRes.headers['content-range']) {
@@ -260,7 +232,7 @@ function proxyStream(targetUrl: string, req: Request, res: Response, redirectCou
           clearTimeout(manifestTimeout);
           if (headersSent || res.headersSent) return;
           if (manifestData.includes('#EXTM3U')) {
-            const rewritten = rewriteM3u8(manifestData, targetUrl);
+            const rewritten = rewriteM3u8(manifestData, targetUrl, proxyPath);
             responseHeaders['Content-Type'] = 'application/vnd.apple.mpegurl';
             responseHeaders['Content-Length'] = Buffer.byteLength(rewritten, 'utf8').toString();
             responseHeaders['Cache-Control'] = 'no-cache, no-store, must-revalidate';
@@ -320,6 +292,10 @@ app.get('/api/proxy/api', async (req, res) => {
     return res.status(400).json({ error: 'Missing url parameter' });
   }
   if (rejectUnsafeProxyTarget(targetUrl, res)) return;
+  if (process.env.NODE_ENV === 'production') {
+    try { await resolvePublicTarget(targetUrl, process.env.ALLOW_PRIVATE_TARGETS === '1'); }
+    catch { return res.status(403).json({ error: 'TARGET_BLOCKED' }); }
+  }
 
   const urlsToTry = [targetUrl];
   if (targetUrl.startsWith('https://')) {
@@ -340,24 +316,16 @@ app.get('/api/proxy/api', async (req, res) => {
   for (const currentUrl of urlsToTry) {
     for (const ua of userAgents) {
       try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 12000);
-
-        const response = await fetch(currentUrl, {
-          method: 'GET',
-          headers: {
-            'User-Agent': ua,
-            'Accept': 'application/json, text/plain, */*',
-          },
-          signal: controller.signal,
+        const response = await guardedRequest(currentUrl, {
+          headers: { 'User-Agent': ua, 'Accept': 'application/json, text/plain, */*' },
+          timeout: 12000,
+          allowPrivate: process.env.NODE_ENV !== 'production' || process.env.ALLOW_PRIVATE_TARGETS === '1',
         });
-
-        clearTimeout(timeout);
         lastStatus = response.status;
-        const text = await response.text();
+        const text = response.body.toString('utf8');
         lastText = text;
 
-        if (response.ok) {
+        if (response.status >= 200 && response.status < 300) {
           try {
             const data = JSON.parse(text);
             return res.json(data);
@@ -403,19 +371,18 @@ app.post('/api/xtream/test', async (req, res) => {
 
   const cleanHost = host.replace(/\/+$/, '');
   const apiUrl = `${cleanHost}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
+  if (process.env.NODE_ENV === 'production') {
+    try { await resolvePublicTarget(apiUrl, process.env.ALLOW_PRIVATE_TARGETS === '1'); }
+    catch { return res.status(403).json({ error: 'TARGET_BLOCKED' }); }
+  }
 
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
-
-    const response = await fetch(apiUrl, {
+    const response = await guardedRequest(apiUrl, {
       headers: { 'User-Agent': DEFAULT_USER_AGENT },
-      signal: controller.signal,
+      timeout: 15000,
+      allowPrivate: process.env.NODE_ENV !== 'production' || process.env.ALLOW_PRIVATE_TARGETS === '1',
     });
-
-    clearTimeout(timeout);
-
-    const text = await response.text();
+    const text = response.body.toString('utf8');
     let data: any;
     try {
       data = JSON.parse(text);

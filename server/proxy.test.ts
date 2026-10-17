@@ -1,0 +1,3 @@
+import { describe,expect,it } from 'vitest';import { rewriteM3u8 } from './proxy';
+const p=(u:string)=>`/proxy?url=${encodeURIComponent(u)}`;
+describe('rewriteM3u8',()=>{it('rewrites relative, absolute, keys and maps while preserving blanks and CRLF structure',()=>{const input='#EXTM3U\r\n#EXT-X-KEY:METHOD=AES-128,URI="key.bin"\r\n#EXT-X-MAP:URI="https://cdn.test/init.mp4"\r\n\r\nseg.ts\r\nhttps://cdn.test/next.m3u8';const out=rewriteM3u8(input,'https://origin.test/live/main.m3u8',p);expect(out).toContain(p('https://origin.test/live/key.bin'));expect(out).toContain(p('https://cdn.test/init.mp4'));expect(out).toContain(`\n\n${p('https://origin.test/live/seg.ts')}\n`);expect(out).toContain(p('https://cdn.test/next.m3u8'));});});

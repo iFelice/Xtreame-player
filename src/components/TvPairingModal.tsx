@@ -22,6 +22,8 @@ import { Capacitor } from '@capacitor/core';
 
 const DEFAULT_PAIRING_SERVER = 'https://login-extream-neyt.onrender.com';
 
+// Native platforms use the separate pairing service. Pointing
+// xtream_pairing_server at this same-origin-only instance is unsupported.
 function pairingApiUrl(path: string): string {
   if (!Capacitor.isNativePlatform()) return path;
   const base = (localStorage.getItem('xtream_pairing_server') || DEFAULT_PAIRING_SERVER).replace(/\/+$/, '');

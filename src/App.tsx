@@ -16,6 +16,7 @@ import { ServerInfoModal } from './components/ServerInfoModal';
 import { RecentProductsShelf } from './components/RecentProductsShelf';
 import { SettingsSyncModal } from './components/SettingsSyncModal';
 import { RemoteLoginView } from './components/RemoteLoginView';
+import { AccessUnlock } from './components/AccessUnlock';
 
 import {
   XtreamParsedUrl,
@@ -46,6 +47,7 @@ export default function App() {
   const [password, setPassword] = useState<string>('');
   const [authData, setAuthData] = useState<XtreamAuthResponse | null>(null);
   const [safeMode, setSafeMode] = useState(false);
+  const [accessRequired, setAccessRequired] = useState(false);
 
   const [activeTab, setActiveTab] = useState<'live' | 'movies' | 'series' | 'recent' | 'favorites'>('live');
   const [showTvHome, setShowTvHome] = useState<boolean>(true);
@@ -258,9 +260,11 @@ export default function App() {
     const restoreSession = async () => {
       try {
         const response = await fetch('/api/runtime-config');
-        const runtime = (await response.json()) as { safeMode?: boolean };
+        const runtime = (await response.json()) as { safeMode?: boolean; accessRequired?: boolean };
         if (cancelled) return;
         setSafeMode(Boolean(runtime.safeMode));
+        setAccessRequired(Boolean(runtime.accessRequired));
+        if (runtime.accessRequired) return;
         if (!runtime.safeMode) sessionStorage.removeItem('xtream_safe_mode');
         if (runtime.safeMode) {
           sessionStorage.setItem('xtream_safe_mode', '1');
@@ -381,6 +385,8 @@ export default function App() {
 
   const isConnected = Boolean(serverUrl && username && password);
   const currentAccountKey = serverUrl && username ? `${serverUrl}_${username}` : undefined;
+
+  if (accessRequired) return <AccessUnlock />;
 
   if (isRemoteLoginPage) {
     return (
