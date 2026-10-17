@@ -269,6 +269,7 @@ export default function App() {
         const runtime = (await response.json()) as { safeMode?: boolean; accessRequired?: boolean };
         if (cancelled) return;
         setSafeMode(Boolean(runtime.safeMode));
+        if (isRemoteLoginPage) return;
         setAccessRequired(Boolean(runtime.accessRequired));
         if (runtime.accessRequired) return;
         if (!runtime.safeMode) sessionStorage.removeItem('xtream_safe_mode');
@@ -305,7 +306,7 @@ export default function App() {
 
     void restoreSession();
     return () => { cancelled = true; };
-  }, [connectToServer]);
+  }, [connectToServer, isRemoteLoginPage]);
 
   const handlePlayDirect = (media: PlayableMediaItem) => {
     setActiveMedia(media);
@@ -392,8 +393,6 @@ export default function App() {
   const isConnected = Boolean(serverUrl && username && password);
   const currentAccountKey = serverUrl && username ? `${serverUrl}_${username}` : undefined;
 
-  if (accessRequired) return <AccessUnlock />;
-
   if (isRemoteLoginPage) {
     return (
       <RemoteLoginView
@@ -404,6 +403,8 @@ export default function App() {
       />
     );
   }
+
+  if (accessRequired) return <AccessUnlock />;
 
   return (
     <Suspense fallback={<div className="min-h-screen bg-zinc-950 text-zinc-300 flex items-center justify-center">Caricamento…</div>}>

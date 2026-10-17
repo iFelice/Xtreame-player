@@ -101,3 +101,9 @@ docker run -e APP_ACCESS_TOKEN='usa-almeno-24-caratteri-casuali' -p 3000:3000 xt
 ```
 
 Le destinazioni private sono bloccate in produzione. `ALLOW_PRIVATE_TARGETS=1` disattiva esplicitamente tale protezione ed è destinato soltanto a reti amministrate e fidate.
+
+### Reverse proxy e ascolto locale
+
+Su Render `TRUST_PROXY=1` è configurato perché esiste un solo reverse proxy fidato davanti al servizio. Non impostarlo in Docker o in locale senza un reverse proxy controllato: in sua assenza gli header `X-Forwarded-For` non devono influenzare il rate limit.
+
+In sviluppo, senza un `APP_ACCESS_TOKEN` valido, il server ascolta soltanto su `127.0.0.1`. Un token di almeno 24 caratteri abilita l'ascolto predefinito su `0.0.0.0`. Impostare `HOST` forza esplicitamente l'indirizzo; senza token viene mostrato un avviso di esposizione non autenticata.

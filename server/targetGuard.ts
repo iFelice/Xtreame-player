@@ -1,36 +1,59 @@
 import dns from 'dns';
-import net from 'net';
 import type { LookupFunction } from 'net';
+import ipaddr from 'ipaddr.js';
 
-function ipv4Number(ip: string): number { return ip.split('.').reduce((n, part) => (n * 256 + Number(part)) >>> 0, 0); }
-function inV4(ip: string, base: string, bits: number) { const mask = bits === 0 ? 0 : (0xffffffff << (32 - bits)) >>> 0; return (ipv4Number(ip) & mask) === (ipv4Number(base) & mask); }
-export function isPrivateAddress(input: string): boolean {
-  let ip = input.toLowerCase().split('%')[0];
-  if (ip.startsWith('::ffff:')) {
-    const mapped = ip.slice(7);
-    if (net.isIP(mapped) === 4) ip = mapped;
-    else if (/^[0-9a-f]{1,4}:[0-9a-f]{1,4}$/.test(mapped)) {
-      const [high, low] = mapped.split(':').map(part => parseInt(part, 16));
-      ip = `${high >> 8}.${high & 255}.${low >> 8}.${low & 255}`;
-    }
-  }
-  if (net.isIP(ip) === 4) return [['0.0.0.0',8],['10.0.0.0',8],['100.64.0.0',10],['127.0.0.0',8],['169.254.0.0',16],['172.16.0.0',12],['192.168.0.0',16]].some(([b,n]) => inV4(ip,b as string,n as number));
-  if (net.isIP(ip) === 6) return ip === '::' || ip === '::1' || /^f[cd]/.test(ip) || /^(fe[89ab])/.test(ip);
-  return true;
+export type AddressClassifier = (address: string) => boolean;
+
+function stripIpv6Brackets(hostname: string): string {
+  return hostname.startsWith('[') && hostname.endsWith(']')
+    ? hostname.slice(1, -1)
+    : hostname;
 }
-export async function resolvePublicTarget(raw: string, allowPrivate = false) {
-  const url = new URL(raw); if (!['http:','https:'].includes(url.protocol)) throw new Error('TARGET_PROTOCOL_BLOCKED');
-  const records = await dns.promises.lookup(url.hostname, { all: true, verbatim: true });
-  if (!records.length || (!allowPrivate && records.some(r => isPrivateAddress(r.address)))) throw new Error('PRIVATE_TARGET_BLOCKED');
-  const allowed = new Map(records.map(r => [`${r.family}:${r.address}`, r]));
-  const lookup: LookupFunction = (hostname, options, callback) => {
+
+export function isPrivateAddress(input: string): boolean {
+  try {
+    let address = ipaddr.parse(stripIpv6Brackets(input.split('%')[0]));
+    if (address.kind() === 'ipv6') {
+      const ipv6 = address as ipaddr.IPv6;
+      if (ipv6.isIPv4MappedAddress()) address = ipv6.toIPv4Address();
+    }
+    return address.range() !== 'unicast';
+  } catch {
+    return true;
+  }
+}
+
+export async function resolvePublicTarget(
+  rawUrl: string,
+  allowPrivate = false,
+  classifyAddress: AddressClassifier = isPrivateAddress,
+) {
+  const url = new URL(rawUrl);
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new Error('TARGET_PROTOCOL_BLOCKED');
+  }
+
+  const hostname = stripIpv6Brackets(url.hostname);
+  const records = await dns.promises.lookup(hostname, { all: true, verbatim: true });
+  if (!records.length || (!allowPrivate && records.some((record) => classifyAddress(record.address)))) {
+    throw new Error('PRIVATE_TARGET_BLOCKED');
+  }
+
+  const allowed = new Set(records.map((record) => `${record.family}:${record.address}`));
+  const lookup: LookupFunction = (requestedHostname, options, callback) => {
     const config = typeof options === 'number' ? { family: options, all: false } : options;
     const family = config?.family || 0;
-    const matches = records.filter(r => !family || r.family === family);
-    if (hostname !== url.hostname || !matches.length || matches.some(r => !allowed.has(`${r.family}:${r.address}`))) return callback(new Error('DNS_REBIND_BLOCKED'), '', 4);
+    const matches = records.filter((record) => !family || record.family === family);
+    const validRequest =
+      stripIpv6Brackets(requestedHostname) === hostname &&
+      matches.length > 0 &&
+      matches.every((record) => allowed.has(`${record.family}:${record.address}`));
+
+    if (!validRequest) return callback(new Error('DNS_REBIND_BLOCKED'), '', 4);
     if (config && 'all' in config && config.all) return (callback as any)(null, matches);
     const match = matches[0];
-    callback(null, match.address, match.family);
+    return callback(null, match.address, match.family);
   };
+
   return { url, lookup, addresses: records };
 }

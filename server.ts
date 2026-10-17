@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import { randomBytes } from 'crypto';
 import { createSafeProxySigner, isSafeDevelopmentTarget, SAFE_CONNECT_POLICY, safeProxyEnabled } from './server/safeProxy';
-import { createAccessAuth, requireProductionToken } from './server/auth';
+import { createAccessAuth, isPublicApiPath, requireProductionToken } from './server/auth';
 import { resolvePublicTarget } from './server/targetGuard';
 import { guardedRequest, rewriteM3u8 } from './server/proxy';
 
@@ -16,7 +16,7 @@ const __dirname = path.dirname(__filename);
 
 requireProductionToken(process.env);
 const app = express();
-app.set('trust proxy', 1);
+if (process.env.TRUST_PROXY === '1') app.set('trust proxy', 1);
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 const SAFE_MODE = safeProxyEnabled();
 const accessAuth = createAccessAuth(process.env.APP_ACCESS_TOKEN, process.env.NODE_ENV === 'production');
@@ -52,7 +52,7 @@ app.get('/api/runtime-config', (req, res) => {
   res.json({ safeMode: SAFE_MODE, accessRequired: accessAuth.enabled && !accessAuth.verify(cookie) });
 });
 app.use('/api', (req, res, next) => {
-  if (req.path === '/auth/unlock' || req.path === '/runtime-config' || req.path.startsWith('/session/')) return next();
+  if (isPublicApiPath(req.path)) return next();
   return accessAuth.middleware(req, res, next);
 });
 
@@ -502,8 +502,15 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server Xtream Player avviato su http://0.0.0.0:${PORT}`);
+  const explicitHost = process.env.HOST;
+  const hasValidToken = Boolean(process.env.APP_ACCESS_TOKEN && process.env.APP_ACCESS_TOKEN.length >= 24);
+  const listenHost = explicitHost || (hasValidToken ? '0.0.0.0' : '127.0.0.1');
+  if (explicitHost && !hasValidToken) {
+    console.warn('ATTENZIONE: HOST è impostato senza un APP_ACCESS_TOKEN valido; il server può essere esposto senza autenticazione.');
+  }
+
+  app.listen(PORT, listenHost, () => {
+    console.log(`Server Xtream Player avviato su http://${listenHost}:${PORT}`);
     if (SAFE_MODE) console.log('Modalità sicura attiva: proxy limitato al mock locale.');
   });
 }
