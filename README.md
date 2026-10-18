@@ -38,7 +38,7 @@ Puoi pubblicare questa applicazione sul tuo account personale di **[Render.com](
      - **Start Command**: `npm start`
      - **Instance Type**: `Free`
    - Clicca su **Deploy Web Service**.
-4. In circa 2 minuti avrai il tuo link personale (es. `https://mio-xtream-player.onrender.com`), protetto dal token `APP_ACCESS_TOKEN` e dal relativo cookie di accesso firmato.
+4. In circa 2 minuti avrai il tuo link personale (es. `https://mio-xtream-player.onrender.com`).
 
 ---
 
@@ -86,24 +86,14 @@ Visita `http://localhost:3000`.
 
 ## Sicurezza dell'istanza
 
-L'istanza accetta soltanto richieste API same-origin. In produzione `APP_ACCESS_TOKEN` è obbligatorio (minimo 24 caratteri); Render lo genera automaticamente e lo mostra in **Dashboard → Service → Environment**. Inseriscilo una volta nella schermata di sblocco: viene creato un cookie HttpOnly firmato, valido 30 giorni.
+Nessun token e nessuna schermata di sblocco: il proxy resta chiuso e il primo login riuscito con un provider (`user_info.auth === 1`) abilita automaticamente quella origine per tutte le altre richieste. Verso le origini mai autorizzate passa soltanto la richiesta di login (con un massimo di 20 tentativi ogni 10 minuti per IP); l'elenco tiene al massimo 5 provider, eliminando quello usato meno di recente.
 
-In locale, se vuoi provare la protezione:
-
-```bash
-APP_ACCESS_TOKEN='usa-almeno-24-caratteri-casuali' npm run dev
-```
-
-Con Docker passa la variabile senza inserirla nell'immagine:
-
-```bash
-docker run -e APP_ACCESS_TOKEN='usa-almeno-24-caratteri-casuali' -p 3000:3000 xtream-player
-```
+Per azzerare l'elenco dei provider consentiti cancella il file `data/allowed-hosts.json` e riavvia il server.
 
 Le destinazioni private sono bloccate in produzione. `ALLOW_PRIVATE_TARGETS=1` disattiva esplicitamente tale protezione ed è destinato soltanto a reti amministrate e fidate.
 
-### Reverse proxy e ascolto locale
+### Reverse proxy e ascolto di rete
 
-Su Render `TRUST_PROXY=1` è configurato perché esiste un solo reverse proxy fidato davanti al servizio. Non impostarlo in Docker o in locale senza un reverse proxy controllato: in sua assenza gli header `X-Forwarded-For` non devono influenzare il rate limit.
+`TRUST_PROXY=1` resta disponibile per chi espone il servizio dietro un solo reverse proxy fidato. Non impostarlo in Docker o in locale senza un reverse proxy controllato: in sua assenza gli header `X-Forwarded-For` non devono influenzare il rate limit.
 
-In sviluppo, senza un `APP_ACCESS_TOKEN` valido, il server ascolta soltanto su `127.0.0.1`. Un token di almeno 24 caratteri abilita l'ascolto predefinito su `0.0.0.0`. Impostare `HOST` forza esplicitamente l'indirizzo; senza token viene mostrato un avviso di esposizione non autenticata.
+Il server è pensato per la rete di casa e ascolta su `0.0.0.0`, così è raggiungibile da TV e telefono: la protezione è l'elenco dei provider consentiti, non l'indirizzo di ascolto. Imposta `HOST=127.0.0.1` per limitarlo alla sola macchina locale.

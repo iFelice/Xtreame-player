@@ -1,6 +1,14 @@
 import http, { type Server } from 'http';
+import { mkdtempSync } from 'fs';
+import { tmpdir } from 'os';
+import path from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { app } from '../server';
+
+process.env.ALLOWED_HOSTS_FILE = path.join(
+  mkdtempSync(path.join(tmpdir(), 'xtream-lifecycle-hosts-')),
+  'allowed-hosts.json',
+);
+const { app, allowedOrigins } = await import('../server');
 
 const servers: Server[] = [];
 
@@ -25,6 +33,7 @@ function waitForClose(register: (resolve: () => void) => void): Promise<void> {
 }
 
 afterEach(async () => {
+  allowedOrigins.clear();
   await Promise.all(servers.splice(0).map((server) => new Promise<void>((resolve) => {
     server.close(() => resolve());
     server.closeAllConnections?.();
@@ -45,6 +54,7 @@ describe('proxy connection lifecycle', () => {
       });
     });
     const providerPort = await listen(provider);
+    allowedOrigins.add(`http://127.0.0.1:${providerPort}`);
     const proxyPort = await listen(app.listen(0, '127.0.0.1'));
 
     await new Promise<void>((resolve, reject) => {
@@ -76,6 +86,7 @@ describe('proxy connection lifecycle', () => {
       setTimeout(() => res.end('late'), 2_000).unref();
     });
     const providerPort = await listen(provider);
+    allowedOrigins.add(`http://127.0.0.1:${providerPort}`);
     const proxyPort = await listen(app.listen(0, '127.0.0.1'));
     const client = http.get(
       `http://127.0.0.1:${proxyPort}/api/proxy/stream?url=${encodeURIComponent(`http://127.0.0.1:${providerPort}/slow`)}`,
@@ -96,6 +107,7 @@ describe('proxy connection lifecycle', () => {
       res.end('{"error":"forbidden"}');
     });
     const providerPort = await listen(provider);
+    allowedOrigins.add(`http://127.0.0.1:${providerPort}`);
     const proxyPort = await listen(app.listen(0, '127.0.0.1'));
 
     const result = await new Promise<{ body: string; status: number | undefined }>((resolve, reject) => {

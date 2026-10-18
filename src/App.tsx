@@ -16,7 +16,6 @@ import { ServerInfoModal } from './components/ServerInfoModal';
 import { RecentProductsShelf } from './components/RecentProductsShelf';
 import { SettingsSyncModal } from './components/SettingsSyncModal';
 import { RemoteLoginView } from './components/RemoteLoginView';
-import { AccessUnlock } from './components/AccessUnlock';
 
 import {
   XtreamParsedUrl,
@@ -47,8 +46,6 @@ export default function App() {
   const [password, setPassword] = useState<string>('');
   const [authData, setAuthData] = useState<XtreamAuthResponse | null>(null);
   const [safeMode, setSafeMode] = useState(false);
-  const [accessRequired, setAccessRequired] = useState(false);
-  const [accessResolved, setAccessResolved] = useState(false);
 
   const [activeTab, setActiveTab] = useState<'live' | 'movies' | 'series' | 'recent' | 'favorites'>('live');
   const [showTvHome, setShowTvHome] = useState<boolean>(true);
@@ -99,15 +96,6 @@ export default function App() {
       window.removeEventListener('xtream-download-status', handleDownloadStatus);
       if (hideTimer) clearTimeout(hideTimer);
     };
-  }, []);
-
-  useEffect(() => {
-    const requireAccess = () => {
-      setAccessResolved(true);
-      setAccessRequired(true);
-    };
-    window.addEventListener('xtream-access-required', requireAccess);
-    return () => window.removeEventListener('xtream-access-required', requireAccess);
   }, []);
 
   useEffect(() => {
@@ -270,13 +258,10 @@ export default function App() {
     const restoreSession = async () => {
       try {
         const response = await fetch('/api/runtime-config');
-        const runtime = (await response.json()) as { safeMode?: boolean; accessRequired?: boolean };
+        const runtime = (await response.json()) as { safeMode?: boolean };
         if (cancelled) return;
         setSafeMode(Boolean(runtime.safeMode));
-        setAccessResolved(true);
         if (isRemoteLoginPage) return;
-        setAccessRequired(Boolean(runtime.accessRequired));
-        if (runtime.accessRequired) return;
         if (!runtime.safeMode) sessionStorage.removeItem('xtream_safe_mode');
         if (runtime.safeMode) {
           sessionStorage.setItem('xtream_safe_mode', '1');
@@ -408,8 +393,6 @@ export default function App() {
       />
     );
   }
-
-  if (accessRequired) return <AccessUnlock />;
 
   return (
     <Suspense fallback={<div className="min-h-screen bg-zinc-950 text-zinc-300 flex items-center justify-center">Caricamento…</div>}>
@@ -743,7 +726,7 @@ export default function App() {
           <LoginForm
             onLogin={(targetServer, user, pass) => connectToServer(targetServer, user, pass)}
             isLoading={isLoadingCatalog}
-            pairingEnabled={accessResolved && !accessRequired}
+            pairingEnabled
           />
         )}
       </main>
