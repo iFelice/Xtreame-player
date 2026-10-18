@@ -12,13 +12,14 @@ export default defineConfig(() => {
       },
     },
     server: {
-      // Arena and local network previews use dynamic hostnames.
+      // Il server di sviluppo ascolta su 0.0.0.0 per essere raggiungibile
+      // da TV e telefono nella rete di casa. Vite di default accetta solo
+      // "localhost" e gli indirizzi IP nell'header Host: un dispositivo che
+      // raggiunge il PC tramite nome host (es. http://nome-pc.local:3000)
+      // riceverebbe un 403. allowedHosts: true li ammette tutti; la
+      // protezione effettiva resta l'elenco dei provider consentiti del
+      // proxy (server/allowedHosts.ts), non questo controllo.
       allowedHosts: true as const,
-      // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modify—file watching is disabled to prevent flickering during agent edits.
-      hmr: process.env.DISABLE_HMR !== 'true',
-      // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
-      watch: process.env.DISABLE_HMR === 'true' ? null : {},
     },
   };
 });
