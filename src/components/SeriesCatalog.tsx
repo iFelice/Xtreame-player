@@ -29,7 +29,7 @@ import { storage } from '../services/storage';
 import { sortSeriesList } from '../utils/recentSorting';
 import { getSecureImageUrl } from '../utils/imageUrl';
 import { VirtualizedMediaGrid } from './VirtualizedMediaGrid';
-import { ListPositionPill } from './ListPositionPill';
+import { ListPositionIndicator } from './ListPositionIndicator';
 import { triggerMediaDownload, isTvEnvironment } from '../utils/downloadHelper';
 
 interface SeriesCatalogProps {
@@ -299,7 +299,7 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
         </aside>
 
         {/* Right Column: Series in the Selected Category (extended down to bottom of page) */}
-        <section className="media-content-panel relative flex-1 w-full min-w-0 bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 sm:p-6 flex flex-col shadow-xl h-[calc(100vh-210px)] min-h-[680px]">
+        <section className="media-content-panel flex-1 w-full min-w-0 bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 sm:p-6 flex flex-col shadow-xl h-[calc(100vh-210px)] min-h-[680px]">
           {/* Header of the Selected Category */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-800 shrink-0">
             <div className="min-w-0">
@@ -307,10 +307,13 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                 <Tv className="w-7 h-7 text-blue-400 shrink-0" />
                 <span className="truncate">{currentCategory?.category_name || 'Serie TV'}</span>
               </h2>
-              <p className="text-xs sm:text-sm text-zinc-400 font-medium mt-1">
-                Mostrando <strong className="text-zinc-100">{filteredSeries.length}</strong> serie TV
-                {searchQuery ? ` per "${searchQuery}"` : ''}
-              </p>
+              <ListPositionIndicator
+                scrollRef={seriesListRef}
+                total={filteredSeries.length}
+                label="serie TV"
+                searchQuery={searchQuery}
+                layout="grid"
+              />
             </div>
 
             {/* Controls: Sort, Search & Scroll Arrows */}
@@ -481,12 +484,6 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
             />
           )}
           </div>
-
-          <ListPositionPill
-            scrollRef={seriesListRef}
-            total={filteredSeries.length}
-            layout="grid"
-          />
         </section>
       </div>
 
