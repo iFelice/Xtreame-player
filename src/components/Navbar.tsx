@@ -1,3 +1,4 @@
+import { RemoteImage } from './RemoteImage';
 import React, { useState } from 'react';
 import {
   Info,
@@ -39,7 +40,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* Brand with Large Dynamic Icon and Text */}
         <div className="flex items-center gap-3 sm:gap-4 shrink-0">
           <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl bg-zinc-900 border border-zinc-700 p-1 sm:p-1.5 flex items-center justify-center shadow-xl shadow-emerald-950/40 group shrink-0">
-            <img
+            <RemoteImage
               src={currentAppIcon}
               alt="Xtream Player Icon"
               className="w-full h-full object-contain"

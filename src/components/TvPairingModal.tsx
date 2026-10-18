@@ -1,3 +1,4 @@
+import { RemoteImage } from './RemoteImage';
 import React, { useState, useEffect, useRef } from 'react';
 import QRCode from 'qrcode';
 import {
@@ -18,9 +19,32 @@ import {
 } from 'lucide-react';
 import { storage } from '../services/storage';
 import { parseXtreamUrl } from '../utils/parseXtreamUrl';
+import { Capacitor } from '@capacitor/core';
+import { buildPairingCreateRequest, buildPairingStatusRequest } from '../services/pairingRequests';
+
+const DEFAULT_PAIRING_SERVER = 'https://login-extream-neyt.onrender.com';
+
+// Native platforms use the separate pairing service. Pointing
+// xtream_pairing_server at this same-origin-only instance is unsupported.
+function nativePairingServer(): string {
+  return (localStorage.getItem('xtream_pairing_server') || DEFAULT_PAIRING_SERVER).replace(/\/+$/, '');
+}
+
+function pairingApiUrl(path: string): string {
+  if (!Capacitor.isNativePlatform()) return path;
+  return `${nativePairingServer()}${path}`;
+}
+
+function pairingWebUrl(code?: string): string {
+  const base = Capacitor.isNativePlatform()
+    ? (localStorage.getItem('xtream_pairing_server') || DEFAULT_PAIRING_SERVER).replace(/\/+$/, '')
+    : window.location.origin;
+  return code ? `${base}/?code=${encodeURIComponent(code)}` : base;
+}
 
 interface TvPairingModalProps {
   isOpen: boolean;
+  pairingEnabled?: boolean;
   onClose: () => void;
   onConnectAccount: (server: string, username: string, pass: string) => void;
   initialCode?: string | null;
@@ -28,6 +52,7 @@ interface TvPairingModalProps {
 
 export const TvPairingModal: React.FC<TvPairingModalProps> = ({
   isOpen,
+  pairingEnabled = false,
   onClose,
   onConnectAccount,
   initialCode = null,
@@ -37,6 +62,7 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
 
   // TV receiver state
   const [pinCode, setPinCode] = useState<string>('');
+  const [pollToken, setPollToken] = useState<string | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const [expiresIn, setExpiresIn] = useState<number>(600);
   const [isWaitingForPhone, setIsWaitingForPhone] = useState<boolean>(true);
@@ -56,6 +82,8 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
 
   const pollIntervalRef = useRef<any>(null);
   const timerIntervalRef = useRef<any>(null);
+  const expiresAtRef = useRef<number>(0);
+  const creationStartedRef = useRef<boolean>(false);
   const savedAccounts = storage.getAccounts();
 
   // If initialCode changes, set remotePin and switch mode
@@ -68,23 +96,36 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
 
   // Generate PIN and QR Code when opening TV mode
   const generateNewSession = async () => {
+    const native = Capacitor.isNativePlatform();
+    if (!native && !pairingEnabled) return;
+
     try {
       setPollError(null);
       setReceivedSuccess(false);
       setIsWaitingForPhone(true);
-      setExpiresIn(600);
+      setPinCode('');
+      setPollToken(null);
 
-      const res = await fetch('/api/session/create');
+      const request = buildPairingCreateRequest({
+        native,
+        nativeServer: nativePairingServer(),
+      });
+      const res = await fetch(request.url, { headers: request.headers });
       if (!res.ok) {
         throw new Error('Impossibile creare sessione TV');
       }
       const data = await res.json();
       const code = data.code;
+      const lifetime = !native && typeof data.expiresInSeconds === 'number'
+        ? data.expiresInSeconds
+        : 600;
       setPinCode(code);
+      setPollToken(native ? null : data.pollToken);
+      setExpiresIn(lifetime);
+      expiresAtRef.current = Date.now() + lifetime * 1000;
 
       // Create QR Code containing direct pairing URL
-      const origin = typeof window !== 'undefined' ? window.location.origin : '';
-      const pairUrl = `${origin}/?pair=${code}`;
+      const pairUrl = pairingWebUrl(code);
 
       const qrUrl = await QRCode.toDataURL(pairUrl, {
         width: 320,
@@ -97,7 +138,10 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
       setQrDataUrl(qrUrl);
     } catch (err: any) {
       console.error('TV Session create error:', err);
-      setPollError('Errore durante la creazione del codice TV. Clicca su Riprova.');
+      const base = pairingWebUrl();
+      setPollError(
+        `Server di collegamento non raggiungibile (${base}). Verifica l’indirizzo nella schermata di login e premi Riprova.`
+      );
     }
   };
 
@@ -123,8 +167,22 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
     // Polling every 2.5 seconds
     pollIntervalRef.current = setInterval(async () => {
       try {
-        const res = await fetch(`/api/session/status/${pinCode}`);
-        if (!res.ok) return;
+        const native = Capacitor.isNativePlatform();
+        const request = buildPairingStatusRequest(pinCode, {
+          native,
+          nativeServer: nativePairingServer(),
+          pollToken,
+        });
+        const res = await fetch(request.url, { headers: request.headers });
+        if (!res.ok) {
+          if (!native && res.status === 404 && Date.now() >= expiresAtRef.current) {
+            clearInterval(pollIntervalRef.current);
+            clearInterval(timerIntervalRef.current);
+            setIsWaitingForPhone(false);
+            setPollError('Sessione scaduta. Genera un nuovo codice PIN.');
+          }
+          return;
+        }
 
         const data = await res.json();
         if (data.status === 'completed' && data.data) {
@@ -148,14 +206,21 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     };
-  }, [isOpen, mode, pinCode, onConnectAccount, onClose]);
+  }, [isOpen, mode, pinCode, pollToken, onConnectAccount, onClose]);
 
-  // Initial generation on modal open
+  // Create at most once per modal opening. The ref also prevents React
+  // StrictMode's development effect replay from consuming a second session.
   useEffect(() => {
-    if (isOpen && mode === 'tv' && !pinCode) {
-      generateNewSession();
+    if (!isOpen) {
+      creationStartedRef.current = false;
+      return;
     }
-  }, [isOpen, mode]);
+    const native = Capacitor.isNativePlatform();
+    if (mode !== 'tv' || pinCode || creationStartedRef.current) return;
+    if (!native && !pairingEnabled) return;
+    creationStartedRef.current = true;
+    void generateNewSession();
+  }, [isOpen, mode, pinCode, pairingEnabled]);
 
   // Handle remote form paste link
   const handlePastedLinkChange = (value: string) => {
@@ -191,7 +256,7 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
 
     try {
       setIsSending(true);
-      const res = await fetch('/api/session/submit', {
+      const res = await fetch(pairingApiUrl('/api/session/submit'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code, server, username, password }),
@@ -219,8 +284,7 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
 
   const copyPairLink = () => {
     if (!pinCode) return;
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    navigator.clipboard.writeText(`${origin}/?pair=${pinCode}`);
+    navigator.clipboard.writeText(pairingWebUrl(pinCode));
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2000);
   };
@@ -232,8 +296,8 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
   const formattedTime = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
-      <div className="bg-zinc-900 border border-zinc-700/80 rounded-3xl max-w-2xl w-full shadow-2xl overflow-hidden relative my-auto">
+    <div className="tv-pairing-modal fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
+      <div className="tv-pairing-panel bg-zinc-900 border border-zinc-700/80 rounded-3xl max-w-2xl w-full shadow-2xl overflow-hidden relative my-auto">
         {/* Header Tabs */}
         <div className="flex items-center justify-between border-b border-zinc-800 p-4 sm:p-5 bg-zinc-950/70">
           <div className="flex items-center gap-3">
@@ -279,7 +343,7 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
                 </div>
                 <h4 className="text-2xl font-bold text-white">Credenziali Ricevute con Successo!</h4>
                 <p className="text-sm text-zinc-300 max-w-md mx-auto">
-                  Lo smartphone ha configurato la TV. Connessione al server Xtream in corso...
+                  Lo smartphone ha configurato la TV. Le credenziali saranno riportate nella schermata di accesso.
                 </p>
                 <div className="w-8 h-8 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mt-4"></div>
               </div>
@@ -289,7 +353,7 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
                 <div className="flex flex-col items-center justify-center bg-zinc-950/80 p-5 rounded-2xl border border-zinc-800/90 text-center">
                   <div className="bg-white p-3 rounded-2xl shadow-xl shadow-black/50">
                     {qrDataUrl ? (
-                      <img
+                      <RemoteImage
                         src={qrDataUrl}
                         alt="QR Code per accoppiamento TV"
                         className="w-48 h-48 sm:w-52 sm:h-52 object-contain rounded-lg"
@@ -322,7 +386,7 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
                       Oppure inserisci questo PIN
                     </span>
                     <h4 className="text-sm text-zinc-300">
-                      Vai su <strong className="text-white font-mono">{typeof window !== 'undefined' ? window.location.host : 'xtream-player'}</strong> da smartphone o PC e digita:
+                      Vai su <strong className="text-white font-mono">{pairingWebUrl()}</strong> da smartphone o PC e digita:
                     </h4>
                   </div>
 

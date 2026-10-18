@@ -1,3 +1,4 @@
+import { RemoteImage } from './RemoteImage';
 import React, { useState } from 'react';
 import { X, Download, Monitor, Smartphone, Check, Sparkles, Palette } from 'lucide-react';
 import { storage, AVAILABLE_APP_ICONS } from '../services/storage';
@@ -36,7 +37,7 @@ export const InstallAppModal: React.FC<InstallAppModalProps> = ({
         <div className="p-6 bg-gradient-to-r from-emerald-950/70 via-zinc-900 to-zinc-900 border-b border-zinc-800 flex items-start justify-between gap-4 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-2xl bg-zinc-950 p-1 flex items-center justify-center border border-zinc-700 overflow-hidden shrink-0 shadow-lg">
-              <img src={selectedIcon} alt="App Logo" className="w-full h-full object-contain" />
+              <RemoteImage src={selectedIcon} alt="App Logo" className="w-full h-full object-contain" />
             </div>
             <div>
               <div className="flex items-center gap-1.5">
@@ -85,7 +86,7 @@ export const InstallAppModal: React.FC<InstallAppModalProps> = ({
                     }`}
                   >
                     <div className="w-10 h-10 rounded-xl overflow-hidden shadow-md flex items-center justify-center p-0.5 bg-black/60">
-                      <img src={icon.path} alt={icon.name} className="w-full h-full object-contain" />
+                      <RemoteImage src={icon.path} alt={icon.name} className="w-full h-full object-contain" />
                     </div>
                     <span className="text-[10px] font-semibold text-zinc-200 leading-tight">
                       {icon.name}

@@ -1,0 +1,22 @@
+package b7;
+
+import android.widget.ImageView;
+import android.widget.TextView;
+import androidx.cardview.widget.CardView;
+
+/* JADX INFO: renamed from: b7.p0, reason: case insensitive filesystem */
+/* JADX INFO: loaded from: classes2.dex */
+public final class C0543p0 extends O1.c0 {
+
+    /* JADX INFO: renamed from: a0, reason: collision with root package name */
+    public TextView f10375a0;
+
+    /* JADX INFO: renamed from: b0, reason: collision with root package name */
+    public ImageView f10376b0;
+
+    /* JADX INFO: renamed from: c0, reason: collision with root package name */
+    public ImageView f10377c0;
+
+    /* JADX INFO: renamed from: d0, reason: collision with root package name */
+    public CardView f10378d0;
+}

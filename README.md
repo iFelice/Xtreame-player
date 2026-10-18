@@ -38,7 +38,7 @@ Puoi pubblicare questa applicazione sul tuo account personale di **[Render.com](
      - **Start Command**: `npm start`
      - **Instance Type**: `Free`
    - Clicca su **Deploy Web Service**.
-4. In circa 2 minuti avrai il tuo link personale (es. `https://mio-xtream-player.onrender.com`) protetto e sotto il tuo controllo esclusivo!
+4. In circa 2 minuti avrai il tuo link personale (es. `https://mio-xtream-player.onrender.com`), protetto dal token `APP_ACCESS_TOKEN` e dal relativo cookie di accesso firmato.
 
 ---
 
@@ -83,3 +83,27 @@ Visita `http://localhost:3000`.
 - **Riproduzione Immediata**: player video con seek, volume, velocità, proporzioni e Picture-in-Picture.
 - **Catalogo Completo**: Film VOD, Canali Live con loghi, Serie TV divise per stagioni ed episodi.
 - **Bypass CORS/HTTP**: streaming fluido senza blocchi del browser.
+
+## Sicurezza dell'istanza
+
+L'istanza accetta soltanto richieste API same-origin. In produzione `APP_ACCESS_TOKEN` è obbligatorio (minimo 24 caratteri); Render lo genera automaticamente e lo mostra in **Dashboard → Service → Environment**. Inseriscilo una volta nella schermata di sblocco: viene creato un cookie HttpOnly firmato, valido 30 giorni.
+
+In locale, se vuoi provare la protezione:
+
+```bash
+APP_ACCESS_TOKEN='usa-almeno-24-caratteri-casuali' npm run dev
+```
+
+Con Docker passa la variabile senza inserirla nell'immagine:
+
+```bash
+docker run -e APP_ACCESS_TOKEN='usa-almeno-24-caratteri-casuali' -p 3000:3000 xtream-player
+```
+
+Le destinazioni private sono bloccate in produzione. `ALLOW_PRIVATE_TARGETS=1` disattiva esplicitamente tale protezione ed è destinato soltanto a reti amministrate e fidate.
+
+### Reverse proxy e ascolto locale
+
+Su Render `TRUST_PROXY=1` è configurato perché esiste un solo reverse proxy fidato davanti al servizio. Non impostarlo in Docker o in locale senza un reverse proxy controllato: in sua assenza gli header `X-Forwarded-For` non devono influenzare il rate limit.
+
+In sviluppo, senza un `APP_ACCESS_TOKEN` valido, il server ascolta soltanto su `127.0.0.1`. Un token di almeno 24 caratteri abilita l'ascolto predefinito su `0.0.0.0`. Impostare `HOST` forza esplicitamente l'indirizzo; senza token viene mostrato un avviso di esposizione non autenticata.

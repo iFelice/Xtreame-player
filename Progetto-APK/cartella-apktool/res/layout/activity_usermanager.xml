@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout android:background="@color/orplayer_bg_color" android:layout_width="match_parent" android:layout_height="match_parent"
+  xmlns:android="http://schemas.android.com/apk/res/android">
+    <ImageView android:id="@id/img_bg" android:background="@drawable/corner_shadow" android:layout_width="match_parent" android:layout_height="match_parent" />
+    <FrameLayout android:background="@color/orplayer_header_color" android:layout_width="match_parent" android:layout_height="50.0dp">
+        <TextView android:textSize="16.0sp" android:textColor="@color/orplayer_litegray_font_color" android:gravity="left" android:layout_gravity="center_vertical" android:id="@id/textView11" android:paddingTop="10.0dp" android:paddingBottom="12.0dp" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginLeft="20.0dp" android:text="@string/xc_account_management" android:fontFamily="@font/quicksand_light" />
+        <LinearLayout android:layout_gravity="right|center" android:orientation="horizontal" android:layout_width="wrap_content" android:layout_height="match_parent">
+            <Button android:textColor="@color/orplayer_skyblue_font_color" android:layout_gravity="right|center" android:id="@id/btn_m3u" android:background="@drawable/btn" android:paddingLeft="15.0dp" android:paddingRight="15.0dp" android:layout_width="wrap_content" android:layout_height="40.0dp" android:layout_marginRight="10.0dp" android:text="+M3U" android:layout_weight="1.0" android:fontFamily="@font/quicksand_medium" />
+            <Button android:textColor="@color/orplayer_skyblue_font_color" android:layout_gravity="right|center" android:id="@id/btn_fastogt" android:background="@drawable/btn" android:paddingLeft="15.0dp" android:paddingRight="15.0dp" android:layout_width="wrap_content" android:layout_height="40.0dp" android:layout_marginRight="10.0dp" android:text="+FastoCloud" android:layout_weight="1.0" android:fontFamily="@font/quicksand_medium" />
+            <Button android:textColor="@color/orplayer_skyblue_font_color" android:layout_gravity="right|center" android:id="@id/btn_ezserver" android:background="@drawable/btn" android:paddingLeft="15.0dp" android:paddingRight="15.0dp" android:layout_width="wrap_content" android:layout_height="40.0dp" android:layout_marginRight="10.0dp" android:text="+EZServer" android:layout_weight="1.0" android:fontFamily="@font/quicksand_medium" />
+            <Button android:textColor="@color/orplayer_skyblue_font_color" android:layout_gravity="right|center" android:id="@id/btn_add" android:background="@drawable/btn" android:paddingLeft="15.0dp" android:paddingRight="15.0dp" android:layout_width="wrap_content" android:layout_height="40.0dp" android:layout_marginRight="20.0dp" android:text="+Xtream Codes" android:fontFamily="@font/quicksand_medium" />
+        </LinearLayout>
+    </FrameLayout>
+    <LinearLayout android:orientation="vertical" android:background="#8b151515" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginLeft="15.0dp" android:layout_marginTop="50.0dp" android:layout_marginRight="15.0dp">
+        <ListView android:id="@id/listView" android:layout_width="match_parent" android:layout_height="match_parent" android:layout_marginLeft="5.0dp" android:layout_marginTop="10.0dp" android:layout_marginRight="5.0dp" android:dividerHeight="0.5dp" />
+    </LinearLayout>
+    <ProgressBar android:layout_gravity="center" android:id="@id/progressBar" android:layout_width="wrap_content" android:layout_height="wrap_content" style="?android:progressBarStyle" />
+</FrameLayout>

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout android:gravity="center" android:orientation="vertical" android:background="#d82b2a2a" android:padding="10.0dp" android:layout_width="match_parent" android:layout_height="wrap_content"
+  xmlns:android="http://schemas.android.com/apk/res/android">
+    <LinearLayout android:orientation="vertical" android:layout_width="match_parent" android:layout_height="wrap_content">
+        <LinearLayout android:orientation="vertical" android:layout_width="match_parent" android:layout_height="match_parent">
+            <TextView android:textColor="#ffffff" android:gravity="center" android:id="@id/textView27" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="15.0dp" android:text="Enter your External Closed Captions URL" android:fontFamily="@font/quicksand_light" />
+            <LinearLayout android:orientation="horizontal" android:layout_width="match_parent" android:layout_height="wrap_content">
+                <LinearLayout android:orientation="horizontal" android:layout_width="match_parent" android:layout_height="match_parent">
+                    <TextView android:textSize="16.0sp" android:textColor="@android:color/background_light" android:id="@id/txt_username_umd" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="URL" android:fontFamily="@font/quicksand_regular" />
+                    <EditText android:textSize="16.0sp" android:id="@id/ed_cc_url" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginLeft="20.0dp" android:hint="Enter Exteranl URL" android:inputType="textPersonName" android:fontFamily="@font/quicksand_regular" />
+                </LinearLayout>
+            </LinearLayout>
+            <LinearLayout android:orientation="horizontal" android:layout_width="match_parent" android:layout_height="match_parent">
+                <LinearLayout android:orientation="horizontal" android:layout_width="match_parent" android:layout_height="match_parent" />
+            </LinearLayout>
+            <LinearLayout android:orientation="horizontal" android:layout_width="match_parent" android:layout_height="match_parent">
+                <LinearLayout android:orientation="horizontal" android:layout_width="match_parent" android:layout_height="match_parent" />
+            </LinearLayout>
+        </LinearLayout>
+        <LinearLayout android:id="@id/layout_button" android:layout_width="match_parent" android:layout_height="match_parent" android:layout_marginTop="25.0dp" android:layout_below="@id/textview_title" android:layout_centerHorizontal="true">
+            <LinearLayout android:orientation="horizontal" android:layout_width="match_parent" android:layout_height="match_parent">
+                <Button android:id="@id/btn_cc_cancel" android:background="@drawable/btn_red" android:layout_width="180.0dp" android:layout_height="50.0dp" android:layout_marginRight="5.0dp" android:text="@string/xc_cancel_str" android:layout_weight="1.0" android:fontFamily="@font/quicksand_regular" />
+                <Button android:layout_gravity="center_horizontal" android:id="@id/btn_cc_add" android:background="@drawable/btn" android:paddingLeft="5.0dp" android:layout_width="180.0dp" android:layout_height="50.0dp" android:layout_marginRight="5.0dp" android:text="Add" android:layout_weight="1.0" android:fontFamily="@font/quicksand_regular" />
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+</RelativeLayout>

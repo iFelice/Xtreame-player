@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { RemoteImage } from './RemoteImage';
+import React, { useEffect, useRef, useState, useCallback, useReducer } from 'react';
 import {
   Play,
   Pause,
@@ -9,8 +10,6 @@ import {
   RotateCcw,
   RotateCw,
   X,
-  Copy,
-  Check,
   Tv,
   Film,
   AlertCircle,
@@ -28,8 +27,12 @@ import mpegts from 'mpegts.js';
 import { Capacitor } from '@capacitor/core';
 import { PlayableMediaItem } from '../types/xtream';
 import { storage } from '../services/storage';
-import { triggerMediaDownload, isTvEnvironment } from '../utils/downloadHelper';
-import { StreamExportModal } from './StreamExportModal';
+import { triggerMediaDownload, isDirectFileDownload, isTvEnvironment } from '../utils/downloadHelper';
+import { getSecureImageUrl } from '../utils/imageUrl';
+import { initialPlaybackState, isPlaybackLoading, playbackReducer } from '../player/playbackState';
+import { destroyMediaEngines, releaseVideoElement, selectMediaEngine } from '../player/mediaEngine';
+import { HLS_CONFIG, MPEGTS_CONFIG } from '../player/engineConfig';
+import { canFallbackToMpegTs, isPublicMockStream, normalizeLiveStreamUrl } from '../player/streamFormat';
 
 interface MediaPlayerProps {
   media: PlayableMediaItem | null;
@@ -50,36 +53,87 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const hlsRef = useRef<Hls | null>(null);
   const mpegtsRef = useRef<any>(null);
+  const destroyEngines = useCallback(() => {
+    destroyMediaEngines({ hls: hlsRef.current, mpegts: mpegtsRef.current });
+    hlsRef.current = null;
+    mpegtsRef.current = null;
+  }, []);
 
-  const [isPlaying, setIsPlaying] = useState<boolean>(false);
+  const [playback, dispatchPlayback] = useReducer(playbackReducer, initialPlaybackState);
+  const isPlaying = playback.status === 'playing';
+  const isLoading = isPlaybackLoading(playback);
+  const errorMessage = playback.error;
+  const setIsPlaying = useCallback((playing: boolean) => {
+    dispatchPlayback({ type: playing ? 'PLAYING' : 'PAUSE' });
+  }, []);
+  const setIsLoading = useCallback((loading: boolean) => {
+    dispatchPlayback({ type: loading ? 'WAITING' : 'READY' });
+  }, []);
+  const setErrorMessage = useCallback((message: string | null) => {
+    dispatchPlayback(message ? { type: 'FAIL', message } : { type: 'RESET_ERROR' });
+  }, []);
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [duration, setDuration] = useState<number>(0);
+  const [showBufferingIndicator, setShowBufferingIndicator] = useState(false);
+  const [startupSeconds, setStartupSeconds] = useState(0);
   const [volume, setVolume] = useState<number>(1);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [isWindowFullscreen, setIsWindowFullscreen] = useState<boolean>(false);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
-  const [downloadToast, setDownloadToast] = useState<boolean>(false);
   const isTv = isTvEnvironment();
   const isNative = typeof window !== 'undefined' && (Capacitor.isNativePlatform() || window.location.protocol === 'capacitor:');
+  const isSafeMode = typeof window !== 'undefined' && !isNative && sessionStorage.getItem('xtream_safe_mode') === '1';
+  const canSwitchLiveFormat = Boolean(media?.type === 'live' && !isPublicMockStream(media.streamUrl));
   const [aspectRatio, setAspectRatio] = useState<'contain' | '16_9' | '4_3' | 'cover' | 'fill'>('contain');
   const [showSettings, setShowSettings] = useState<boolean>(false);
-  const [showExportModal, setShowExportModal] = useState<boolean>(false);
-  const [copiedLink, setCopiedLink] = useState<boolean>(false);
   const [controlsVisible, setControlsVisible] = useState<boolean>(true);
   const [useProxy, setUseProxy] = useState<boolean>(() => {
+    // A Capacitor WebView has no Express server behind capacitor://localhost.
+    // Never restore a web proxy preference when running the native app.
+    if (isNative) return false;
     try {
+      // Safe development must never inherit a previous "direct stream" choice.
+      if (sessionStorage.getItem('xtream_safe_mode') === '1') return true;
       const saved = localStorage.getItem('xtream_use_proxy');
       if (saved !== null) return saved === 'true';
-      return true; // Always enable proxy by default for reliable playback like on Render
+      return true; // Web deployment uses the Express proxy by default.
     } catch {
       return true;
     }
   });
   const [liveFormat, setLiveFormat] = useState<'m3u8' | 'ts'>('m3u8');
   const hideControlsTimerRef = useRef<any>(null);
+  const startupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const bufferingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const bufferingUiDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastHistoryWriteRef = useRef(0);
+  const seekPlaybackIntentRef = useRef<boolean | null>(null);
+  const desiredPlayingRef = useRef(true);
+  const hasStartedPlaybackRef = useRef(false);
+  const playbackAttempt = playback.attempt;
+
+  const clearPlaybackWatchdogs = useCallback(() => {
+    if (startupTimeoutRef.current) clearTimeout(startupTimeoutRef.current);
+    if (bufferingTimeoutRef.current) clearTimeout(bufferingTimeoutRef.current);
+    startupTimeoutRef.current = null;
+    bufferingTimeoutRef.current = null;
+  }, []);
+
+  useEffect(() => () => {
+    if (hideControlsTimerRef.current) clearTimeout(hideControlsTimerRef.current);
+    if (bufferingUiDelayRef.current) clearTimeout(bufferingUiDelayRef.current);
+  }, []);
+
+  useEffect(() => {
+    if (playback.status !== 'loading') {
+      setStartupSeconds(0);
+      return;
+    }
+    setStartupSeconds(0);
+    const timer = window.setInterval(() => setStartupSeconds((value) => value + 1), 1000);
+    return () => window.clearInterval(timer);
+  }, [playback.status, media?.id]);
 
   // Sync fullscreen state with native browser events
   useEffect(() => {
@@ -103,14 +157,17 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     if (!media) return '';
     let target = media.streamUrl;
 
-    // Handle live stream format conversion (m3u8 vs ts)
     if (media.type === 'live') {
-      if (liveFormat === 'm3u8') {
-        target = target.replace(/\.ts(\?|$)/i, '.m3u8$1');
-      } else {
-        target = target.replace(/\.m3u8(\?|$)/i, '.ts$1');
-      }
+      target = normalizeLiveStreamUrl(target, liveFormat);
     }
+
+    // Native Capacitor builds cannot use relative Express routes. Unwrap any
+    // previously generated proxy URL and always connect to the IPTV host.
+    if (isNative && target.startsWith('/api/proxy/stream?url=')) {
+      const query = target.split('?')[1] || '';
+      return new URLSearchParams(query).get('url') || target;
+    }
+    if (isNative) return target;
 
     if (useProxy) {
       if (target.startsWith('/api/proxy/stream')) {
@@ -120,13 +177,11 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     }
 
     if (target.startsWith('/api/proxy/stream?url=')) {
-      const match = target.match(/url=([^&]+)/);
-      if (match && match[1]) {
-        return decodeURIComponent(match[1]);
-      }
+      const query = target.split('?')[1] || '';
+      return new URLSearchParams(query).get('url') || target;
     }
     return target;
-  }, [media, useProxy, liveFormat]);
+  }, [media, useProxy, liveFormat, isNative]);
 
   // Activity timer to hide controls during playback
   const showControlsTemporarily = useCallback(() => {
@@ -146,22 +201,50 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
 
     const video = videoRef.current;
     const url = getEffectiveUrl();
-    setIsLoading(true);
-    setErrorMessage(null);
+    if (bufferingUiDelayRef.current) clearTimeout(bufferingUiDelayRef.current);
+    bufferingUiDelayRef.current = null;
+    setShowBufferingIndicator(false);
+    lastHistoryWriteRef.current = 0;
+    desiredPlayingRef.current = true;
+    seekPlaybackIntentRef.current = null;
+    dispatchPlayback({ type: 'LOAD' });
+    hasStartedPlaybackRef.current = false;
+    clearPlaybackWatchdogs();
 
-    // Destroy existing HLS / mpegts instances if any
-    if (hlsRef.current) {
-      hlsRef.current.destroy();
-      hlsRef.current = null;
-    }
-    if (mpegtsRef.current) {
-      mpegtsRef.current.destroy();
-      mpegtsRef.current = null;
-    }
+    // A stream must produce playable media within 20 seconds. Browsers can
+    // otherwise leave a fetch pending forever without dispatching an error.
+    startupTimeoutRef.current = setTimeout(() => {
+      if (hasStartedPlaybackRef.current || video.currentTime > 0 || video.readyState >= 3) return;
+      video.pause();
+      destroyEngines();
+      setIsPlaying(false);
+      setIsLoading(false);
+      setErrorMessage('Il contenuto non ha risposto entro 20 secondi. Riprova oppure torna al catalogo.');
+    }, 20_000);
+
+    // Engine cleanup is centralized and idempotent.
+    destroyEngines();
 
     const isLive = media.type === 'live';
+    const allowsMpegTsFallback = canFallbackToMpegTs(media.type, media.streamUrl);
+    const failOrFallback = (message: string) => {
+      if (allowsMpegTsFallback) {
+        setLiveFormat('ts');
+      } else {
+        setIsLoading(false);
+        setErrorMessage(message);
+      }
+    };
+    const engine = selectMediaEngine({
+      isLive,
+      liveFormat,
+      mediaExtension: media.containerExtension,
+      supportsMpegTs: mpegts.isSupported(),
+      supportsHlsJs: Hls.isSupported(),
+      supportsNativeHls: Boolean(video.canPlayType('application/vnd.apple.mpegurl')),
+    });
 
-    if (isLive && liveFormat === 'ts' && mpegts.isSupported()) {
+    if (engine === 'mpegts') {
       // Enhanced Real-time MPEG-TS streaming with higher buffer & latency protection
       try {
         const player = mpegts.createPlayer(
@@ -170,18 +253,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
             isLive: true,
             url,
           },
-          {
-            enableWorker: true,
-            lazyLoad: false,
-            liveBufferLatencyChasing: false,
-            liveBufferLatencyMaxLatency: 12.0,
-            liveBufferLatencyMinRemain: 2.0,
-            autoCleanupSourceBuffer: true,
-            autoCleanupMaxBackwardDuration: 40,
-            autoCleanupMinBackwardDuration: 20,
-            fixAudioTimestampGap: true,
-            accurateSeek: false,
-          }
+          MPEGTS_CONFIG
         );
         mpegtsRef.current = player;
         player.attachMediaElement(video);
@@ -217,18 +289,9 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
         console.error('MPEG-TS init failed, falling back to HLS:', err);
         setLiveFormat('m3u8');
       }
-    } else if (isLive && liveFormat === 'm3u8' && Hls.isSupported()) {
+    } else if (engine === 'hls-js') {
       // Enhanced HLS.js streaming configuration for smooth and stable playback
-      const hls = new Hls({
-        enableWorker: true,
-        lowLatencyMode: false,
-        backBufferLength: 60,
-        maxBufferLength: 60,
-        maxMaxBufferLength: 120,
-        maxBufferSize: 60 * 1000 * 1000,
-        highBufferWatchdogPeriod: 2,
-        nudgeMaxRetry: 10,
-      });
+      const hls = new Hls(HLS_CONFIG);
 
       hlsRef.current = hls;
       hls.loadSource(url);
@@ -261,7 +324,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
                 );
                 setIsLoading(false);
               } else {
-                setLiveFormat('ts');
+                failOrFallback('Impossibile scaricare la playlist HLS. Verifica la connessione e riprova.');
               }
             }
             break;
@@ -274,17 +337,17 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
                 hls.recoverMediaError();
               } catch {
                 hls.destroy();
-                setLiveFormat('ts');
+                failOrFallback('Il browser non è riuscito a decodificare il flusso HLS.');
               }
             }
             break;
           default:
             hls.destroy();
-            setLiveFormat('ts');
+            failOrFallback('Errore HLS non recuperabile. Riprova oppure torna al catalogo.');
             break;
         }
       });
-    } else if (isLive && video.canPlayType('application/vnd.apple.mpegurl')) {
+    } else if (engine === 'native-hls') {
       // Native Apple HLS (iOS Safari, macOS Safari / Catalyst)
       video.src = url;
       video.load();
@@ -314,23 +377,57 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     }
 
     return () => {
-      if (hlsRef.current) {
-        hlsRef.current.destroy();
-        hlsRef.current = null;
-      }
-      if (mpegtsRef.current) {
-        mpegtsRef.current.destroy();
-        mpegtsRef.current = null;
-      }
+      clearPlaybackWatchdogs();
+      destroyEngines();
+
+      // Stop WebKit/AVFoundation from continuing to buffer a multi-GB VOD
+      // after the player is closed or another title is selected.
+      releaseVideoElement(video);
     };
-  }, [media, getEffectiveUrl, liveFormat]);
+  }, [media, getEffectiveUrl, liveFormat, playbackAttempt, clearPlaybackWatchdogs, destroyEngines]);
 
   // Video event handlers
+  const handlePlaybackReady = () => {
+    hasStartedPlaybackRef.current = true;
+    if (startupTimeoutRef.current) clearTimeout(startupTimeoutRef.current);
+    if (bufferingTimeoutRef.current) clearTimeout(bufferingTimeoutRef.current);
+    startupTimeoutRef.current = null;
+    bufferingTimeoutRef.current = null;
+    if (bufferingUiDelayRef.current) clearTimeout(bufferingUiDelayRef.current);
+    bufferingUiDelayRef.current = null;
+    setShowBufferingIndicator(false);
+    setIsLoading(false);
+  };
+
+  const handleWaiting = () => {
+    setIsLoading(true);
+    if (hasStartedPlaybackRef.current && !bufferingUiDelayRef.current) {
+      bufferingUiDelayRef.current = setTimeout(() => {
+        bufferingUiDelayRef.current = null;
+        if (videoRef.current?.readyState !== undefined && videoRef.current.readyState < 3) {
+          setShowBufferingIndicator(true);
+        }
+      }, 1000);
+    }
+    if (!hasStartedPlaybackRef.current || bufferingTimeoutRef.current) return;
+    bufferingTimeoutRef.current = setTimeout(() => {
+      const video = videoRef.current;
+      if (!video || video.readyState >= 3) return;
+      video.pause();
+      hlsRef.current?.stopLoad();
+      setIsPlaying(false);
+      setIsLoading(false);
+      setErrorMessage('La riproduzione è rimasta in buffering per oltre 15 secondi. Controlla la connessione e riprova.');
+    }, 15_000);
+  };
+
   const handleTimeUpdate = () => {
     if (videoRef.current) {
       setCurrentTime(videoRef.current.currentTime);
-      if (media && videoRef.current.duration > 0 && Math.floor(videoRef.current.currentTime) % 5 === 0) {
-        storage.saveHistory(media, videoRef.current.currentTime, videoRef.current.duration, accountKey);
+      const elapsed = videoRef.current.currentTime;
+      if (media && videoRef.current.duration > 0 && Math.abs(elapsed - lastHistoryWriteRef.current) >= 5) {
+        lastHistoryWriteRef.current = elapsed;
+        storage.saveHistory(media, elapsed, videoRef.current.duration, accountKey);
       }
     }
   };
@@ -338,27 +435,72 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   const handleLoadedMetadata = () => {
     if (videoRef.current) {
       setDuration(videoRef.current.duration || 0);
-      setIsLoading(false);
     }
   };
 
   const togglePlay = () => {
     if (!videoRef.current) return;
-    if (isPlaying) {
+    if (desiredPlayingRef.current) {
+      desiredPlayingRef.current = false;
       videoRef.current.pause();
       setIsPlaying(false);
     } else {
-      videoRef.current.play().catch(() => {});
+      // An explicit Play click supersedes every delayed event from the seek.
+      desiredPlayingRef.current = true;
+      seekPlaybackIntentRef.current = null;
+      videoRef.current.play().catch(() => {
+        desiredPlayingRef.current = false;
+        setIsPlaying(false);
+      });
       setIsPlaying(true);
     }
   };
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const video = videoRef.current;
     const time = parseFloat(e.target.value);
     setCurrentTime(time);
-    if (videoRef.current) {
-      videoRef.current.currentTime = time;
+    if (!video) return;
+
+    // Some browsers emit a transient play event while seeking HLS. Preserve
+    // the user's state from before the seek instead of trusting that event.
+    if (seekPlaybackIntentRef.current === null) {
+      seekPlaybackIntentRef.current = desiredPlayingRef.current && !video.paused;
     }
+    video.currentTime = time;
+    if (seekPlaybackIntentRef.current === false) video.pause();
+  };
+
+  const finishSeekInteraction = () => {
+    if (seekPlaybackIntentRef.current === false) {
+      desiredPlayingRef.current = false;
+      videoRef.current?.pause();
+      setIsPlaying(false);
+    }
+  };
+
+  const handleSeeked = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    const shouldResume = seekPlaybackIntentRef.current ?? desiredPlayingRef.current;
+    if (shouldResume) seekPlaybackIntentRef.current = null;
+    if (shouldResume) {
+      void video.play().catch(() => setIsPlaying(false));
+    } else {
+      video.pause();
+      setIsPlaying(false);
+    }
+  };
+
+  const handleVideoPlay = () => {
+    // HLS/Chrome may emit play while a paused seek is settling. The visual
+    // state follows the user's explicit intent, never that transient event.
+    if (!desiredPlayingRef.current) {
+      videoRef.current?.pause();
+      setIsPlaying(false);
+      return;
+    }
+    setIsPlaying(true);
   };
 
   const handleSkip = (seconds: number) => {
@@ -456,29 +598,6 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     setShowSettings(false);
   };
 
-  const copyDirectStreamLink = async () => {
-    if (!media) return;
-    const directUrl = media.streamUrl.startsWith('/api/proxy/stream?url=')
-      ? decodeURIComponent(media.streamUrl.replace('/api/proxy/stream?url=', ''))
-      : media.streamUrl;
-
-    try {
-      await navigator.clipboard.writeText(directUrl);
-      setCopiedLink(true);
-      setTimeout(() => setCopiedLink(false), 2500);
-    } catch {
-      // Fallback
-      const input = document.createElement('input');
-      input.value = directUrl;
-      document.body.appendChild(input);
-      input.select();
-      document.execCommand('copy');
-      document.body.removeChild(input);
-      setCopiedLink(true);
-      setTimeout(() => setCopiedLink(false), 2500);
-    }
-  };
-
   // Keyboard controls
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -551,6 +670,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   return (
     <div
       ref={containerRef}
+      data-media-player="true"
       onMouseMove={showControlsTemporarily}
       className={`transition-all duration-300 ${
         isWindowFullscreen
@@ -562,22 +682,25 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       <video
         ref={videoRef}
         playsInline
-        preload="auto"
+        preload="metadata"
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
-        onLoadedData={() => setIsLoading(false)}
-        onCanPlay={() => setIsLoading(false)}
-        onPlay={() => setIsPlaying(true)}
+        onLoadedData={handlePlaybackReady}
+        onCanPlay={handlePlaybackReady}
+        onPlay={handleVideoPlay}
         onPause={() => setIsPlaying(false)}
-        onWaiting={() => setIsLoading(true)}
-        onPlaying={() => setIsLoading(false)}
+        onSeeked={handleSeeked}
+        onWaiting={handleWaiting}
+        onPlaying={handlePlaybackReady}
         onError={() => {
+          clearPlaybackWatchdogs();
           if (videoRef.current && (videoRef.current.currentTime > 1 || videoRef.current.readyState >= 3 || videoRef.current.videoWidth > 0)) {
             console.warn('HTML5 video onError ignored because video is actively playing');
             return;
           }
-          // If not using proxy and video fails to play, auto-fallback to proxy immediately
-          if (!useProxy) {
+          // The fallback exists only on web: native Capacitor builds have no
+          // Express proxy available at capacitor://localhost.
+          if (!isNative && !useProxy) {
             console.log('Video error on direct stream, auto-switching to proxy...');
             setUseProxy(true);
             return;
@@ -611,12 +734,30 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       />
 
       {/* Loading Spinner */}
-      {isLoading && !errorMessage && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 pointer-events-none backdrop-blur-xs">
-          <div className="w-14 h-14 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin mb-3"></div>
-          <span className="text-zinc-200 text-sm sm:text-base font-bold tracking-wide">
-            Caricamento stream multimediale...
-          </span>
+      {(playback.status === 'loading' || showBufferingIndicator) && !errorMessage && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 pointer-events-none overflow-hidden">
+          {(media.backdrop || media.poster) && (
+            <RemoteImage
+              src={getSecureImageUrl(media.backdrop || media.poster || '')}
+              alt=""
+              aria-hidden="true"
+              className="absolute inset-0 h-full w-full object-cover opacity-25 blur-sm scale-105"
+            />
+          )}
+          <div className="absolute inset-0 bg-linear-to-t from-black via-black/55 to-black/70" />
+          <div className="relative z-10 flex flex-col items-center px-6 text-center">
+            <div className="w-14 h-14 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin mb-4"></div>
+            <span className="text-zinc-100 text-sm sm:text-base font-bold tracking-wide">
+              {showBufferingIndicator
+                ? 'Buffering del flusso…'
+                : startupSeconds < 3
+                  ? 'Connessione al server…'
+                  : startupSeconds < 7
+                    ? 'Preparazione del video…'
+                    : 'Il canale sta rispondendo, ancora un momento…'}
+            </span>
+            <span className="mt-2 max-w-md truncate text-xs text-zinc-400">{media.title}</span>
+          </div>
         </div>
       )}
 
@@ -630,12 +771,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
           <div className="flex flex-wrap items-center justify-center gap-3">
             <button
               onClick={() => {
-                setErrorMessage(null);
-                setIsLoading(true);
-                if (videoRef.current) {
-                  videoRef.current.load();
-                  videoRef.current.play().catch(() => {});
-                }
+                dispatchPlayback({ type: 'RETRY' });
               }}
               className="px-5 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm sm:text-base font-bold flex items-center gap-2 transition cursor-pointer shadow-lg"
             >
@@ -643,7 +779,15 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
               Riprova
             </button>
 
-            {media.type === 'live' && (
+            <button
+              onClick={onClose}
+              className="px-5 py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl text-sm sm:text-base font-bold flex items-center gap-2 transition cursor-pointer border border-zinc-700"
+            >
+              <X className="w-4 h-4" />
+              Torna al catalogo
+            </button>
+
+            {canSwitchLiveFormat && (
               <button
                 onClick={() => setLiveFormat(liveFormat === 'm3u8' ? 'ts' : 'm3u8')}
                 className="px-5 py-3 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-sm sm:text-base font-bold flex items-center gap-2 transition cursor-pointer shadow-lg"
@@ -652,32 +796,27 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
               </button>
             )}
 
-            <button
-              onClick={() => {
-                const nextVal = !useProxy;
-                setUseProxy(nextVal);
-                try {
-                  localStorage.setItem('xtream_use_proxy', String(nextVal));
-                } catch {}
-                setErrorMessage(null);
-                setIsLoading(true);
-              }}
-              className={`px-5 py-3 rounded-xl text-sm sm:text-base font-bold flex items-center gap-2 transition cursor-pointer shadow-lg ${
-                !useProxy
-                  ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-950/50'
-                  : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700'
-              }`}
-            >
-              {useProxy ? '⚡ Passa a Stream Diretto' : '🛡️ Attiva Proxy HTTPS'}
-            </button>
+            {!isNative && !isSafeMode && (
+              <button
+                onClick={() => {
+                  const nextVal = !useProxy;
+                  setUseProxy(nextVal);
+                  try {
+                    localStorage.setItem('xtream_use_proxy', String(nextVal));
+                  } catch {}
+                  setErrorMessage(null);
+                  setIsLoading(true);
+                }}
+                className={`px-5 py-3 rounded-xl text-sm sm:text-base font-bold flex items-center gap-2 transition cursor-pointer shadow-lg ${
+                  !useProxy
+                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-950/50'
+                    : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700'
+                }`}
+              >
+                {useProxy ? '⚡ Passa a Stream Diretto' : '🛡️ Attiva Proxy HTTPS'}
+              </button>
+            )}
 
-            <button
-              onClick={copyDirectStreamLink}
-              className="px-5 py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl text-sm sm:text-base font-semibold flex items-center gap-2 border border-zinc-700 transition cursor-pointer"
-            >
-              {copiedLink ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-              Copia Link per VLC
-            </button>
           </div>
         </div>
       )}
@@ -771,29 +910,29 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          {!isTv && (
+          {!isTv && media.type !== 'live' && isDirectFileDownload(media.containerExtension) && (
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 e.preventDefault();
-                setShowExportModal(true);
+                void triggerMediaDownload(
+                  media.streamUrl,
+                  media.title,
+                  media.type === 'series' ? 'episode' : 'movie',
+                  media.poster,
+                  media.containerExtension || 'mp4',
+                  accountKey
+                );
               }}
-              title="Estrapola Link Flusso & Strumenti Download / VLC"
-              className="px-3 py-1.5 sm:px-3.5 sm:py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-2xl text-xs sm:text-sm font-bold flex items-center gap-2 transition cursor-pointer shadow-lg"
+              title="Scarica nella cartella locale dell’app"
+              aria-label="Scarica video"
+              className="p-2 sm:p-2.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-2xl transition cursor-pointer shadow-lg"
             >
-              <Download className="w-4 h-4" />
-              <span className="hidden sm:inline">Estrapola Link / VLC</span>
+              <Download className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
           )}
 
-          <button
-            onClick={copyDirectStreamLink}
-            title="Copia link stream per VLC o lettore esterno"
-            className="p-2 sm:p-2.5 text-zinc-300 hover:text-white hover:bg-white/10 rounded-2xl transition cursor-pointer"
-          >
-            {copiedLink ? <Check className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-400" /> : <Copy className="w-5 h-5 sm:w-6 sm:h-6" />}
-          </button>
           <button
             onClick={onClose}
             className="p-2 sm:p-2.5 text-zinc-300 hover:text-white hover:bg-white/10 rounded-2xl transition cursor-pointer"
@@ -804,15 +943,6 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
         </div>
       </div>
 
-      {/* Download Started Toast Notification */}
-      {downloadToast && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-30 px-5 py-3 rounded-2xl bg-emerald-950/95 border border-emerald-500/80 text-white shadow-2xl flex items-center gap-3 animate-in fade-in zoom-in-95">
-          <Check className="w-5 h-5 text-emerald-400 shrink-0" />
-          <span className="text-sm sm:text-base font-bold">
-            Download avviato! Il file verrà salvato nella cartella Download del Mac.
-          </span>
-        </div>
-      )}
 
       {/* Center Big Play Button (when paused) */}
       {!isPlaying && !isLoading && !errorMessage && (
@@ -844,6 +974,8 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
                 step={0.1}
                 value={currentTime}
                 onChange={handleSeek}
+                onPointerUp={finishSeekInteraction}
+                onKeyUp={finishSeekInteraction}
                 className="w-full h-2 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-emerald-500 focus:outline-hidden hover:h-2.5 transition-all"
               />
             </div>
@@ -859,9 +991,9 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
             <button
               onClick={togglePlay}
               className="p-2 sm:p-2.5 text-white hover:text-emerald-400 hover:bg-white/10 rounded-2xl transition cursor-pointer"
-              title={isPlaying ? 'Pausa (Spazio)' : 'Riproduci (Spazio)'}
+              title={desiredPlayingRef.current ? 'Pausa (Spazio)' : 'Riproduci (Spazio)'}
             >
-              {isPlaying ? <Pause className="w-6 h-6 fill-current" /> : <Play className="w-6 h-6 fill-current" />}
+              {desiredPlayingRef.current ? <Pause className="w-6 h-6 fill-current" /> : <Play className="w-6 h-6 fill-current" />}
             </button>
 
             {/* Live TV Previous & Next Channel buttons */}
@@ -1003,17 +1135,6 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
         </div>
       </div>
 
-      {/* Stream Export & VLC Modal */}
-      {media && (
-        <StreamExportModal
-          isOpen={showExportModal}
-          onClose={() => setShowExportModal(false)}
-          title={media.title}
-          streamUrl={media.streamUrl}
-          type={media.type === 'movie' ? 'movie' : media.type === 'series' ? 'episode' : 'live'}
-          containerExtension={media.containerExtension || 'mp4'}
-        />
-      )}
     </div>
   );
 };

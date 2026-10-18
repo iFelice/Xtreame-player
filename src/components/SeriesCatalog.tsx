@@ -1,3 +1,4 @@
+import { RemoteImage } from './RemoteImage';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Search,
@@ -27,8 +28,8 @@ import { xtreamClient } from '../services/xtreamClient';
 import { storage } from '../services/storage';
 import { sortSeriesList } from '../utils/recentSorting';
 import { getSecureImageUrl } from '../utils/imageUrl';
+import { VirtualizedMediaGrid } from './VirtualizedMediaGrid';
 import { triggerMediaDownload, isTvEnvironment } from '../utils/downloadHelper';
-import { StreamExportModal } from './StreamExportModal';
 
 interface SeriesCatalogProps {
   categories: XtreamCategory[];
@@ -57,9 +58,9 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
   onClearSelectedSeries,
   accountKey,
 }) => {
+  const [, refreshFavorites] = useState(0);
   const categoriesListRef = useRef<HTMLDivElement | null>(null);
   const seriesListRef = useRef<HTMLDivElement | null>(null);
-  const [downloadingEpisodeId, setDownloadingEpisodeId] = useState<string | number | null>(null);
   const isTv = isTvEnvironment();
 
   // Always default to the first category to avoid freezing with 4,000+ series
@@ -70,11 +71,6 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
   const [categorySearch, setCategorySearch] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [sortBy, setSortBy] = useState<'recent' | 'rating' | 'name' | 'id'>('recent');
-  const [exportTarget, setExportTarget] = useState<{
-    title: string;
-    streamUrl: string;
-    containerExtension: string;
-  } | null>(null);
   const [activeSeriesDetail, setActiveSeriesDetail] = useState<{
     series: XtreamSeries;
     info: XtreamSeriesInfo | null;
@@ -205,15 +201,19 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
       containerExtension: ext,
     };
 
+    // Close the season/episode dialog before handing control to the player.
+    // Also clear externally requested series so the dialog cannot reopen on render.
+    setActiveSeriesDetail(null);
+    onClearSelectedSeries?.();
     onPlay(mediaItem);
   };
 
   return (
-    <div className="space-y-4">
+    <div className="media-catalog space-y-4">
       {/* Master - Detail Dual Column Layout */}
-      <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 items-stretch">
+      <div className="media-browser-layout flex flex-col lg:flex-row gap-4 sm:gap-6 items-stretch">
         {/* Left Column: Categories List (extended down to bottom of page) */}
-        <aside className="w-full lg:w-80 xl:w-96 shrink-0 bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 sm:p-5 flex flex-col shadow-xl h-[calc(100vh-210px)] min-h-[680px]">
+        <aside className="media-category-panel w-full lg:w-80 xl:w-96 shrink-0 bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 sm:p-5 flex flex-col shadow-xl h-[calc(100vh-210px)] min-h-[680px]">
           <div className="flex items-center justify-between px-1 shrink-0">
             <div className="flex items-center gap-2.5">
               <Layers className="w-6 h-6 text-blue-400" />
@@ -298,7 +298,7 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
         </aside>
 
         {/* Right Column: Series in the Selected Category (extended down to bottom of page) */}
-        <section className="flex-1 w-full min-w-0 bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 sm:p-6 flex flex-col shadow-xl h-[calc(100vh-210px)] min-h-[680px]">
+        <section className="media-content-panel flex-1 w-full min-w-0 bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 sm:p-6 flex flex-col shadow-xl h-[calc(100vh-210px)] min-h-[680px]">
           {/* Header of the Selected Category */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-800 shrink-0">
             <div className="min-w-0">
@@ -378,8 +378,11 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 sm:gap-5">
-                {visibleSeries.map((series) => {
+              <VirtualizedMediaGrid
+                items={visibleSeries}
+                scrollRef={seriesListRef}
+                getKey={(series) => series.series_id}
+                renderItem={(series) => {
                   const isFav = storage.isFavorite(`series_${series.series_id}`, accountKey);
                   const isPlayingThis =
                     activeMediaId === `series_${series.series_id}` ||
@@ -388,6 +391,7 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                   return (
                     <div
                       key={series.series_id}
+                      tabIndex={0}
                       onClick={() => handleOpenSeries(series)}
                       className={`group relative rounded-2xl overflow-hidden shadow-lg transition-all duration-300 flex flex-col cursor-pointer ${
                         isPlayingThis
@@ -398,11 +402,12 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                     {/* Cover Container */}
                     <div className="relative aspect-2/3 bg-zinc-950 overflow-hidden">
                       {series.cover ? (
-                        <img
+                        <RemoteImage
                           src={getSecureImageUrl(series.cover)}
                           alt={series.name}
                           referrerPolicy="no-referrer"
                           loading="lazy"
+                          decoding="async"
                           onError={(e) => {
                             (e.target as HTMLElement).style.display = 'none';
                           }}
@@ -438,10 +443,10 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                             poster: series.cover,
                           };
                           storage.toggleFavorite(item, accountKey);
-                          setSelectedCategory((c) => c);
+                          refreshFavorites((value) => value + 1);
                         }}
                         aria-label={isFav ? "Rimuovi dai preferiti" : "Aggiungi ai preferiti"}
-                        className="absolute top-2 right-2 p-2 rounded-xl bg-black/80 hover:bg-black text-zinc-300 hover:text-amber-400 transition cursor-pointer"
+                        className="absolute z-30 top-2 right-2 p-2 rounded-xl bg-black/80 hover:bg-black text-zinc-300 hover:text-amber-400 transition cursor-pointer"
                       >
                         <Star className={`w-4 h-4 ${isFav ? 'fill-amber-400 text-amber-400' : ''}`} />
                       </button>
@@ -470,8 +475,8 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                     </div>
                   </div>
                 );
-              })}
-            </div>
+              }}
+            />
           )}
           </div>
         </section>
@@ -596,17 +601,12 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                                     ext,
                                     accountKey
                                   );
-                                  setExportTarget({
-                                    title,
-                                    streamUrl,
-                                    containerExtension: ext,
-                                  });
                                 }}
-                                title="Estrapola Link & Strumenti Download / VLC"
-                                className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-cyan-400 hover:text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+                                title="Scarica nella cartella locale dell’app"
+                                aria-label="Scarica episodio"
+                                className="p-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-cyan-400 hover:text-white transition cursor-pointer"
                               >
-                                <Download className="w-3.5 h-3.5" />
-                                <span>Link / VLC</span>
+                                <Download className="w-4 h-4" />
                               </button>
                             )}
 
@@ -635,17 +635,6 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
         </div>
       )}
 
-      {/* Stream Export & VLC Modal */}
-      {exportTarget && (
-        <StreamExportModal
-          isOpen={Boolean(exportTarget)}
-          onClose={() => setExportTarget(null)}
-          title={exportTarget.title}
-          streamUrl={exportTarget.streamUrl}
-          type="episode"
-          containerExtension={exportTarget.containerExtension}
-        />
-      )}
     </div>
   );
 };

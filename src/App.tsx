@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { lazy, Suspense, useState, useEffect, useCallback } from 'react';
 import {
   Film,
   Tv,
@@ -8,20 +8,15 @@ import {
   AlertCircle,
   RefreshCw,
   CheckCircle2,
-  Download,
+  LoaderCircle,
 } from 'lucide-react';
 import { Navbar } from './components/Navbar';
 import { LoginForm } from './components/LoginForm';
-import { MediaPlayer } from './components/MediaPlayer';
-import { VodCatalog } from './components/VodCatalog';
-import { LiveCatalog } from './components/LiveCatalog';
-import { SeriesCatalog } from './components/SeriesCatalog';
-import { FavoritesView } from './components/FavoritesView';
 import { ServerInfoModal } from './components/ServerInfoModal';
 import { RecentProductsShelf } from './components/RecentProductsShelf';
-import { DownloadsView } from './components/DownloadsView';
 import { SettingsSyncModal } from './components/SettingsSyncModal';
 import { RemoteLoginView } from './components/RemoteLoginView';
+import { AccessUnlock } from './components/AccessUnlock';
 
 import {
   XtreamParsedUrl,
@@ -35,16 +30,28 @@ import {
 import { xtreamClient } from './services/xtreamClient';
 import { storage, SavedAccount } from './services/storage';
 import { buildStreamUrl } from './utils/parseXtreamUrl';
-import { isTvEnvironment } from './utils/downloadHelper';
+import { cleanupLegacyNativeDownloads, isTvEnvironment } from './utils/downloadHelper';
+import { useTvNavigation } from './utils/tvNavigation';
+
+const MediaPlayer = lazy(() => import('./components/MediaPlayer').then((module) => ({ default: module.MediaPlayer })));
+const VodCatalog = lazy(() => import('./components/VodCatalog').then((module) => ({ default: module.VodCatalog })));
+const LiveCatalog = lazy(() => import('./components/LiveCatalog').then((module) => ({ default: module.LiveCatalog })));
+const SeriesCatalog = lazy(() => import('./components/SeriesCatalog').then((module) => ({ default: module.SeriesCatalog })));
+const FavoritesView = lazy(() => import('./components/FavoritesView').then((module) => ({ default: module.FavoritesView })));
 
 export default function App() {
   const isTv = isTvEnvironment();
+  useTvNavigation(isTv);
   const [serverUrl, setServerUrl] = useState<string>('');
   const [username, setUsername] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [authData, setAuthData] = useState<XtreamAuthResponse | null>(null);
+  const [safeMode, setSafeMode] = useState(false);
+  const [accessRequired, setAccessRequired] = useState(false);
+  const [accessResolved, setAccessResolved] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<'live' | 'movies' | 'series' | 'recent' | 'downloads' | 'favorites'>('live');
+  const [activeTab, setActiveTab] = useState<'live' | 'movies' | 'series' | 'recent' | 'favorites'>('live');
+  const [showTvHome, setShowTvHome] = useState<boolean>(true);
   const [activeMedia, setActiveMedia] = useState<PlayableMediaItem | null>(null);
   const [selectedSeriesForModal, setSelectedSeriesForModal] = useState<string | number | null>(null);
 
@@ -62,6 +69,65 @@ export default function App() {
     return path.includes('remote-login') || search.get('page') === 'remote-login' || search.has('code');
   });
   const [savedAccounts, setSavedAccounts] = useState<SavedAccount[]>(() => storage.getAccounts());
+  const [downloadFeedback, setDownloadFeedback] = useState<{
+    status: 'started' | 'exporting' | 'finished';
+    title: string;
+  } | null>(null);
+
+  // Remove the hidden persistent files created by the previous download
+  // implementation. This one-time migration immediately recovers that space.
+  useEffect(() => {
+    void cleanupLegacyNativeDownloads();
+  }, []);
+
+  useEffect(() => {
+    let hideTimer: ReturnType<typeof setTimeout> | undefined;
+    const handleDownloadStatus = (event: Event) => {
+      const { status, title } = (event as CustomEvent<{ status: string; title: string }>).detail;
+      if (hideTimer) clearTimeout(hideTimer);
+      if (status === 'cancelled' || status === 'error') {
+        setDownloadFeedback(null);
+      } else if (status === 'finished') {
+        setDownloadFeedback({ status: 'finished', title });
+        hideTimer = setTimeout(() => setDownloadFeedback(null), 3000);
+      } else {
+        setDownloadFeedback({ status: status as 'started' | 'exporting', title });
+      }
+    };
+    window.addEventListener('xtream-download-status', handleDownloadStatus);
+    return () => {
+      window.removeEventListener('xtream-download-status', handleDownloadStatus);
+      if (hideTimer) clearTimeout(hideTimer);
+    };
+  }, []);
+
+  useEffect(() => {
+    const requireAccess = () => {
+      setAccessResolved(true);
+      setAccessRequired(true);
+    };
+    window.addEventListener('xtream-access-required', requireAccess);
+    return () => window.removeEventListener('xtream-access-required', requireAccess);
+  }, []);
+
+  useEffect(() => {
+    if (!isTv) return;
+    const handleTvBack = () => {
+      if (activeMedia) {
+        setActiveMedia(null);
+      } else if (showServerInfo) {
+        setShowServerInfo(false);
+      } else if (showSettingsSyncModal) {
+        setShowSettingsSyncModal(false);
+      } else if (selectedSeriesForModal) {
+        setSelectedSeriesForModal(null);
+      } else if (!showTvHome) {
+        setShowTvHome(true);
+      }
+    };
+    window.addEventListener('android-tv-back', handleTvBack);
+    return () => window.removeEventListener('android-tv-back', handleTvBack);
+  }, [isTv, activeMedia, showServerInfo, showSettingsSyncModal, selectedSeriesForModal, showTvHome]);
 
   // Catalog data
   const [vodCategories, setVodCategories] = useState<XtreamCategory[]>([]);
@@ -197,35 +263,55 @@ export default function App() {
     []
   );
 
-  // On app startup: check URL query parameters or auto-connect to last saved account
+  // Safe development always selects the local mock and never restores real accounts.
   useEffect(() => {
-    try {
-      const searchParams = new URLSearchParams(window.location.search);
-      const paramServer = searchParams.get('server') || searchParams.get('url');
-      const paramUser = searchParams.get('user') || searchParams.get('username');
-      const paramPass = searchParams.get('pass') || searchParams.get('password');
-      const paramSettings = searchParams.get('settings') || searchParams.get('setup');
+    let cancelled = false;
 
-      if (paramServer && paramUser && paramPass) {
-        connectToServer(paramServer, paramUser, paramPass);
+    const restoreSession = async () => {
+      try {
+        const response = await fetch('/api/runtime-config');
+        const runtime = (await response.json()) as { safeMode?: boolean; accessRequired?: boolean };
+        if (cancelled) return;
+        setSafeMode(Boolean(runtime.safeMode));
+        setAccessResolved(true);
+        if (isRemoteLoginPage) return;
+        setAccessRequired(Boolean(runtime.accessRequired));
+        if (runtime.accessRequired) return;
+        if (!runtime.safeMode) sessionStorage.removeItem('xtream_safe_mode');
+        if (runtime.safeMode) {
+          sessionStorage.setItem('xtream_safe_mode', '1');
+          connectToServer('http://localhost:3333', 'demo', 'demo');
+          return;
+        }
+
+        const searchParams = new URLSearchParams(window.location.search);
+        const paramServer = searchParams.get('server') || searchParams.get('url');
+        const paramUser = searchParams.get('user') || searchParams.get('username');
+        const paramPass = searchParams.get('pass') || searchParams.get('password');
+        const paramSettings = searchParams.get('settings') || searchParams.get('setup');
+
+        if (paramServer && paramUser && paramPass) {
+          connectToServer(paramServer, paramUser, paramPass);
+          return;
+        }
+        if (paramSettings) setShowSettingsSyncModal(true);
+      } catch (e) {
+        console.error('Error restoring app session:', e);
         return;
       }
 
-      if (paramSettings) {
-        setShowSettingsSyncModal(true);
+      const last = storage.getLastAccount();
+      if (last?.serverUrl && last.username && last.password) {
+        setServerUrl(last.serverUrl);
+        setUsername(last.username);
+        setPassword(last.password);
+        connectToServer(last.serverUrl, last.username, last.password, last.originalLink);
       }
-    } catch (e) {
-      console.error('Error reading URL params:', e);
-    }
+    };
 
-    const last = storage.getLastAccount();
-    if (last && last.serverUrl && last.username && last.password) {
-      setServerUrl(last.serverUrl);
-      setUsername(last.username);
-      setPassword(last.password);
-      connectToServer(last.serverUrl, last.username, last.password, last.originalLink);
-    }
-  }, [connectToServer]);
+    void restoreSession();
+    return () => { cancelled = true; };
+  }, [connectToServer, isRemoteLoginPage]);
 
   const handlePlayDirect = (media: PlayableMediaItem) => {
     setActiveMedia(media);
@@ -323,9 +409,38 @@ export default function App() {
     );
   }
 
+  if (accessRequired) return <AccessUnlock />;
+
   return (
+    <Suspense fallback={<div className="min-h-screen bg-zinc-950 text-zinc-300 flex items-center justify-center">Caricamento…</div>}>
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col selection:bg-emerald-500/30 selection:text-emerald-200 w-full max-w-full overflow-x-hidden">
-      {/* Top Navbar */}
+      {safeMode && (
+        <div className="sticky top-0 z-[110] flex items-center justify-center gap-2 border-b border-emerald-400/40 bg-emerald-950 px-3 py-1.5 text-xs font-bold tracking-[0.16em] text-emerald-200 shadow-lg" role="status">
+          <span className="h-2 w-2 rounded-full bg-emerald-400" aria-hidden="true" />
+          MODALITÀ SICURA · MOCK LOCALE
+        </div>
+      )}
+      {downloadFeedback && (
+        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[100] max-w-[90vw] px-5 py-3 rounded-2xl bg-zinc-900/95 border border-cyan-500/70 text-white shadow-2xl flex items-center gap-3">
+          {downloadFeedback.status === 'finished' ? (
+            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+          ) : (
+            <LoaderCircle className="w-5 h-5 text-cyan-400 shrink-0 animate-spin" />
+          )}
+          <div className="min-w-0">
+            <p className="text-sm font-bold">
+              {downloadFeedback.status === 'started'
+                ? 'Download in corso…'
+                : downloadFeedback.status === 'exporting'
+                  ? 'Download completato — scegli dove salvare'
+                  : 'File salvato'}
+            </p>
+            <p className="text-xs text-zinc-400 truncate">{downloadFeedback.title}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Top banner remains visible on TV, matching the original TV layout. */}
       <Navbar
         serverUrl={serverUrl}
         username={username}
@@ -386,10 +501,59 @@ export default function App() {
           </div>
         )}
 
+        {/* Android TV home: large, remote-friendly entry points. */}
+        {isTv && isConnected && !isLoadingCatalog && showTvHome && !activeMedia && (
+          <section className="tv-home min-h-[68vh] flex flex-col justify-center py-8">
+            <div className="text-center mb-10">
+              <h2 className="text-4xl font-black text-white">Cosa vuoi guardare?</h2>
+              <p className="text-xl text-zinc-400 mt-3">Usa le frecce del telecomando e premi OK</p>
+            </div>
+            <div className="grid grid-cols-3 gap-8 max-w-6xl mx-auto w-full">
+              <button
+                type="button"
+                autoFocus
+                onClick={() => { setActiveTab('live'); setShowTvHome(false); }}
+                className="tv-home-card min-h-64 rounded-3xl bg-zinc-900 border-2 border-zinc-700 flex flex-col items-center justify-center gap-5 text-white"
+              >
+                <Tv className="w-20 h-20 text-rose-400" />
+                <span className="text-3xl font-black">LIVE TV</span>
+                <span className="text-lg text-zinc-400">{liveStreams.length} canali</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setActiveTab('movies'); setShowTvHome(false); }}
+                className="tv-home-card min-h-64 rounded-3xl bg-zinc-900 border-2 border-zinc-700 flex flex-col items-center justify-center gap-5 text-white"
+              >
+                <Film className="w-20 h-20 text-emerald-400" />
+                <span className="text-3xl font-black">FILM</span>
+                <span className="text-lg text-zinc-400">{vodStreams.length} titoli</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setActiveTab('series'); setShowTvHome(false); }}
+                className="tv-home-card min-h-64 rounded-3xl bg-zinc-900 border-2 border-zinc-700 flex flex-col items-center justify-center gap-5 text-white"
+              >
+                <Layers className="w-20 h-20 text-blue-400" />
+                <span className="text-3xl font-black">SERIE TV</span>
+                <span className="text-lg text-zinc-400">{seriesList.length} serie</span>
+              </button>
+            </div>
+          </section>
+        )}
+
         {/* Connected Catalog Navigation Tabs */}
-        {isConnected && !isLoadingCatalog && (
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-zinc-800/90 pb-4">
+        {isConnected && !isLoadingCatalog && (!isTv || !showTvHome) && (
+          <div className="tv-catalog-nav flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-zinc-800/90 pb-4">
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              {isTv && (
+                <button
+                  type="button"
+                  onClick={() => setShowTvHome(true)}
+                  className="flex items-center gap-2.5 px-5 py-3 rounded-2xl text-base font-bold bg-zinc-900 text-emerald-300 border border-emerald-700"
+                >
+                  Home TV
+                </button>
+              )}
               {/* 1. Live TV */}
               <button
                 onClick={() => setActiveTab('live')}
@@ -451,22 +615,7 @@ export default function App() {
                 Novità & Recenti
               </button>
 
-              {/* 5. I Miei Download (disattivato su TV) */}
-              {!isTv && (
-                <button
-                  onClick={() => setActiveTab('downloads')}
-                  className={`flex items-center gap-2.5 px-4 sm:px-5 py-2.5 rounded-2xl text-sm sm:text-base font-bold transition cursor-pointer shadow-md ${
-                    activeTab === 'downloads'
-                      ? 'bg-cyan-600 text-white shadow-cyan-950/60 scale-105'
-                      : 'bg-zinc-900 text-zinc-300 hover:text-white hover:bg-zinc-850 border border-zinc-800'
-                  }`}
-                >
-                  <Download className="w-5 h-5 text-cyan-400" />
-                  I Miei Download
-                </button>
-              )}
-
-              {/* 6. Preferiti & Continua a Guardare */}
+              {/* 5. Preferiti & Continua a Guardare */}
               <button
                 onClick={() => setActiveTab('favorites')}
                 className={`flex items-center gap-2.5 px-4 sm:px-5 py-2.5 rounded-2xl text-sm sm:text-base font-bold transition cursor-pointer shadow-md ${
@@ -513,6 +662,8 @@ export default function App() {
             </p>
           </div>
         ) : isConnected ? (
+          isTv && showTvHome ? null : (
+          <Suspense fallback={<div className="mt-4 py-16 text-center text-zinc-400">Caricamento sezione…</div>}>
           <div className="mt-4">
             {activeTab === 'live' && (
               <LiveCatalog
@@ -574,25 +725,25 @@ export default function App() {
               />
             )}
 
-            {activeTab === 'downloads' && (
-              <DownloadsView
-                onPlay={handlePlayDirect}
-                onExploreContent={(tab) => setActiveTab(tab)}
-              />
-            )}
-
             {activeTab === 'favorites' && (
               <FavoritesView
                 onPlay={handlePlayDirect}
+                onOpenSeries={(seriesId) => {
+                  setSelectedSeriesForModal(seriesId);
+                  setActiveTab('series');
+                }}
                 accountKey={currentAccountKey}
               />
             )}
           </div>
+          </Suspense>
+          )
         ) : (
           /* Clean Dedicated Login Form when not logged in (zero links/favorites before login) */
           <LoginForm
             onLogin={(targetServer, user, pass) => connectToServer(targetServer, user, pass)}
             isLoading={isLoadingCatalog}
+            pairingEnabled={accessResolved && !accessRequired}
           />
         )}
       </main>
@@ -629,5 +780,6 @@ export default function App() {
         Xtream Player &bull; Riproduttore multimediale per server Xtream Codes
       </footer>
     </div>
+    </Suspense>
   );
 }

@@ -1,3 +1,4 @@
+import { RemoteImage } from './RemoteImage';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Search,
@@ -16,7 +17,6 @@ import {
   ChevronDown,
   Radio,
   Download,
-  Check,
 } from 'lucide-react';
 import { XtreamCategory, XtreamVodStream, XtreamVodDetails, PlayableMediaItem } from '../types/xtream';
 import { buildStreamUrl, formatDuration } from '../utils/parseXtreamUrl';
@@ -24,8 +24,8 @@ import { xtreamClient } from '../services/xtreamClient';
 import { storage } from '../services/storage';
 import { sortVodStreams } from '../utils/recentSorting';
 import { getSecureImageUrl } from '../utils/imageUrl';
-import { triggerMediaDownload, isTvEnvironment } from '../utils/downloadHelper';
-import { StreamExportModal } from './StreamExportModal';
+import { VirtualizedMediaGrid } from './VirtualizedMediaGrid';
+import { triggerMediaDownload, isDirectFileDownload, isTvEnvironment } from '../utils/downloadHelper';
 
 interface VodCatalogProps {
   categories: XtreamCategory[];
@@ -50,9 +50,9 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
   isLoading = false,
   accountKey,
 }) => {
+  const [, refreshFavorites] = useState(0);
   const categoriesListRef = useRef<HTMLDivElement | null>(null);
   const moviesListRef = useRef<HTMLDivElement | null>(null);
-  const [downloadingMovieId, setDownloadingMovieId] = useState<string | number | null>(null);
   const isTv = isTvEnvironment();
 
   // Always default to the first category to avoid rendering 20,000 items at once
@@ -63,11 +63,6 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
   const [categorySearch, setCategorySearch] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [sortBy, setSortBy] = useState<'recent' | 'rating' | 'name' | 'id'>('recent');
-  const [exportTarget, setExportTarget] = useState<{
-    title: string;
-    streamUrl: string;
-    containerExtension: string;
-  } | null>(null);
   const [activeMovieDetail, setActiveMovieDetail] = useState<{
     stream: XtreamVodStream;
     details: XtreamVodDetails | null;
@@ -168,11 +163,11 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="media-catalog space-y-4">
       {/* Master - Detail Dual Column Layout */}
-      <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 items-stretch">
+      <div className="media-browser-layout flex flex-col lg:flex-row gap-4 sm:gap-6 items-stretch">
         {/* Left Column: Categories List (extended down to bottom of page) */}
-        <aside className="w-full lg:w-80 xl:w-96 shrink-0 bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 sm:p-5 flex flex-col shadow-xl h-[calc(100vh-210px)] min-h-[680px]">
+        <aside className="media-category-panel w-full lg:w-80 xl:w-96 shrink-0 bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 sm:p-5 flex flex-col shadow-xl h-[calc(100vh-210px)] min-h-[680px]">
           <div className="flex items-center justify-between px-1 shrink-0">
             <div className="flex items-center gap-2.5">
               <Layers className="w-6 h-6 text-emerald-400" />
@@ -257,7 +252,7 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
         </aside>
 
         {/* Right Column: Movies in the Selected Category (extended down to bottom of page) */}
-        <section className="flex-1 w-full min-w-0 bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 sm:p-6 flex flex-col shadow-xl h-[calc(100vh-210px)] min-h-[680px]">
+        <section className="media-content-panel flex-1 w-full min-w-0 bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 sm:p-6 flex flex-col shadow-xl h-[calc(100vh-210px)] min-h-[680px]">
           {/* Header of the Selected Category */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-800 shrink-0">
             <div className="min-w-0">
@@ -337,11 +332,13 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 sm:gap-5">
-              {visibleStreams.map((stream) => {
+            <VirtualizedMediaGrid
+              items={visibleStreams}
+              scrollRef={moviesListRef}
+              getKey={(stream) => stream.stream_id}
+              renderItem={(stream) => {
                 const isFav = storage.isFavorite(`movie_${stream.stream_id}`, accountKey);
                 const isPlayingThis = activeMediaId === `movie_${stream.stream_id}`;
-                const isDownloadingThis = downloadingMovieId === stream.stream_id;
 
                 const handleDirectDownload = (e: React.MouseEvent) => {
                   e.stopPropagation();
@@ -364,16 +361,15 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                     ext,
                     accountKey
                   );
-                  setExportTarget({
-                    title: stream.name,
-                    streamUrl,
-                    containerExtension: ext,
-                  });
                 };
 
                 return (
                   <div
                     key={stream.stream_id}
+                    tabIndex={0}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') handleOpenDetails(stream);
+                    }}
                     className={`group relative rounded-2xl overflow-hidden shadow-lg transition-all duration-300 flex flex-col ${
                       isPlayingThis
                         ? 'bg-emerald-950/80 border-2 border-emerald-400 ring-4 ring-emerald-500/50 shadow-2xl shadow-emerald-950/90 scale-[1.02]'
@@ -383,11 +379,12 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                     {/* Poster Container */}
                     <div className="relative aspect-2/3 bg-zinc-950 overflow-hidden">
                       {stream.stream_icon ? (
-                        <img
+                        <RemoteImage
                           src={getSecureImageUrl(stream.stream_icon)}
                           alt={stream.name}
                           referrerPolicy="no-referrer"
                           loading="lazy"
+                          decoding="async"
                           onError={(e) => {
                             (e.target as HTMLElement).style.display = 'none';
                           }}
@@ -420,21 +417,14 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
 
                       {/* Top-Right Badges: Direct Download + Favorite directly on poster */}
                       <div className="absolute top-2 right-2 flex items-center gap-1 z-10">
-                        {!isTv && (
+                        {!isTv && isDirectFileDownload(stream.container_extension) && (
                           <button
                             onClick={handleDirectDownload}
                             title="Scarica questo film nella cartella Download del Mac"
-                            className={`p-2 rounded-xl backdrop-blur-md transition cursor-pointer shadow-lg ${
-                              isDownloadingThis
-                                ? 'bg-emerald-600 text-white animate-pulse'
-                                : 'bg-black/80 hover:bg-emerald-600 text-zinc-300 hover:text-white'
-                            }`}
+                            aria-label="Scarica film"
+                            className="p-2 rounded-xl backdrop-blur-md bg-black/80 hover:bg-emerald-600 text-zinc-300 hover:text-white transition cursor-pointer shadow-lg"
                           >
-                            {isDownloadingThis ? (
-                              <Check className="w-4 h-4 text-white" />
-                            ) : (
-                              <Download className="w-4 h-4" />
-                            )}
+                            <Download className="w-4 h-4" />
                           </button>
                         )}
 
@@ -450,10 +440,10 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                               containerExtension: stream.container_extension,
                             };
                             storage.toggleFavorite(item, accountKey);
-                            setSelectedCategory((c) => c);
+                            refreshFavorites((value) => value + 1);
                           }}
                           aria-label={isFav ? "Rimuovi dai preferiti" : "Aggiungi ai preferiti"}
-                          className="p-2 rounded-xl bg-black/80 hover:bg-black text-zinc-300 hover:text-amber-400 transition cursor-pointer shadow-lg backdrop-blur-md"
+                          className="relative z-30 p-2 rounded-xl bg-black/80 hover:bg-black text-zinc-300 hover:text-amber-400 transition cursor-pointer shadow-lg backdrop-blur-md"
                         >
                           <Star className={`w-4 h-4 ${isFav ? 'fill-amber-400 text-amber-400' : ''}`} />
                         </button>
@@ -479,29 +469,6 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                             Dettagli
                           </button>
 
-                          {!isTv && (
-                            <button
-                              onClick={handleDirectDownload}
-                              className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-md ${
-                                isDownloadingThis
-                                  ? 'bg-emerald-500 text-white'
-                                  : 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                              }`}
-                              title="Scarica film su Mac"
-                            >
-                              {isDownloadingThis ? (
-                                <>
-                                  <Check className="w-3.5 h-3.5" />
-                                  <span>Avviato!</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Download className="w-3.5 h-3.5" />
-                                  <span>Scarica</span>
-                                </>
-                              )}
-                            </button>
-                          )}
                         </div>
                       </div>
                     </div>
@@ -518,8 +485,8 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                     </div>
                   </div>
                 );
-              })}
-            </div>
+              }}
+            />
           )}
           </div>
         </section>
@@ -546,7 +513,7 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
             <div className="p-5 sm:p-6 overflow-y-auto space-y-4">
               <div className="flex flex-col sm:flex-row gap-5">
                 {activeMovieDetail.stream.stream_icon && (
-                  <img
+                  <RemoteImage
                     src={getSecureImageUrl(activeMovieDetail.stream.stream_icon)}
                     alt={activeMovieDetail.stream.name}
                     className="w-36 sm:w-44 aspect-2/3 object-cover rounded-2xl shadow-xl shrink-0"
@@ -585,7 +552,7 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
 
             {/* Footer with play and download buttons */}
             <div className="p-4 sm:p-5 border-t border-zinc-800 flex items-center justify-end gap-3 bg-zinc-900/50">
-              {!isTv && (
+              {!isTv && isDirectFileDownload(activeMovieDetail.stream.container_extension) && (
                 <button
                   type="button"
                   onClick={() => {
@@ -607,16 +574,12 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                       ext,
                       accountKey
                     );
-                    setExportTarget({
-                      title: activeMovieDetail.stream.name,
-                      streamUrl,
-                      containerExtension: ext,
-                    });
                   }}
-                  className="px-5 py-3 rounded-xl border border-zinc-700 hover:border-cyan-500 bg-zinc-900 hover:bg-zinc-800 text-cyan-400 hover:text-white text-sm font-bold flex items-center gap-2 transition cursor-pointer"
+                  title="Scarica nella cartella locale dell’app"
+                  aria-label="Scarica film"
+                  className="p-3 rounded-xl border border-zinc-700 hover:border-cyan-500 bg-zinc-900 hover:bg-zinc-800 text-cyan-400 hover:text-white transition cursor-pointer"
                 >
-                  <Download className="w-4 h-4 text-cyan-400" />
-                  <span>Estrapola Link / VLC</span>
+                  <Download className="w-5 h-5" />
                 </button>
               )}
 
@@ -635,17 +598,6 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
         </div>
       )}
 
-      {/* Stream Export Modal */}
-      {exportTarget && (
-        <StreamExportModal
-          isOpen={Boolean(exportTarget)}
-          onClose={() => setExportTarget(null)}
-          title={exportTarget.title}
-          streamUrl={exportTarget.streamUrl}
-          type="movie"
-          containerExtension={exportTarget.containerExtension}
-        />
-      )}
     </div>
   );
 };

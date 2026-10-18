@@ -1,0 +1,16 @@
+package p086l;
+
+import android.os.LocaleList;
+import android.widget.TextView;
+
+/* JADX INFO: renamed from: l.a0, reason: case insensitive filesystem */
+/* JADX INFO: loaded from: classes.dex */
+public abstract class AbstractC3017a0 {
+    public static LocaleList a(String str) {
+        return LocaleList.forLanguageTags(str);
+    }
+
+    public static void b(TextView textView, LocaleList localeList) {
+        textView.setTextLocales(localeList);
+    }
+}

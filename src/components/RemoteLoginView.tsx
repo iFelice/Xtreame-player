@@ -80,10 +80,12 @@ export const RemoteLoginView: React.FC<RemoteLoginViewProps> = ({ onBackToApp, i
           text: 'Credenziali inviate con successo alla TV! Lo schermo della TV si aggiornerà automaticamente tra un istante.',
         });
       } else {
-        setStatusMessage({
-          type: 'error',
-          text: data.error || 'Codice PIN errato o sessione scaduta. Verifica il PIN sulla TV.',
-        });
+        const message = res.status === 409
+          ? 'Questo PIN è già stato completato.'
+          : res.status === 429
+            ? 'Troppi tentativi. Attendi qualche minuto prima di riprovare.'
+            : 'Codice PIN errato o sessione scaduta. Verifica il PIN sulla TV.';
+        setStatusMessage({ type: 'error', text: message });
       }
     } catch (err: any) {
       setStatusMessage({
