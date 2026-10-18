@@ -25,6 +25,7 @@ import { storage } from '../services/storage';
 import { sortVodStreams } from '../utils/recentSorting';
 import { getSecureImageUrl } from '../utils/imageUrl';
 import { VirtualizedMediaGrid } from './VirtualizedMediaGrid';
+import { ListPositionPill } from './ListPositionPill';
 import { triggerMediaDownload, isDirectFileDownload, isTvEnvironment } from '../utils/downloadHelper';
 
 interface VodCatalogProps {
@@ -252,7 +253,7 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
         </aside>
 
         {/* Right Column: Movies in the Selected Category (extended down to bottom of page) */}
-        <section className="media-content-panel flex-1 w-full min-w-0 bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 sm:p-6 flex flex-col shadow-xl h-[calc(100vh-210px)] min-h-[680px]">
+        <section className="media-content-panel relative flex-1 w-full min-w-0 bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 sm:p-6 flex flex-col shadow-xl h-[calc(100vh-210px)] min-h-[680px]">
           {/* Header of the Selected Category */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-800 shrink-0">
             <div className="min-w-0">
@@ -336,7 +337,7 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
               items={visibleStreams}
               scrollRef={moviesListRef}
               getKey={(stream) => stream.stream_id}
-              renderItem={(stream) => {
+              renderItem={(stream, index) => {
                 const isFav = storage.isFavorite(`movie_${stream.stream_id}`, accountKey);
                 const isPlayingThis = activeMediaId === `movie_${stream.stream_id}`;
 
@@ -366,6 +367,7 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                 return (
                   <div
                     key={stream.stream_id}
+                    data-media-index={index + 1}
                     tabIndex={0}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter') handleOpenDetails(stream);
@@ -489,6 +491,12 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
             />
           )}
           </div>
+
+          <ListPositionPill
+            scrollRef={moviesListRef}
+            total={filteredStreams.length}
+            layout="grid"
+          />
         </section>
       </div>
 

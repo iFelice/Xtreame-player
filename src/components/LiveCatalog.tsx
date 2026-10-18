@@ -17,6 +17,7 @@ import { XtreamCategory, XtreamLiveStream, PlayableMediaItem } from '../types/xt
 import { buildStreamUrl } from '../utils/parseXtreamUrl';
 import { storage } from '../services/storage';
 import { getSecureImageUrl } from '../utils/imageUrl';
+import { ListPositionPill } from './ListPositionPill';
 
 // Smart Channel Logo component with styled fallback initials to avoid black boxes
 const ChannelLogo: React.FC<{ icon?: string; name: string; size?: 'sm' | 'md' }> = ({
@@ -325,7 +326,7 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
         </aside>
 
         {/* Right Column: Channels of the Selected Category (extended down to bottom of page) */}
-        <section className="media-content-panel flex-1 w-full min-w-0 bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 sm:p-6 flex flex-col shadow-xl h-[calc(100vh-210px)] min-h-[680px]">
+        <section className="media-content-panel relative flex-1 w-full min-w-0 bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 sm:p-6 flex flex-col shadow-xl h-[calc(100vh-210px)] min-h-[680px]">
           {/* Header of the Selected Category */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-800 shrink-0">
             <div className="min-w-0">
@@ -433,6 +434,7 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
                         <div
                           key={stream.stream_id}
                           id={`live-channel-${stream.stream_id}`}
+                          data-media-index={idx + 1}
                           tabIndex={0}
                           onClick={() => handlePlayLive(stream)}
                           className={`group flex items-center justify-between p-3.5 sm:p-4 rounded-2xl transition-all cursor-pointer gap-3 sm:gap-5 shadow-sm scroll-mt-2 ${
@@ -510,6 +512,7 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
                       <div
                         key={stream.stream_id}
                         id={`live-channel-${stream.stream_id}`}
+                        data-media-index={idx + 1}
                         tabIndex={0}
                         onClick={() => handlePlayLive(stream)}
                         className={`group relative rounded-3xl p-4 shadow-lg transition-all cursor-pointer flex flex-col justify-between scroll-mt-2 ${
@@ -570,6 +573,12 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
             </div>
           )}
           </div>
+
+          <ListPositionPill
+            scrollRef={channelsListRef}
+            total={filteredStreams.length}
+            layout={viewMode === 'grid' ? 'grid' : 'list'}
+          />
         </section>
       </div>
     </div>
