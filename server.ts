@@ -7,35 +7,85 @@ import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import { randomBytes } from 'crypto';
 import { createSafeProxySigner, isSafeDevelopmentTarget, SAFE_CONNECT_POLICY, safeProxyEnabled } from './server/safeProxy';
-import { createAccessAuth, isPublicApiPath, requireProductionToken } from './server/auth';
 import { resolvePublicTarget } from './server/targetGuard';
 import { guardedRequest, rewriteM3u8 } from './server/proxy';
 import { createRemoteSessionService } from './server/remoteSession';
+import { createAllowedHostsStore } from './server/allowedHosts';
+import { createProviderGate } from './server/providerGate';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-requireProductionToken(process.env);
 export const app = express();
 if (process.env.TRUST_PROXY === '1') app.set('trust proxy', 1);
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 const SAFE_MODE = safeProxyEnabled();
-const accessAuth = createAccessAuth(process.env.APP_ACCESS_TOKEN, process.env.NODE_ENV === 'production');
-const safeProxySigner = createSafeProxySigner(randomBytes(32));
 const remoteSession = createRemoteSessionService();
 
+// Random per-process secret: signs the URLs the server rewrites inside M3U8
+// manifests so /api/proxy/stream can admit them even when their origin is not
+// (or no longer) in the allowed provider list.
+const streamSigner = createSafeProxySigner(randomBytes(32));
+
+// Closed proxy: only provider origins with at least one successful login.
+// Exported for tests and runtime inspection.
+export const allowedOrigins = createAllowedHostsStore({
+  filePath:
+    process.env.ALLOWED_HOSTS_FILE || path.join(__dirname, 'data', 'allowed-hosts.json'),
+});
+const providerGate = createProviderGate({ store: allowedOrigins });
+
+export function signStreamUrl(targetUrl: string): string {
+  return streamSigner.sign(targetUrl);
+}
+
 function proxyPath(targetUrl: string): string {
-  const signature = SAFE_MODE ? `&safe=${safeProxySigner.sign(targetUrl)}` : '';
-  return `/api/proxy/stream?url=${encodeURIComponent(targetUrl)}${signature}`;
+  return `/api/proxy/stream?url=${encodeURIComponent(targetUrl)}&safe=${streamSigner.sign(targetUrl)}`;
 }
 
 function rejectUnsafeProxyTarget(targetUrl: string, res: Response, signature?: unknown): boolean {
-  if (SAFE_MODE && safeProxySigner.verify(targetUrl, signature)) return false;
+  if (SAFE_MODE && streamSigner.verify(targetUrl, signature)) return false;
   if (!SAFE_MODE || isSafeDevelopmentTarget(targetUrl)) return false;
   res.status(403).json({
     error: 'Modalità sviluppo sicura: sono consentiti soltanto localhost e il mock Xtream locale.',
   });
   return true;
+}
+
+/**
+ * Enforces the closed-proxy policy. Returns the access decision when the
+ * request may proceed toward the target, or null after answering the request
+ * itself (400/403/429). The private-target guard (targetGuard) keeps applying
+ * downstream in every case.
+ */
+function gateProxyRequest(
+  targetUrl: string,
+  req: Request,
+  res: Response,
+  options: { allowSignature: boolean },
+): { type: 'allowed' | 'login'; origin: string } | null {
+  const signatureValid = options.allowSignature
+    ? streamSigner.verify(targetUrl, req.query.safe)
+    : false;
+  const decision = providerGate.check(targetUrl, {
+    ip: req.ip || req.socket.remoteAddress || 'unknown',
+    signatureValid,
+    allowSignature: options.allowSignature,
+  });
+
+  switch (decision.type) {
+    case 'invalid':
+      res.status(400).json({ error: 'URL di destinazione non valido' });
+      return null;
+    case 'blocked':
+      res.status(403).json({ error: 'PROVIDER_NOT_ALLOWED' });
+      return null;
+    case 'rate_limited':
+      res.status(429).json({ error: 'TOO_MANY_LOGIN_ATTEMPTS' });
+      return null;
+    default:
+      return decision;
+  }
 }
 
 app.use(express.json({ limit: '10mb' }));
@@ -48,14 +98,8 @@ if (SAFE_MODE) {
   });
 }
 
-app.post('/api/auth/unlock', accessAuth.unlock);
-app.get('/api/runtime-config', (req, res) => {
-  const cookie = req.headers.cookie?.split(';').map(v => v.trim()).find(v => v.startsWith('xtream_access='))?.slice(14);
-  res.json({ safeMode: SAFE_MODE, accessRequired: accessAuth.enabled && !accessAuth.verify(cookie) });
-});
-app.use('/api', (req, res, next) => {
-  if (isPublicApiPath(req.path)) return next();
-  return accessAuth.middleware(req, res, next);
+app.get('/api/runtime-config', (_req, res) => {
+  res.json({ safeMode: SAFE_MODE });
 });
 
 const DEFAULT_USER_AGENT = 'IPTVSmartersPro/3.1.5.1 (Linux; Android 11; Smart TV)';
@@ -133,7 +177,10 @@ export async function proxyStream(targetUrl: string, req: Request, res: Response
         res.socket.setTimeout(0);
       }
 
-      // Handle redirects (301, 302, 303, 307, 308)
+      // Handle redirects (301, 302, 303, 307, 308). Redirects starting from an
+      // already admitted (or server-signed) target stay allowed: providers
+      // routinely move streams onto other servers. targetGuard applies again
+      // on each hop when enabled.
       if (
         upstreamResponse.statusCode &&
         [301, 302, 303, 307, 308].includes(upstreamResponse.statusCode) &&
@@ -295,6 +342,7 @@ app.get('/api/proxy/stream', (req, res) => {
     return res.status(400).send('Missing url parameter');
   }
   if (rejectUnsafeProxyTarget(targetUrl, res, req.query.safe)) return;
+  if (!gateProxyRequest(targetUrl, req, res, { allowSignature: true })) return;
   proxyStream(targetUrl, req, res);
 });
 
@@ -305,6 +353,8 @@ app.get('/api/proxy/api', async (req, res) => {
     return res.status(400).json({ error: 'Missing url parameter' });
   }
   if (rejectUnsafeProxyTarget(targetUrl, res)) return;
+  const access = gateProxyRequest(targetUrl, req, res, { allowSignature: false });
+  if (!access) return;
   if (process.env.NODE_ENV === 'production') {
     try { await resolvePublicTarget(targetUrl, process.env.ALLOW_PRIVATE_TARGETS === '1'); }
     catch { return res.status(403).json({ error: 'TARGET_BLOCKED' }); }
@@ -339,7 +389,13 @@ app.get('/api/proxy/api', async (req, res) => {
 
       if (response.status >= 200 && response.status < 300) {
         try {
-          return res.json(JSON.parse(lastText));
+          const parsedBody = JSON.parse(lastText);
+          // Only a successful Xtream login (user_info.auth === 1) admits the
+          // origin for every other proxied request.
+          if (access.type === 'login' && parsedBody?.user_info?.auth === 1) {
+            allowedOrigins.add(access.origin);
+          }
+          return res.json(parsedBody);
         } catch {
           res.header('Content-Type', 'text/plain');
           return res.send(lastText);
@@ -373,7 +429,9 @@ app.get('/api/proxy/api', async (req, res) => {
   });
 });
 
-// Quick endpoint to test server connectivity and parse credentials
+// Quick endpoint to test server connectivity and parse credentials.
+// It performs, by construction, only Xtream login requests; the rate limit of
+// the closed proxy applies here as well.
 app.post('/api/xtream/test', async (req, res) => {
   const { host, username, password } = req.body;
   if (!host || !username || !password) {
@@ -382,6 +440,8 @@ app.post('/api/xtream/test', async (req, res) => {
 
   const cleanHost = host.replace(/\/+$/, '');
   const apiUrl = `${cleanHost}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
+  const access = gateProxyRequest(apiUrl, req, res, { allowSignature: false });
+  if (!access) return;
   if (process.env.NODE_ENV === 'production') {
     try { await resolvePublicTarget(apiUrl, process.env.ALLOW_PRIVATE_TARGETS === '1'); }
     catch { return res.status(403).json({ error: 'TARGET_BLOCKED' }); }
@@ -409,6 +469,10 @@ app.post('/api/xtream/test', async (req, res) => {
         error: 'Credenziali non valide o account disabilitato',
         data,
       });
+    }
+
+    if (access.type === 'login' && data.user_info?.auth === 1) {
+      allowedOrigins.add(access.origin);
     }
 
     return res.json({
@@ -450,12 +514,10 @@ async function startServer() {
     });
   }
 
-  const explicitHost = process.env.HOST;
-  const hasValidToken = Boolean(process.env.APP_ACCESS_TOKEN && process.env.APP_ACCESS_TOKEN.length >= 24);
-  const listenHost = explicitHost || (hasValidToken ? '0.0.0.0' : '127.0.0.1');
-  if (explicitHost && !hasValidToken) {
-    console.warn('ATTENZIONE: HOST è impostato senza un APP_ACCESS_TOKEN valido; il server può essere esposto senza autenticazione.');
-  }
+  // Home-network server: reachable from Mac, TV and phones by default.
+  // Protection comes from the allowed-provider list, not from the bind
+  // address; set HOST=127.0.0.1 to restrict it to this machine only.
+  const listenHost = process.env.HOST || '0.0.0.0';
 
   app.listen(PORT, listenHost, () => {
     console.log(`Server Xtream Player avviato su http://${listenHost}:${PORT}`);

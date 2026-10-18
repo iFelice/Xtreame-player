@@ -6,3 +6,6 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Elenco locale dei provider abilitati al proxy (generato a runtime)
+data/allowed-hosts.json

@@ -16,8 +16,10 @@ import {
   HelpCircle,
   QrCode,
   Smartphone,
+  AlertCircle,
 } from 'lucide-react';
 import { parseXtreamUrl, buildStreamUrl } from '../utils/parseXtreamUrl';
+import { xtreamClient } from '../services/xtreamClient';
 import { XtreamParsedUrl, PlayableMediaItem } from '../types/xtream';
 
 interface UrlInputBarProps {
@@ -42,6 +44,8 @@ export const UrlInputBar: React.FC<UrlInputBarProps> = ({
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [copiedExample, setCopiedExample] = useState<boolean>(false);
   const [manualMode, setManualMode] = useState<boolean>(false);
+  const [isAuthenticating, setIsAuthenticating] = useState<boolean>(false);
+  const [directPlayError, setDirectPlayError] = useState<string | null>(null);
 
   // Manual inputs fallback
   const [manualHost, setManualHost] = useState<string>('');
@@ -52,9 +56,11 @@ export const UrlInputBar: React.FC<UrlInputBarProps> = ({
   useEffect(() => {
     if (!urlInput.trim()) {
       setParsed(null);
+      setDirectPlayError(null);
       return;
     }
     const res = parseXtreamUrl(urlInput);
+    setDirectPlayError(null);
     setParsed(res);
   }, [urlInput]);
 
@@ -77,8 +83,37 @@ export const UrlInputBar: React.FC<UrlInputBarProps> = ({
     setTimeout(() => setCopiedExample(false), 2000);
   };
 
-  const handlePlayDirectClick = () => {
-    if (!parsed || !parsed.username || !parsed.password) return;
+  const handlePlayDirectClick = async () => {
+    if (!parsed || !parsed.username || !parsed.password || isAuthenticating) return;
+
+    setDirectPlayError(null);
+    setIsAuthenticating(true);
+    try {
+      // Il proxy è chiuso: prima della riproduzione serve un login riuscito
+      // verso questo provider, che abilita l'origine sul server.
+      const auth = await xtreamClient.authenticate(
+        parsed.serverUrl,
+        parsed.username,
+        parsed.password
+      );
+      if (auth.user_info?.status === 'Disabled') {
+        setDirectPlayError('Questo account Xtream risulta disabilitato sul server.');
+        return;
+      }
+      if (auth.user_info?.auth === 0) {
+        setDirectPlayError('Nome utente o password non corretti per questo server Xtream.');
+        return;
+      }
+    } catch (err: any) {
+      console.error('Errore di accesso prima della riproduzione diretta:', err);
+      setDirectPlayError(
+        err?.message ||
+          'Impossibile connettersi al server Xtream Codes. Verifica il link o la raggiungibilità del server.'
+      );
+      return;
+    } finally {
+      setIsAuthenticating(false);
+    }
 
     const streamType: 'movie' | 'series' | 'live' =
       parsed.streamType === 'live' ? 'live' : parsed.streamType === 'series' ? 'series' : 'movie';
@@ -309,11 +344,20 @@ export const UrlInputBar: React.FC<UrlInputBarProps> = ({
           <button
             type="button"
             onClick={handlePlayDirectClick}
-            disabled={!hasValidCreds}
+            disabled={!hasValidCreds || isAuthenticating}
             className="flex-1 min-w-[200px] flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-medium text-sm shadow-lg shadow-emerald-950/40 transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
-            <Play className="w-4 h-4 fill-white" />
-            Riproduci Subito Questo Video (#{parsed.streamId})
+            {isAuthenticating ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                Verifica credenziali...
+              </>
+            ) : (
+              <>
+                <Play className="w-4 h-4 fill-white" />
+                Riproduci Subito Questo Video (#{parsed.streamId})
+              </>
+            )}
           </button>
         )}
 
@@ -332,6 +376,27 @@ export const UrlInputBar: React.FC<UrlInputBarProps> = ({
           {isLoading ? 'Connessione al server in corso...' : 'Esplora Intero Catalogo del Server'}
         </button>
       </div>
+
+      {/* Direct-play login error */}
+      {directPlayError && (
+        <div
+          role="alert"
+          className="mt-3 flex items-start gap-2.5 p-3 rounded-xl bg-rose-950/80 border border-rose-800 text-rose-200 shadow-lg"
+        >
+          <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+          <div className="min-w-0 flex-1">
+            <p className="text-xs sm:text-sm font-bold text-rose-300">Errore di Connessione</p>
+            <p className="text-xs sm:text-sm text-rose-300/90 mt-0.5 leading-relaxed">{directPlayError}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setDirectPlayError(null)}
+            className="text-xs font-bold text-rose-400 hover:text-white px-2 py-1 rounded-lg hover:bg-rose-900/60 transition cursor-pointer shrink-0"
+          >
+            Chiudi
+          </button>
+        </div>
+      )}
 
       {/* Quick Help Tip */}
       <div className="mt-3 flex items-center gap-1.5 text-[11px] text-zinc-400">
