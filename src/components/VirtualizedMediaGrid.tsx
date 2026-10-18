@@ -1,19 +1,13 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import { columnsForViewport } from '../utils/gridColumns';
 
 interface VirtualizedMediaGridProps<T> {
   items: T[];
   scrollRef: React.RefObject<HTMLElement | null>;
   getKey: (item: T) => React.Key;
-  renderItem: (item: T) => React.ReactNode;
-}
-
-function columnsForViewport(width: number): number {
-  if (width >= 1536) return 6;
-  if (width >= 1280) return 5;
-  if (width >= 768) return 4;
-  if (width >= 640) return 3;
-  return 2;
+  /** The second argument is the absolute index of the item in the grid. */
+  renderItem: (item: T, index: number) => React.ReactNode;
 }
 
 /**
@@ -84,8 +78,10 @@ export function VirtualizedMediaGrid<T>({
             className="absolute top-0 left-0 w-full grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 sm:gap-5 pb-4 sm:pb-5"
             style={{ transform: `translateY(${virtualRow.start}px)` }}
           >
-            {rowItems.map((item) => (
-              <React.Fragment key={getKey(item)}>{renderItem(item)}</React.Fragment>
+            {rowItems.map((item, offset) => (
+              <React.Fragment key={getKey(item)}>
+                {renderItem(item, start + offset)}
+              </React.Fragment>
             ))}
           </div>
         );

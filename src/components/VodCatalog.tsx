@@ -25,6 +25,7 @@ import { storage } from '../services/storage';
 import { sortVodStreams } from '../utils/recentSorting';
 import { getSecureImageUrl } from '../utils/imageUrl';
 import { VirtualizedMediaGrid } from './VirtualizedMediaGrid';
+import { ListPositionIndicator } from './ListPositionIndicator';
 import { triggerMediaDownload, isDirectFileDownload, isTvEnvironment } from '../utils/downloadHelper';
 
 interface VodCatalogProps {
@@ -260,10 +261,13 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                 <Film className="w-7 h-7 text-emerald-400 shrink-0" />
                 <span className="truncate">{currentCategory?.category_name || 'Film'}</span>
               </h2>
-              <p className="text-xs sm:text-sm text-zinc-400 font-medium mt-1">
-                Mostrando <strong className="text-zinc-100">{filteredStreams.length}</strong> film
-                {searchQuery ? ` per "${searchQuery}"` : ''}
-              </p>
+              <ListPositionIndicator
+                scrollRef={moviesListRef}
+                total={filteredStreams.length}
+                label="film"
+                searchQuery={searchQuery}
+                layout="grid"
+              />
             </div>
 
             {/* Controls: Sort, Search & Scroll Arrows */}
@@ -336,7 +340,7 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
               items={visibleStreams}
               scrollRef={moviesListRef}
               getKey={(stream) => stream.stream_id}
-              renderItem={(stream) => {
+              renderItem={(stream, index) => {
                 const isFav = storage.isFavorite(`movie_${stream.stream_id}`, accountKey);
                 const isPlayingThis = activeMediaId === `movie_${stream.stream_id}`;
 
@@ -366,6 +370,7 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                 return (
                   <div
                     key={stream.stream_id}
+                    data-media-index={index + 1}
                     tabIndex={0}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter') handleOpenDetails(stream);

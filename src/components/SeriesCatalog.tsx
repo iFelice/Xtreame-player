@@ -29,6 +29,7 @@ import { storage } from '../services/storage';
 import { sortSeriesList } from '../utils/recentSorting';
 import { getSecureImageUrl } from '../utils/imageUrl';
 import { VirtualizedMediaGrid } from './VirtualizedMediaGrid';
+import { ListPositionIndicator } from './ListPositionIndicator';
 import { triggerMediaDownload, isTvEnvironment } from '../utils/downloadHelper';
 
 interface SeriesCatalogProps {
@@ -306,10 +307,13 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                 <Tv className="w-7 h-7 text-blue-400 shrink-0" />
                 <span className="truncate">{currentCategory?.category_name || 'Serie TV'}</span>
               </h2>
-              <p className="text-xs sm:text-sm text-zinc-400 font-medium mt-1">
-                Mostrando <strong className="text-zinc-100">{filteredSeries.length}</strong> serie TV
-                {searchQuery ? ` per "${searchQuery}"` : ''}
-              </p>
+              <ListPositionIndicator
+                scrollRef={seriesListRef}
+                total={filteredSeries.length}
+                label="serie TV"
+                searchQuery={searchQuery}
+                layout="grid"
+              />
             </div>
 
             {/* Controls: Sort, Search & Scroll Arrows */}
@@ -382,7 +386,7 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                 items={visibleSeries}
                 scrollRef={seriesListRef}
                 getKey={(series) => series.series_id}
-                renderItem={(series) => {
+                renderItem={(series, index) => {
                   const isFav = storage.isFavorite(`series_${series.series_id}`, accountKey);
                   const isPlayingThis =
                     activeMediaId === `series_${series.series_id}` ||
@@ -391,6 +395,7 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                   return (
                     <div
                       key={series.series_id}
+                      data-media-index={index + 1}
                       tabIndex={0}
                       onClick={() => handleOpenSeries(series)}
                       className={`group relative rounded-2xl overflow-hidden shadow-lg transition-all duration-300 flex flex-col cursor-pointer ${
