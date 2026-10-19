@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout android:id="@null" android:layout_width="0.0dp" android:layout_height="match_parent" android:layout_weight="?guidedButtonActionsWidthWeight" android:transitionName="guidedactions_root2" android:transitionGroup="false"
-  xmlns:android="http://schemas.android.com/apk/res/android">
-    <androidx.leanback.widget.NonOverlappingView android:id="@null" android:background="?guidedActionsBackgroundDark" android:layout_width="match_parent" android:layout_height="match_parent" android:transitionName="guidedactions_list_background2" />
-    <androidx.leanback.widget.NonOverlappingFrameLayout android:id="@null" android:layout_width="match_parent" android:layout_height="match_parent" android:transitionName="guidedactions_content2" android:transitionGroup="false">
-        <androidx.leanback.widget.VerticalGridView android:id="@null" android:transitionGroup="true" style="?guidedButtonActionsListStyle" />
-    </androidx.leanback.widget.NonOverlappingFrameLayout>
-</RelativeLayout>
