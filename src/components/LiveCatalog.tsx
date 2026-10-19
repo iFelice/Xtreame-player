@@ -1,66 +1,20 @@
-import { RemoteImage } from './RemoteImage';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Search,
   Tv,
   Star,
   Play,
-  Layers,
   LayoutGrid,
   List,
-  ChevronRight,
-  Radio,
   ChevronUp,
   ChevronDown,
 } from 'lucide-react';
 import { XtreamCategory, XtreamLiveStream, PlayableMediaItem } from '../types/xtream';
 import { buildStreamUrl } from '../utils/parseXtreamUrl';
 import { storage } from '../services/storage';
-import { getSecureImageUrl } from '../utils/imageUrl';
 import { ListPositionIndicator } from './ListPositionIndicator';
-
-// Smart Channel Logo component with styled fallback initials to avoid black boxes
-const ChannelLogo: React.FC<{ icon?: string; name: string; size?: 'sm' | 'md' }> = ({
-  icon,
-  name,
-  size = 'md',
-}) => {
-  const [hasError, setHasError] = useState(false);
-
-  const initials = useMemo(() => {
-    const cleaned = name
-      .replace(/\[.*?\]|\(.*?\)|HD|FHD|4K|UHD|IT:|ITA:|IT|HEVC|H\.265/gi, '')
-      .trim();
-    const parts = cleaned.split(/\s+/).filter(Boolean);
-    if (parts.length >= 2) {
-      return (parts[0][0] + parts[1][0]).toUpperCase();
-    }
-    return (cleaned.slice(0, 3) || 'TV').toUpperCase();
-  }, [name]);
-
-  if (!icon || hasError) {
-    return (
-      <div className="w-full h-full flex flex-col items-center justify-center   text-danger font-bold  rounded-xl shadow-inner border border-separator select-none p-1">
-        <span className={`${size === 'sm' ? 'text-xs sm:text-sm' : 'text-sm sm:text-base'} tracking-wider leading-none font-bold`}>
-          {initials}
-        </span>
-        <Tv className={`${size === 'sm' ? 'w-3.5 h-3.5' : 'w-5 h-5'} text-label-tertiary mt-1 opacity-70`} />
-      </div>
-    );
-  }
-
-  return (
-    <RemoteImage
-      src={getSecureImageUrl(icon)}
-      alt={name}
-      referrerPolicy="no-referrer"
-      loading="lazy"
-      onError={() => setHasError(true)}
-      onRemoteError={() => setHasError(true)}
-      className="w-full h-full object-contain"
-    />
-  );
-};
+import { CollapsibleCategoryPanel } from './CollapsibleCategoryPanel';
+import { ChannelLogo, LiveChannelListRow } from './LiveChannelRow';
 
 interface LiveCatalogProps {
   categories: XtreamCategory[];
@@ -86,7 +40,6 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
   accountKey,
 }) => {
   const [, refreshFavorites] = useState(0);
-  const categoriesListRef = useRef<HTMLDivElement | null>(null);
   const channelsListRef = useRef<HTMLDivElement | null>(null);
 
   // Always default to the FIRST category (never "all" to prevent freezing)
@@ -94,7 +47,6 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
     return categories[0]?.category_id ? String(categories[0].category_id) : '';
   });
 
-  const [categorySearch, setCategorySearch] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
 
@@ -114,13 +66,6 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
     } catch {}
   };
 
-  const scrollCategories = (direction: 'up' | 'down') => {
-    if (categoriesListRef.current) {
-      const delta = direction === 'up' ? -260 : 260;
-      categoriesListRef.current.scrollBy({ top: delta, behavior: 'smooth' });
-    }
-  };
-
   const scrollChannels = (direction: 'up' | 'down') => {
     if (channelsListRef.current) {
       const delta = direction === 'up' ? -360 : 360;
@@ -137,13 +82,6 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
     }
     return counts;
   }, [streams]);
-
-  // Filtered categories for left sidebar
-  const filteredCategories = useMemo(() => {
-    if (!categorySearch.trim()) return categories;
-    const q = categorySearch.toLowerCase();
-    return categories.filter((c) => c.category_name.toLowerCase().includes(q));
-  }, [categories, categorySearch]);
 
   const currentCategory = useMemo(() => {
     return categories.find((c) => String(c.category_id) === String(selectedCategory));
@@ -240,90 +178,18 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
     <div className="media-catalog space-y-4">
       {/* Master - Detail Dual Column Layout */}
       <div className="media-browser-layout flex flex-col lg:flex-row gap-4 sm:gap-6 items-stretch">
-        {/* Left Column: Categories List (extended down to bottom of page) */}
-        <aside className="media-category-panel w-full lg:w-84 xl:w-96 shrink-0 bg-surface-0/90 border border-separator rounded-3xl p-4 sm:p-5 flex flex-col shadow-xl h-[calc(100vh-210px)] min-h-[680px]">
-          <div className="flex items-center justify-between px-1 shrink-0">
-            <div className="flex items-center gap-2.5">
-              <Layers className="w-6 h-6 text-live" />
-              <h3 className="text-base sm:text-lg font-black text-label tracking-wide uppercase">
-                Categorie ({categories.length})
-              </h3>
-            </div>
-            {/* Scroll Navigation Arrows for TV / Remote */}
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => scrollCategories('up')}
-                className="p-1.5 rounded-xl bg-surface-1 hover:bg-surface-2 text-label-secondary hover:text-label transition cursor-pointer shadow-xs"
-                title="Scorri su (▲)"
-              >
-                <ChevronUp className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => scrollCategories('down')}
-                className="p-1.5 rounded-xl bg-surface-1 hover:bg-surface-2 text-label-secondary hover:text-label transition cursor-pointer shadow-xs"
-                title="Scorri giù (▼)"
-              >
-                <ChevronDown className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-
-          {/* Search Category */}
-          <div className="relative shrink-0 mt-3">
-            <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-label-secondary" />
-            <input
-              type="text"
-              value={categorySearch}
-              onChange={(e) => setCategorySearch(e.target.value)}
-              placeholder="Filtra categorie..."
-              className="w-full pl-12 pr-4 py-3 bg-surface-0 border border-separator-strong/80 rounded-2xl text-sm sm:text-base font-medium text-label placeholder-label-tertiary focus:outline-hidden focus:border-live transition shadow-inner"
-            />
-          </div>
-
-          {/* Scrollable Categories List taking full remaining height */}
-          <div
-            ref={categoriesListRef}
-            className="flex-1 min-h-0 space-y-2 overflow-y-auto scroll-smooth pr-1.5 mt-3"
-          >
-            {filteredCategories.length === 0 ? (
-              <div className="py-10 text-center text-label-tertiary text-sm sm:text-base font-medium">
-                Nessuna categoria trovata
-              </div>
-            ) : (
-              filteredCategories.map((cat) => {
-                const count = categoryCounts[cat.category_id] || 0;
-                const isSelected = String(cat.category_id) === String(selectedCategory);
-                return (
-                  <button
-                    key={cat.category_id}
-                    onClick={() => {
-                      setSelectedCategory(String(cat.category_id));
-                      setSearchQuery('');
-                    }}
-                    className={`w-full text-left px-4 py-3 sm:py-3.5 rounded-2xl text-sm sm:text-base font-bold flex items-center justify-between transition cursor-pointer group ${
-                      isSelected
-                        ? 'bg-live text-on-accent shadow-xl  scale-[1.02]'
-                        : 'text-label hover:bg-surface-1 hover:text-label bg-surface-0/40 border border-separator'
-                    }`}
-                  >
-                    <span className="truncate pr-2">{cat.category_name}</span>
-                    <span
-                      className={`text-xs sm:text-sm  font-bold px-2.5 py-0.5 rounded-full shrink-0 ${
-                        isSelected
-                          ? 'bg-live text-on-accent'
-                          : 'bg-surface-1 text-label-secondary group-hover:text-label'
-                      }`}
-                    >
-                      {count}
-                    </span>
-                  </button>
-                );
-              })
-            )}
-          </div>
-        </aside>
+        <CollapsibleCategoryPanel
+          categories={categories}
+          selectedCategory={selectedCategory}
+          onSelectCategory={(categoryId) => {
+            setSelectedCategory(categoryId);
+            setSearchQuery('');
+          }}
+          categoryCounts={categoryCounts}
+          contentListRef={channelsListRef}
+          accent="live"
+          panelId="live-category-panel"
+        />
 
         {/* Right Column: Channels of the Selected Category (extended down to bottom of page) */}
         <section className="media-content-panel flex-1 w-full min-w-0 bg-surface-0/90 border border-separator rounded-3xl p-4 sm:p-6 flex flex-col shadow-xl h-[calc(100vh-210px)] min-h-[680px]">
@@ -434,76 +300,18 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
                       const isPlayingThis = activeMediaId === `live_${stream.stream_id}`;
 
                       return (
-                        <div
+                        <LiveChannelListRow
                           key={stream.stream_id}
-                          id={`live-channel-${stream.stream_id}`}
-                          data-media-index={idx + 1}
-                          tabIndex={0}
-                          onClick={() => handlePlayLive(stream)}
-                          className={`group flex items-center justify-between p-3.5 sm:p-4 rounded-2xl transition-all cursor-pointer gap-3 sm:gap-5 shadow-sm scroll-mt-2 ${
-                            isPlayingThis
-                              ? 'bg-live/90 border-2 border-live ring-4 ring-live/50 shadow-2xl  scale-[1.01]'
-                              : 'bg-surface-0/60 hover:bg-surface-1 border border-separator/90 hover:border-live/50'
-                          }`}
-                        >
-                        <div className="flex items-center gap-3.5 sm:gap-5 min-w-0 flex-1">
-                          <span className=" text-sm sm:text-base font-bold text-label-secondary w-8 sm:w-10 text-right shrink-0">
-                            {idx + 1}
-                          </span>
-                          <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-surface-0 border border-separator p-1 flex items-center justify-center overflow-hidden shrink-0 shadow-inner">
-                            <ChannelLogo icon={stream.stream_icon} name={stream.name} size="sm" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2.5 flex-wrap">
-                              <h4 className="text-base sm:text-lg font-black text-label truncate group-hover:text-live transition">
-                                {stream.name}
-                              </h4>
-                              {isPlayingThis && (
-                                <span className="px-2.5 py-0.5 rounded-full bg-live text-on-accent text-xs font-bold uppercase tracking-wider animate-pulse flex items-center gap-1.5 shrink-0 shadow-md">
-                                  <Radio className="w-3.5 h-3.5" /> In Onda
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-3 text-xs sm:text-sm text-label-secondary  mt-1 font-semibold">
-                              <span>ID #{stream.stream_id}</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2.5 shrink-0">
-                          <span className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-xl bg-live/80 text-on-accent text-xs sm:text-sm font-bold border border-live/40">
-                            <span className="w-2.5 h-2.5 rounded-full bg-on-accent animate-pulse"></span>
-                            LIVE
-                          </span>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleFavorite(stream);
-                            }}
-                            className="p-2.5 rounded-xl text-label-secondary hover:text-favorite hover:bg-surface-1 transition cursor-pointer"
-                            title="Aggiungi ai Preferiti"
-                          >
-                            <Star className={`w-5 h-5 ${isFav ? 'text-favorite fill-favorite' : ''}`} />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handlePlayLive(stream);
-                            }}
-                            className={`px-4 sm:px-6 py-2.5 rounded-xl text-sm sm:text-base font-extrabold flex items-center gap-2 shadow-md transition cursor-pointer ${
-                              isPlayingThis
-                                ? 'bg-live text-on-accent '
-                                : 'bg-live hover:brightness-110 text-on-accent '
-                            }`}
-                          >
-                            <Play className="w-4 h-4 fill-current" />
-                            <span>Guarda</span>
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                          stream={stream}
+                          index={idx}
+                          isFavorite={isFav}
+                          isPlaying={isPlayingThis}
+                          onPlay={handlePlayLive}
+                          onToggleFavorite={toggleFavorite}
+                        />
+                      );
+                    })}
+                  </div>
               ) : (
                 /* Griglia Canali */
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">

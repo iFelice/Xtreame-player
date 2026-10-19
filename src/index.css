@@ -83,7 +83,8 @@ body.tv-mode .tv-login-shell {
 
 body.tv-mode .tv-login-card {
   width: 100%;
-  height: 480px;
+  height: auto;
+  min-height: 480px;
   max-height: calc(100vh - 128px);
   padding: 16px 26px;
   display: grid;
@@ -177,7 +178,8 @@ body.tv-mode .tv-pairing-panel img[alt="QR Code per accoppiamento TV"] {
 
 @media (max-height: 650px) {
   body.tv-mode .tv-login-card {
-    height: 450px;
+    height: auto;
+    min-height: 450px;
     padding-top: 10px;
     padding-bottom: 10px;
   }
@@ -447,4 +449,28 @@ body.tv-mode .media-content-panel .grid {
 
 body.tv-mode footer {
   display: none !important;
+}
+
+/* Mobile-only navigation is never shown in TV mode; the desktop sidebar stays visible. */
+body.tv-mode .mobile-section-bar,
+body.tv-mode .mobile-category-panel {
+  display: none !important;
+}
+
+body.tv-mode .media-category-panel {
+  display: flex !important;
+}
+
+/* Live list rows: TV always uses the desktop layout, never the mobile one. */
+body.tv-mode .live-row-mobile {
+  display: none !important;
+}
+
+body.tv-mode .live-row-desktop-number,
+body.tv-mode .live-row-desktop-block {
+  display: block !important;
+}
+
+body.tv-mode .live-row-desktop-flex {
+  display: flex !important;
 }

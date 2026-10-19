@@ -312,11 +312,11 @@ export const UrlInputBar: React.FC<UrlInputBarProps> = ({
             )}
 
             {parsed.isDirectStream && parsed.streamId && (
-              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-accent/80 border border-accent/60 text-accent-strong font-medium">
+              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-accent/15 border border-accent/40 text-label font-medium">
                 {parsed.streamType === 'live' ? (
-                  <Tv className="w-3 h-3" />
+                  <Tv className="w-3 h-3 text-accent" />
                 ) : (
-                  <Film className="w-3 h-3" />
+                  <Film className="w-3 h-3 text-accent" />
                 )}
                 <span>
                   {parsed.streamType === 'movie'
@@ -391,7 +391,7 @@ export const UrlInputBar: React.FC<UrlInputBarProps> = ({
           <button
             type="button"
             onClick={() => setDirectPlayError(null)}
-            className="text-xs font-bold text-danger hover:text-label px-2 py-1 rounded-lg hover:bg-danger/20 transition cursor-pointer shrink-0"
+            className="text-xs font-bold text-label hover:underline px-2 py-1 rounded-lg hover:bg-danger/20 transition cursor-pointer shrink-0"
           >
             Chiudi
           </button>
