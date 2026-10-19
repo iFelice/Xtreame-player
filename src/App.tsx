@@ -32,6 +32,8 @@ import { storage, SavedAccount } from './services/storage';
 import { buildStreamUrl } from './utils/parseXtreamUrl';
 import { cleanupLegacyNativeDownloads, isTvEnvironment } from './utils/downloadHelper';
 import { useTvNavigation } from './utils/tvNavigation';
+import { chooseInitialTab, shouldShowMobileBar } from './utils/navigation';
+import type { SectionTab } from './utils/navigation';
 
 const MediaPlayer = lazy(() => import('./components/MediaPlayer').then((module) => ({ default: module.MediaPlayer })));
 const VodCatalog = lazy(() => import('./components/VodCatalog').then((module) => ({ default: module.VodCatalog })));
@@ -48,9 +50,11 @@ export default function App() {
   const [authData, setAuthData] = useState<XtreamAuthResponse | null>(null);
   const [safeMode, setSafeMode] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<'live' | 'movies' | 'series' | 'recent' | 'favorites'>('live');
-  const [showTvHome, setShowTvHome] = useState<boolean>(true);
+  // Novità is the landing section on phones, desktop and TV alike.
+  const [activeTab, setActiveTab] = useState<SectionTab>('recent');
+  const [showTvHome, setShowTvHome] = useState<boolean>(false);
   const [activeMedia, setActiveMedia] = useState<PlayableMediaItem | null>(null);
+  const [isPlayerFullscreen, setIsPlayerFullscreen] = useState<boolean>(false);
   const [selectedSeriesForModal, setSelectedSeriesForModal] = useState<string | number | null>(null);
 
   const [isLoadingCatalog, setIsLoadingCatalog] = useState<boolean>(false);
@@ -229,16 +233,16 @@ export default function App() {
         setSeriesList(fetchedSeries);
         setLastRefreshedAt(Date.now());
 
-        // Default to active tab in requested order: Live TV -> Film & VOD -> Serie TV
-        if (fetchedLiveStreams.length > 0) {
-          setActiveTab('live');
-        } else if (fetchedVodStreams.length > 0) {
-          setActiveTab('movies');
-        } else if (fetchedSeries.length > 0) {
-          setActiveTab('series');
-        } else {
-          setActiveTab('recent');
-        }
+        // Land on Novità whenever there are movies or series; otherwise Live TV.
+        setActiveTab(
+          chooseInitialTab({
+            live: fetchedLiveStreams.length,
+            movies: fetchedVodStreams.length,
+            series: fetchedSeries.length,
+          })
+        );
+        // A successful login always starts from the catalog, never from TV Home.
+        setShowTvHome(false);
       } catch (err: any) {
         console.error('Connection error:', err);
         setErrorMessage(
@@ -383,7 +387,12 @@ export default function App() {
 
   const isConnected = Boolean(serverUrl && username && password);
   const currentAccountKey = serverUrl && username ? `${serverUrl}_${username}` : undefined;
-  const showMobileBar = !isTv && isConnected && !isLoadingCatalog && !activeMedia;
+  const showMobileBar = shouldShowMobileBar({
+    isTv,
+    isConnected,
+    isLoadingCatalog,
+    isPlayerFullscreen,
+  });
 
   if (isRemoteLoginPage) {
     return (
@@ -465,6 +474,7 @@ export default function App() {
               onClose={() => setActiveMedia(null)}
               onNext={activeMedia.type === 'live' && liveStreams.length > 1 ? handleNextChannel : undefined}
               onPrevious={activeMedia.type === 'live' && liveStreams.length > 1 ? handlePreviousChannel : undefined}
+              onFullscreenChange={setIsPlayerFullscreen}
               accountKey={currentAccountKey}
             />
           </section>
@@ -774,7 +784,6 @@ export default function App() {
         <MobileSectionBar
           activeTab={activeTab}
           onSelect={(tab) => setActiveTab(tab)}
-          activeMedia={activeMedia}
         />
       )}
     </div>
