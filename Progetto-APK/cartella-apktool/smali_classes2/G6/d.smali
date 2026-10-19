@@ -1,6 +1,0 @@
-.class public interface abstract LG6/d;
-.super Ljava/lang/Object;
-.source "SourceFile"
-
-# interfaces
-.implements LG6/a;

@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<LinearLayout android:orientation="vertical" android:layout_width="match_parent" android:layout_height="match_parent"
-  xmlns:android="http://schemas.android.com/apk/res/android">
-    <FrameLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10.0dp" android:layout_marginBottom="10.0dp">
-        <TextView android:textSize="16.0sp" android:textStyle="bold" android:textColor="@color/exo_edit_mode_background_color" android:gravity="center" android:layout_gravity="center_horizontal" android:id="@id/txt_cat_name_ch" android:background="@drawable/round_layout_with_shadow_text" android:layout_width="300.0dp" android:layout_height="60.0dp" android:layout_marginLeft="10.0dp" android:layout_marginTop="7.0dp" android:layout_marginRight="10.0dp" android:layout_marginBottom="7.0dp" android:text="RADIO NAME" android:lines="2" />
-    </FrameLayout>
-</LinearLayout>

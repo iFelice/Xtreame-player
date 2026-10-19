@@ -1,6 +1,0 @@
-.class public interface abstract LI/a;
-.super Ljava/lang/Object;
-.source "SourceFile"
-
-# interfaces
-.implements Landroid/view/Menu;

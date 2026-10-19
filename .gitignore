@@ -13,3 +13,8 @@ android TV/**/build/
 
 # Elenco locale dei provider abilitati al proxy (generato a runtime)
 data/allowed-hosts.json
+
+# Materiale di riferimento APK (estrazione apktool/JADX): non è codice del prodotto
+# ed è conservato fuori dal repository dal proprietario; resta recuperabile dalla
+# storia git (vedi reference/README.md).
+Progetto-APK/

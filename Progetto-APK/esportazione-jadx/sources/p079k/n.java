@@ -1,6 +1,0 @@
-package p079k;
-
-/* JADX INFO: loaded from: classes.dex */
-public interface n {
-    boolean a(q qVar);
-}
