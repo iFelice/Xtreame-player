@@ -6,7 +6,6 @@ import {
   Eye,
   EyeOff,
   LogIn,
-  Tv,
   Trash2,
   Smartphone,
   QrCode,
@@ -73,11 +72,13 @@ export const LoginForm: React.FC<LoginFormProps> = ({
       <div className="tv-login-card bg-zinc-900/95 border border-zinc-800 rounded-3xl p-6 sm:p-9 shadow-2xl backdrop-blur-xl">
         {/* Brand Header */}
         <div className="tv-login-brand flex flex-col items-center text-center mb-6 sm:mb-8">
-          <div className="w-18 h-18 rounded-2xl bg-zinc-950 border border-emerald-500/40 p-2.5 flex items-center justify-center shadow-xl shadow-emerald-950/40 mb-3">
-            <Tv className="w-10 h-10 text-emerald-400" />
-          </div>
+          <img
+            src="/brand/icon-192.png"
+            alt="FelixVisionPlayer"
+            className="w-18 h-18 mb-3"
+          />
           <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-            Accedi a <span className="text-emerald-400">Xtream Player</span>
+            Accedi a FelixVision <span className="text-emerald-400">Player</span>
           </h1>
           <p className="text-sm sm:text-base text-zinc-400 mt-2 max-w-md">
             Inserisci le credenziali del tuo server per caricare l'intero catalogo di Canali Live, Film e Serie TV

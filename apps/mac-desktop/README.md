@@ -1,4 +1,4 @@
-# Xtream Player — Mac/Desktop
+# FelixVisionPlayer — Mac/Desktop
 
 Questa è la prima applicazione del nuovo piano multipiattaforma.
 

@@ -200,7 +200,7 @@ app.get('/player_api.php', async (req, res) => {
         duration: '00:09:56',
         rating: '8.0',
         genre: 'Animazione / Test',
-        plot: 'Contenuto dimostrativo usato esclusivamente per collaudare Xtream Player.',
+        plot: 'Contenuto dimostrativo usato esclusivamente per collaudare FelixVisionPlayer.',
       },
       movie_data: {
         stream_id: id,

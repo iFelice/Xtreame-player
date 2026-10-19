@@ -1,4 +1,3 @@
-import { RemoteImage } from './RemoteImage';
 import React, { useState } from 'react';
 import {
   Info,
@@ -30,26 +29,23 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const [showAccountDropdown, setShowAccountDropdown] = useState<boolean>(false);
   const savedAccounts = storage.getAccounts();
-  const currentAppIcon = storage.getAppIcon();
 
   const isConnected = Boolean(serverUrl && username);
 
   return (
     <header className="sticky top-0 z-40 w-full max-w-full bg-zinc-950/98 backdrop-blur-md border-b border-zinc-800 shadow-xl">
       <div className="w-full max-w-[2400px] mx-auto px-4 sm:px-8 h-18 sm:h-22 flex items-center justify-between gap-3 sm:gap-6">
-        {/* Brand with Large Dynamic Icon and Text */}
+        {/* Brand Icon and Text */}
         <div className="flex items-center gap-3 sm:gap-4 shrink-0">
-          <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl bg-zinc-900 border border-zinc-700 p-1 sm:p-1.5 flex items-center justify-center shadow-xl shadow-emerald-950/40 group shrink-0">
-            <RemoteImage
-              src={currentAppIcon}
-              alt="Xtream Player Icon"
-              className="w-full h-full object-contain"
-            />
-          </div>
+          <img
+            src="/brand/favicon.svg"
+            alt="FelixVisionPlayer"
+            className="w-11 h-11 sm:w-14 sm:h-14 shrink-0"
+          />
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-lg sm:text-2xl font-black text-white tracking-tight">
-                Xtream <span className="text-emerald-400">Player</span>
+                FelixVision <span className="text-emerald-400">Player</span>
               </h1>
               <span className="hidden md:inline-block px-2 py-0.5 rounded-md bg-zinc-800 text-xs text-zinc-400 font-mono font-bold">
                 v2.1
