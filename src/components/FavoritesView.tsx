@@ -94,7 +94,7 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({ onPlay, onOpenSeri
                     ) : (
                       <Film className="w-7 h-7 text-label-tertiary" />
                     )}
-                    <div className="absolute inset-0 bg-surface-1/40 group-hover:bg-accent/30 flex items-center justify-center transition">
+                    <div className="absolute inset-0 bg-surface-1/40 group-hover:bg-accent/15 flex items-center justify-center transition">
                       <Play className="w-7 h-7 fill-white text-label drop-shadow" />
                     </div>
                   </div>

@@ -72,7 +72,7 @@ export const LiveChannelListRow: React.FC<LiveChannelListRowProps> = ({
       onClick={() => onPlay(stream)}
       className={`group flex items-center justify-between p-3.5 sm:p-4 rounded-2xl transition-all cursor-pointer gap-3 sm:gap-5 shadow-sm scroll-mt-2 ${
         isPlaying
-          ? 'bg-live/90 border-2 border-live ring-4 ring-live/50 shadow-2xl  scale-[1.01]'
+          ? 'bg-live/15 border-2 border-live ring-2 ring-live/40 shadow-2xl scale-[1.01]'
           : 'bg-surface-0/60 hover:bg-surface-1 border border-separator/90 hover:border-live/50'
       }`}
     >

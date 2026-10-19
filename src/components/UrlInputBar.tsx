@@ -327,7 +327,7 @@ export const UrlInputBar: React.FC<UrlInputBarProps> = ({
                   : ID #{parsed.streamId}
                 </span>
                 {parsed.containerExtension && (
-                  <span className="uppercase text-[10px] bg-accent/60 px-1 rounded ">
+                  <span className="uppercase text-[10px] bg-surface-2 text-label-secondary px-1 rounded">
                     .{parsed.containerExtension}
                   </span>
                 )}

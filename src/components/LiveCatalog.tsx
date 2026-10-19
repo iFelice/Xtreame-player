@@ -328,7 +328,7 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
                         onClick={() => handlePlayLive(stream)}
                         className={`group relative rounded-3xl p-4 shadow-lg transition-all cursor-pointer flex flex-col justify-between scroll-mt-2 ${
                           isPlayingThis
-                            ? 'bg-live/90 border-2 border-live ring-4 ring-live/50 shadow-2xl  scale-[1.02]'
+                            ? 'bg-live/15 border-2 border-live ring-2 ring-live/40 shadow-2xl scale-[1.02]'
                             : 'bg-surface-0/70 border border-separator hover:border-live/60 hover:-translate-y-1'
                         }`}
                       >

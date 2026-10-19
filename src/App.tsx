@@ -407,7 +407,7 @@ export default function App() {
 
   return (
     <Suspense fallback={<div className="min-h-screen bg-surface-0 text-label-secondary flex items-center justify-center">Caricamento…</div>}>
-    <div className="min-h-screen bg-surface-0 text-label flex flex-col selection:bg-accent/30 selection:text-accent-strong w-full max-w-full overflow-x-hidden">
+    <div className="min-h-screen bg-surface-0 text-label flex flex-col selection:bg-accent/15 selection:text-accent-strong w-full max-w-full overflow-x-hidden">
       {safeMode && (
         <div className="sticky top-0 z-[110] flex items-center justify-center gap-2 border-b border-accent/40 bg-accent px-3 py-1.5 text-xs font-bold tracking-[0.16em] text-on-accent shadow-lg" role="status">
           <span className="h-2 w-2 rounded-full bg-on-accent" aria-hidden="true" />

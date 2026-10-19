@@ -34,6 +34,7 @@ import { destroyMediaEngines, releaseVideoElement, selectMediaEngine } from '../
 import { HLS_CONFIG, MPEGTS_CONFIG } from '../player/engineConfig';
 import { canFallbackToMpegTs, isPublicMockStream, normalizeLiveStreamUrl } from '../player/streamFormat';
 import { useIsMobileViewport } from '../utils/mobileLayout';
+import { MobilePlayerErrorPanel } from './MobilePlayerErrorPanel';
 
 interface MediaPlayerProps {
   media: PlayableMediaItem | null;
@@ -800,64 +801,86 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       )}
 
       {/* Error Overlay */}
-      {errorMessage && (!videoRef.current || videoRef.current.paused || videoRef.current.currentTime === 0) && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-surface-0/95 p-6 text-center z-30">
-          <AlertCircle className="w-14 h-14 text-danger mb-3 animate-pulse" />
-          <h3 className="text-lg sm:text-xl font-bold text-label mb-2">Impossibile riprodurre lo stream</h3>
-          <p className="text-sm sm:text-base text-label-secondary max-w-md mb-6 leading-relaxed">{errorMessage}</p>
+      {errorMessage && (!videoRef.current || videoRef.current.paused || videoRef.current.currentTime === 0) &&
+        (isMobile ? (
+          <MobilePlayerErrorPanel
+            message={errorMessage}
+            canSwitchFormat={canSwitchLiveFormat}
+            formatLabel={`Passa a formato ${liveFormat === 'm3u8' ? 'MPEG-TS (.ts)' : 'HLS (.m3u8)'}`}
+            showProxyOption={!isNative && !isSafeMode}
+            proxyLabel={useProxy ? '⚡ Passa a Stream Diretto' : '🛡️ Attiva Proxy HTTPS'}
+            proxyFilled={!useProxy}
+            onRetry={() => dispatchPlayback({ type: 'RETRY' })}
+            onClose={onClose}
+            onToggleFormat={() => setLiveFormat(liveFormat === 'm3u8' ? 'ts' : 'm3u8')}
+            onToggleProxy={() => {
+              const nextVal = !useProxy;
+              setUseProxy(nextVal);
+              try {
+                localStorage.setItem('xtream_use_proxy', String(nextVal));
+              } catch {}
+              setErrorMessage(null);
+              setIsLoading(true);
+            }}
+          />
+        ) : (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-surface-0/95 p-6 text-center z-30">
+            <AlertCircle className="w-14 h-14 text-danger mb-3 animate-pulse" />
+            <h3 className="text-lg sm:text-xl font-bold text-label mb-2">Impossibile riprodurre lo stream</h3>
+            <p className="text-sm sm:text-base text-label-secondary max-w-md mb-6 leading-relaxed">{errorMessage}</p>
 
-          <div className="flex flex-wrap items-center justify-center gap-3">
-            <button
-              onClick={() => {
-                dispatchPlayback({ type: 'RETRY' });
-              }}
-              className="px-5 py-3 bg-accent hover:bg-accent-strong text-on-accent rounded-xl text-sm sm:text-base font-bold flex items-center gap-2 transition cursor-pointer shadow-lg"
-            >
-              <RefreshCw className="w-4 h-4" />
-              Riprova
-            </button>
-
-            <button
-              onClick={onClose}
-              className="px-5 py-3 bg-surface-1 hover:bg-surface-2 text-label rounded-xl text-sm sm:text-base font-bold flex items-center gap-2 transition cursor-pointer border border-separator-strong"
-            >
-              <X className="w-4 h-4" />
-              Torna al catalogo
-            </button>
-
-            {canSwitchLiveFormat && (
-              <button
-                onClick={() => setLiveFormat(liveFormat === 'm3u8' ? 'ts' : 'm3u8')}
-                className="px-5 py-3 bg-live hover:brightness-110 text-on-accent rounded-xl text-sm sm:text-base font-bold flex items-center gap-2 transition cursor-pointer shadow-lg"
-              >
-                Passa a formato {liveFormat === 'm3u8' ? 'MPEG-TS (.ts)' : 'HLS (.m3u8)'}
-              </button>
-            )}
-
-            {!isNative && !isSafeMode && (
+            <div className="flex flex-wrap items-center justify-center gap-3">
               <button
                 onClick={() => {
-                  const nextVal = !useProxy;
-                  setUseProxy(nextVal);
-                  try {
-                    localStorage.setItem('xtream_use_proxy', String(nextVal));
-                  } catch {}
-                  setErrorMessage(null);
-                  setIsLoading(true);
+                  dispatchPlayback({ type: 'RETRY' });
                 }}
-                className={`px-5 py-3 rounded-xl text-sm sm:text-base font-bold flex items-center gap-2 transition cursor-pointer shadow-lg ${
-                  !useProxy
-                    ? 'bg-accent hover:bg-accent-strong text-on-accent '
-                    : 'bg-surface-1 hover:bg-surface-2 text-label border border-separator-strong'
-                }`}
+                className="px-5 py-3 bg-accent hover:bg-accent-strong text-on-accent rounded-xl text-sm sm:text-base font-bold flex items-center gap-2 transition cursor-pointer shadow-lg"
               >
-                {useProxy ? '⚡ Passa a Stream Diretto' : '🛡️ Attiva Proxy HTTPS'}
+                <RefreshCw className="w-4 h-4" />
+                Riprova
               </button>
-            )}
 
+              <button
+                onClick={onClose}
+                className="px-5 py-3 bg-surface-1 hover:bg-surface-2 text-label rounded-xl text-sm sm:text-base font-bold flex items-center gap-2 transition cursor-pointer border border-separator-strong"
+              >
+                <X className="w-4 h-4" />
+                Torna al catalogo
+              </button>
+
+              {canSwitchLiveFormat && (
+                <button
+                  onClick={() => setLiveFormat(liveFormat === 'm3u8' ? 'ts' : 'm3u8')}
+                  className="px-5 py-3 bg-live hover:brightness-110 text-on-accent rounded-xl text-sm sm:text-base font-bold flex items-center gap-2 transition cursor-pointer shadow-lg"
+                >
+                  Passa a formato {liveFormat === 'm3u8' ? 'MPEG-TS (.ts)' : 'HLS (.m3u8)'}
+                </button>
+              )}
+
+              {!isNative && !isSafeMode && (
+                <button
+                  onClick={() => {
+                    const nextVal = !useProxy;
+                    setUseProxy(nextVal);
+                    try {
+                      localStorage.setItem('xtream_use_proxy', String(nextVal));
+                    } catch {}
+                    setErrorMessage(null);
+                    setIsLoading(true);
+                  }}
+                  className={`px-5 py-3 rounded-xl text-sm sm:text-base font-bold flex items-center gap-2 transition cursor-pointer shadow-lg ${
+                    !useProxy
+                      ? 'bg-accent hover:bg-accent-strong text-on-accent '
+                      : 'bg-surface-1 hover:bg-surface-2 text-label border border-separator-strong'
+                  }`}
+                >
+                  {useProxy ? '⚡ Passa a Stream Diretto' : '🛡️ Attiva Proxy HTTPS'}
+                </button>
+              )}
+
+            </div>
           </div>
-        </div>
-      )}
+        ))}
 
       {/* Side floating channel zapping buttons for Live TV (not on mobile) */}
       {!isMobile && media.type === 'live' && onPrevious && (
