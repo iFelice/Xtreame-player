@@ -8,11 +8,9 @@ import {
   Info,
   Calendar,
   Clock,
-  Layers,
   Sparkles,
   X,
   ArrowDownUp,
-  ChevronRight,
   ChevronUp,
   ChevronDown,
   Radio,
@@ -27,6 +25,7 @@ import { getSecureImageUrl } from '../utils/imageUrl';
 import { VirtualizedMediaGrid } from './VirtualizedMediaGrid';
 import { ListPositionIndicator } from './ListPositionIndicator';
 import { triggerMediaDownload, isDirectFileDownload, isTvEnvironment } from '../utils/downloadHelper';
+import { CollapsibleCategoryPanel } from './CollapsibleCategoryPanel';
 
 interface VodCatalogProps {
   categories: XtreamCategory[];
@@ -52,7 +51,6 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
   accountKey,
 }) => {
   const [, refreshFavorites] = useState(0);
-  const categoriesListRef = useRef<HTMLDivElement | null>(null);
   const moviesListRef = useRef<HTMLDivElement | null>(null);
   const isTv = isTvEnvironment();
 
@@ -61,7 +59,6 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
     return categories[0]?.category_id ? String(categories[0].category_id) : '';
   });
 
-  const [categorySearch, setCategorySearch] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [sortBy, setSortBy] = useState<'recent' | 'rating' | 'name' | 'id'>('recent');
   const [activeMovieDetail, setActiveMovieDetail] = useState<{
@@ -79,13 +76,6 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
     }
   }, [categories, selectedCategory]);
 
-  const scrollCategories = (direction: 'up' | 'down') => {
-    if (categoriesListRef.current) {
-      const delta = direction === 'up' ? -260 : 260;
-      categoriesListRef.current.scrollBy({ top: delta, behavior: 'smooth' });
-    }
-  };
-
   const scrollMovies = (direction: 'up' | 'down') => {
     if (moviesListRef.current) {
       const delta = direction === 'up' ? -360 : 360;
@@ -102,12 +92,6 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
     }
     return counts;
   }, [streams]);
-
-  const filteredCategories = useMemo(() => {
-    if (!categorySearch.trim()) return categories;
-    const q = categorySearch.toLowerCase();
-    return categories.filter((c) => c.category_name.toLowerCase().includes(q));
-  }, [categories, categorySearch]);
 
   const currentCategory = useMemo(() => {
     return categories.find((c) => String(c.category_id) === String(selectedCategory));
@@ -167,90 +151,18 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
     <div className="media-catalog space-y-4">
       {/* Master - Detail Dual Column Layout */}
       <div className="media-browser-layout flex flex-col lg:flex-row gap-4 sm:gap-6 items-stretch">
-        {/* Left Column: Categories List (extended down to bottom of page) */}
-        <aside className="media-category-panel w-full lg:w-80 xl:w-96 shrink-0 bg-surface-0/90 border border-separator rounded-3xl p-4 sm:p-5 flex flex-col shadow-xl h-[calc(100vh-210px)] min-h-[680px]">
-          <div className="flex items-center justify-between px-1 shrink-0">
-            <div className="flex items-center gap-2.5">
-              <Layers className="w-6 h-6 text-accent-strong" />
-              <h3 className="text-base sm:text-lg font-black text-label tracking-wide uppercase">
-                Categorie Film ({categories.length})
-              </h3>
-            </div>
-            {/* TV / Remote Scroll Navigation Arrows */}
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => scrollCategories('up')}
-                className="p-1.5 rounded-xl bg-surface-1 hover:bg-surface-2 text-label-secondary hover:text-label transition cursor-pointer shadow-xs"
-                title="Scorri categorie su (▲)"
-              >
-                <ChevronUp className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => scrollCategories('down')}
-                className="p-1.5 rounded-xl bg-surface-1 hover:bg-surface-2 text-label-secondary hover:text-label transition cursor-pointer shadow-xs"
-                title="Scorri categorie giù (▼)"
-              >
-                <ChevronDown className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-
-          {/* Search Category */}
-          <div className="relative shrink-0 mt-3">
-            <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-label-secondary" />
-            <input
-              type="text"
-              value={categorySearch}
-              onChange={(e) => setCategorySearch(e.target.value)}
-              placeholder="Filtra categorie film..."
-              className="w-full pl-12 pr-4 py-3 bg-surface-0 border border-separator-strong/80 rounded-2xl text-sm sm:text-base font-medium text-label placeholder-label-tertiary focus:outline-hidden focus:border-accent transition shadow-inner"
-            />
-          </div>
-
-          {/* Scrollable Categories List taking full remaining height */}
-          <div
-            ref={categoriesListRef}
-            className="flex-1 min-h-0 space-y-2 overflow-y-auto scroll-smooth pr-1.5 mt-3"
-          >
-            {filteredCategories.length === 0 ? (
-              <div className="py-10 text-center text-label-tertiary text-sm sm:text-base font-medium">
-                Nessuna categoria trovata
-              </div>
-            ) : (
-              filteredCategories.map((cat) => {
-                const count = categoryCounts[cat.category_id] || 0;
-                const isSelected = String(cat.category_id) === String(selectedCategory);
-                return (
-                  <button
-                    key={cat.category_id}
-                    onClick={() => {
-                      setSelectedCategory(String(cat.category_id));
-                      setSearchQuery('');
-                    }}
-                    className={`w-full text-left px-4 py-3 sm:py-3.5 rounded-2xl text-sm sm:text-base font-bold flex items-center justify-between transition cursor-pointer group ${
-                      isSelected
-                        ? 'bg-accent text-on-accent shadow-xl  scale-[1.02]'
-                        : 'text-label hover:bg-surface-1 hover:text-label bg-surface-0/40 border border-separator'
-                    }`}
-                  >
-                    <span className="truncate pr-2">{cat.category_name}</span>
-                    <span
-                      className={`text-xs sm:text-sm  font-bold px-2.5 py-0.5 rounded-full shrink-0 ${
-                        isSelected
-                          ? 'bg-accent text-on-accent'
-                          : 'bg-surface-1 text-label-secondary group-hover:text-label'
-                      }`}
-                    >
-                      {count}
-                    </span>
-                  </button>
-                );
-              })
-            )}
-          </div>
-        </aside>
+        <CollapsibleCategoryPanel
+          categories={categories}
+          selectedCategory={selectedCategory}
+          onSelectCategory={(categoryId) => {
+            setSelectedCategory(categoryId);
+            setSearchQuery('');
+          }}
+          categoryCounts={categoryCounts}
+          contentListRef={moviesListRef}
+          accent="accent"
+          panelId="vod-category-panel"
+        />
 
         {/* Right Column: Movies in the Selected Category (extended down to bottom of page) */}
         <section className="media-content-panel flex-1 w-full min-w-0 bg-surface-0/90 border border-separator rounded-3xl p-4 sm:p-6 flex flex-col shadow-xl h-[calc(100vh-210px)] min-h-[680px]">

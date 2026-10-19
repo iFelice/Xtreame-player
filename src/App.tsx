@@ -16,6 +16,7 @@ import { ServerInfoModal } from './components/ServerInfoModal';
 import { RecentProductsShelf } from './components/RecentProductsShelf';
 import { SettingsSyncModal } from './components/SettingsSyncModal';
 import { RemoteLoginView } from './components/RemoteLoginView';
+import { MobileSectionBar } from './components/MobileSectionBar';
 
 import {
   XtreamParsedUrl,
@@ -382,6 +383,7 @@ export default function App() {
 
   const isConnected = Boolean(serverUrl && username && password);
   const currentAccountKey = serverUrl && username ? `${serverUrl}_${username}` : undefined;
+  const showMobileBar = !isTv && isConnected && !isLoadingCatalog && !activeMedia;
 
   if (isRemoteLoginPage) {
     return (
@@ -432,10 +434,13 @@ export default function App() {
         onOpenServerInfo={() => setShowServerInfo(true)}
         onDisconnect={handleDisconnect}
         onOpenSettingsSync={() => setShowSettingsSyncModal(true)}
+        onRefreshCatalog={handleRefreshCatalog}
+        isRefreshingCatalog={isRefreshingCatalog}
+        lastRefreshedAt={lastRefreshedAt}
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 w-full max-w-[2400px] mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-6 overflow-x-hidden">
+      <main className={`flex-1 w-full max-w-[2400px] mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-6 overflow-x-hidden ${showMobileBar ? 'pb-[calc(56px+env(safe-area-inset-bottom)+1.5rem)] md:pb-6' : ''}`}>
         {/* Refresh Success Notification Banner */}
         {refreshSuccessMessage && (
           <div className="p-4 rounded-2xl bg-accent/15 border border-accent/40 text-label flex items-center justify-between gap-3 animate-in fade-in shadow-xl">
@@ -477,7 +482,7 @@ export default function App() {
             </div>
             <button
               onClick={() => setErrorMessage(null)}
-              className="text-xs sm:text-sm font-bold text-danger hover:text-label px-3 py-1.5 rounded-lg hover:bg-danger/20 transition cursor-pointer"
+              className="text-xs sm:text-sm font-bold text-label hover:underline px-3 py-1.5 rounded-lg hover:bg-danger/20 transition cursor-pointer"
             >
               Chiudi
             </button>
@@ -524,9 +529,9 @@ export default function App() {
           </section>
         )}
 
-        {/* Connected Catalog Navigation Tabs */}
+        {/* Connected Catalog Navigation Tabs (desktop/tablet and TV only; mobile uses the bottom bar) */}
         {isConnected && !isLoadingCatalog && (!isTv || !showTvHome) && (
-          <div className="tv-catalog-nav flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-separator/90 pb-4">
+          <div className="tv-catalog-nav hidden md:flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-separator/90 pb-4">
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               {isTv && (
                 <button
@@ -737,6 +742,7 @@ export default function App() {
           authData={authData}
           serverUrl={serverUrl}
           onClose={() => setShowServerInfo(false)}
+          lastRefreshedAt={lastRefreshedAt}
         />
       )}
 
@@ -759,9 +765,18 @@ export default function App() {
       />
 
       {/* Footer */}
-      <footer className="w-full border-t border-separator bg-surface-0 py-4 text-center text-xs sm:text-sm text-label-tertiary">
+      <footer className={`w-full border-t border-separator bg-surface-0 py-4 text-center text-xs sm:text-sm text-label-tertiary ${showMobileBar ? 'mb-[calc(56px+env(safe-area-inset-bottom))] md:mb-0' : ''}`}>
         FelixVisionPlayer &bull; Riproduttore multimediale per server Xtream Codes
       </footer>
+
+      {/* Mobile bottom section bar */}
+      {showMobileBar && (
+        <MobileSectionBar
+          activeTab={activeTab}
+          onSelect={(tab) => setActiveTab(tab)}
+          activeMedia={activeMedia}
+        />
+      )}
     </div>
     </Suspense>
   );

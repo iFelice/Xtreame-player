@@ -7,12 +7,14 @@ interface ServerInfoModalProps {
   authData: XtreamAuthResponse | null;
   serverUrl: string;
   onClose: () => void;
+  lastRefreshedAt?: number | null;
 }
 
 export const ServerInfoModal: React.FC<ServerInfoModalProps> = ({
   authData,
   serverUrl,
   onClose,
+  lastRefreshedAt = null,
 }) => {
   if (!authData) return null;
 
@@ -123,6 +125,14 @@ export const ServerInfoModal: React.FC<ServerInfoModalProps> = ({
                 </span>
               </div>
             )}
+            <div className="flex justify-between">
+              <span>Ultimo aggiornamento del catalogo:</span>
+              <span className=" text-label">
+                {lastRefreshedAt
+                  ? new Date(lastRefreshedAt).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
+                  : 'non disponibile'}
+              </span>
+            </div>
           </div>
         </div>
 
