@@ -460,3 +460,17 @@ body.tv-mode .mobile-category-panel {
 body.tv-mode .media-category-panel {
   display: flex !important;
 }
+
+/* Live list rows: TV always uses the desktop layout, never the mobile one. */
+body.tv-mode .live-row-mobile {
+  display: none !important;
+}
+
+body.tv-mode .live-row-desktop-number,
+body.tv-mode .live-row-desktop-block {
+  display: block !important;
+}
+
+body.tv-mode .live-row-desktop-flex {
+  display: flex !important;
+}
