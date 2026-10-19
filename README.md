@@ -1,99 +1,104 @@
-# 🎬 Xtream StreamPlayer (Self-Hosted & Privato)
+# 🎬 FelixVisionPlayer
 
-Un lettore multimediale e navigatore di cataloghi basato su **Xtream Codes** indipendente, veloce e privato.
-
----
-
-## 🛡️ Garanzia di Privacy & Sicurezza dei tuoi dati
-
-- **Zero Chiamate AI**: Questa applicazione **non** invia né username, né password, né link a modelli di intelligenza artificiale o server esterni.
-- **Nessun Database Esterno**: I preferiti e la cronologia vengono salvati **esclusivamente nel `localStorage` del tuo browser**.
-- **Proxy Locale Indipendente**: Il backend Node.js/Express serve unicamente come proxy per inoltrare i flussi video e le chiamate API verso il tuo server Xtream, risolvendo i problemi di CORS e Mixed-Content (HTTP su HTTPS) dei browser moderni.
+Lettore multimediale e navigatore di cataloghi basato su **Xtream Codes**, indipendente, veloce e privato. Il pacchetto npm si chiama `felixvision-player`.
 
 ---
 
-## 🚀 Come fare il Deploy Gratuito su Render (Guida Passo-Passo)
+## 🛡️ Privacy & sicurezza dei dati
 
-Puoi pubblicare questa applicazione sul tuo account personale di **[Render.com](https://render.com)** gratuitamente in meno di 3 minuti:
-
-### Metodo 1: Tramite GitHub (Consigliato)
-1. **Crea un nuovo repository su GitHub**:
-   - Vai su [GitHub](https://github.com/new) e crea un repository privato (es. `mio-xtream-player`).
-2. **Carica il codice nel tuo repository**:
-   ```bash
-   git init
-   git add .
-   git commit -m "Initial commit"
-   git branch -M main
-   git remote add origin https://github.com/TUO_UTENTE/mio-xtream-player.git
-   git push -u origin main
-   ```
-3. **Collega Render**:
-   - Accedi a [Render.com](https://dashboard.render.com).
-   - Clicca su **New +** > **Web Service**.
-   - Seleziona **Build and deploy from a Git repository** e scegli il tuo repository GitHub.
-   - Render rileverà automaticamente il file `render.yaml` oppure imposta:
-     - **Environment**: `Node`
-     - **Build Command**: `npm install --legacy-peer-deps && npm run build`
-     - **Start Command**: `npm start`
-     - **Instance Type**: `Free`
-   - Clicca su **Deploy Web Service**.
-4. In circa 2 minuti avrai il tuo link personale (es. `https://mio-xtream-player.onrender.com`).
+- **Zero chiamate AI**: l'applicazione non invia né username, né password, né link a modelli di intelligenza artificiale o server esterni. Non esistono dipendenze AI nel progetto.
+- **Nessun database esterno**: preferiti e cronologia vengono salvati esclusivamente nel `localStorage` del browser.
+- **Proxy locale indipendente**: il backend Node.js/Express serve unicamente come proxy per inoltrare i flussi video e le chiamate API verso il tuo server Xtream, risolvendo i problemi di CORS e Mixed-Content (HTTP su HTTPS) dei browser moderni.
 
 ---
 
-## 💻 Come eseguirlo in Locale sul tuo PC (Massima Riservatezza)
+## 💻 Uso locale
 
-Se non vuoi caricare il codice su nessun servizio cloud e preferisci usarlo solo sul tuo computer:
+**Requisiti**: Node.js 20.19.0 o superiore (richiesto da Vite). Per la suite di test (`npm run check`) serve Node.js 22.12.0 o superiore (richiesto da Vitest).
 
-1. **Requisiti**: Avere installato Node.js (v18 o superiore).
-2. **Installazione**:
-   ```bash
-   npm install
-   ```
-3. **Avvio**:
-   ```bash
-   npm run dev
-   ```
-4. Apri il browser all'indirizzo:
-   ```
-   http://localhost:3000
-   ```
-Tutto funzionerà localmente sulla tua macchina, senza che nessun dato esca dal tuo computer se non per comunicare con il server Xtream.
+```bash
+npm install
+npm run dev
+```
+
+Apri il browser su `http://localhost:3000`.
+
+Altri comandi:
+
+```bash
+npm run build      # build di produzione in dist/
+npm start          # serve la build di produzione (dist/)
+npm run preview    # anteprima statica con vite
+npm run dev:safe   # sviluppo in modalità sicura (vedi sotto)
+```
+
+In `npm run dev:safe` (`XTREAM_SAFE_MODE=1`) il proxy inoltra solo verso `localhost`/`127.0.0.1`/`::1` — quindi anche verso il mock Xtream locale — e il browser riceve una Content-Security-Policy che limita le connessioni allo stesso origine e a localhost.
+
+---
+
+## 📺 Accesso da TV e telefono sulla rete di casa
+
+Il server ascolta su `0.0.0.0`: dalla TV o dal telefono, collegati alla stessa rete domestica, raggiungi il PC con il suo indirizzo LAN, per esempio `http://192.168.1.10:3000`. Nessun port forwarding né esposizione su Internet: il servizio è pensato per la rete di casa.
+
+La protezione è l'elenco dei provider consentiti (sezione seguente), non l'indirizzo di ascolto. Per limitare il server alla sola macchina locale, avvia con `HOST=127.0.0.1`. La porta si cambia con `PORT`.
+
+### QR per collegare una TV
+
+Dall'app web è possibile accoppiare il telefono alla TV:
+
+1. Apri il pairing sull'app TV: vengono mostrati un **codice QR** e un **PIN a 6 cifre**, validi 10 minuti.
+2. Sul telefono inquadra il QR (o apri il link e inserisci il PIN): si apre la pagina di inserimento credenziali.
+3. Inserisci server/username/password del tuo Xtream e invia: la TV riceve le credenziali e accede al catalogo.
+
+Il flusso usa gli endpoint `/api/session/*` dello stesso server. Nella build nativa (Capacitor) il pairing passa invece dal servizio configurabile con la voce `xtream_pairing_server` nelle impostazioni.
+
+---
+
+## 🔐 Elenco automatico dei provider
+
+Il proxy è **chiuso**: un'origine Xtream è raggiungibile solo dopo che un login è riuscito (`user_info.auth === 1`); il primo login la abilita automaticamente. Verso le origini non ancora autorizzate passa soltanto la richiesta di login, con un massimo di **20 tentativi ogni 10 minuti per IP**. L'elenco tiene al massimo **5 provider**, eliminando quello usato meno di recente.
+
+Per azzerare l'elenco dei provider consentiti, cancella il file `data/allowed-hosts.json` e riavvia il server. Il percorso è modificabile con `ALLOWED_HOSTS_FILE`.
+
+In produzione le destinazioni private (IP locali, loopback, ecc.) sono bloccate; `ALLOW_PRIVATE_TARGETS=1` disattiva esplicitamente tale protezione ed è destinato solo a reti amministrate e fidate. `TRUST_PROXY=1` resta disponibile per chi espone il servizio dietro un solo reverse proxy fidato: in sua assenza gli header `X-Forwarded-For` non influenzano il rate limit.
+
+---
+
+## 🧪 Server Xtream finto per i test
+
+Il progetto include un mock delle API Xtream Codes, senza account, URL o contenuti privati:
+
+```bash
+npm run mock:xtream
+```
+
+Il server parte su `http://localhost:3333` con credenziali dimostrative `demo`/`demo` (porta e host si cambiano con `XTREAM_MOCK_PORT` e `XTREAM_MOCK_HOST`). Nell'app usa `http://localhost:3333` come server. Profili disponibili:
+
+```bash
+npm run mock:xtream:small    # 12 film, 16 canali, 5 serie
+npm run mock:xtream:visual   # 144 film, 220 canali, 42 serie (default)
+npm run mock:xtream:public   # visual + fino a 200 stream HLS da playlist pubblica
+npm run mock:xtream:stress   # 5.000 film, 8.000 canali, 1.000 serie
+```
+
+Dettagli e scenari player simulati: `tools/xtream-mock/README.md`.
 
 ---
 
 ## 🐳 Esecuzione con Docker
 
-Se disponi di Docker o un piccolo server/VPS:
-
 ```bash
-# Costruzione immagine
-docker build -t xtream-streamplayer .
-
-# Avvio container sulla porta 3000
-docker run -d -p 3000:3000 --name xtream-player xtream-streamplayer
+docker build -t felixvision-player .
+docker run -d -p 3000:3000 --name felixvision-player felixvision-player
 ```
+
 Visita `http://localhost:3000`.
 
 ---
 
-## ✨ Funzionalità Incluse
-- **Parsing Intelligente**: incolla link diretti come `http://host/movie/User/Pass/id.mp4`, `series` o `live`.
-- **Riproduzione Immediata**: player video con seek, volume, velocità, proporzioni e Picture-in-Picture.
-- **Catalogo Completo**: Film VOD, Canali Live con loghi, Serie TV divise per stagioni ed episodi.
+## ✨ Funzionalità
+
+- **Parsing intelligente**: incolla link diretti come `http://host/movie/User/Pass/id.mp4`, `series`, `live` o link `get.php`/`player_api.php`.
+- **Riproduzione immediata**: player video con seek, volume, velocità, proporzioni e Picture-in-Picture.
+- **Catalogo completo**: Film VOD, canali Live con loghi, Serie TV divise per stagioni ed episodi.
 - **Bypass CORS/HTTP**: streaming fluido senza blocchi del browser.
-
-## Sicurezza dell'istanza
-
-Nessun token e nessuna schermata di sblocco: il proxy resta chiuso e il primo login riuscito con un provider (`user_info.auth === 1`) abilita automaticamente quella origine per tutte le altre richieste. Verso le origini mai autorizzate passa soltanto la richiesta di login (con un massimo di 20 tentativi ogni 10 minuti per IP); l'elenco tiene al massimo 5 provider, eliminando quello usato meno di recente.
-
-Per azzerare l'elenco dei provider consentiti cancella il file `data/allowed-hosts.json` e riavvia il server.
-
-Le destinazioni private sono bloccate in produzione. `ALLOW_PRIVATE_TARGETS=1` disattiva esplicitamente tale protezione ed è destinato soltanto a reti amministrate e fidate.
-
-### Reverse proxy e ascolto di rete
-
-`TRUST_PROXY=1` resta disponibile per chi espone il servizio dietro un solo reverse proxy fidato. Non impostarlo in Docker o in locale senza un reverse proxy controllato: in sua assenza gli header `X-Forwarded-For` non devono influenzare il rate limit.
-
-Il server è pensato per la rete di casa e ascolta su `0.0.0.0`, così è raggiungibile da TV e telefono: la protezione è l'elenco dei provider consentiti, non l'indirizzo di ascolto. Imposta `HOST=127.0.0.1` per limitarlo alla sola macchina locale.

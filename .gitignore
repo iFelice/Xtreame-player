@@ -7,5 +7,9 @@ coverage/
 .env*
 !.env.example
 
+# Android TV: cache e cartelle di build Gradle generate in locale
+android TV/.gradle/
+android TV/**/build/
+
 # Elenco locale dei provider abilitati al proxy (generato a runtime)
 data/allowed-hosts.json
