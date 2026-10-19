@@ -69,13 +69,13 @@ http://localhost:3000`;
 
         <div className="p-6 space-y-6 text-xs max-h-[75vh] overflow-y-auto">
           {/* Privacy Guarantee Banner */}
-          <div className="p-4 rounded-2xl bg-accent/40 border border-accent/60 text-accent-strong space-y-2">
-            <div className="flex items-center gap-2 text-sm font-semibold text-accent-strong">
-              <Lock className="w-4 h-4" />
+          <div className="p-4 rounded-2xl bg-accent/15 border border-accent/40 text-label space-y-2">
+            <div className="flex items-center gap-2 text-sm font-semibold text-label">
+              <Lock className="w-4 h-4 text-accent" />
               Nessun dato viene inviato a una AI o a terzi
             </div>
-            <p className="leading-relaxed text-label-secondary">
-              L'applicazione non effettua alcuna chiamata a Gemini, OpenAI o altri modelli AI quando inserisci il link. I flussi video e le richieste alle API Xtream Codes transitano <strong>esclusivamente dal proxy Node.js verso il server Xtream che hai inserito</strong>, e la cronologia/preferiti vengono salvati solo nella memoria locale del tuo browser (<code className="text-accent-strong">localStorage</code>).
+            <p className="leading-relaxed text-label">
+              L'applicazione non effettua alcuna chiamata a Gemini, OpenAI o altri modelli AI quando inserisci il link. I flussi video e le richieste alle API Xtream Codes transitano <strong>esclusivamente dal proxy Node.js verso il server Xtream che hai inserito</strong>, e la cronologia/preferiti vengono salvati solo nella memoria locale del tuo browser (<code className="text-label">localStorage</code>).
             </p>
           </div>
 

@@ -135,7 +135,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               {/* Disconnect Button */}
               <button
                 onClick={onDisconnect}
-                className="p-2.5 sm:p-3 text-label-secondary hover:text-danger hover:bg-danger/40 rounded-2xl border border-separator-strong/80 transition cursor-pointer shadow-md"
+                className="p-2.5 sm:p-3 text-label-secondary hover:text-danger hover:bg-danger/20 rounded-2xl border border-separator-strong/80 transition cursor-pointer shadow-md"
                 title="Disconnetti server"
               >
                 <LogOut className="w-5 h-5 sm:w-6 sm:h-6" />

@@ -99,7 +99,7 @@ export const RecentProductsShelf: React.FC<RecentProductsShelfProps> = ({
               <h2 className="text-base sm:text-lg font-bold text-label tracking-tight">
                 Ultimi Arrivi & Aggiunti di Recente
               </h2>
-              <span className="px-2 py-0.5 rounded-full bg-accent/80 text-on-accent text-[10px] font-semibold border border-accent/50">
+              <span className="px-2 py-0.5 rounded-full bg-fresh text-on-accent text-[10px] font-semibold border border-fresh/50">
                 Novità
               </span>
             </div>

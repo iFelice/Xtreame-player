@@ -420,8 +420,8 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
                   </div>
 
                   {pollError && (
-                    <div className="text-xs text-on-accent flex items-center gap-2 bg-danger/50 p-3 rounded-xl border border-danger/60">
-                      <AlertCircle className="w-4 h-4 shrink-0" />
+                    <div className="text-xs text-label flex items-center gap-2 bg-danger/15 p-3 rounded-xl border border-danger/40">
+                      <AlertCircle className="w-4 h-4 text-danger shrink-0" />
                       <span>{pollError}</span>
                     </div>
                   )}
@@ -448,10 +448,10 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
         {mode === 'remote' && (
           <div className="p-5 sm:p-7 space-y-5">
             {sendSuccessMessage ? (
-              <div className="p-6 text-center space-y-4 bg-accent/40 border border-accent/80 rounded-2xl animate-in zoom-in-95">
-                <CheckCircle2 className="w-12 h-12 text-accent-strong mx-auto" />
+              <div className="p-6 text-center space-y-4 bg-accent/15 border border-accent/40 rounded-2xl animate-in zoom-in-95 text-label">
+                <CheckCircle2 className="w-12 h-12 text-accent mx-auto" />
                 <h4 className="text-xl font-bold text-label">{sendSuccessMessage}</h4>
-                <p className="text-xs text-label-secondary">
+                <p className="text-xs text-label">
                   Puoi guardare lo schermo della TV: il catalogo dei canali e film si caricherà automaticamente tra pochi istanti!
                 </p>
                 <button
@@ -566,8 +566,8 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
                 </div>
 
                 {sendErrorMessage && (
-                  <div className="p-3 rounded-xl bg-danger/70 border border-danger text-on-accent text-xs flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4 shrink-0" />
+                  <div className="p-3 rounded-xl bg-danger/15 border border-danger/40 text-label text-xs flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-danger shrink-0" />
                     <span>{sendErrorMessage}</span>
                   </div>
                 )}

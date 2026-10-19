@@ -381,17 +381,17 @@ export const UrlInputBar: React.FC<UrlInputBarProps> = ({
       {directPlayError && (
         <div
           role="alert"
-          className="mt-3 flex items-start gap-2.5 p-3 rounded-xl bg-danger/80 border border-danger text-on-accent shadow-lg"
+          className="mt-3 flex items-start gap-2.5 p-3 rounded-xl bg-danger/15 border border-danger/40 text-label shadow-lg"
         >
           <AlertCircle className="w-4 h-4 text-danger shrink-0 mt-0.5" />
           <div className="min-w-0 flex-1">
-            <p className="text-xs sm:text-sm font-bold text-danger">Errore di Connessione</p>
-            <p className="text-xs sm:text-sm text-danger/90 mt-0.5 leading-relaxed">{directPlayError}</p>
+            <p className="text-xs sm:text-sm font-bold text-label">Errore di Connessione</p>
+            <p className="text-xs sm:text-sm text-label mt-0.5 leading-relaxed">{directPlayError}</p>
           </div>
           <button
             type="button"
             onClick={() => setDirectPlayError(null)}
-            className="text-xs font-bold text-danger hover:text-label px-2 py-1 rounded-lg hover:bg-danger/60 transition cursor-pointer shrink-0"
+            className="text-xs font-bold text-danger hover:text-label px-2 py-1 rounded-lg hover:bg-danger/20 transition cursor-pointer shrink-0"
           >
             Chiudi
           </button>

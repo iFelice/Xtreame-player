@@ -258,12 +258,12 @@ export const RemoteLoginView: React.FC<RemoteLoginViewProps> = ({ onBackToApp, i
           <div
             className={`mt-4 p-3.5 rounded-xl border flex items-start gap-2.5 text-xs animate-in fade-in ${
               statusMessage.type === 'success'
-                ? 'bg-accent/70 border-accent text-on-accent'
-                : 'bg-danger/70 border-danger text-on-accent'
+                ? 'bg-accent/15 border-accent/40 text-label'
+                : 'bg-danger/15 border-danger/40 text-label'
             }`}
           >
             {statusMessage.type === 'success' ? (
-              <CheckCircle2 className="w-4 h-4 text-accent-strong shrink-0 mt-0.5" />
+              <CheckCircle2 className="w-4 h-4 text-accent shrink-0 mt-0.5" />
             ) : (
               <AlertCircle className="w-4 h-4 text-danger shrink-0 mt-0.5" />
             )}

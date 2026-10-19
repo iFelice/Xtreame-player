@@ -406,7 +406,7 @@ export default function App() {
       {downloadFeedback && (
         <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[100] max-w-[90vw] px-5 py-3 rounded-2xl bg-surface-0/95 border border-series/70 text-label shadow-2xl flex items-center gap-3">
           {downloadFeedback.status === 'finished' ? (
-            <CheckCircle2 className="w-5 h-5 text-accent-strong shrink-0" />
+            <CheckCircle2 className="w-5 h-5 text-accent shrink-0" />
           ) : (
             <LoaderCircle className="w-5 h-5 text-series shrink-0 animate-spin" />
           )}
@@ -438,14 +438,14 @@ export default function App() {
       <main className="flex-1 w-full max-w-[2400px] mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-6 overflow-x-hidden">
         {/* Refresh Success Notification Banner */}
         {refreshSuccessMessage && (
-          <div className="p-4 rounded-2xl bg-accent/90 border border-accent text-on-accent flex items-center justify-between gap-3 animate-in fade-in shadow-xl">
+          <div className="p-4 rounded-2xl bg-accent/15 border border-accent/40 text-label flex items-center justify-between gap-3 animate-in fade-in shadow-xl">
             <div className="flex items-center gap-3 text-sm font-semibold">
-              <CheckCircle2 className="w-5 h-5 text-accent-strong shrink-0" />
+              <CheckCircle2 className="w-5 h-5 text-accent shrink-0" />
               <span>{refreshSuccessMessage}</span>
             </div>
             <button
               onClick={() => setRefreshSuccessMessage(null)}
-              className="text-sm font-bold text-accent-strong hover:text-label px-2.5 py-1 rounded-lg hover:bg-accent/40 cursor-pointer"
+              className="text-sm font-bold text-accent hover:text-label px-2.5 py-1 rounded-lg hover:bg-accent/20 cursor-pointer"
             >
               ✕
             </button>
@@ -467,17 +467,17 @@ export default function App() {
 
         {/* Error Notification Banner */}
         {errorMessage && (
-          <div className="p-4 sm:p-5 rounded-2xl bg-danger/80 border border-danger text-on-accent flex items-start justify-between gap-3 animate-in fade-in shadow-xl">
+          <div className="p-4 sm:p-5 rounded-2xl bg-danger/15 border border-danger/40 text-label flex items-start justify-between gap-3 animate-in fade-in shadow-xl">
             <div className="flex items-start gap-3.5">
               <AlertCircle className="w-6 h-6 text-danger shrink-0 mt-0.5" />
               <div>
-                <h4 className="text-base font-bold text-danger">Errore di Connessione</h4>
-                <p className="text-sm text-danger/90 mt-1 leading-relaxed">{errorMessage}</p>
+                <h4 className="text-base font-bold text-label">Errore di Connessione</h4>
+                <p className="text-sm text-label mt-1 leading-relaxed">{errorMessage}</p>
               </div>
             </div>
             <button
               onClick={() => setErrorMessage(null)}
-              className="text-xs sm:text-sm font-bold text-danger hover:text-label px-3 py-1.5 rounded-lg hover:bg-danger/60 transition cursor-pointer"
+              className="text-xs sm:text-sm font-bold text-danger hover:text-label px-3 py-1.5 rounded-lg hover:bg-danger/20 transition cursor-pointer"
             >
               Chiudi
             </button>
@@ -546,7 +546,7 @@ export default function App() {
                     : 'bg-surface-0 text-label-secondary hover:text-label hover:bg-surface-1 border border-separator'
                 }`}
               >
-                <Tv className={`w-5 h-5 ${activeTab === 'live' ? 'text-on-accent' : 'text-live'}`} />
+                <Tv className={`w-5 h-5 ${activeTab === 'live' ? 'text-inherit' : 'text-live'}`} />
                 Live TV
                 <span className="text-xs px-2 py-0.5 rounded-full bg-surface-1/50 ">
                   {liveStreams.length}
@@ -562,7 +562,7 @@ export default function App() {
                     : 'bg-surface-0 text-label-secondary hover:text-label hover:bg-surface-1 border border-separator'
                 }`}
               >
-                <Film className={`w-5 h-5 ${activeTab === 'movies' ? 'text-on-accent' : 'text-accent'}`} />
+                <Film className={`w-5 h-5 ${activeTab === 'movies' ? 'text-inherit' : 'text-accent'}`} />
                 Film & VOD
                 <span className="text-xs px-2 py-0.5 rounded-full bg-surface-1/50 ">
                   {vodStreams.length}
@@ -578,7 +578,7 @@ export default function App() {
                     : 'bg-surface-0 text-label-secondary hover:text-label hover:bg-surface-1 border border-separator'
                 }`}
               >
-                <Layers className={`w-5 h-5 ${activeTab === 'series' ? 'text-on-accent' : 'text-series'}`} />
+                <Layers className={`w-5 h-5 ${activeTab === 'series' ? 'text-inherit' : 'text-series'}`} />
                 Serie TV
                 <span className="text-xs px-2 py-0.5 rounded-full bg-surface-1/50 ">
                   {seriesList.length}
@@ -594,7 +594,7 @@ export default function App() {
                     : 'bg-surface-0 text-label-secondary hover:text-label hover:bg-surface-1 border border-separator'
                 }`}
               >
-                <Sparkles className={`w-5 h-5 ${activeTab === 'recent' ? 'text-on-accent' : 'text-fresh'}`} />
+                <Sparkles className={`w-5 h-5 ${activeTab === 'recent' ? 'text-inherit' : 'text-fresh'}`} />
                 Novità & Recenti
               </button>
 
@@ -607,7 +607,7 @@ export default function App() {
                     : 'bg-surface-0 text-label-secondary hover:text-label hover:bg-surface-1 border border-separator'
                 }`}
               >
-                <Star className={`w-5 h-5 ${activeTab === 'favorites' ? 'text-on-accent' : 'text-favorite'}`} />
+                <Star className={`w-5 h-5 ${activeTab === 'favorites' ? 'text-inherit' : 'text-favorite'}`} />
                 Preferiti & Cronologia
               </button>
             </div>

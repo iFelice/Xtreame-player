@@ -114,6 +114,26 @@ function classViolations(value: string): string[] {
   return errors;
 }
 
+
+function onAccentViolations(value: string): string[] {
+  const tokens = value.split(/\s+/).filter(Boolean);
+  const errors: string[] = [];
+  const allowed = ['accent','accent-strong','live','series','fresh','favorite'];
+  const foregroundTokens = tokens.filter((token) => /^(?:[\w-]+:)*text-on-accent$/.test(token));
+  for (const foreground of foregroundTokens) {
+    const state = foreground.slice(0, foreground.length - 'text-on-accent'.length);
+    const hasAllowedFill = tokens.some((token) => {
+      if (!token.startsWith(state + 'bg-')) return false;
+      const match = token.slice(state.length).match(/^bg-(accent|accent-strong|live|series|fresh|favorite|danger)(?:\/(\d+))?$/);
+      if (!match) return false;
+      if (match[1] === 'danger') return match[2] === undefined;
+      return match[2] === undefined || Number(match[2]) >= 80 && Number(match[2]) <= 100;
+    });
+    if (!hasAllowedFill) errors.push(`${foreground} without an allowed colored fill`);
+  }
+  return errors;
+}
+
 describe('theme token guard', () => {
   it('does not use default Tailwind palette classes or monospace font utility', () => {
     const violations: string[] = [];
@@ -136,6 +156,20 @@ describe('theme token guard', () => {
         for (const violation of classViolations(value)) {
           const line = source.slice(0, offset).split('\n').length;
           violations.push(`${relative(root, file)}:${line}: ${violation} [${value}]`);
+        }
+      }
+    }
+    expect(violations, violations.join('\n')).toEqual([]);
+  });
+
+  it('allows on-accent text only over sufficiently opaque colored fills', () => {
+    const violations: string[] = [];
+    for (const file of sourceFiles(root)) {
+      const source = readFileSync(file, 'utf8');
+      for (const { value, offset } of classNameValues(source)) {
+        for (const violation of onAccentViolations(value)) {
+          const line = source.slice(0, offset).split('\n').length;
+          violations.push(`${relative(root, file)}:${line}: ${violation}`);
         }
       }
     }

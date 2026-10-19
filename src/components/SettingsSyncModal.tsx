@@ -86,8 +86,8 @@ export const SettingsSyncModal: React.FC<SettingsSyncModalProps> = ({
         {/* Modal Body */}
         <div className="p-4 sm:p-6 max-h-[75vh] overflow-y-auto space-y-5">
           <form onSubmit={handleFormSubmit} className="space-y-4">
-            <div className="bg-accent/20 border border-accent/40 rounded-2xl p-3.5 text-xs text-accent-strong/90 flex items-start gap-2.5">
-              <Laptop className="w-4 h-4 text-accent-strong shrink-0 mt-0.5" />
+            <div className="bg-accent/15 border border-accent/40 rounded-2xl p-3.5 text-xs text-label flex items-start gap-2.5">
+              <Laptop className="w-4 h-4 text-accent shrink-0 mt-0.5" />
               <span>
                 Puoi modificare o inserire qui le credenziali Xtream Codes.
                 Cliccando su <strong>Salva e Connetti</strong> verranno sincronizzate subito.
