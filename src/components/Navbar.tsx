@@ -33,7 +33,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const isConnected = Boolean(serverUrl && username);
 
   return (
-    <header className="sticky top-0 z-40 w-full max-w-full bg-zinc-950/98 backdrop-blur-md border-b border-zinc-800 shadow-xl">
+    <header className="sticky top-0 z-40 w-full max-w-full bg-surface-0/98 backdrop-blur-md border-b border-separator shadow-xl">
       <div className="w-full max-w-[2400px] mx-auto px-4 sm:px-8 h-18 sm:h-22 flex items-center justify-between gap-3 sm:gap-6">
         {/* Brand Icon and Text */}
         <div className="flex items-center gap-3 sm:gap-4 shrink-0">
@@ -44,14 +44,14 @@ export const Navbar: React.FC<NavbarProps> = ({
           />
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-lg sm:text-2xl font-black text-white tracking-tight">
-                FelixVision <span className="text-emerald-400">Player</span>
+              <h1 className="text-lg sm:text-2xl font-black text-label tracking-tight">
+                FelixVision <span className="text-accent-strong">Player</span>
               </h1>
-              <span className="hidden md:inline-block px-2 py-0.5 rounded-md bg-zinc-800 text-xs text-zinc-400 font-mono font-bold">
+              <span className="hidden md:inline-block px-2 py-0.5 rounded-md bg-surface-1 text-xs text-label-secondary  font-bold">
                 v2.1
               </span>
             </div>
-            <p className="text-xs sm:text-sm text-zinc-400 font-medium hidden lg:block mt-0.5">
+            <p className="text-xs sm:text-sm text-label-secondary font-medium hidden lg:block mt-0.5">
               Lettore Multimediale & Browser Xtream Codes
             </p>
           </div>
@@ -65,19 +65,19 @@ export const Navbar: React.FC<NavbarProps> = ({
               <div className="relative">
                 <button
                   onClick={() => setShowAccountDropdown(!showAccountDropdown)}
-                  className="flex items-center gap-2.5 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-2xl bg-zinc-900 border border-zinc-700/80 hover:border-emerald-500/60 text-sm sm:text-base text-zinc-100 transition cursor-pointer shadow-md"
+                  className="flex items-center gap-2.5 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-2xl bg-surface-0 border border-separator-strong/80 hover:border-accent/60 text-sm sm:text-base text-label transition cursor-pointer shadow-md"
                   title={`${username}@${serverUrl}`}
                 >
-                  <span className="w-3 h-3 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
-                  <span className="font-mono font-bold max-w-[120px] sm:max-w-[180px] truncate">
+                  <span className="w-3 h-3 rounded-full bg-accent animate-pulse shrink-0"></span>
+                  <span className=" font-bold max-w-[120px] sm:max-w-[180px] truncate">
                     {username}
                   </span>
-                  <ChevronDown className="w-4 h-4 sm:w-5 sm:h-5 text-zinc-400 shrink-0" />
+                  <ChevronDown className="w-4 h-4 sm:w-5 sm:h-5 text-label-secondary shrink-0" />
                 </button>
 
                 {showAccountDropdown && (
-                  <div className="absolute right-0 mt-2 w-80 bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl p-3 z-50 animate-in fade-in">
-                    <div className="text-xs sm:text-sm font-bold text-zinc-400 px-3 py-2 border-b border-zinc-800 flex items-center justify-between">
+                  <div className="absolute right-0 mt-2 w-80 bg-surface-0 border border-separator-strong rounded-2xl shadow-2xl p-3 z-50 animate-in fade-in">
+                    <div className="text-xs sm:text-sm font-bold text-label-secondary px-3 py-2 border-b border-separator flex items-center justify-between">
                       <span>Server e Account</span>
                       {onOpenSettingsSync && (
                         <button
@@ -85,14 +85,14 @@ export const Navbar: React.FC<NavbarProps> = ({
                             setShowAccountDropdown(false);
                             onOpenSettingsSync();
                           }}
-                          className="text-emerald-400 hover:underline flex items-center gap-1 text-xs font-bold cursor-pointer"
+                          className="text-accent-strong hover:underline flex items-center gap-1 text-xs font-bold cursor-pointer"
                         >
                           <Settings className="w-4 h-4" /> Modifica
                         </button>
                       )}
                     </div>
                     {savedAccounts.length === 0 ? (
-                      <div className="text-sm text-zinc-500 p-4 text-center">
+                      <div className="text-sm text-label-tertiary p-4 text-center">
                         Nessun account memorizzato
                       </div>
                     ) : (
@@ -104,15 +104,15 @@ export const Navbar: React.FC<NavbarProps> = ({
                               onSelectAccount(acc);
                               setShowAccountDropdown(false);
                             }}
-                            className="w-full text-left p-3 rounded-xl hover:bg-zinc-800 text-sm text-zinc-300 transition flex items-center justify-between cursor-pointer"
+                            className="w-full text-left p-3 rounded-xl hover:bg-surface-1 text-sm text-label-secondary transition flex items-center justify-between cursor-pointer"
                           >
                             <div className="min-w-0">
-                              <p className="font-bold text-white truncate text-sm sm:text-base">{acc.name}</p>
-                              <p className="text-xs text-zinc-400 font-mono truncate mt-0.5">
+                              <p className="font-bold text-label truncate text-sm sm:text-base">{acc.name}</p>
+                              <p className="text-xs text-label-secondary  truncate mt-0.5">
                                 {acc.serverUrl}
                               </p>
                             </div>
-                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0 ml-2"></span>
+                            <span className="w-2.5 h-2.5 rounded-full bg-accent shrink-0 ml-2"></span>
                           </button>
                         ))}
                       </div>
@@ -125,7 +125,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               {authData && (
                 <button
                   onClick={onOpenServerInfo}
-                  className="p-2.5 sm:p-3 text-zinc-300 hover:text-white hover:bg-zinc-800 rounded-2xl border border-zinc-700/80 transition cursor-pointer shadow-md"
+                  className="p-2.5 sm:p-3 text-label-secondary hover:text-label hover:bg-surface-1 rounded-2xl border border-separator-strong/80 transition cursor-pointer shadow-md"
                   title="Dettagli abbonamento e server"
                 >
                   <Info className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -135,7 +135,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               {/* Disconnect Button */}
               <button
                 onClick={onDisconnect}
-                className="p-2.5 sm:p-3 text-zinc-300 hover:text-rose-400 hover:bg-rose-950/40 rounded-2xl border border-zinc-700/80 transition cursor-pointer shadow-md"
+                className="p-2.5 sm:p-3 text-label-secondary hover:text-danger hover:bg-danger/40 rounded-2xl border border-separator-strong/80 transition cursor-pointer shadow-md"
                 title="Disconnetti server"
               >
                 <LogOut className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -143,8 +143,8 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              <span className="flex items-center gap-2.5 text-sm sm:text-base font-bold text-zinc-400 px-4 py-2 rounded-2xl bg-zinc-900 border border-zinc-800">
-                <span className="w-2.5 h-2.5 rounded-full bg-zinc-600"></span>
+              <span className="flex items-center gap-2.5 text-sm sm:text-base font-bold text-label-secondary px-4 py-2 rounded-2xl bg-surface-0 border border-separator">
+                <span className="w-2.5 h-2.5 rounded-full bg-surface-2"></span>
                 Non connesso
               </span>
             </div>

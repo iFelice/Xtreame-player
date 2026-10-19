@@ -395,20 +395,20 @@ export default function App() {
   }
 
   return (
-    <Suspense fallback={<div className="min-h-screen bg-zinc-950 text-zinc-300 flex items-center justify-center">Caricamento…</div>}>
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col selection:bg-emerald-500/30 selection:text-emerald-200 w-full max-w-full overflow-x-hidden">
+    <Suspense fallback={<div className="min-h-screen bg-surface-0 text-label-secondary flex items-center justify-center">Caricamento…</div>}>
+    <div className="min-h-screen bg-surface-0 text-label flex flex-col selection:bg-accent/30 selection:text-accent-strong w-full max-w-full overflow-x-hidden">
       {safeMode && (
-        <div className="sticky top-0 z-[110] flex items-center justify-center gap-2 border-b border-emerald-400/40 bg-emerald-950 px-3 py-1.5 text-xs font-bold tracking-[0.16em] text-emerald-200 shadow-lg" role="status">
-          <span className="h-2 w-2 rounded-full bg-emerald-400" aria-hidden="true" />
+        <div className="sticky top-0 z-[110] flex items-center justify-center gap-2 border-b border-accent/40 bg-accent px-3 py-1.5 text-xs font-bold tracking-[0.16em] text-accent-strong shadow-lg" role="status">
+          <span className="h-2 w-2 rounded-full bg-accent" aria-hidden="true" />
           MODALITÀ SICURA · MOCK LOCALE
         </div>
       )}
       {downloadFeedback && (
-        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[100] max-w-[90vw] px-5 py-3 rounded-2xl bg-zinc-900/95 border border-cyan-500/70 text-white shadow-2xl flex items-center gap-3">
+        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[100] max-w-[90vw] px-5 py-3 rounded-2xl bg-surface-0/95 border border-series/70 text-label shadow-2xl flex items-center gap-3">
           {downloadFeedback.status === 'finished' ? (
-            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+            <CheckCircle2 className="w-5 h-5 text-accent-strong shrink-0" />
           ) : (
-            <LoaderCircle className="w-5 h-5 text-cyan-400 shrink-0 animate-spin" />
+            <LoaderCircle className="w-5 h-5 text-series shrink-0 animate-spin" />
           )}
           <div className="min-w-0">
             <p className="text-sm font-bold">
@@ -418,7 +418,7 @@ export default function App() {
                   ? 'Download completato — scegli dove salvare'
                   : 'File salvato'}
             </p>
-            <p className="text-xs text-zinc-400 truncate">{downloadFeedback.title}</p>
+            <p className="text-xs text-label-secondary truncate">{downloadFeedback.title}</p>
           </div>
         </div>
       )}
@@ -438,14 +438,14 @@ export default function App() {
       <main className="flex-1 w-full max-w-[2400px] mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-6 overflow-x-hidden">
         {/* Refresh Success Notification Banner */}
         {refreshSuccessMessage && (
-          <div className="p-4 rounded-2xl bg-emerald-950/90 border border-emerald-800 text-emerald-200 flex items-center justify-between gap-3 animate-in fade-in shadow-xl">
+          <div className="p-4 rounded-2xl bg-accent/90 border border-accent text-accent-strong flex items-center justify-between gap-3 animate-in fade-in shadow-xl">
             <div className="flex items-center gap-3 text-sm font-semibold">
-              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+              <CheckCircle2 className="w-5 h-5 text-accent-strong shrink-0" />
               <span>{refreshSuccessMessage}</span>
             </div>
             <button
               onClick={() => setRefreshSuccessMessage(null)}
-              className="text-sm font-bold text-emerald-400 hover:text-white px-2.5 py-1 rounded-lg hover:bg-emerald-900/40 cursor-pointer"
+              className="text-sm font-bold text-accent-strong hover:text-label px-2.5 py-1 rounded-lg hover:bg-accent/40 cursor-pointer"
             >
               ✕
             </button>
@@ -467,17 +467,17 @@ export default function App() {
 
         {/* Error Notification Banner */}
         {errorMessage && (
-          <div className="p-4 sm:p-5 rounded-2xl bg-rose-950/80 border border-rose-800 text-rose-200 flex items-start justify-between gap-3 animate-in fade-in shadow-xl">
+          <div className="p-4 sm:p-5 rounded-2xl bg-danger/80 border border-danger text-danger flex items-start justify-between gap-3 animate-in fade-in shadow-xl">
             <div className="flex items-start gap-3.5">
-              <AlertCircle className="w-6 h-6 text-rose-400 shrink-0 mt-0.5" />
+              <AlertCircle className="w-6 h-6 text-danger shrink-0 mt-0.5" />
               <div>
-                <h4 className="text-base font-bold text-rose-300">Errore di Connessione</h4>
-                <p className="text-sm text-rose-300/90 mt-1 leading-relaxed">{errorMessage}</p>
+                <h4 className="text-base font-bold text-danger">Errore di Connessione</h4>
+                <p className="text-sm text-danger/90 mt-1 leading-relaxed">{errorMessage}</p>
               </div>
             </div>
             <button
               onClick={() => setErrorMessage(null)}
-              className="text-xs sm:text-sm font-bold text-rose-400 hover:text-white px-3 py-1.5 rounded-lg hover:bg-rose-900/60 transition cursor-pointer"
+              className="text-xs sm:text-sm font-bold text-danger hover:text-label px-3 py-1.5 rounded-lg hover:bg-danger/60 transition cursor-pointer"
             >
               Chiudi
             </button>
@@ -488,37 +488,37 @@ export default function App() {
         {isTv && isConnected && !isLoadingCatalog && showTvHome && !activeMedia && (
           <section className="tv-home min-h-[68vh] flex flex-col justify-center py-8">
             <div className="text-center mb-10">
-              <h2 className="text-4xl font-black text-white">Cosa vuoi guardare?</h2>
-              <p className="text-xl text-zinc-400 mt-3">Usa le frecce del telecomando e premi OK</p>
+              <h2 className="text-4xl font-black text-label">Cosa vuoi guardare?</h2>
+              <p className="text-xl text-label-secondary mt-3">Usa le frecce del telecomando e premi OK</p>
             </div>
             <div className="grid grid-cols-3 gap-8 max-w-6xl mx-auto w-full">
               <button
                 type="button"
                 autoFocus
                 onClick={() => { setActiveTab('live'); setShowTvHome(false); }}
-                className="tv-home-card min-h-64 rounded-3xl bg-zinc-900 border-2 border-zinc-700 flex flex-col items-center justify-center gap-5 text-white"
+                className="tv-home-card min-h-64 rounded-3xl bg-surface-0 border-2 border-separator-strong flex flex-col items-center justify-center gap-5 text-label"
               >
-                <Tv className="w-20 h-20 text-rose-400" />
+                <Tv className="w-20 h-20 text-danger" />
                 <span className="text-3xl font-black">LIVE TV</span>
-                <span className="text-lg text-zinc-400">{liveStreams.length} canali</span>
+                <span className="text-lg text-label-secondary">{liveStreams.length} canali</span>
               </button>
               <button
                 type="button"
                 onClick={() => { setActiveTab('movies'); setShowTvHome(false); }}
-                className="tv-home-card min-h-64 rounded-3xl bg-zinc-900 border-2 border-zinc-700 flex flex-col items-center justify-center gap-5 text-white"
+                className="tv-home-card min-h-64 rounded-3xl bg-surface-0 border-2 border-separator-strong flex flex-col items-center justify-center gap-5 text-label"
               >
-                <Film className="w-20 h-20 text-emerald-400" />
+                <Film className="w-20 h-20 text-accent-strong" />
                 <span className="text-3xl font-black">FILM</span>
-                <span className="text-lg text-zinc-400">{vodStreams.length} titoli</span>
+                <span className="text-lg text-label-secondary">{vodStreams.length} titoli</span>
               </button>
               <button
                 type="button"
                 onClick={() => { setActiveTab('series'); setShowTvHome(false); }}
-                className="tv-home-card min-h-64 rounded-3xl bg-zinc-900 border-2 border-zinc-700 flex flex-col items-center justify-center gap-5 text-white"
+                className="tv-home-card min-h-64 rounded-3xl bg-surface-0 border-2 border-separator-strong flex flex-col items-center justify-center gap-5 text-label"
               >
-                <Layers className="w-20 h-20 text-blue-400" />
+                <Layers className="w-20 h-20 text-series" />
                 <span className="text-3xl font-black">SERIE TV</span>
-                <span className="text-lg text-zinc-400">{seriesList.length} serie</span>
+                <span className="text-lg text-label-secondary">{seriesList.length} serie</span>
               </button>
             </div>
           </section>
@@ -526,13 +526,13 @@ export default function App() {
 
         {/* Connected Catalog Navigation Tabs */}
         {isConnected && !isLoadingCatalog && (!isTv || !showTvHome) && (
-          <div className="tv-catalog-nav flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-zinc-800/90 pb-4">
+          <div className="tv-catalog-nav flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-separator/90 pb-4">
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               {isTv && (
                 <button
                   type="button"
                   onClick={() => setShowTvHome(true)}
-                  className="flex items-center gap-2.5 px-5 py-3 rounded-2xl text-base font-bold bg-zinc-900 text-emerald-300 border border-emerald-700"
+                  className="flex items-center gap-2.5 px-5 py-3 rounded-2xl text-base font-bold bg-surface-0 text-accent-strong border border-accent"
                 >
                   Home TV
                 </button>
@@ -542,13 +542,13 @@ export default function App() {
                 onClick={() => setActiveTab('live')}
                 className={`flex items-center gap-2.5 px-4 sm:px-5 py-2.5 rounded-2xl text-sm sm:text-base font-bold transition cursor-pointer shadow-md ${
                   activeTab === 'live'
-                    ? 'bg-rose-600 text-white shadow-rose-950/60 scale-105'
-                    : 'bg-zinc-900 text-zinc-300 hover:text-white hover:bg-zinc-850 border border-zinc-800'
+                    ? 'bg-live text-on-accent  scale-105'
+                    : 'bg-surface-0 text-label-secondary hover:text-label hover:bg-surface-1 border border-separator'
                 }`}
               >
-                <Tv className="w-5 h-5 text-rose-400" />
+                <Tv className="w-5 h-5 text-live" />
                 Live TV
-                <span className="text-xs px-2 py-0.5 rounded-full bg-black/50 font-mono">
+                <span className="text-xs px-2 py-0.5 rounded-full bg-surface-1/50 ">
                   {liveStreams.length}
                 </span>
               </button>
@@ -558,13 +558,13 @@ export default function App() {
                 onClick={() => setActiveTab('movies')}
                 className={`flex items-center gap-2.5 px-4 sm:px-5 py-2.5 rounded-2xl text-sm sm:text-base font-bold transition cursor-pointer shadow-md ${
                   activeTab === 'movies'
-                    ? 'bg-emerald-600 text-white shadow-emerald-950/60 scale-105'
-                    : 'bg-zinc-900 text-zinc-300 hover:text-white hover:bg-zinc-850 border border-zinc-800'
+                    ? 'bg-accent text-on-accent  scale-105'
+                    : 'bg-surface-0 text-label-secondary hover:text-label hover:bg-surface-1 border border-separator'
                 }`}
               >
-                <Film className="w-5 h-5 text-emerald-400" />
+                <Film className="w-5 h-5 text-accent-strong" />
                 Film & VOD
-                <span className="text-xs px-2 py-0.5 rounded-full bg-black/50 font-mono">
+                <span className="text-xs px-2 py-0.5 rounded-full bg-surface-1/50 ">
                   {vodStreams.length}
                 </span>
               </button>
@@ -574,13 +574,13 @@ export default function App() {
                 onClick={() => setActiveTab('series')}
                 className={`flex items-center gap-2.5 px-4 sm:px-5 py-2.5 rounded-2xl text-sm sm:text-base font-bold transition cursor-pointer shadow-md ${
                   activeTab === 'series'
-                    ? 'bg-blue-600 text-white shadow-blue-950/60 scale-105'
-                    : 'bg-zinc-900 text-zinc-300 hover:text-white hover:bg-zinc-850 border border-zinc-800'
+                    ? 'bg-series text-on-accent  scale-105'
+                    : 'bg-surface-0 text-label-secondary hover:text-label hover:bg-surface-1 border border-separator'
                 }`}
               >
-                <Layers className="w-5 h-5 text-blue-400" />
+                <Layers className="w-5 h-5 text-series" />
                 Serie TV
-                <span className="text-xs px-2 py-0.5 rounded-full bg-black/50 font-mono">
+                <span className="text-xs px-2 py-0.5 rounded-full bg-surface-1/50 ">
                   {seriesList.length}
                 </span>
               </button>
@@ -590,11 +590,11 @@ export default function App() {
                 onClick={() => setActiveTab('recent')}
                 className={`flex items-center gap-2.5 px-4 sm:px-5 py-2.5 rounded-2xl text-sm sm:text-base font-bold transition cursor-pointer shadow-md ${
                   activeTab === 'recent'
-                    ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-amber-950/60 scale-105'
-                    : 'bg-zinc-900 text-zinc-300 hover:text-white hover:bg-zinc-850 border border-zinc-800'
+                    ? 'bg-fresh text-on-accent scale-105'
+                    : 'bg-surface-0 text-label-secondary hover:text-label hover:bg-surface-1 border border-separator'
                 }`}
               >
-                <Sparkles className="w-5 h-5 text-amber-200" />
+                <Sparkles className="w-5 h-5 text-favorite" />
                 Novità & Recenti
               </button>
 
@@ -603,11 +603,11 @@ export default function App() {
                 onClick={() => setActiveTab('favorites')}
                 className={`flex items-center gap-2.5 px-4 sm:px-5 py-2.5 rounded-2xl text-sm sm:text-base font-bold transition cursor-pointer shadow-md ${
                   activeTab === 'favorites'
-                    ? 'bg-zinc-800 text-white border-2 border-amber-400/80 shadow-amber-950/50 scale-105'
-                    : 'bg-zinc-900 text-zinc-300 hover:text-white hover:bg-zinc-850 border border-zinc-800'
+                    ? 'bg-surface-1 text-label border-2 border-favorite/80  scale-105'
+                    : 'bg-surface-0 text-label-secondary hover:text-label hover:bg-surface-1 border border-separator'
                 }`}
               >
-                <Star className="w-5 h-5 text-amber-400" />
+                <Star className="w-5 h-5 text-favorite" />
                 Preferiti & Cronologia
               </button>
             </div>
@@ -617,7 +617,7 @@ export default function App() {
               <button
                 onClick={handleRefreshCatalog}
                 disabled={isRefreshingCatalog}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm sm:text-base font-bold bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-xl shadow-emerald-950/50 transition cursor-pointer disabled:opacity-50"
+                className="flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm sm:text-base font-bold bg-accent hover:bg-accent-strong text-on-accent shadow-xl  transition cursor-pointer disabled:opacity-50"
                 title="Ricarica tutti i contenuti dal server Xtream"
               >
                 <RefreshCw className={`w-4 h-4 sm:w-5 sm:h-5 ${isRefreshingCatalog ? 'animate-spin' : ''}`} />
@@ -625,7 +625,7 @@ export default function App() {
               </button>
 
               {lastRefreshedAt && (
-                <span className="hidden xl:inline text-xs text-zinc-400 font-mono">
+                <span className="hidden xl:inline text-xs text-label-secondary ">
                   Sync: {new Date(lastRefreshedAt).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
                 </span>
               )}
@@ -636,17 +636,17 @@ export default function App() {
         {/* Catalog Views Content */}
         {isLoadingCatalog ? (
           <div className="py-28 text-center">
-            <div className="w-14 h-14 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin mx-auto mb-4"></div>
-            <h3 className="text-lg sm:text-xl font-bold text-white">
+            <div className="w-14 h-14 border-4 border-accent/20 border-t-accent rounded-full animate-spin mx-auto mb-4"></div>
+            <h3 className="text-lg sm:text-xl font-bold text-label">
               Recupero catalogo dal server Xtream...
             </h3>
-            <p className="text-sm text-zinc-400 mt-1.5 max-w-md mx-auto">
+            <p className="text-sm text-label-secondary mt-1.5 max-w-md mx-auto">
               Caricamento categorie, canali in diretta, film VOD e serie TV per l'account specificato.
             </p>
           </div>
         ) : isConnected ? (
           isTv && showTvHome ? null : (
-          <Suspense fallback={<div className="mt-4 py-16 text-center text-zinc-400">Caricamento sezione…</div>}>
+          <Suspense fallback={<div className="mt-4 py-16 text-center text-label-secondary">Caricamento sezione…</div>}>
           <div className="mt-4">
             {activeTab === 'live' && (
               <LiveCatalog
@@ -759,7 +759,7 @@ export default function App() {
       />
 
       {/* Footer */}
-      <footer className="w-full border-t border-zinc-900 bg-zinc-950 py-4 text-center text-xs sm:text-sm text-zinc-600">
+      <footer className="w-full border-t border-separator bg-surface-0 py-4 text-center text-xs sm:text-sm text-label-tertiary">
         FelixVisionPlayer &bull; Riproduttore multimediale per server Xtream Codes
       </footer>
     </div>

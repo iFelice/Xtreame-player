@@ -185,7 +185,7 @@ export const ListPositionIndicator: React.FC<ListPositionIndicatorProps> = ({
   const counter = counterParts(state.position, total);
 
   return (
-    <p aria-live="off" className="mt-1 text-xs sm:text-sm text-zinc-400 font-medium">
+    <p aria-live="off" className="mt-1 text-xs sm:text-sm text-label-secondary font-medium">
       {/* Both texts share the same grid cell: the line keeps the size of the
           wider/taller one, so the header never moves when they swap. */}
       <span className="inline-grid min-w-40 max-w-full align-top">
@@ -195,7 +195,7 @@ export const ListPositionIndicator: React.FC<ListPositionIndicatorProps> = ({
             state.active ? 'opacity-0' : 'opacity-100'
           }`}
         >
-          Mostrando <strong className="text-zinc-100">{total}</strong>
+          Mostrando <strong className="text-label">{total}</strong>
           {idleCountSuffix(label, searchQuery)}
         </span>
         <span
@@ -206,7 +206,7 @@ export const ListPositionIndicator: React.FC<ListPositionIndicatorProps> = ({
           style={{ fontVariantNumeric: 'tabular-nums' }}
         >
           <span style={{ color: '#10B981' }}>{counter.position}</span>
-          <span className="text-zinc-300/90">{counter.total}</span>
+          <span className="text-label-secondary/90">{counter.total}</span>
         </span>
       </span>
     </p>

@@ -87,23 +87,23 @@ export const RecentProductsShelf: React.FC<RecentProductsShelfProps> = ({
   if (vodStreams.length === 0 && seriesList.length === 0) return null;
 
   return (
-    <section className="bg-zinc-900/60 border border-zinc-800 rounded-3xl p-5 sm:p-6 shadow-xl space-y-5">
+    <section className="bg-surface-0/60 border border-separator rounded-3xl p-5 sm:p-6 shadow-xl space-y-5">
       {/* Shelf Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800/80 pb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-separator/80 pb-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-amber-500/10 text-amber-400 border border-amber-500/30 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-2xl bg-favorite/10 text-favorite border border-favorite/30 flex items-center justify-center">
             <Sparkles className="w-5 h-5" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">
+              <h2 className="text-base sm:text-lg font-bold text-label tracking-tight">
                 Ultimi Arrivi & Aggiunti di Recente
               </h2>
-              <span className="px-2 py-0.5 rounded-full bg-emerald-950/80 text-emerald-400 text-[10px] font-semibold border border-emerald-800/50">
+              <span className="px-2 py-0.5 rounded-full bg-accent/80 text-on-accent-strong text-[10px] font-semibold border border-accent/50">
                 Novità
               </span>
             </div>
-            <p className="text-xs text-zinc-400">
+            <p className="text-xs text-label-secondary">
               I film e le serie TV caricati più di recente sul server Xtream
             </p>
           </div>
@@ -116,8 +116,8 @@ export const RecentProductsShelf: React.FC<RecentProductsShelfProps> = ({
               onClick={() => setActiveType('movies')}
               className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer ${
                 activeType === 'movies'
-                  ? 'bg-emerald-600 text-white shadow-md'
-                  : 'bg-zinc-950 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                  ? 'bg-accent text-on-accent shadow-md'
+                  : 'bg-surface-0 text-label-secondary hover:text-label border border-separator'
               }`}
             >
               <Film className="w-3.5 h-3.5" />
@@ -130,8 +130,8 @@ export const RecentProductsShelf: React.FC<RecentProductsShelfProps> = ({
               onClick={() => setActiveType('series')}
               className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer ${
                 activeType === 'series'
-                  ? 'bg-blue-600 text-white shadow-md'
-                  : 'bg-zinc-950 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                  ? 'bg-series text-on-accent shadow-md'
+                  : 'bg-surface-0 text-label-secondary hover:text-label border border-separator'
               }`}
             >
               <Tv className="w-3.5 h-3.5" />
@@ -151,10 +151,10 @@ export const RecentProductsShelf: React.FC<RecentProductsShelfProps> = ({
               <div
                 key={movie.stream_id}
                 onClick={() => handlePlayMovie(movie)}
-                className="group relative bg-zinc-950 border border-zinc-800/90 hover:border-emerald-500/60 rounded-xl overflow-hidden shadow-lg transition-all duration-300 hover:-translate-y-1 flex flex-col cursor-pointer"
+                className="group relative bg-surface-0 border border-separator/90 hover:border-accent/60 rounded-xl overflow-hidden shadow-lg transition-all duration-300 hover:-translate-y-1 flex flex-col cursor-pointer"
               >
                 {/* Poster */}
-                <div className="relative aspect-2/3 bg-zinc-900 overflow-hidden">
+                <div className="relative aspect-2/3 bg-surface-0 overflow-hidden">
                   {movie.stream_icon ? (
                     <RemoteImage
                       src={getSecureImageUrl(movie.stream_icon)}
@@ -169,23 +169,23 @@ export const RecentProductsShelf: React.FC<RecentProductsShelfProps> = ({
                   ) : null}
 
                   {/* Fallback film icon */}
-                  <div className="absolute inset-0 -z-10 flex flex-col items-center justify-center p-3 text-zinc-600 bg-zinc-900">
+                  <div className="absolute inset-0 -z-10 flex flex-col items-center justify-center p-3 text-label-tertiary bg-surface-0">
                     <Film className="w-8 h-8 mb-1.5 opacity-50" />
-                    <span className="text-[10px] text-center line-clamp-2 text-zinc-400">
+                    <span className="text-[10px] text-center line-clamp-2 text-label-secondary">
                       {movie.name}
                     </span>
                   </div>
 
                   {/* Date Added Badge */}
-                  <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/80 backdrop-blur-xs text-emerald-400 border border-emerald-500/30 text-[10px] font-medium flex items-center gap-1">
-                    <Calendar className="w-3 h-3 text-emerald-400" />
+                  <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-surface-1/80 backdrop-blur-xs text-accent-strong border border-accent/30 text-[10px] font-medium flex items-center gap-1">
+                    <Calendar className="w-3 h-3 text-accent-strong" />
                     {dateStr}
                   </div>
 
                   {/* Rating */}
                   {movie.rating && movie.rating !== '0' && (
-                    <div className="absolute bottom-2 left-2 px-1.5 py-0.5 rounded bg-black/80 backdrop-blur-xs text-amber-400 border border-amber-500/30 text-[10px] font-semibold flex items-center gap-1">
-                      <Star className="w-2.5 h-2.5 fill-amber-400" />
+                    <div className="absolute bottom-2 left-2 px-1.5 py-0.5 rounded bg-surface-1/80 backdrop-blur-xs text-favorite border border-favorite/30 text-[10px] font-semibold flex items-center gap-1">
+                      <Star className="w-2.5 h-2.5 fill-favorite" />
                       {typeof movie.rating === 'number' ? movie.rating.toFixed(1) : movie.rating}
                     </div>
                   )}
@@ -214,16 +214,16 @@ export const RecentProductsShelf: React.FC<RecentProductsShelfProps> = ({
                       setDisplayCount((c) => c);
                     }}
                     aria-label={isFav ? "Rimuovi dai preferiti" : "Aggiungi ai preferiti"}
-                    className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/70 hover:bg-black text-zinc-300 hover:text-amber-400 transition"
+                    className="absolute top-2 right-2 p-1.5 rounded-lg bg-surface-1/70 hover:bg-surface-1 text-label-secondary hover:text-favorite transition"
                   >
                     <Star
-                      className={`w-3.5 h-3.5 ${isFav ? 'fill-amber-400 text-amber-400' : ''}`}
+                      className={`w-3.5 h-3.5 ${isFav ? 'fill-favorite text-favorite' : ''}`}
                     />
                   </button>
 
                   {/* Hover play & download buttons */}
-                  <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
-                    <div className="w-11 h-11 rounded-full bg-emerald-500 flex items-center justify-center text-white shadow-xl transform group-hover:scale-110 transition">
+                  <div className="absolute inset-0 bg-surface-1/70 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
+                    <div className="w-11 h-11 rounded-full bg-accent flex items-center justify-center text-label shadow-xl transform group-hover:scale-110 transition">
                       <Play className="w-5 h-5 ml-0.5 fill-white" />
                     </div>
 
@@ -249,7 +249,7 @@ export const RecentProductsShelf: React.FC<RecentProductsShelfProps> = ({
                             extension
                           );
                         }}
-                        className="p-2 rounded-lg bg-zinc-900/90 hover:bg-cyan-950 text-zinc-300 hover:text-cyan-300 border border-zinc-700 hover:border-cyan-700 transition"
+                        className="p-2 rounded-lg bg-surface-0/90 hover:bg-series text-on-accent hover:text-series border border-separator-strong hover:border-series transition"
                         title="Scarica nella cartella locale dell’app"
                         aria-label="Scarica film"
                       >
@@ -262,14 +262,14 @@ export const RecentProductsShelf: React.FC<RecentProductsShelfProps> = ({
                 {/* Info */}
                 <div className="p-2.5 flex-1 flex flex-col justify-between">
                   <h4
-                    className="text-xs font-medium text-zinc-200 line-clamp-2 group-hover:text-emerald-400 transition-colors"
+                    className="text-xs font-medium text-label line-clamp-2 group-hover:text-accent-strong transition-colors"
                     title={movie.name}
                   >
                     {movie.name}
                   </h4>
-                  <div className="flex items-center justify-between text-[10px] text-zinc-500 mt-2 pt-1 border-t border-zinc-900">
-                    <span className="uppercase font-mono">.{movie.container_extension || 'mp4'}</span>
-                    <span className="font-mono text-zinc-400">#{movie.stream_id}</span>
+                  <div className="flex items-center justify-between text-[10px] text-label-tertiary mt-2 pt-1 border-t border-separator">
+                    <span className="uppercase ">.{movie.container_extension || 'mp4'}</span>
+                    <span className=" text-label-secondary">#{movie.stream_id}</span>
                   </div>
                 </div>
               </div>
@@ -285,10 +285,10 @@ export const RecentProductsShelf: React.FC<RecentProductsShelfProps> = ({
               <div
                 key={series.series_id}
                 onClick={() => onOpenSeries(series)}
-                className="group relative bg-zinc-950 border border-zinc-800/90 hover:border-blue-500/60 rounded-xl overflow-hidden shadow-lg transition-all duration-300 hover:-translate-y-1 flex flex-col cursor-pointer"
+                className="group relative bg-surface-0 border border-separator/90 hover:border-series/60 rounded-xl overflow-hidden shadow-lg transition-all duration-300 hover:-translate-y-1 flex flex-col cursor-pointer"
               >
                 {/* Cover */}
-                <div className="relative aspect-2/3 bg-zinc-900 overflow-hidden">
+                <div className="relative aspect-2/3 bg-surface-0 overflow-hidden">
                   {series.cover ? (
                     <RemoteImage
                       src={getSecureImageUrl(series.cover)}
@@ -303,23 +303,23 @@ export const RecentProductsShelf: React.FC<RecentProductsShelfProps> = ({
                   ) : null}
 
                   {/* Fallback TV icon */}
-                  <div className="absolute inset-0 -z-10 flex flex-col items-center justify-center p-3 text-zinc-600 bg-zinc-900">
+                  <div className="absolute inset-0 -z-10 flex flex-col items-center justify-center p-3 text-label-tertiary bg-surface-0">
                     <Tv className="w-8 h-8 mb-1.5 opacity-50" />
-                    <span className="text-[10px] text-center line-clamp-2 text-zinc-400">
+                    <span className="text-[10px] text-center line-clamp-2 text-label-secondary">
                       {series.name}
                     </span>
                   </div>
 
                   {/* Date Added Badge */}
-                  <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/80 backdrop-blur-xs text-blue-400 border border-blue-500/30 text-[10px] font-medium flex items-center gap-1">
-                    <Calendar className="w-3 h-3 text-blue-400" />
+                  <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-surface-1/80 backdrop-blur-xs text-fresh border border-fresh/30 text-[10px] font-medium flex items-center gap-1">
+                    <Calendar className="w-3 h-3 text-series" />
                     {dateStr}
                   </div>
 
                   {/* Rating */}
                   {series.rating && series.rating !== '0' && (
-                    <div className="absolute bottom-2 left-2 px-1.5 py-0.5 rounded bg-black/80 backdrop-blur-xs text-amber-400 border border-amber-500/30 text-[10px] font-semibold flex items-center gap-1">
-                      <Star className="w-2.5 h-2.5 fill-amber-400" />
+                    <div className="absolute bottom-2 left-2 px-1.5 py-0.5 rounded bg-surface-1/80 backdrop-blur-xs text-favorite border border-favorite/30 text-[10px] font-semibold flex items-center gap-1">
+                      <Star className="w-2.5 h-2.5 fill-favorite" />
                       {series.rating}
                     </div>
                   )}
@@ -339,16 +339,16 @@ export const RecentProductsShelf: React.FC<RecentProductsShelfProps> = ({
                       setDisplayCount((c) => c);
                     }}
                     aria-label={isFav ? "Rimuovi dai preferiti" : "Aggiungi ai preferiti"}
-                    className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/70 hover:bg-black text-zinc-300 hover:text-amber-400 transition"
+                    className="absolute top-2 right-2 p-1.5 rounded-lg bg-surface-1/70 hover:bg-surface-1 text-label-secondary hover:text-favorite transition"
                   >
                     <Star
-                      className={`w-3.5 h-3.5 ${isFav ? 'fill-amber-400 text-amber-400' : ''}`}
+                      className={`w-3.5 h-3.5 ${isFav ? 'fill-favorite text-favorite' : ''}`}
                     />
                   </button>
 
                   {/* Hover Open Episodes overlay */}
-                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <div className="px-3 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-semibold flex items-center gap-1.5 shadow-xl">
+                  <div className="absolute inset-0 bg-surface-1/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <div className="px-3 py-1.5 rounded-xl bg-series text-on-accent text-xs font-semibold flex items-center gap-1.5 shadow-xl">
                       <Play className="w-3.5 h-3.5 fill-white" />
                       Vedi Episodi
                     </div>
@@ -358,14 +358,14 @@ export const RecentProductsShelf: React.FC<RecentProductsShelfProps> = ({
                 {/* Info */}
                 <div className="p-2.5 flex-1 flex flex-col justify-between">
                   <h4
-                    className="text-xs font-medium text-zinc-200 line-clamp-2 group-hover:text-blue-400 transition-colors"
+                    className="text-xs font-medium text-label line-clamp-2 group-hover:text-series transition-colors"
                     title={series.name}
                   >
                     {series.name}
                   </h4>
-                  <div className="flex items-center justify-between text-[10px] text-zinc-500 mt-2 pt-1 border-t border-zinc-900">
+                  <div className="flex items-center justify-between text-[10px] text-label-tertiary mt-2 pt-1 border-t border-separator">
                     <span>Serie TV</span>
-                    <span className="font-mono text-zinc-400">#{series.series_id}</span>
+                    <span className=" text-label-secondary">#{series.series_id}</span>
                   </div>
                 </div>
               </div>
@@ -380,14 +380,14 @@ export const RecentProductsShelf: React.FC<RecentProductsShelfProps> = ({
           onClick={() =>
             setDisplayCount((prev) => (prev >= 60 ? 18 : prev + 18))
           }
-          className="text-zinc-400 hover:text-white transition font-medium underline underline-offset-4"
+          className="text-label-secondary hover:text-label transition font-medium underline underline-offset-4"
         >
           {displayCount >= 60 ? 'Mostra meno' : 'Carica altri recenti (+18)'}
         </button>
 
         <button
           onClick={() => onNavigateToTab(activeType)}
-          className="flex items-center gap-1 text-emerald-400 hover:text-emerald-300 transition font-semibold"
+          className="flex items-center gap-1 text-accent-strong hover:text-accent-strong transition font-semibold"
         >
           Esplora l'intero catalogo {activeType === 'movies' ? 'Film' : 'Serie'}
           <ChevronRight className="w-4 h-4" />

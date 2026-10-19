@@ -161,12 +161,12 @@ export const UrlInputBar: React.FC<UrlInputBarProps> = ({
   );
 
   return (
-    <div className="w-full bg-zinc-900/90 border border-zinc-800 rounded-2xl p-4 sm:p-5 shadow-xl backdrop-blur-md">
+    <div className="w-full bg-surface-0/90 border border-separator rounded-2xl p-4 sm:p-5 shadow-xl backdrop-blur-md">
       {/* Top row: Label & quick actions */}
       <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
         <div className="flex items-center gap-2">
-          <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></div>
-          <label htmlFor="xtream-link" className="text-sm font-semibold text-white tracking-wide">
+          <div className="w-2.5 h-2.5 rounded-full bg-accent animate-pulse"></div>
+          <label htmlFor="xtream-link" className="text-sm font-semibold text-label tracking-wide">
             Incolla Link o URL Xtream Codes
           </label>
         </div>
@@ -176,7 +176,7 @@ export const UrlInputBar: React.FC<UrlInputBarProps> = ({
             <button
               type="button"
               onClick={onOpenTvQrLogin}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold transition cursor-pointer shadow-md shadow-emerald-500/20"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent hover:bg-accent text-on-accent font-bold transition cursor-pointer shadow-md "
               title="Accedi facilmente dalla TV o Fire Stick inquadrando un QR Code dal tuo smartphone"
             >
               <QrCode className="w-3.5 h-3.5" />
@@ -187,7 +187,7 @@ export const UrlInputBar: React.FC<UrlInputBarProps> = ({
           <button
             type="button"
             onClick={handleLoadExample}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition cursor-pointer font-medium"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent/10 hover:bg-accent/20 text-accent-strong border border-accent/30 transition cursor-pointer font-medium"
             title="Incolla l'esempio: http://reload.loginflash.com/movie/User/Password/10112.mp4"
           >
             <Sparkles className="w-3.5 h-3.5" />
@@ -197,7 +197,7 @@ export const UrlInputBar: React.FC<UrlInputBarProps> = ({
           <button
             type="button"
             onClick={() => setManualMode(!manualMode)}
-            className="text-zinc-400 hover:text-zinc-200 transition underline underline-offset-2"
+            className="text-label-secondary hover:text-label transition underline underline-offset-2"
           >
             {manualMode ? 'Modalità Link Singolo' : 'Inserimento Manuale (Host/User/Pass)'}
           </button>
@@ -208,7 +208,7 @@ export const UrlInputBar: React.FC<UrlInputBarProps> = ({
       {!manualMode ? (
         <div className="space-y-3">
           <div className="relative flex items-center">
-            <div className="absolute left-3.5 text-zinc-500 pointer-events-none">
+            <div className="absolute left-3.5 text-label-tertiary pointer-events-none">
               <Link2 className="w-5 h-5" />
             </div>
             <input
@@ -217,14 +217,14 @@ export const UrlInputBar: React.FC<UrlInputBarProps> = ({
               value={urlInput}
               onChange={(e) => setUrlInput(e.target.value)}
               placeholder="es. http://reload.loginflash.com/movie/User/Password/10112.mp4 o get.php"
-              className="w-full pl-11 pr-24 py-3 bg-zinc-950/80 border border-zinc-700/80 rounded-xl text-white placeholder-zinc-500 text-sm focus:outline-hidden focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 font-mono transition"
+              className="w-full pl-11 pr-24 py-3 bg-surface-0/80 border border-separator-strong/80 rounded-xl text-label placeholder-label-tertiary text-sm focus:outline-hidden focus:border-accent focus:ring-2 focus:ring-accent/20  transition"
             />
             <div className="absolute right-2 flex items-center gap-1">
               {urlInput && (
                 <button
                   type="button"
                   onClick={() => setUrlInput('')}
-                  className="px-2 py-1 text-xs text-zinc-400 hover:text-white rounded hover:bg-zinc-800 transition"
+                  className="px-2 py-1 text-xs text-label-secondary hover:text-label rounded hover:bg-surface-1 transition"
                 >
                   Cancella
                 </button>
@@ -232,7 +232,7 @@ export const UrlInputBar: React.FC<UrlInputBarProps> = ({
               <button
                 type="button"
                 onClick={handlePasteClipboard}
-                className="p-1.5 text-zinc-300 hover:text-white hover:bg-zinc-800 rounded-lg transition"
+                className="p-1.5 text-label-secondary hover:text-label hover:bg-surface-1 rounded-lg transition"
                 title="Incolla dagli appunti"
               >
                 <Clipboard className="w-4 h-4" />
@@ -244,33 +244,33 @@ export const UrlInputBar: React.FC<UrlInputBarProps> = ({
         /* Manual input fields */
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
-            <label className="text-xs text-zinc-400 block mb-1">Server Host (con porta)</label>
+            <label className="text-xs text-label-secondary block mb-1">Server Host (con porta)</label>
             <input
               type="text"
               value={manualHost}
               onChange={(e) => setManualHost(e.target.value)}
               placeholder="http://reload.loginflash.com"
-              className="w-full px-3 py-2 bg-zinc-950/80 border border-zinc-700 rounded-lg text-white text-xs font-mono focus:border-emerald-500 focus:outline-hidden"
+              className="w-full px-3 py-2 bg-surface-0/80 border border-separator-strong rounded-lg text-label text-xs  focus:border-accent focus:outline-hidden"
             />
           </div>
           <div>
-            <label className="text-xs text-zinc-400 block mb-1">Nome Utente</label>
+            <label className="text-xs text-label-secondary block mb-1">Nome Utente</label>
             <input
               type="text"
               value={manualUser}
               onChange={(e) => setManualUser(e.target.value)}
               placeholder="User"
-              className="w-full px-3 py-2 bg-zinc-950/80 border border-zinc-700 rounded-lg text-white text-xs font-mono focus:border-emerald-500 focus:outline-hidden"
+              className="w-full px-3 py-2 bg-surface-0/80 border border-separator-strong rounded-lg text-label text-xs  focus:border-accent focus:outline-hidden"
             />
           </div>
           <div>
-            <label className="text-xs text-zinc-400 block mb-1">Password</label>
+            <label className="text-xs text-label-secondary block mb-1">Password</label>
             <input
               type="password"
               value={manualPass}
               onChange={(e) => setManualPass(e.target.value)}
               placeholder="Password"
-              className="w-full px-3 py-2 bg-zinc-950/80 border border-zinc-700 rounded-lg text-white text-xs font-mono focus:border-emerald-500 focus:outline-hidden"
+              className="w-full px-3 py-2 bg-surface-0/80 border border-separator-strong rounded-lg text-label text-xs  focus:border-accent focus:outline-hidden"
             />
           </div>
         </div>
@@ -278,33 +278,33 @@ export const UrlInputBar: React.FC<UrlInputBarProps> = ({
 
       {/* Auto-detected Parameter Badges */}
       {parsed && parsed.serverUrl && (
-        <div className="mt-3.5 p-3 rounded-xl bg-zinc-950/60 border border-zinc-800/80 flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="mt-3.5 p-3 rounded-xl bg-surface-0/60 border border-separator/80 flex flex-wrap items-center justify-between gap-3 text-xs">
           <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-1.5 text-zinc-300">
-              <Server className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="text-zinc-500">Host:</span>
-              <span className="font-mono text-white font-medium">{parsed.host}</span>
+            <div className="flex items-center gap-1.5 text-label-secondary">
+              <Server className="w-3.5 h-3.5 text-accent-strong" />
+              <span className="text-label-tertiary">Host:</span>
+              <span className=" text-label font-medium">{parsed.host}</span>
             </div>
 
             {parsed.username && (
-              <div className="flex items-center gap-1.5 text-zinc-300">
-                <User className="w-3.5 h-3.5 text-blue-400" />
-                <span className="text-zinc-500">Utente:</span>
-                <span className="font-mono text-white font-medium">{parsed.username}</span>
+              <div className="flex items-center gap-1.5 text-label-secondary">
+                <User className="w-3.5 h-3.5 text-series" />
+                <span className="text-label-tertiary">Utente:</span>
+                <span className=" text-label font-medium">{parsed.username}</span>
               </div>
             )}
 
             {parsed.password && (
-              <div className="flex items-center gap-1.5 text-zinc-300">
-                <Key className="w-3.5 h-3.5 text-amber-400" />
-                <span className="text-zinc-500">Password:</span>
-                <span className="font-mono text-zinc-200">
+              <div className="flex items-center gap-1.5 text-label-secondary">
+                <Key className="w-3.5 h-3.5 text-favorite" />
+                <span className="text-label-tertiary">Password:</span>
+                <span className=" text-label">
                   {showPassword ? parsed.password : '••••••••'}
                 </span>
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="p-0.5 text-zinc-400 hover:text-zinc-200 ml-0.5"
+                  className="p-0.5 text-label-secondary hover:text-label ml-0.5"
                 >
                   {showPassword ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
                 </button>
@@ -312,7 +312,7 @@ export const UrlInputBar: React.FC<UrlInputBarProps> = ({
             )}
 
             {parsed.isDirectStream && parsed.streamId && (
-              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-950/80 border border-emerald-800/60 text-emerald-400 font-medium">
+              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-accent/80 border border-accent/60 text-accent-strong font-medium">
                 {parsed.streamType === 'live' ? (
                   <Tv className="w-3 h-3" />
                 ) : (
@@ -327,7 +327,7 @@ export const UrlInputBar: React.FC<UrlInputBarProps> = ({
                   : ID #{parsed.streamId}
                 </span>
                 {parsed.containerExtension && (
-                  <span className="uppercase text-[10px] bg-emerald-900/60 px-1 rounded font-mono">
+                  <span className="uppercase text-[10px] bg-accent/60 px-1 rounded ">
                     .{parsed.containerExtension}
                   </span>
                 )}
@@ -345,7 +345,7 @@ export const UrlInputBar: React.FC<UrlInputBarProps> = ({
             type="button"
             onClick={handlePlayDirectClick}
             disabled={!hasValidCreds || isAuthenticating}
-            className="flex-1 min-w-[200px] flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-medium text-sm shadow-lg shadow-emerald-950/40 transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            className="flex-1 min-w-[200px] flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-accent hover:bg-accent-strong text-on-accent font-medium text-sm shadow-lg  transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
             {isAuthenticating ? (
               <>
@@ -366,12 +366,12 @@ export const UrlInputBar: React.FC<UrlInputBarProps> = ({
           type="button"
           onClick={handleConnectCatalogClick}
           disabled={!hasValidCreds || isLoading}
-          className="flex-1 min-w-[220px] flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-medium text-sm border border-zinc-700 hover:border-zinc-600 shadow-md transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+          className="flex-1 min-w-[220px] flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-surface-1 hover:bg-surface-2 text-label font-medium text-sm border border-separator-strong hover:border-separator-strong shadow-md transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
         >
           {isLoading ? (
-            <div className="w-4 h-4 border-2 border-zinc-400 border-t-white rounded-full animate-spin"></div>
+            <div className="w-4 h-4 border-2 border-separator-strong border-t-white rounded-full animate-spin"></div>
           ) : (
-            <Layers className="w-4 h-4 text-emerald-400" />
+            <Layers className="w-4 h-4 text-accent-strong" />
           )}
           {isLoading ? 'Connessione al server in corso...' : 'Esplora Intero Catalogo del Server'}
         </button>
@@ -381,17 +381,17 @@ export const UrlInputBar: React.FC<UrlInputBarProps> = ({
       {directPlayError && (
         <div
           role="alert"
-          className="mt-3 flex items-start gap-2.5 p-3 rounded-xl bg-rose-950/80 border border-rose-800 text-rose-200 shadow-lg"
+          className="mt-3 flex items-start gap-2.5 p-3 rounded-xl bg-danger/80 border border-danger text-danger shadow-lg"
         >
-          <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+          <AlertCircle className="w-4 h-4 text-danger shrink-0 mt-0.5" />
           <div className="min-w-0 flex-1">
-            <p className="text-xs sm:text-sm font-bold text-rose-300">Errore di Connessione</p>
-            <p className="text-xs sm:text-sm text-rose-300/90 mt-0.5 leading-relaxed">{directPlayError}</p>
+            <p className="text-xs sm:text-sm font-bold text-danger">Errore di Connessione</p>
+            <p className="text-xs sm:text-sm text-danger/90 mt-0.5 leading-relaxed">{directPlayError}</p>
           </div>
           <button
             type="button"
             onClick={() => setDirectPlayError(null)}
-            className="text-xs font-bold text-rose-400 hover:text-white px-2 py-1 rounded-lg hover:bg-rose-900/60 transition cursor-pointer shrink-0"
+            className="text-xs font-bold text-danger hover:text-label px-2 py-1 rounded-lg hover:bg-danger/60 transition cursor-pointer shrink-0"
           >
             Chiudi
           </button>
@@ -399,10 +399,10 @@ export const UrlInputBar: React.FC<UrlInputBarProps> = ({
       )}
 
       {/* Quick Help Tip */}
-      <div className="mt-3 flex items-center gap-1.5 text-[11px] text-zinc-400">
-        <HelpCircle className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+      <div className="mt-3 flex items-center gap-1.5 text-[11px] text-label-secondary">
+        <HelpCircle className="w-3.5 h-3.5 text-label-tertiary shrink-0" />
         <span>
-          Supporta qualsiasi link Xtream Codes (es. <code className="text-zinc-300">/movie/User/Pass/id.mp4</code>, <code className="text-zinc-300">/series/...</code>, <code className="text-zinc-300">/live/...</code> o playlist <code className="text-zinc-300">get.php</code>). Il server proxy integrato gestisce automaticamente le restrizioni CORS e HTTP/HTTPS.
+          Supporta qualsiasi link Xtream Codes (es. <code className="text-label-secondary">/movie/User/Pass/id.mp4</code>, <code className="text-label-secondary">/series/...</code>, <code className="text-label-secondary">/live/...</code> o playlist <code className="text-label-secondary">get.php</code>). Il server proxy integrato gestisce automaticamente le restrizioni CORS e HTTP/HTTPS.
         </span>
       </div>
     </div>

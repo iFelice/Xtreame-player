@@ -22,16 +22,16 @@ export class AppErrorBoundary extends React.Component<Props, State> {
   render(): React.ReactNode {
     if (!this.state.failed) return this.props.children;
     return (
-      <main className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center p-6">
-        <section className="max-w-lg rounded-3xl border border-zinc-800 bg-zinc-900 p-8 text-center shadow-2xl">
+      <main className="min-h-screen bg-surface-0 text-label flex items-center justify-center p-6">
+        <section className="max-w-lg rounded-3xl border border-separator bg-surface-0 p-8 text-center shadow-2xl">
           <h1 className="text-xl font-bold">Impossibile caricare questa sezione</h1>
-          <p className="mt-3 text-sm text-zinc-400">
+          <p className="mt-3 text-sm text-label-secondary">
             La sessione resta sul dispositivo. Ricarica l’interfaccia per riprovare.
           </p>
           <button
             type="button"
             onClick={() => window.location.reload()}
-            className="mt-6 rounded-xl bg-emerald-600 px-5 py-3 font-bold text-white hover:bg-emerald-500"
+            className="mt-6 rounded-xl bg-accent px-5 py-3 font-bold text-label hover:bg-accent"
           >
             Ricarica l’app
           </button>
