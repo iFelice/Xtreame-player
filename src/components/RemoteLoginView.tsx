@@ -237,7 +237,7 @@ export const RemoteLoginView: React.FC<RemoteLoginViewProps> = ({ onBackToApp, i
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full mt-2 py-3.5 px-4 bg-accent hover:bg-accent active:bg-accent text-on-accent font-bold rounded-xl transition flex items-center justify-center gap-2 shadow-lg  cursor-pointer disabled:opacity-50"
+            className="w-full mt-2 py-3.5 px-4 bg-accent hover:bg-accent-strong active:bg-accent text-on-accent font-bold rounded-xl transition flex items-center justify-center gap-2 shadow-lg  cursor-pointer disabled:opacity-50"
           >
             {isSubmitting ? (
               <span className="flex items-center gap-2 text-sm">
@@ -258,8 +258,8 @@ export const RemoteLoginView: React.FC<RemoteLoginViewProps> = ({ onBackToApp, i
           <div
             className={`mt-4 p-3.5 rounded-xl border flex items-start gap-2.5 text-xs animate-in fade-in ${
               statusMessage.type === 'success'
-                ? 'bg-accent/70 border-accent text-accent-strong'
-                : 'bg-danger/70 border-danger text-danger'
+                ? 'bg-accent/70 border-accent text-on-accent'
+                : 'bg-danger/70 border-danger text-on-accent'
             }`}
           >
             {statusMessage.type === 'success' ? (

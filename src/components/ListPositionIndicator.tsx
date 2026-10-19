@@ -205,7 +205,7 @@ export const ListPositionIndicator: React.FC<ListPositionIndicatorProps> = ({
           }`}
           style={{ fontVariantNumeric: 'tabular-nums' }}
         >
-          <span style={{ color: '#10B981' }}>{counter.position}</span>
+          <span style={{ color: 'var(--color-accent)' }}>{counter.position}</span>
           <span className="text-label-secondary/90">{counter.total}</span>
         </span>
       </span>

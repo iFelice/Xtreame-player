@@ -420,7 +420,7 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
                   </div>
 
                   {pollError && (
-                    <div className="text-xs text-danger flex items-center gap-2 bg-danger/50 p-3 rounded-xl border border-danger/60">
+                    <div className="text-xs text-on-accent flex items-center gap-2 bg-danger/50 p-3 rounded-xl border border-danger/60">
                       <AlertCircle className="w-4 h-4 shrink-0" />
                       <span>{pollError}</span>
                     </div>
@@ -566,7 +566,7 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
                 </div>
 
                 {sendErrorMessage && (
-                  <div className="p-3 rounded-xl bg-danger/70 border border-danger text-danger text-xs flex items-center gap-2">
+                  <div className="p-3 rounded-xl bg-danger/70 border border-danger text-on-accent text-xs flex items-center gap-2">
                     <AlertCircle className="w-4 h-4 shrink-0" />
                     <span>{sendErrorMessage}</span>
                   </div>
@@ -575,7 +575,7 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
                 <button
                   type="submit"
                   disabled={isSending}
-                  className="w-full py-3.5 rounded-2xl bg-accent hover:bg-accent text-on-accent font-bold text-sm shadow-xl  transition transform active:scale-98 cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="w-full py-3.5 rounded-2xl bg-accent hover:bg-accent-strong text-on-accent font-bold text-sm shadow-xl  transition transform active:scale-98 cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   {isSending ? (
                     <>

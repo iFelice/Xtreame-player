@@ -172,7 +172,7 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({ onPlay, onOpenSeri
                   </button>
 
                   <div className="absolute inset-0 bg-surface-1/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
-                    <div className="w-12 h-12 rounded-full bg-accent flex items-center justify-center text-label shadow-xl transform group-hover:scale-110 transition">
+                    <div className="w-12 h-12 rounded-full bg-accent flex items-center justify-center text-on-accent shadow-xl transform group-hover:scale-110 transition">
                       <Play className="w-6 h-6 ml-0.5 fill-white" />
                     </div>
                   </div>

@@ -773,7 +773,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
               onClick={() => {
                 dispatchPlayback({ type: 'RETRY' });
               }}
-              className="px-5 py-3 bg-accent hover:bg-accent text-on-accent rounded-xl text-sm sm:text-base font-bold flex items-center gap-2 transition cursor-pointer shadow-lg"
+              className="px-5 py-3 bg-accent hover:bg-accent-strong text-on-accent rounded-xl text-sm sm:text-base font-bold flex items-center gap-2 transition cursor-pointer shadow-lg"
             >
               <RefreshCw className="w-4 h-4" />
               Riprova
@@ -790,7 +790,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
             {canSwitchLiveFormat && (
               <button
                 onClick={() => setLiveFormat(liveFormat === 'm3u8' ? 'ts' : 'm3u8')}
-                className="px-5 py-3 bg-live hover:bg-live text-on-accent rounded-xl text-sm sm:text-base font-bold flex items-center gap-2 transition cursor-pointer shadow-lg"
+                className="px-5 py-3 bg-live hover:brightness-110 text-on-accent rounded-xl text-sm sm:text-base font-bold flex items-center gap-2 transition cursor-pointer shadow-lg"
               >
                 Passa a formato {liveFormat === 'm3u8' ? 'MPEG-TS (.ts)' : 'HLS (.m3u8)'}
               </button>
@@ -809,7 +809,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
                 }}
                 className={`px-5 py-3 rounded-xl text-sm sm:text-base font-bold flex items-center gap-2 transition cursor-pointer shadow-lg ${
                   !useProxy
-                    ? 'bg-accent hover:bg-accent text-on-accent '
+                    ? 'bg-accent hover:bg-accent-strong text-on-accent '
                     : 'bg-surface-1 hover:bg-surface-2 text-label border border-separator-strong'
                 }`}
               >
@@ -829,7 +829,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
             e.stopPropagation();
             onPrevious();
           }}
-          className={`absolute left-4 top-1/2 -translate-y-1/2 p-3 sm:p-4 rounded-full bg-surface-1/75 hover:bg-live text-on-accent shadow-2xl backdrop-blur-md border border-white/20 transition-all z-20 cursor-pointer ${
+          className={`absolute left-4 top-1/2 -translate-y-1/2 p-3 sm:p-4 rounded-full bg-surface-1/75 text-label hover:bg-live hover:text-on-accent shadow-2xl backdrop-blur-md border border-white/20 transition-all z-20 cursor-pointer ${
             controlsVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'
           }`}
           title="Canale Precedente (⏮️ / Freccia Sinistra / P)"
@@ -845,7 +845,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
             e.stopPropagation();
             onNext();
           }}
-          className={`absolute right-4 top-1/2 -translate-y-1/2 p-3 sm:p-4 rounded-full bg-surface-1/75 hover:bg-live text-on-accent shadow-2xl backdrop-blur-md border border-white/20 transition-all z-20 cursor-pointer ${
+          className={`absolute right-4 top-1/2 -translate-y-1/2 p-3 sm:p-4 rounded-full bg-surface-1/75 text-label hover:bg-live hover:text-on-accent shadow-2xl backdrop-blur-md border border-white/20 transition-all z-20 cursor-pointer ${
             controlsVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'
           }`}
           title="Canale Successivo (⏭️ / Freccia Destra / N)"
@@ -879,7 +879,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
                     <button
                       type="button"
                       onClick={onPrevious}
-                      className="p-1 sm:p-1.5 rounded-lg bg-surface-1/90 hover:bg-live text-label-secondary hover:text-label transition cursor-pointer border border-separator-strong/60"
+                      className="p-1 sm:p-1.5 rounded-lg bg-surface-1/90 hover:bg-live text-label-secondary hover:text-on-accent transition cursor-pointer border border-separator-strong/60"
                       title="Canale Precedente"
                     >
                       <ChevronLeft className="w-4 h-4" />
@@ -889,7 +889,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
                     <button
                       type="button"
                       onClick={onNext}
-                      className="p-1 sm:p-1.5 rounded-lg bg-surface-1/90 hover:bg-live text-label-secondary hover:text-label transition cursor-pointer border border-separator-strong/60"
+                      className="p-1 sm:p-1.5 rounded-lg bg-surface-1/90 hover:bg-live text-label-secondary hover:text-on-accent transition cursor-pointer border border-separator-strong/60"
                       title="Canale Successivo"
                     >
                       <ChevronRight className="w-4 h-4" />
@@ -927,7 +927,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
               }}
               title="Scarica nella cartella locale dell’app"
               aria-label="Scarica video"
-              className="p-2 sm:p-2.5 bg-series hover:bg-series text-on-accent rounded-2xl transition cursor-pointer shadow-lg"
+              className="p-2 sm:p-2.5 bg-series hover:brightness-110 text-on-accent rounded-2xl transition cursor-pointer shadow-lg"
             >
               <Download className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
@@ -948,7 +948,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       {!isPlaying && !isLoading && !errorMessage && (
         <button
           onClick={togglePlay}
-          className="absolute z-20 w-16 h-16 sm:w-22 sm:h-22 rounded-full bg-accent/90 hover:bg-accent text-on-accent flex items-center justify-center shadow-2xl transition-transform transform hover:scale-110 active:scale-95 cursor-pointer"
+          className="absolute z-20 w-16 h-16 sm:w-22 sm:h-22 rounded-full bg-accent/90 hover:bg-accent-strong text-on-accent flex items-center justify-center shadow-2xl transition-transform transform hover:scale-110 active:scale-95 cursor-pointer"
         >
           <Play className="w-8 h-8 sm:w-11 sm:h-11 ml-1 fill-white" />
         </button>
@@ -1065,7 +1065,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
 
             {media.type === 'live' && (
               <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-xl bg-live/80 border border-live/60 text-on-accent text-xs sm:text-sm font-bold">
-                <span className="w-2.5 h-2.5 rounded-full bg-live animate-pulse"></span>
+                <span className="w-2.5 h-2.5 rounded-full bg-on-accent animate-pulse"></span>
                 DIRETTA TV
               </div>
             )}

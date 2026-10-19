@@ -153,7 +153,7 @@ http://localhost:3000`;
         <div className="p-4 bg-surface-0 border-t border-separator flex justify-end">
           <button
             onClick={onClose}
-            className="px-5 py-2 bg-accent hover:bg-accent text-on-accent rounded-xl text-xs font-semibold transition"
+            className="px-5 py-2 bg-accent hover:bg-accent-strong text-on-accent rounded-xl text-xs font-semibold transition"
           >
             Ho Capito, Chiudi
           </button>

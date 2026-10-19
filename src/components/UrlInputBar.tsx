@@ -176,7 +176,7 @@ export const UrlInputBar: React.FC<UrlInputBarProps> = ({
             <button
               type="button"
               onClick={onOpenTvQrLogin}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent hover:bg-accent text-on-accent font-bold transition cursor-pointer shadow-md "
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent hover:bg-accent-strong text-on-accent font-bold transition cursor-pointer shadow-md "
               title="Accedi facilmente dalla TV o Fire Stick inquadrando un QR Code dal tuo smartphone"
             >
               <QrCode className="w-3.5 h-3.5" />
@@ -190,7 +190,7 @@ export const UrlInputBar: React.FC<UrlInputBarProps> = ({
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent/10 hover:bg-accent/20 text-accent-strong border border-accent/30 transition cursor-pointer font-medium"
             title="Incolla l'esempio: http://reload.loginflash.com/movie/User/Password/10112.mp4"
           >
-            <Sparkles className="w-3.5 h-3.5" />
+            <Sparkles className="w-3.5 h-3.5 text-label-secondary" />
             {copiedExample ? 'Caricato!' : 'Carica Link Esempio'}
           </button>
 
@@ -381,7 +381,7 @@ export const UrlInputBar: React.FC<UrlInputBarProps> = ({
       {directPlayError && (
         <div
           role="alert"
-          className="mt-3 flex items-start gap-2.5 p-3 rounded-xl bg-danger/80 border border-danger text-danger shadow-lg"
+          className="mt-3 flex items-start gap-2.5 p-3 rounded-xl bg-danger/80 border border-danger text-on-accent shadow-lg"
         >
           <AlertCircle className="w-4 h-4 text-danger shrink-0 mt-0.5" />
           <div className="min-w-0 flex-1">

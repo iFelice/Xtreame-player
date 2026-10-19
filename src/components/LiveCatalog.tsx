@@ -472,7 +472,7 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
 
                         <div className="flex items-center gap-2.5 shrink-0">
                           <span className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-xl bg-live/80 text-on-accent text-xs sm:text-sm font-bold border border-live/40">
-                            <span className="w-2.5 h-2.5 rounded-full bg-live animate-pulse"></span>
+                            <span className="w-2.5 h-2.5 rounded-full bg-on-accent animate-pulse"></span>
                             LIVE
                           </span>
                           <button
@@ -493,7 +493,7 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
                             className={`px-4 sm:px-6 py-2.5 rounded-xl text-sm sm:text-base font-extrabold flex items-center gap-2 shadow-md transition cursor-pointer ${
                               isPlayingThis
                                 ? 'bg-live text-on-accent '
-                                : 'bg-live hover:bg-live text-on-accent '
+                                : 'bg-live hover:brightness-110 text-on-accent '
                             }`}
                           >
                             <Play className="w-4 h-4 fill-current" />
@@ -538,7 +538,7 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
                               </span>
                             ) : (
                               <span className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-live/80 text-on-accent text-xs font-bold border border-live/40">
-                                <span className="w-2 h-2 rounded-full bg-live animate-pulse"></span>
+                                <span className="w-2 h-2 rounded-full bg-on-accent animate-pulse"></span>
                                 LIVE
                               </span>
                             )}

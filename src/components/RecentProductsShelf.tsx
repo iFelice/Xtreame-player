@@ -91,15 +91,15 @@ export const RecentProductsShelf: React.FC<RecentProductsShelfProps> = ({
       {/* Shelf Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-separator/80 pb-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-favorite/10 text-favorite border border-favorite/30 flex items-center justify-center">
-            <Sparkles className="w-5 h-5" />
+          <div className="w-10 h-10 rounded-2xl bg-fresh/10 text-fresh border border-fresh/30 flex items-center justify-center">
+            <Sparkles className="w-5 h-5 text-fresh" />
           </div>
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-base sm:text-lg font-bold text-label tracking-tight">
                 Ultimi Arrivi & Aggiunti di Recente
               </h2>
-              <span className="px-2 py-0.5 rounded-full bg-accent/80 text-on-accent-strong text-[10px] font-semibold border border-accent/50">
+              <span className="px-2 py-0.5 rounded-full bg-accent/80 text-on-accent text-[10px] font-semibold border border-accent/50">
                 Novità
               </span>
             </div>
@@ -223,7 +223,7 @@ export const RecentProductsShelf: React.FC<RecentProductsShelfProps> = ({
 
                   {/* Hover play & download buttons */}
                   <div className="absolute inset-0 bg-surface-1/70 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
-                    <div className="w-11 h-11 rounded-full bg-accent flex items-center justify-center text-label shadow-xl transform group-hover:scale-110 transition">
+                    <div className="w-11 h-11 rounded-full bg-accent flex items-center justify-center text-on-accent shadow-xl transform group-hover:scale-110 transition">
                       <Play className="w-5 h-5 ml-0.5 fill-white" />
                     </div>
 
@@ -249,7 +249,7 @@ export const RecentProductsShelf: React.FC<RecentProductsShelfProps> = ({
                             extension
                           );
                         }}
-                        className="p-2 rounded-lg bg-surface-0/90 hover:bg-series text-on-accent hover:text-series border border-separator-strong hover:border-series transition"
+                        className="p-2 rounded-lg bg-surface-0/90 text-label-secondary hover:bg-series hover:text-on-accent border border-separator-strong hover:border-series transition"
                         title="Scarica nella cartella locale dell’app"
                         aria-label="Scarica film"
                       >
@@ -312,7 +312,7 @@ export const RecentProductsShelf: React.FC<RecentProductsShelfProps> = ({
 
                   {/* Date Added Badge */}
                   <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-surface-1/80 backdrop-blur-xs text-fresh border border-fresh/30 text-[10px] font-medium flex items-center gap-1">
-                    <Calendar className="w-3 h-3 text-series" />
+                    <Calendar className="w-3 h-3 text-fresh" />
                     {dateStr}
                   </div>
 

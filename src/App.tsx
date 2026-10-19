@@ -398,8 +398,8 @@ export default function App() {
     <Suspense fallback={<div className="min-h-screen bg-surface-0 text-label-secondary flex items-center justify-center">Caricamento…</div>}>
     <div className="min-h-screen bg-surface-0 text-label flex flex-col selection:bg-accent/30 selection:text-accent-strong w-full max-w-full overflow-x-hidden">
       {safeMode && (
-        <div className="sticky top-0 z-[110] flex items-center justify-center gap-2 border-b border-accent/40 bg-accent px-3 py-1.5 text-xs font-bold tracking-[0.16em] text-accent-strong shadow-lg" role="status">
-          <span className="h-2 w-2 rounded-full bg-accent" aria-hidden="true" />
+        <div className="sticky top-0 z-[110] flex items-center justify-center gap-2 border-b border-accent/40 bg-accent px-3 py-1.5 text-xs font-bold tracking-[0.16em] text-on-accent shadow-lg" role="status">
+          <span className="h-2 w-2 rounded-full bg-on-accent" aria-hidden="true" />
           MODALITÀ SICURA · MOCK LOCALE
         </div>
       )}
@@ -438,7 +438,7 @@ export default function App() {
       <main className="flex-1 w-full max-w-[2400px] mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-6 overflow-x-hidden">
         {/* Refresh Success Notification Banner */}
         {refreshSuccessMessage && (
-          <div className="p-4 rounded-2xl bg-accent/90 border border-accent text-accent-strong flex items-center justify-between gap-3 animate-in fade-in shadow-xl">
+          <div className="p-4 rounded-2xl bg-accent/90 border border-accent text-on-accent flex items-center justify-between gap-3 animate-in fade-in shadow-xl">
             <div className="flex items-center gap-3 text-sm font-semibold">
               <CheckCircle2 className="w-5 h-5 text-accent-strong shrink-0" />
               <span>{refreshSuccessMessage}</span>
@@ -467,7 +467,7 @@ export default function App() {
 
         {/* Error Notification Banner */}
         {errorMessage && (
-          <div className="p-4 sm:p-5 rounded-2xl bg-danger/80 border border-danger text-danger flex items-start justify-between gap-3 animate-in fade-in shadow-xl">
+          <div className="p-4 sm:p-5 rounded-2xl bg-danger/80 border border-danger text-on-accent flex items-start justify-between gap-3 animate-in fade-in shadow-xl">
             <div className="flex items-start gap-3.5">
               <AlertCircle className="w-6 h-6 text-danger shrink-0 mt-0.5" />
               <div>
@@ -546,7 +546,7 @@ export default function App() {
                     : 'bg-surface-0 text-label-secondary hover:text-label hover:bg-surface-1 border border-separator'
                 }`}
               >
-                <Tv className="w-5 h-5 text-live" />
+                <Tv className={`w-5 h-5 ${activeTab === 'live' ? 'text-on-accent' : 'text-live'}`} />
                 Live TV
                 <span className="text-xs px-2 py-0.5 rounded-full bg-surface-1/50 ">
                   {liveStreams.length}
@@ -562,7 +562,7 @@ export default function App() {
                     : 'bg-surface-0 text-label-secondary hover:text-label hover:bg-surface-1 border border-separator'
                 }`}
               >
-                <Film className="w-5 h-5 text-accent-strong" />
+                <Film className={`w-5 h-5 ${activeTab === 'movies' ? 'text-on-accent' : 'text-accent'}`} />
                 Film & VOD
                 <span className="text-xs px-2 py-0.5 rounded-full bg-surface-1/50 ">
                   {vodStreams.length}
@@ -578,7 +578,7 @@ export default function App() {
                     : 'bg-surface-0 text-label-secondary hover:text-label hover:bg-surface-1 border border-separator'
                 }`}
               >
-                <Layers className="w-5 h-5 text-series" />
+                <Layers className={`w-5 h-5 ${activeTab === 'series' ? 'text-on-accent' : 'text-series'}`} />
                 Serie TV
                 <span className="text-xs px-2 py-0.5 rounded-full bg-surface-1/50 ">
                   {seriesList.length}
@@ -594,7 +594,7 @@ export default function App() {
                     : 'bg-surface-0 text-label-secondary hover:text-label hover:bg-surface-1 border border-separator'
                 }`}
               >
-                <Sparkles className="w-5 h-5 text-favorite" />
+                <Sparkles className={`w-5 h-5 ${activeTab === 'recent' ? 'text-on-accent' : 'text-fresh'}`} />
                 Novità & Recenti
               </button>
 
@@ -603,11 +603,11 @@ export default function App() {
                 onClick={() => setActiveTab('favorites')}
                 className={`flex items-center gap-2.5 px-4 sm:px-5 py-2.5 rounded-2xl text-sm sm:text-base font-bold transition cursor-pointer shadow-md ${
                   activeTab === 'favorites'
-                    ? 'bg-surface-1 text-label border-2 border-favorite/80  scale-105'
+                    ? 'bg-favorite hover:brightness-110 text-on-accent border-2 border-favorite/80 scale-105'
                     : 'bg-surface-0 text-label-secondary hover:text-label hover:bg-surface-1 border border-separator'
                 }`}
               >
-                <Star className="w-5 h-5 text-favorite" />
+                <Star className={`w-5 h-5 ${activeTab === 'favorites' ? 'text-on-accent' : 'text-favorite'}`} />
                 Preferiti & Cronologia
               </button>
             </div>

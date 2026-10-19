@@ -458,7 +458,7 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
 
                       {/* Hover Overlay */}
                       <div className="absolute inset-0 bg-surface-1/75 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col items-center justify-center p-3 gap-2">
-                        <span className="px-4 py-2 rounded-xl bg-series hover:bg-series text-on-accent text-xs font-bold flex items-center gap-1.5 shadow-lg transform transition hover:scale-105">
+                        <span className="px-4 py-2 rounded-xl bg-series hover:brightness-110 text-on-accent text-xs font-bold flex items-center gap-1.5 shadow-lg transform transition hover:scale-105">
                           <Play className="w-4 h-4 fill-white" />
                           Sfoglia Episodi
                         </span>
@@ -619,7 +619,7 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                               onClick={() =>
                                 handlePlayEpisode(ep, activeSeriesDetail.selectedSeason)
                               }
-                              className="px-3.5 py-1.5 rounded-xl bg-series hover:bg-series text-on-accent text-xs sm:text-sm font-bold flex items-center gap-1.5 transition shrink-0 cursor-pointer shadow-md"
+                              className="px-3.5 py-1.5 rounded-xl bg-series hover:brightness-110 text-on-accent text-xs sm:text-sm font-bold flex items-center gap-1.5 transition shrink-0 cursor-pointer shadow-md"
                             >
                               <Play className="w-3.5 h-3.5 fill-white" />
                               Guarda

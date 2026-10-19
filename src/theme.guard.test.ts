@@ -7,12 +7,111 @@ const palette = ['slate','gray','zinc','neutral','stone','red','orange','amber',
 const utility = ['bg','text','border','ring','ring-offset','from','via','to','shadow','outline','fill','stroke','divide','placeholder','caret','accent','decoration'].join('|');
 const bannedPaletteClass = new RegExp('\\b(?:' + utility + ')-(' + palette + ')-\\d');
 const bannedMono = 'font' + '-mono';
+const filledColors = ['accent','accent-strong','live','series','fresh','favorite','danger'];
+const fillBases = filledColors.map((color) => 'bg-' + color);
+const forbiddenText = ['text-' + 'label', 'text-' + 'white', 'text-' + 'label-secondary'];
 
 function sourceFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const path = join(directory, entry.name);
     return entry.isDirectory() ? sourceFiles(path) : /\.(ts|tsx|css)$/.test(entry.name) ? [path] : [];
   });
+}
+
+function classNameValues(source: string): Array<{ value: string; offset: number }> {
+  const values: Array<{ value: string; offset: number }> = [];
+  const attribute = /className\s*=\s*/g;
+  let match: RegExpExecArray | null;
+  while ((match = attribute.exec(source))) {
+    let start = attribute.lastIndex;
+    const quote = source[start];
+    if (quote === '"' || quote === "'") {
+      const end = source.indexOf(quote, start + 1);
+      if (end >= 0) values.push({ value: source.slice(start + 1, end), offset: start + 1 });
+      continue;
+    }
+    if (quote !== '{') continue;
+    start++;
+    while (/\s/.test(source[start] ?? '')) start++;
+    if (source[start] === '`') {
+      let i = start + 1;
+      let segmentStart = i;
+      let expressionDepth = 0;
+      while (i < source.length) {
+        const char = source[i];
+        if (char === '`' && source[i - 1] !== '\\' && expressionDepth === 0) {
+          values.push({ value: source.slice(segmentStart, i), offset: segmentStart });
+          break;
+        }
+        if (char === '$' && source[i + 1] === '{' && expressionDepth === 0) {
+          values.push({ value: source.slice(segmentStart, i), offset: segmentStart });
+          expressionDepth = 1;
+          i += 2;
+          const exprStart = i;
+          let depth = 1;
+          let quoteChar = '';
+          while (i < source.length && depth > 0) {
+            const c = source[i];
+            if (quoteChar) {
+              if (c === quoteChar && source[i - 1] !== '\\') quoteChar = '';
+            } else if (c === '"' || c === "'" || c === '`') quoteChar = c;
+            else if (c === '{') depth++;
+            else if (c === '}') depth--;
+            i++;
+          }
+          const expression = source.slice(exprStart, i - 1);
+          const literals = /(['"`])([\s\S]*?)\1/g;
+          let literal: RegExpExecArray | null;
+          while ((literal = literals.exec(expression))) values.push({ value: literal[2], offset: exprStart + literal.index + 1 });
+          expressionDepth = 0;
+          segmentStart = i;
+          continue;
+        }
+        i++;
+      }
+    } else {
+      let i = start;
+      let depth = 1;
+      let quoteChar = '';
+      while (i < source.length && depth > 0) {
+        const char = source[i];
+        if (quoteChar) {
+          if (char === quoteChar && source[i - 1] !== '\\') quoteChar = '';
+        } else if (char === '"' || char === "'" || char === '`') quoteChar = char;
+        else if (char === '{') depth++;
+        else if (char === '}') depth--;
+        i++;
+      }
+      const expression = source.slice(start + 1, Math.max(start + 1, i - 1));
+      const literals = /(['"`])([\s\S]*?)\1/g;
+      let literal: RegExpExecArray | null;
+      while ((literal = literals.exec(expression))) values.push({ value: literal[2], offset: start + 1 + literal.index + 1 });
+    }
+  }
+  return values;
+}
+
+function classViolations(value: string): string[] {
+  const tokens = value.split(/\s+/).filter(Boolean);
+  const errors: string[] = [];
+  for (const token of tokens) {
+    const match = token.match(/^((?:[\w-]+:)*)bg-([\w-]+)(\/\d+)?$/);
+    if (match && !match[3] && tokens.includes(`${match[1]}hover:bg-${match[2]}`)) {
+      errors.push(`base and identical hover fill: ${token}`);
+    }
+  }
+  const states = ['', 'hover:', 'group-hover:', 'focus:'];
+  for (const state of states) {
+    for (const base of fillBases) {
+      if (!tokens.includes(`${state}${base}`)) continue;
+      const hasStateText = tokens.some((token) => token.startsWith(state + 'text-'));
+      const hasBadText = forbiddenText.some((text) =>
+        tokens.includes(`${state}${text}`) || (state !== '' && !hasStateText && tokens.includes(text))
+      );
+      if (hasBadText) errors.push(`${state}${base} paired with low-contrast text`);
+    }
+  }
+  return errors;
 }
 
 describe('theme token guard', () => {
@@ -25,6 +124,20 @@ describe('theme token guard', () => {
           violations.push(`${relative(root, file)}:${index + 1}: ${line.trim()}`);
         }
       });
+    }
+    expect(violations, violations.join('\n')).toEqual([]);
+  });
+
+  it('checks className fills, matching hover states, and foreground contrast', () => {
+    const violations: string[] = [];
+    for (const file of sourceFiles(root)) {
+      const source = readFileSync(file, 'utf8');
+      for (const { value, offset } of classNameValues(source)) {
+        for (const violation of classViolations(value)) {
+          const line = source.slice(0, offset).split('\n').length;
+          violations.push(`${relative(root, file)}:${line}: ${violation} [${value}]`);
+        }
+      }
     }
     expect(violations, violations.join('\n')).toEqual([]);
   });

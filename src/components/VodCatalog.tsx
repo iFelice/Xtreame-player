@@ -427,7 +427,7 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                             onClick={handleDirectDownload}
                             title="Scarica questo film nella cartella Download del Mac"
                             aria-label="Scarica film"
-                            className="p-2 rounded-xl backdrop-blur-md bg-surface-1/80 hover:bg-accent text-on-accent hover:text-label transition cursor-pointer shadow-lg"
+                            className="p-2 rounded-xl backdrop-blur-md bg-surface-1/80 text-label hover:bg-accent hover:text-on-accent transition cursor-pointer shadow-lg"
                           >
                             <Download className="w-4 h-4" />
                           </button>
@@ -458,7 +458,7 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                       <div className="absolute inset-0 bg-surface-1/75 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col items-center justify-center p-3 gap-2.5">
                         <button
                           onClick={() => handlePlayStream(stream)}
-                          className="w-14 h-14 rounded-full bg-accent hover:bg-accent text-on-accent flex items-center justify-center shadow-xl transform transition hover:scale-110 active:scale-95 cursor-pointer"
+                          className="w-14 h-14 rounded-full bg-accent hover:bg-accent-strong text-on-accent flex items-center justify-center shadow-xl transform transition hover:scale-110 active:scale-95 cursor-pointer"
                           title="Riproduci ora"
                         >
                           <Play className="w-7 h-7 ml-0.5 fill-white" />
@@ -593,7 +593,7 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                   handlePlayStream(activeMovieDetail.stream);
                   setActiveMovieDetail(null);
                 }}
-                className="px-6 py-3 bg-accent hover:bg-accent text-on-accent rounded-xl text-sm font-bold flex items-center gap-2 shadow-xl  transition cursor-pointer"
+                className="px-6 py-3 bg-accent hover:bg-accent-strong text-on-accent rounded-xl text-sm font-bold flex items-center gap-2 shadow-xl  transition cursor-pointer"
               >
                 <Play className="w-5 h-5 fill-white" />
                 Guarda Film

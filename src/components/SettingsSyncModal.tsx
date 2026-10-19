@@ -159,7 +159,7 @@ export const SettingsSyncModal: React.FC<SettingsSyncModalProps> = ({
             <div className="pt-2">
               <button
                 type="submit"
-                className="w-full py-3 bg-accent hover:bg-accent text-on-accent font-semibold rounded-xl text-xs sm:text-sm transition flex items-center justify-center gap-2 shadow-lg  cursor-pointer"
+                className="w-full py-3 bg-accent hover:bg-accent-strong text-on-accent font-semibold rounded-xl text-xs sm:text-sm transition flex items-center justify-center gap-2 shadow-lg  cursor-pointer"
               >
                 <CheckCircle2 className="w-4 h-4" />
                 Salva e Connetti

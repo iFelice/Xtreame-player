@@ -31,7 +31,7 @@ export class AppErrorBoundary extends React.Component<Props, State> {
           <button
             type="button"
             onClick={() => window.location.reload()}
-            className="mt-6 rounded-xl bg-accent px-5 py-3 font-bold text-label hover:bg-accent"
+            className="mt-6 rounded-xl bg-accent hover:bg-accent-strong px-5 py-3 font-bold text-on-accent"
           >
             Ricarica l’app
           </button>
