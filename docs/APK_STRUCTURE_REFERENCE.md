@@ -15,7 +15,7 @@ Il contenuto di `Progetto-APK/` viene consultato esclusivamente come riferimento
 
 1. Usare il riferimento per inventariare schermate, gerarchie, lifecycle e flussi di navigazione.
 2. Reimplementare ogni comportamento con architettura, nomi e codice originali.
-3. Usare esclusivamente logo e asset approvati di Xtream Player.
+3. Usare esclusivamente logo e asset approvati di FelixVisionPlayer.
 4. Non copiare layout pixel-per-pixel, stringhe distintive, codice decompilato o risorse del prodotto di riferimento.
 5. Per Android TV mantenere moduli e risorse native adatte a telecomando, focus, densità TV e Media3.
 6. Conservare il riferimento nel repository senza trasformarlo in una dipendenza di compilazione.

@@ -520,7 +520,7 @@ async function startServer() {
   const listenHost = process.env.HOST || '0.0.0.0';
 
   app.listen(PORT, listenHost, () => {
-    console.log(`Server Xtream Player avviato su http://${listenHost}:${PORT}`);
+    console.log(`Server FelixVisionPlayer avviato su http://${listenHost}:${PORT}`);
     if (SAFE_MODE) console.log('Modalità sicura attiva: proxy limitato al mock locale.');
   });
 }

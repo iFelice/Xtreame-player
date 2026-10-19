@@ -1,4 +1,4 @@
-# Applicazioni Xtream Player
+# Applicazioni FelixVisionPlayer
 
 Ogni piattaforma avrà un'applicazione progettata espressamente per il proprio ambiente. Non verrà riutilizzata l'interfaccia desktop tramite WebView come soluzione definitiva.
 

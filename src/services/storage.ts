@@ -1,5 +1,5 @@
 import { PlayableMediaItem, XtreamParsedUrl } from '../types/xtream';
-import { isString, isUnknownArray, readVersioned, writeVersioned } from './versionedStorage';
+import { isUnknownArray, readVersioned, writeVersioned } from './versionedStorage';
 
 export interface SavedAccount {
   id: string;
@@ -20,57 +20,10 @@ export interface WatchHistoryItem {
   timestamp: number;
 }
 
-export interface AppIconTheme {
-  id: string;
-  name: string;
-  colorName: string;
-  path: string;
-  previewGradient: string;
-}
-
-export const AVAILABLE_APP_ICONS: AppIconTheme[] = [
-  {
-    id: 'emerald',
-    name: 'Smeraldo Cyber',
-    colorName: 'Verde Neon',
-    path: '/favicon.svg',
-    previewGradient: 'from-emerald-500 to-teal-600',
-  },
-  {
-    id: 'purple',
-    name: 'Ametista Neon',
-    colorName: 'Viola Cyberpunk',
-    path: '/favicon-purple.svg',
-    previewGradient: 'from-purple-500 to-pink-600',
-  },
-  {
-    id: 'red',
-    name: 'Rubino Cinema',
-    colorName: 'Rosso Scarlatto',
-    path: '/favicon-red.svg',
-    previewGradient: 'from-rose-500 to-red-700',
-  },
-  {
-    id: 'blue',
-    name: 'Zaffiro Spaziale',
-    colorName: 'Blu Elettrico',
-    path: '/favicon-blue.svg',
-    previewGradient: 'from-blue-500 to-indigo-600',
-  },
-  {
-    id: 'gold',
-    name: 'Oro Deluxe',
-    colorName: 'Oro Lux',
-    path: '/favicon-gold.svg',
-    previewGradient: 'from-amber-400 to-yellow-600',
-  },
-];
-
 const ACCOUNTS_KEY = 'xtream_saved_accounts';
 const FAVORITES_KEY = 'xtream_favorites';
 const HISTORY_KEY = 'xtream_watch_history';
 const LAST_ACCOUNT_KEY = 'xtream_last_account';
-const APP_ICON_KEY = 'xtream_app_icon';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -205,26 +158,5 @@ export const storage = {
   clearHistory(accountKey?: string): void {
     const key = accountKey ? `${HISTORY_KEY}_${accountKey}` : HISTORY_KEY;
     localStorage.removeItem(key);
-  },
-
-  getAppIcon(): string {
-    try {
-      return readVersioned(localStorage, APP_ICON_KEY, '/favicon.svg', isString);
-    } catch {
-      return '/favicon.svg';
-    }
-  },
-
-  setAppIcon(iconPath: string): void {
-    try {
-      writeData(APP_ICON_KEY, iconPath);
-      // Update link[rel="icon"] dynamically
-      const link = document.querySelector("link[rel='icon']") as HTMLLinkElement | null;
-      if (link) link.href = iconPath;
-      const appleLink = document.querySelector("link[rel='apple-touch-icon']") as HTMLLinkElement | null;
-      if (appleLink) appleLink.href = iconPath;
-    } catch (e) {
-      console.error('Failed to set app icon:', e);
-    }
   },
 };

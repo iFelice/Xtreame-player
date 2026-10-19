@@ -760,7 +760,7 @@ export default function App() {
 
       {/* Footer */}
       <footer className="w-full border-t border-zinc-900 bg-zinc-950 py-4 text-center text-xs sm:text-sm text-zinc-600">
-        Xtream Player &bull; Riproduttore multimediale per server Xtream Codes
+        FelixVisionPlayer &bull; Riproduttore multimediale per server Xtream Codes
       </footer>
     </div>
     </Suspense>
