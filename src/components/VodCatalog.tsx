@@ -168,11 +168,11 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
       {/* Master - Detail Dual Column Layout */}
       <div className="media-browser-layout flex flex-col lg:flex-row gap-4 sm:gap-6 items-stretch">
         {/* Left Column: Categories List (extended down to bottom of page) */}
-        <aside className="media-category-panel w-full lg:w-80 xl:w-96 shrink-0 bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 sm:p-5 flex flex-col shadow-xl h-[calc(100vh-210px)] min-h-[680px]">
+        <aside className="media-category-panel w-full lg:w-80 xl:w-96 shrink-0 bg-surface-0/90 border border-separator rounded-3xl p-4 sm:p-5 flex flex-col shadow-xl h-[calc(100vh-210px)] min-h-[680px]">
           <div className="flex items-center justify-between px-1 shrink-0">
             <div className="flex items-center gap-2.5">
-              <Layers className="w-6 h-6 text-emerald-400" />
-              <h3 className="text-base sm:text-lg font-black text-white tracking-wide uppercase">
+              <Layers className="w-6 h-6 text-accent-strong" />
+              <h3 className="text-base sm:text-lg font-black text-label tracking-wide uppercase">
                 Categorie Film ({categories.length})
               </h3>
             </div>
@@ -181,7 +181,7 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
               <button
                 type="button"
                 onClick={() => scrollCategories('up')}
-                className="p-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition cursor-pointer shadow-xs"
+                className="p-1.5 rounded-xl bg-surface-1 hover:bg-surface-2 text-label-secondary hover:text-label transition cursor-pointer shadow-xs"
                 title="Scorri categorie su (▲)"
               >
                 <ChevronUp className="w-4 h-4" />
@@ -189,7 +189,7 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
               <button
                 type="button"
                 onClick={() => scrollCategories('down')}
-                className="p-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition cursor-pointer shadow-xs"
+                className="p-1.5 rounded-xl bg-surface-1 hover:bg-surface-2 text-label-secondary hover:text-label transition cursor-pointer shadow-xs"
                 title="Scorri categorie giù (▼)"
               >
                 <ChevronDown className="w-4 h-4" />
@@ -199,13 +199,13 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
 
           {/* Search Category */}
           <div className="relative shrink-0 mt-3">
-            <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" />
+            <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-label-secondary" />
             <input
               type="text"
               value={categorySearch}
               onChange={(e) => setCategorySearch(e.target.value)}
               placeholder="Filtra categorie film..."
-              className="w-full pl-12 pr-4 py-3 bg-zinc-950 border border-zinc-700/80 rounded-2xl text-sm sm:text-base font-medium text-white placeholder-zinc-500 focus:outline-hidden focus:border-emerald-500 transition shadow-inner"
+              className="w-full pl-12 pr-4 py-3 bg-surface-0 border border-separator-strong/80 rounded-2xl text-sm sm:text-base font-medium text-label placeholder-label-tertiary focus:outline-hidden focus:border-accent transition shadow-inner"
             />
           </div>
 
@@ -215,7 +215,7 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
             className="flex-1 min-h-0 space-y-2 overflow-y-auto scroll-smooth pr-1.5 mt-3"
           >
             {filteredCategories.length === 0 ? (
-              <div className="py-10 text-center text-zinc-500 text-sm sm:text-base font-medium">
+              <div className="py-10 text-center text-label-tertiary text-sm sm:text-base font-medium">
                 Nessuna categoria trovata
               </div>
             ) : (
@@ -231,16 +231,16 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                     }}
                     className={`w-full text-left px-4 py-3 sm:py-3.5 rounded-2xl text-sm sm:text-base font-bold flex items-center justify-between transition cursor-pointer group ${
                       isSelected
-                        ? 'bg-emerald-600 text-white shadow-xl shadow-emerald-950/60 scale-[1.02]'
-                        : 'text-zinc-200 hover:bg-zinc-850 hover:text-white bg-zinc-950/40 border border-zinc-850'
+                        ? 'bg-accent text-on-accent shadow-xl  scale-[1.02]'
+                        : 'text-label hover:bg-surface-1 hover:text-label bg-surface-0/40 border border-separator'
                     }`}
                   >
                     <span className="truncate pr-2">{cat.category_name}</span>
                     <span
-                      className={`text-xs sm:text-sm font-mono font-bold px-2.5 py-0.5 rounded-full shrink-0 ${
+                      className={`text-xs sm:text-sm  font-bold px-2.5 py-0.5 rounded-full shrink-0 ${
                         isSelected
-                          ? 'bg-emerald-800 text-white'
-                          : 'bg-zinc-800 text-zinc-300 group-hover:text-white'
+                          ? 'bg-accent text-on-accent'
+                          : 'bg-surface-1 text-label-secondary group-hover:text-label'
                       }`}
                     >
                       {count}
@@ -253,12 +253,12 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
         </aside>
 
         {/* Right Column: Movies in the Selected Category (extended down to bottom of page) */}
-        <section className="media-content-panel flex-1 w-full min-w-0 bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 sm:p-6 flex flex-col shadow-xl h-[calc(100vh-210px)] min-h-[680px]">
+        <section className="media-content-panel flex-1 w-full min-w-0 bg-surface-0/90 border border-separator rounded-3xl p-4 sm:p-6 flex flex-col shadow-xl h-[calc(100vh-210px)] min-h-[680px]">
           {/* Header of the Selected Category */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-800 shrink-0">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-separator shrink-0">
             <div className="min-w-0">
-              <h2 className="text-xl sm:text-2xl font-black text-white flex items-center gap-3 truncate">
-                <Film className="w-7 h-7 text-emerald-400 shrink-0" />
+              <h2 className="text-xl sm:text-2xl font-black text-label flex items-center gap-3 truncate">
+                <Film className="w-7 h-7 text-accent-strong shrink-0" />
                 <span className="truncate">{currentCategory?.category_name || 'Film'}</span>
               </h2>
               <ListPositionIndicator
@@ -272,12 +272,12 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
 
             {/* Controls: Sort, Search & Scroll Arrows */}
             <div className="flex flex-wrap items-center gap-3 shrink-0">
-              <div className="flex items-center gap-2 bg-zinc-950 border border-zinc-800 rounded-2xl px-3 py-2 text-xs sm:text-sm font-semibold">
-                <ArrowDownUp className="w-4 h-4 text-zinc-400 shrink-0" />
+              <div className="flex items-center gap-2 bg-surface-0 border border-separator rounded-2xl px-3 py-2 text-xs sm:text-sm font-semibold">
+                <ArrowDownUp className="w-4 h-4 text-label-secondary shrink-0" />
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value as any)}
-                  className="bg-transparent text-zinc-100 text-xs sm:text-sm font-bold focus:outline-hidden cursor-pointer"
+                  className="bg-transparent text-label text-xs sm:text-sm font-bold focus:outline-hidden cursor-pointer"
                 >
                   <option value="recent">🕒 Più Recenti</option>
                   <option value="rating">⭐ Valutazione</option>
@@ -287,22 +287,22 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
               </div>
 
               <div className="relative flex-1 sm:w-72">
-                <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" />
+                <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-label-secondary" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Cerca film in questa categoria..."
-                  className="w-full pl-12 pr-4 py-2.5 bg-zinc-950 border border-zinc-700/80 rounded-2xl text-xs sm:text-base text-white placeholder-zinc-500 focus:outline-hidden focus:border-emerald-500 transition shadow-inner font-medium"
+                  className="w-full pl-12 pr-4 py-2.5 bg-surface-0 border border-separator-strong/80 rounded-2xl text-xs sm:text-base text-label placeholder-label-tertiary focus:outline-hidden focus:border-accent transition shadow-inner font-medium"
                 />
               </div>
 
               {/* Up/Down Scroll Buttons for Movies */}
-              <div className="flex items-center gap-1 bg-zinc-950 border border-zinc-800 p-1 rounded-2xl">
+              <div className="flex items-center gap-1 bg-surface-0 border border-separator p-1 rounded-2xl">
                 <button
                   type="button"
                   onClick={() => scrollMovies('up')}
-                  className="p-2 rounded-xl bg-zinc-850 hover:bg-zinc-750 text-zinc-300 hover:text-white transition cursor-pointer"
+                  className="p-2 rounded-xl bg-surface-1 hover:bg-surface-2 text-label-secondary hover:text-label transition cursor-pointer"
                   title="Scorri film su (▲)"
                 >
                   <ChevronUp className="w-4 h-4" />
@@ -310,7 +310,7 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                 <button
                   type="button"
                   onClick={() => scrollMovies('down')}
-                  className="p-2 rounded-xl bg-zinc-850 hover:bg-zinc-750 text-zinc-300 hover:text-white transition cursor-pointer"
+                  className="p-2 rounded-xl bg-surface-1 hover:bg-surface-2 text-label-secondary hover:text-label transition cursor-pointer"
                   title="Scorri film giù (▼)"
                 >
                   <ChevronDown className="w-4 h-4" />
@@ -324,14 +324,14 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
             {isLoading ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
               {Array.from({ length: 10 }).map((_, i) => (
-                <div key={i} className="aspect-2/3 bg-zinc-900 animate-pulse rounded-xl border border-zinc-800"></div>
+                <div key={i} className="aspect-2/3 bg-surface-0 animate-pulse rounded-xl border border-separator"></div>
               ))}
             </div>
           ) : filteredStreams.length === 0 ? (
-            <div className="py-20 text-center text-zinc-400 bg-zinc-900/30 rounded-2xl border border-dashed border-zinc-800">
-              <Film className="w-14 h-14 mx-auto text-zinc-600 mb-3" />
-              <p className="text-base font-semibold text-zinc-300">Nessun film trovato in questa categoria</p>
-              <p className="text-xs text-zinc-500 mt-1">
+            <div className="py-20 text-center text-label-secondary bg-surface-0/30 rounded-2xl border border-dashed border-separator">
+              <Film className="w-14 h-14 mx-auto text-label-tertiary mb-3" />
+              <p className="text-base font-semibold text-label-secondary">Nessun film trovato in questa categoria</p>
+              <p className="text-xs text-label-tertiary mt-1">
                 {searchQuery ? 'Prova a cercare un altro titolo' : 'Seleziona un\'altra categoria a sinistra'}
               </p>
             </div>
@@ -377,12 +377,12 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                     }}
                     className={`group relative rounded-2xl overflow-hidden shadow-lg transition-all duration-300 flex flex-col ${
                       isPlayingThis
-                        ? 'bg-emerald-950/80 border-2 border-emerald-400 ring-4 ring-emerald-500/50 shadow-2xl shadow-emerald-950/90 scale-[1.02]'
-                        : 'bg-zinc-900 border border-zinc-800/80 hover:border-emerald-500/50 hover:-translate-y-1'
+                        ? 'bg-accent/80 border-2 border-accent ring-4 ring-accent/50 shadow-2xl  scale-[1.02]'
+                        : 'bg-surface-0 border border-separator/80 hover:border-accent/50 hover:-translate-y-1'
                     }`}
                   >
                     {/* Poster Container */}
-                    <div className="relative aspect-2/3 bg-zinc-950 overflow-hidden">
+                    <div className="relative aspect-2/3 bg-surface-0 overflow-hidden">
                       {stream.stream_icon ? (
                         <RemoteImage
                           src={getSecureImageUrl(stream.stream_icon)}
@@ -398,24 +398,24 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                       ) : null}
 
                       {/* Fallback film icon */}
-                      <div className="absolute inset-0 -z-10 flex flex-col items-center justify-center p-3 text-zinc-600 bg-zinc-950">
-                        <Film className="w-12 h-12 mb-2 opacity-50 text-emerald-500" />
-                        <span className="text-xs text-center line-clamp-2 text-zinc-400">
+                      <div className="absolute inset-0 -z-10 flex flex-col items-center justify-center p-3 text-label-tertiary bg-surface-0">
+                        <Film className="w-12 h-12 mb-2 opacity-50 text-accent-strong" />
+                        <span className="text-xs text-center line-clamp-2 text-label-secondary">
                           {stream.name}
                         </span>
                       </div>
 
                       {/* Playing Badge */}
                       {isPlayingThis && (
-                        <div className="absolute top-2 left-2 px-2.5 py-1 rounded-full bg-emerald-600 text-white text-xs font-bold tracking-wide uppercase shadow-lg flex items-center gap-1">
+                        <div className="absolute top-2 left-2 px-2.5 py-1 rounded-full bg-accent text-on-accent text-xs font-bold tracking-wide uppercase shadow-lg flex items-center gap-1">
                           <Radio className="w-3.5 h-3.5" /> In Riproduzione
                         </div>
                       )}
 
                       {/* Rating Badge */}
                       {(!isPlayingThis && stream.rating && stream.rating !== '0') && (
-                        <div className="absolute top-2 left-2 px-2 py-0.5 rounded-lg bg-black/80 backdrop-blur-xs text-amber-400 border border-amber-500/30 text-xs font-bold flex items-center gap-1">
-                          <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                        <div className="absolute top-2 left-2 px-2 py-0.5 rounded-lg bg-surface-1/80 backdrop-blur-xs text-favorite border border-favorite/30 text-xs font-bold flex items-center gap-1">
+                          <Star className="w-3.5 h-3.5 fill-favorite text-favorite" />
                           {typeof stream.rating === 'number' ? stream.rating.toFixed(1) : stream.rating}
                         </div>
                       )}
@@ -427,7 +427,7 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                             onClick={handleDirectDownload}
                             title="Scarica questo film nella cartella Download del Mac"
                             aria-label="Scarica film"
-                            className="p-2 rounded-xl backdrop-blur-md bg-black/80 hover:bg-emerald-600 text-zinc-300 hover:text-white transition cursor-pointer shadow-lg"
+                            className="p-2 rounded-xl backdrop-blur-md bg-surface-1/80 text-label hover:bg-accent hover:text-on-accent transition cursor-pointer shadow-lg"
                           >
                             <Download className="w-4 h-4" />
                           </button>
@@ -448,17 +448,17 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                             refreshFavorites((value) => value + 1);
                           }}
                           aria-label={isFav ? "Rimuovi dai preferiti" : "Aggiungi ai preferiti"}
-                          className="relative z-30 p-2 rounded-xl bg-black/80 hover:bg-black text-zinc-300 hover:text-amber-400 transition cursor-pointer shadow-lg backdrop-blur-md"
+                          className="relative z-30 p-2 rounded-xl bg-surface-1/80 hover:bg-surface-1 text-label-secondary hover:text-favorite transition cursor-pointer shadow-lg backdrop-blur-md"
                         >
-                          <Star className={`w-4 h-4 ${isFav ? 'fill-amber-400 text-amber-400' : ''}`} />
+                          <Star className={`w-4 h-4 ${isFav ? 'fill-favorite text-favorite' : ''}`} />
                         </button>
                       </div>
 
                       {/* Hover Overlay with Action Buttons */}
-                      <div className="absolute inset-0 bg-black/75 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col items-center justify-center p-3 gap-2.5">
+                      <div className="absolute inset-0 bg-surface-1/75 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col items-center justify-center p-3 gap-2.5">
                         <button
                           onClick={() => handlePlayStream(stream)}
-                          className="w-14 h-14 rounded-full bg-emerald-500 hover:bg-emerald-400 text-white flex items-center justify-center shadow-xl transform transition hover:scale-110 active:scale-95 cursor-pointer"
+                          className="w-14 h-14 rounded-full bg-accent hover:bg-accent-strong text-on-accent flex items-center justify-center shadow-xl transform transition hover:scale-110 active:scale-95 cursor-pointer"
                           title="Riproduci ora"
                         >
                           <Play className="w-7 h-7 ml-0.5 fill-white" />
@@ -467,7 +467,7 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                         <div className="flex items-center gap-2 mt-1">
                           <button
                             onClick={() => handleOpenDetails(stream)}
-                            className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+                            className="px-3 py-1.5 rounded-xl bg-surface-1 hover:bg-surface-2 text-label text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
                             title="Trama e dettagli"
                           >
                             <Info className="w-4 h-4" />
@@ -480,10 +480,10 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
 
                     {/* Movie Info below Poster */}
                     <div className="p-3 flex-1 flex flex-col justify-between">
-                      <h4 className="text-sm sm:text-base font-bold text-white line-clamp-1 group-hover:text-emerald-400 transition">
+                      <h4 className="text-sm sm:text-base font-bold text-label line-clamp-1 group-hover:text-accent-strong transition">
                         {stream.name}
                       </h4>
-                      <div className="flex items-center justify-between text-xs text-zinc-400 mt-1.5 font-mono">
+                      <div className="flex items-center justify-between text-xs text-label-secondary mt-1.5 ">
                         <span className="uppercase">{stream.container_extension || 'MP4'}</span>
                         <span>#{stream.stream_id}</span>
                       </div>
@@ -499,16 +499,16 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
 
       {/* Movie Details Modal */}
       {activeMovieDetail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl max-w-2xl w-full overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-surface-1/85 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-surface-0 border border-separator rounded-3xl max-w-2xl w-full overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
             {/* Header */}
-            <div className="p-4 sm:p-5 border-b border-zinc-800 flex items-center justify-between">
-              <h3 className="text-base sm:text-lg font-bold text-white truncate pr-4">
+            <div className="p-4 sm:p-5 border-b border-separator flex items-center justify-between">
+              <h3 className="text-base sm:text-lg font-bold text-label truncate pr-4">
                 {activeMovieDetail.stream.name}
               </h3>
               <button
                 onClick={() => setActiveMovieDetail(null)}
-                className="p-1.5 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition cursor-pointer"
+                className="p-1.5 rounded-xl text-label-secondary hover:text-label hover:bg-surface-1 transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -527,28 +527,28 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                 <div className="space-y-2.5 flex-1">
                   {activeMovieDetail.details?.info?.plot && (
                     <div>
-                      <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">Trama:</h4>
-                      <p className="text-sm text-zinc-200 leading-relaxed">
+                      <h4 className="text-xs font-bold text-label-secondary uppercase tracking-wider mb-1">Trama:</h4>
+                      <p className="text-sm text-label leading-relaxed">
                         {activeMovieDetail.details.info.plot}
                       </p>
                     </div>
                   )}
 
                   {activeMovieDetail.details?.info?.genre && (
-                    <div className="text-sm text-zinc-300">
-                      <strong className="text-zinc-400">Genere:</strong> {activeMovieDetail.details.info.genre}
+                    <div className="text-sm text-label-secondary">
+                      <strong className="text-label-secondary">Genere:</strong> {activeMovieDetail.details.info.genre}
                     </div>
                   )}
 
                   {activeMovieDetail.details?.info?.releasedate && (
-                    <div className="text-sm text-zinc-300">
-                      <strong className="text-zinc-400">Data uscita:</strong> {activeMovieDetail.details.info.releasedate}
+                    <div className="text-sm text-label-secondary">
+                      <strong className="text-label-secondary">Data uscita:</strong> {activeMovieDetail.details.info.releasedate}
                     </div>
                   )}
 
                   {activeMovieDetail.details?.info?.duration && (
-                    <div className="text-sm text-zinc-300">
-                      <strong className="text-zinc-400">Durata:</strong> {formatDuration(activeMovieDetail.details.info.duration)}
+                    <div className="text-sm text-label-secondary">
+                      <strong className="text-label-secondary">Durata:</strong> {formatDuration(activeMovieDetail.details.info.duration)}
                     </div>
                   )}
                 </div>
@@ -556,7 +556,7 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
             </div>
 
             {/* Footer with play and download buttons */}
-            <div className="p-4 sm:p-5 border-t border-zinc-800 flex items-center justify-end gap-3 bg-zinc-900/50">
+            <div className="p-4 sm:p-5 border-t border-separator flex items-center justify-end gap-3 bg-surface-0/50">
               {!isTv && isDirectFileDownload(activeMovieDetail.stream.container_extension) && (
                 <button
                   type="button"
@@ -582,7 +582,7 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                   }}
                   title="Scarica nella cartella locale dell’app"
                   aria-label="Scarica film"
-                  className="p-3 rounded-xl border border-zinc-700 hover:border-cyan-500 bg-zinc-900 hover:bg-zinc-800 text-cyan-400 hover:text-white transition cursor-pointer"
+                  className="p-3 rounded-xl border border-separator-strong hover:border-series bg-surface-0 hover:bg-surface-1 text-series hover:text-label transition cursor-pointer"
                 >
                   <Download className="w-5 h-5" />
                 </button>
@@ -593,7 +593,7 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                   handlePlayStream(activeMovieDetail.stream);
                   setActiveMovieDetail(null);
                 }}
-                className="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-bold flex items-center gap-2 shadow-xl shadow-emerald-950/50 transition cursor-pointer"
+                className="px-6 py-3 bg-accent hover:bg-accent-strong text-on-accent rounded-xl text-sm font-bold flex items-center gap-2 shadow-xl  transition cursor-pointer"
               >
                 <Play className="w-5 h-5 fill-white" />
                 Guarda Film

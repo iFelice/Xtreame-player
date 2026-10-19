@@ -98,24 +98,24 @@ export const RemoteLoginView: React.FC<RemoteLoginViewProps> = ({ onBackToApp, i
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col justify-center items-center p-4 sm:p-6 selection:bg-emerald-500/30 selection:text-emerald-200">
-      <div className="w-full max-w-md bg-zinc-900/90 border border-zinc-800 rounded-3xl p-6 sm:p-8 shadow-2xl backdrop-blur-xl relative overflow-hidden">
+    <div className="min-h-screen bg-surface-0 text-label flex flex-col justify-center items-center p-4 sm:p-6 selection:bg-accent/30 selection:text-accent-strong">
+      <div className="w-full max-w-md bg-surface-0/90 border border-separator rounded-3xl p-6 sm:p-8 shadow-2xl backdrop-blur-xl relative overflow-hidden">
         {/* Glow ambient background effect */}
-        <div className="absolute -top-24 -right-24 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
-        <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-teal-500/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div className="absolute -top-24 -right-24 w-48 h-48 bg-accent/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-series/10 rounded-full blur-3xl pointer-events-none"></div>
 
         {/* Top bar with back button if applicable */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shadow-inner">
+            <div className="w-10 h-10 rounded-xl bg-accent/10 border border-accent/30 flex items-center justify-center text-accent-strong shadow-inner">
               <Tv className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-white tracking-tight flex items-center gap-1.5">
+              <h1 className="text-lg font-bold text-label tracking-tight flex items-center gap-1.5">
                 Xtream TV Connect
               </h1>
-              <div className="flex items-center gap-1 text-[11px] text-zinc-400">
-                <Wifi className="w-3 h-3 text-emerald-400" />
+              <div className="flex items-center gap-1 text-[11px] text-label-secondary">
+                <Wifi className="w-3 h-3 text-accent-strong" />
                 <span>Funziona da qualsiasi Wi-Fi o rete 5G</span>
               </div>
             </div>
@@ -124,7 +124,7 @@ export const RemoteLoginView: React.FC<RemoteLoginViewProps> = ({ onBackToApp, i
           {onBackToApp && (
             <button
               onClick={onBackToApp}
-              className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-xl transition"
+              className="p-2 text-label-secondary hover:text-label hover:bg-surface-1 rounded-xl transition"
               title="Torna all'app"
             >
               <ArrowLeft className="w-5 h-5" />
@@ -132,14 +132,14 @@ export const RemoteLoginView: React.FC<RemoteLoginViewProps> = ({ onBackToApp, i
           )}
         </div>
 
-        <p className="text-xs text-zinc-300 leading-relaxed mb-5 bg-zinc-800/40 p-3 rounded-xl border border-zinc-800">
+        <p className="text-xs text-label-secondary leading-relaxed mb-5 bg-surface-1/40 p-3 rounded-xl border border-separator">
           Inserisci qui sotto i dati del tuo abbonamento Xtream Codes per trasmetterli istantaneamente alla tua Smart TV senza dover usare il telecomando!
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* PIN Input */}
           <div>
-            <label className="block text-xs font-semibold text-zinc-300 mb-1.5 uppercase tracking-wider">
+            <label className="block text-xs font-semibold text-label-secondary mb-1.5 uppercase tracking-wider">
               Codice PIN TV
             </label>
             <div className="relative">
@@ -149,22 +149,22 @@ export const RemoteLoginView: React.FC<RemoteLoginViewProps> = ({ onBackToApp, i
                 value={code}
                 onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
                 placeholder="Es. 842190"
-                className="w-full px-4 py-3 bg-zinc-950 border border-zinc-700 focus:border-emerald-500 rounded-xl text-center text-xl font-mono font-bold tracking-widest text-emerald-400 focus:outline-hidden transition shadow-inner"
+                className="w-full px-4 py-3 bg-surface-0 border border-separator-strong focus:border-accent rounded-xl text-center text-xl  font-bold tracking-widest text-accent-strong focus:outline-hidden transition shadow-inner"
                 required
               />
             </div>
-            <p className="text-[11px] text-zinc-400 mt-1">
+            <p className="text-[11px] text-label-secondary mt-1">
               Inserisci il codice a 6 cifre mostrato sullo schermo della TV
             </p>
           </div>
 
           {/* Toggle between quick link and fields */}
           <div className="flex items-center justify-between pt-1">
-            <span className="text-xs text-zinc-400 font-medium">Metodo di inserimento:</span>
+            <span className="text-xs text-label-secondary font-medium">Metodo di inserimento:</span>
             <button
               type="button"
               onClick={() => setUseQuickLink(!useQuickLink)}
-              className="text-xs text-emerald-400 hover:text-emerald-300 underline underline-offset-2 transition cursor-pointer"
+              className="text-xs text-accent-strong hover:text-accent-strong underline underline-offset-2 transition cursor-pointer"
             >
               {useQuickLink ? 'Inserisci Campi Separati' : 'Incolla Link Completo'}
             </button>
@@ -172,7 +172,7 @@ export const RemoteLoginView: React.FC<RemoteLoginViewProps> = ({ onBackToApp, i
 
           {useQuickLink ? (
             <div>
-              <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+              <label className="block text-xs font-semibold text-label-secondary mb-1.5">
                 Link Xtream Codes Completo
               </label>
               <textarea
@@ -180,9 +180,9 @@ export const RemoteLoginView: React.FC<RemoteLoginViewProps> = ({ onBackToApp, i
                 value={quickLink}
                 onChange={(e) => handleQuickLinkChange(e.target.value)}
                 placeholder="http://server.com:8080/movie/user/pass/123.mp4 oppure player_api.php?..."
-                className="w-full px-3.5 py-2.5 bg-zinc-950 border border-zinc-700 focus:border-emerald-500 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-hidden transition resize-none"
+                className="w-full px-3.5 py-2.5 bg-surface-0 border border-separator-strong focus:border-accent rounded-xl text-xs text-label placeholder-label-tertiary focus:outline-hidden transition resize-none"
               />
-              <p className="text-[11px] text-zinc-400 mt-1">
+              <p className="text-[11px] text-label-secondary mt-1">
                 Il sistema estrarrà automaticamente Host, Username e Password dal link.
               </p>
             </div>
@@ -190,7 +190,7 @@ export const RemoteLoginView: React.FC<RemoteLoginViewProps> = ({ onBackToApp, i
 
           {/* Server URL */}
           <div>
-            <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+            <label className="block text-xs font-semibold text-label-secondary mb-1.5">
               URL Server Xtream
             </label>
             <input
@@ -198,14 +198,14 @@ export const RemoteLoginView: React.FC<RemoteLoginViewProps> = ({ onBackToApp, i
               value={server}
               onChange={(e) => setServer(e.target.value)}
               placeholder="http://esempio.com:8080"
-              className="w-full px-3.5 py-2.5 bg-zinc-950 border border-zinc-700 focus:border-emerald-500 rounded-xl text-sm text-white placeholder-zinc-500 focus:outline-hidden transition"
+              className="w-full px-3.5 py-2.5 bg-surface-0 border border-separator-strong focus:border-accent rounded-xl text-sm text-label placeholder-label-tertiary focus:outline-hidden transition"
               required
             />
           </div>
 
           {/* Username */}
           <div>
-            <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+            <label className="block text-xs font-semibold text-label-secondary mb-1.5">
               Username
             </label>
             <input
@@ -213,14 +213,14 @@ export const RemoteLoginView: React.FC<RemoteLoginViewProps> = ({ onBackToApp, i
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               placeholder="Il tuo username"
-              className="w-full px-3.5 py-2.5 bg-zinc-950 border border-zinc-700 focus:border-emerald-500 rounded-xl text-sm text-white placeholder-zinc-500 focus:outline-hidden transition"
+              className="w-full px-3.5 py-2.5 bg-surface-0 border border-separator-strong focus:border-accent rounded-xl text-sm text-label placeholder-label-tertiary focus:outline-hidden transition"
               required
             />
           </div>
 
           {/* Password */}
           <div>
-            <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+            <label className="block text-xs font-semibold text-label-secondary mb-1.5">
               Password
             </label>
             <input
@@ -228,7 +228,7 @@ export const RemoteLoginView: React.FC<RemoteLoginViewProps> = ({ onBackToApp, i
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="La tua password"
-              className="w-full px-3.5 py-2.5 bg-zinc-950 border border-zinc-700 focus:border-emerald-500 rounded-xl text-sm text-white placeholder-zinc-500 focus:outline-hidden transition"
+              className="w-full px-3.5 py-2.5 bg-surface-0 border border-separator-strong focus:border-accent rounded-xl text-sm text-label placeholder-label-tertiary focus:outline-hidden transition"
               required
             />
           </div>
@@ -237,11 +237,11 @@ export const RemoteLoginView: React.FC<RemoteLoginViewProps> = ({ onBackToApp, i
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full mt-2 py-3.5 px-4 bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-zinc-950 font-bold rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 cursor-pointer disabled:opacity-50"
+            className="w-full mt-2 py-3.5 px-4 bg-accent hover:bg-accent-strong active:bg-accent text-on-accent font-bold rounded-xl transition flex items-center justify-center gap-2 shadow-lg  cursor-pointer disabled:opacity-50"
           >
             {isSubmitting ? (
               <span className="flex items-center gap-2 text-sm">
-                <span className="w-4 h-4 border-2 border-zinc-950 border-t-transparent rounded-full animate-spin"></span>
+                <span className="w-4 h-4 border-2 border-separator-strong border-t-transparent rounded-full animate-spin"></span>
                 Invio alla TV in corso...
               </span>
             ) : (
@@ -258,22 +258,22 @@ export const RemoteLoginView: React.FC<RemoteLoginViewProps> = ({ onBackToApp, i
           <div
             className={`mt-4 p-3.5 rounded-xl border flex items-start gap-2.5 text-xs animate-in fade-in ${
               statusMessage.type === 'success'
-                ? 'bg-emerald-950/70 border-emerald-700 text-emerald-200'
-                : 'bg-rose-950/70 border-rose-700 text-rose-200'
+                ? 'bg-accent/15 border-accent/40 text-label'
+                : 'bg-danger/15 border-danger/40 text-label'
             }`}
           >
             {statusMessage.type === 'success' ? (
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+              <CheckCircle2 className="w-4 h-4 text-accent shrink-0 mt-0.5" />
             ) : (
-              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+              <AlertCircle className="w-4 h-4 text-danger shrink-0 mt-0.5" />
             )}
             <div className="leading-relaxed font-medium">{statusMessage.text}</div>
           </div>
         )}
 
         {/* Security badge */}
-        <div className="mt-6 pt-4 border-t border-zinc-800/80 flex items-center justify-center gap-1.5 text-[11px] text-zinc-500">
-          <Shield className="w-3.5 h-3.5 text-emerald-500" />
+        <div className="mt-6 pt-4 border-t border-separator/80 flex items-center justify-center gap-1.5 text-[11px] text-label-tertiary">
+          <Shield className="w-3.5 h-3.5 text-accent-strong" />
           <span>Connessione sicura crittografata diretta</span>
         </div>
       </div>

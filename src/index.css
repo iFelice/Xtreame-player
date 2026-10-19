@@ -1,10 +1,31 @@
 @import "tailwindcss";
 
+@theme {
+  --color-surface-0: #1C1C1E;
+  --color-surface-1: #2C2C2E;
+  --color-surface-2: #3A3A3C;
+  --color-surface-3: #48484A;
+  --color-separator: #38383A;
+  --color-separator-strong: #48484A;
+  --color-label: #FFFFFF;
+  --color-label-secondary: #AEAEB2;
+  --color-label-tertiary: #8E8E93;
+  --color-label-disabled: #636366;
+  --color-accent: #10B981;
+  --color-accent-strong: #34D399;
+  --color-live: #FF9F0A;
+  --color-series: #2DD4BF;
+  --color-fresh: #A3E635;
+  --color-favorite: #FBBF24;
+  --color-danger: #FF453A;
+  --color-on-accent: #1C1C1E;
+}
+
 html,
 body,
 #root {
-  background-color: #09090b !important;
-  color: #f4f4f5;
+  background-color: var(--color-surface-0) !important;
+  color: var(--color-label);
   min-height: 100vh;
   width: 100%;
   max-width: 100vw;
@@ -18,7 +39,7 @@ body.tv-mode {
 }
 
 body.tv-mode *:focus-visible {
-  outline: 4px solid #34d399 !important;
+  outline: 4px solid var(--color-accent-strong) !important;
   outline-offset: 4px !important;
   box-shadow: 0 0 0 7px rgba(16, 185, 129, 0.35), 0 14px 34px rgba(0, 0, 0, 0.65) !important;
   position: relative;
@@ -31,8 +52,8 @@ body.tv-mode .tv-home-card {
 
 body.tv-mode .tv-home-card:focus-visible {
   transform: scale(1.07);
-  border-color: #34d399;
-  background-color: #18181b;
+  border-color: var(--color-accent-strong);
+  background-color: var(--color-surface-2);
 }
 
 body.tv-mode input,
@@ -125,7 +146,7 @@ body.tv-mode .tv-login-side {
   flex-direction: column;
   justify-content: center;
   overflow: hidden;
-  border-left: 1px solid #27272a;
+  border-left: 1px solid var(--color-separator);
   padding-left: 32px;
 }
 

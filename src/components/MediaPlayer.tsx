@@ -675,7 +675,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       className={`transition-all duration-300 ${
         isWindowFullscreen
           ? 'fixed inset-0 z-[99999] w-screen h-screen bg-black flex items-center justify-center select-none overflow-hidden'
-          : 'relative w-full bg-black select-none overflow-hidden rounded-3xl shadow-2xl border border-zinc-800 aspect-video max-h-[72vh] flex items-center justify-center group mx-auto'
+          : 'relative w-full bg-black select-none overflow-hidden rounded-3xl shadow-2xl border border-separator aspect-video max-h-[72vh] flex items-center justify-center group mx-auto'
       }`}
     >
       {/* Video Element with exact aspect ratio & fit control (Guaranteed NO cropping with object-contain) */}
@@ -735,7 +735,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
 
       {/* Loading Spinner */}
       {(playback.status === 'loading' || showBufferingIndicator) && !errorMessage && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 pointer-events-none overflow-hidden">
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-surface-1/70 pointer-events-none overflow-hidden">
           {(media.backdrop || media.poster) && (
             <RemoteImage
               src={getSecureImageUrl(media.backdrop || media.poster || '')}
@@ -744,10 +744,10 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
               className="absolute inset-0 h-full w-full object-cover opacity-25 blur-sm scale-105"
             />
           )}
-          <div className="absolute inset-0 bg-linear-to-t from-black via-black/55 to-black/70" />
+          <div className="absolute inset-0 from-black via-black/55 to-black/70" />
           <div className="relative z-10 flex flex-col items-center px-6 text-center">
-            <div className="w-14 h-14 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin mb-4"></div>
-            <span className="text-zinc-100 text-sm sm:text-base font-bold tracking-wide">
+            <div className="w-14 h-14 border-4 border-accent/20 border-t-accent rounded-full animate-spin mb-4"></div>
+            <span className="text-label text-sm sm:text-base font-bold tracking-wide">
               {showBufferingIndicator
                 ? 'Buffering del flusso…'
                 : startupSeconds < 3
@@ -756,24 +756,24 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
                     ? 'Preparazione del video…'
                     : 'Il canale sta rispondendo, ancora un momento…'}
             </span>
-            <span className="mt-2 max-w-md truncate text-xs text-zinc-400">{media.title}</span>
+            <span className="mt-2 max-w-md truncate text-xs text-label-secondary">{media.title}</span>
           </div>
         </div>
       )}
 
       {/* Error Overlay */}
       {errorMessage && (!videoRef.current || videoRef.current.paused || videoRef.current.currentTime === 0) && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-950/95 p-6 text-center z-30">
-          <AlertCircle className="w-14 h-14 text-rose-500 mb-3 animate-pulse" />
-          <h3 className="text-lg sm:text-xl font-bold text-white mb-2">Impossibile riprodurre lo stream</h3>
-          <p className="text-sm sm:text-base text-zinc-300 max-w-md mb-6 leading-relaxed">{errorMessage}</p>
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-surface-0/95 p-6 text-center z-30">
+          <AlertCircle className="w-14 h-14 text-danger mb-3 animate-pulse" />
+          <h3 className="text-lg sm:text-xl font-bold text-label mb-2">Impossibile riprodurre lo stream</h3>
+          <p className="text-sm sm:text-base text-label-secondary max-w-md mb-6 leading-relaxed">{errorMessage}</p>
 
           <div className="flex flex-wrap items-center justify-center gap-3">
             <button
               onClick={() => {
                 dispatchPlayback({ type: 'RETRY' });
               }}
-              className="px-5 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm sm:text-base font-bold flex items-center gap-2 transition cursor-pointer shadow-lg"
+              className="px-5 py-3 bg-accent hover:bg-accent-strong text-on-accent rounded-xl text-sm sm:text-base font-bold flex items-center gap-2 transition cursor-pointer shadow-lg"
             >
               <RefreshCw className="w-4 h-4" />
               Riprova
@@ -781,7 +781,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
 
             <button
               onClick={onClose}
-              className="px-5 py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl text-sm sm:text-base font-bold flex items-center gap-2 transition cursor-pointer border border-zinc-700"
+              className="px-5 py-3 bg-surface-1 hover:bg-surface-2 text-label rounded-xl text-sm sm:text-base font-bold flex items-center gap-2 transition cursor-pointer border border-separator-strong"
             >
               <X className="w-4 h-4" />
               Torna al catalogo
@@ -790,7 +790,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
             {canSwitchLiveFormat && (
               <button
                 onClick={() => setLiveFormat(liveFormat === 'm3u8' ? 'ts' : 'm3u8')}
-                className="px-5 py-3 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-sm sm:text-base font-bold flex items-center gap-2 transition cursor-pointer shadow-lg"
+                className="px-5 py-3 bg-live hover:brightness-110 text-on-accent rounded-xl text-sm sm:text-base font-bold flex items-center gap-2 transition cursor-pointer shadow-lg"
               >
                 Passa a formato {liveFormat === 'm3u8' ? 'MPEG-TS (.ts)' : 'HLS (.m3u8)'}
               </button>
@@ -809,8 +809,8 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
                 }}
                 className={`px-5 py-3 rounded-xl text-sm sm:text-base font-bold flex items-center gap-2 transition cursor-pointer shadow-lg ${
                   !useProxy
-                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-950/50'
-                    : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700'
+                    ? 'bg-accent hover:bg-accent-strong text-on-accent '
+                    : 'bg-surface-1 hover:bg-surface-2 text-label border border-separator-strong'
                 }`}
               >
                 {useProxy ? '⚡ Passa a Stream Diretto' : '🛡️ Attiva Proxy HTTPS'}
@@ -829,7 +829,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
             e.stopPropagation();
             onPrevious();
           }}
-          className={`absolute left-4 top-1/2 -translate-y-1/2 p-3 sm:p-4 rounded-full bg-black/75 hover:bg-rose-600 text-white shadow-2xl backdrop-blur-md border border-white/20 transition-all z-20 cursor-pointer ${
+          className={`absolute left-4 top-1/2 -translate-y-1/2 p-3 sm:p-4 rounded-full bg-surface-1/75 text-label hover:bg-live hover:text-on-accent shadow-2xl backdrop-blur-md border border-white/20 transition-all z-20 cursor-pointer ${
             controlsVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'
           }`}
           title="Canale Precedente (⏮️ / Freccia Sinistra / P)"
@@ -845,7 +845,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
             e.stopPropagation();
             onNext();
           }}
-          className={`absolute right-4 top-1/2 -translate-y-1/2 p-3 sm:p-4 rounded-full bg-black/75 hover:bg-rose-600 text-white shadow-2xl backdrop-blur-md border border-white/20 transition-all z-20 cursor-pointer ${
+          className={`absolute right-4 top-1/2 -translate-y-1/2 p-3 sm:p-4 rounded-full bg-surface-1/75 text-label hover:bg-live hover:text-on-accent shadow-2xl backdrop-blur-md border border-white/20 transition-all z-20 cursor-pointer ${
             controlsVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'
           }`}
           title="Canale Successivo (⏭️ / Freccia Destra / N)"
@@ -856,12 +856,12 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
 
       {/* Top Header Bar (Title & Actions - clean without duplicate format buttons) */}
       <div
-        className={`absolute top-0 left-0 right-0 p-4 sm:p-6 bg-gradient-to-b from-black/95 via-black/60 to-transparent transition-opacity duration-300 z-20 flex items-center justify-between ${
+        className={`absolute top-0 left-0 right-0 p-4 sm:p-6 from-black/95 via-black/60 to-transparent transition-opacity duration-300 z-20 flex items-center justify-between ${
           controlsVisible || !isPlaying ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
       >
         <div className="flex items-center gap-3 min-w-0">
-          <div className="p-2 sm:p-2.5 rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0">
+          <div className="p-2 sm:p-2.5 rounded-2xl bg-accent/20 text-accent-strong border border-accent/30 shrink-0">
             {media.type === 'movie' ? (
               <Film className="w-6 h-6" />
             ) : (
@@ -870,7 +870,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h2 className="text-white font-bold text-base sm:text-xl truncate drop-shadow-md">
+              <h2 className="text-label font-bold text-base sm:text-xl truncate drop-shadow-md">
                 {media.title}
               </h2>
               {media.type === 'live' && (
@@ -879,7 +879,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
                     <button
                       type="button"
                       onClick={onPrevious}
-                      className="p-1 sm:p-1.5 rounded-lg bg-zinc-800/90 hover:bg-rose-600 text-zinc-300 hover:text-white transition cursor-pointer border border-zinc-700/60"
+                      className="p-1 sm:p-1.5 rounded-lg bg-surface-1/90 hover:bg-live text-label-secondary hover:text-on-accent transition cursor-pointer border border-separator-strong/60"
                       title="Canale Precedente"
                     >
                       <ChevronLeft className="w-4 h-4" />
@@ -889,7 +889,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
                     <button
                       type="button"
                       onClick={onNext}
-                      className="p-1 sm:p-1.5 rounded-lg bg-zinc-800/90 hover:bg-rose-600 text-zinc-300 hover:text-white transition cursor-pointer border border-zinc-700/60"
+                      className="p-1 sm:p-1.5 rounded-lg bg-surface-1/90 hover:bg-live text-label-secondary hover:text-on-accent transition cursor-pointer border border-separator-strong/60"
                       title="Canale Successivo"
                     >
                       <ChevronRight className="w-4 h-4" />
@@ -898,10 +898,10 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
                 </div>
               )}
             </div>
-            <div className="flex items-center gap-2.5 text-xs sm:text-sm text-zinc-300 mt-1">
-              {media.categoryName && <span className="font-semibold text-zinc-300">{media.categoryName}</span>}
+            <div className="flex items-center gap-2.5 text-xs sm:text-sm text-label-secondary mt-1">
+              {media.categoryName && <span className="font-semibold text-label-secondary">{media.categoryName}</span>}
               {media.containerExtension && (
-                <span className="uppercase px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 text-xs font-mono font-bold">
+                <span className="uppercase px-2 py-0.5 rounded bg-surface-1 text-label-secondary text-xs  font-bold">
                   {media.containerExtension}
                 </span>
               )}
@@ -927,7 +927,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
               }}
               title="Scarica nella cartella locale dell’app"
               aria-label="Scarica video"
-              className="p-2 sm:p-2.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-2xl transition cursor-pointer shadow-lg"
+              className="p-2 sm:p-2.5 bg-series hover:brightness-110 text-on-accent rounded-2xl transition cursor-pointer shadow-lg"
             >
               <Download className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
@@ -935,7 +935,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
 
           <button
             onClick={onClose}
-            className="p-2 sm:p-2.5 text-zinc-300 hover:text-white hover:bg-white/10 rounded-2xl transition cursor-pointer"
+            className="p-2 sm:p-2.5 text-label-secondary hover:text-label hover:bg-white/10 rounded-2xl transition cursor-pointer"
             title="Chiudi lettore"
           >
             <X className="w-6 h-6 sm:w-7 sm:h-7" />
@@ -948,7 +948,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       {!isPlaying && !isLoading && !errorMessage && (
         <button
           onClick={togglePlay}
-          className="absolute z-20 w-16 h-16 sm:w-22 sm:h-22 rounded-full bg-emerald-600/90 hover:bg-emerald-500 text-white flex items-center justify-center shadow-2xl transition-transform transform hover:scale-110 active:scale-95 cursor-pointer"
+          className="absolute z-20 w-16 h-16 sm:w-22 sm:h-22 rounded-full bg-accent/90 hover:bg-accent-strong text-on-accent flex items-center justify-center shadow-2xl transition-transform transform hover:scale-110 active:scale-95 cursor-pointer"
         >
           <Play className="w-8 h-8 sm:w-11 sm:h-11 ml-1 fill-white" />
         </button>
@@ -956,14 +956,14 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
 
       {/* Bottom Controls Bar */}
       <div
-        className={`absolute bottom-0 left-0 right-0 p-4 sm:p-6 bg-gradient-to-t from-black/95 via-black/75 to-transparent transition-opacity duration-300 z-20 ${
+        className={`absolute bottom-0 left-0 right-0 p-4 sm:p-6 from-black/95 via-black/75 to-transparent transition-opacity duration-300 z-20 ${
           controlsVisible || !isPlaying ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
       >
         {/* Timeline Scrub Bar */}
         {media.type !== 'live' && duration > 0 && (
           <div className="flex items-center gap-3 mb-3">
-            <span className="text-xs sm:text-sm font-mono text-zinc-200 min-w-14 text-right font-bold">
+            <span className="text-xs sm:text-sm  text-label min-w-14 text-right font-bold">
               {formatTime(currentTime)}
             </span>
             <div className="relative flex-1 group/bar py-1 cursor-pointer">
@@ -976,10 +976,10 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
                 onChange={handleSeek}
                 onPointerUp={finishSeekInteraction}
                 onKeyUp={finishSeekInteraction}
-                className="w-full h-2 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-emerald-500 focus:outline-hidden hover:h-2.5 transition-all"
+                className="w-full h-2 bg-surface-2 rounded-lg appearance-none cursor-pointer accent focus:outline-hidden hover:h-2.5 transition-all"
               />
             </div>
-            <span className="text-xs sm:text-sm font-mono text-zinc-400 min-w-14 font-semibold">
+            <span className="text-xs sm:text-sm  text-label-secondary min-w-14 font-semibold">
               {formatTime(duration)}
             </span>
           </div>
@@ -990,7 +990,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
           <div className="flex items-center gap-2 sm:gap-3">
             <button
               onClick={togglePlay}
-              className="p-2 sm:p-2.5 text-white hover:text-emerald-400 hover:bg-white/10 rounded-2xl transition cursor-pointer"
+              className="p-2 sm:p-2.5 text-label hover:text-accent-strong hover:bg-white/10 rounded-2xl transition cursor-pointer"
               title={desiredPlayingRef.current ? 'Pausa (Spazio)' : 'Riproduci (Spazio)'}
             >
               {desiredPlayingRef.current ? <Pause className="w-6 h-6 fill-current" /> : <Play className="w-6 h-6 fill-current" />}
@@ -1002,7 +1002,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
                 {onPrevious && (
                   <button
                     onClick={onPrevious}
-                    className="p-2 text-zinc-300 hover:text-white hover:bg-white/10 rounded-2xl transition cursor-pointer"
+                    className="p-2 text-label-secondary hover:text-label hover:bg-white/10 rounded-2xl transition cursor-pointer"
                     title="Canale Precedente (⏮️ / Freccia Sinistra / P)"
                   >
                     <SkipBack className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -1011,7 +1011,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
                 {onNext && (
                   <button
                     onClick={onNext}
-                    className="p-2 text-zinc-300 hover:text-white hover:bg-white/10 rounded-2xl transition cursor-pointer"
+                    className="p-2 text-label-secondary hover:text-label hover:bg-white/10 rounded-2xl transition cursor-pointer"
                     title="Canale Successivo (⏭️ / Freccia Destra / N)"
                   >
                     <SkipForward className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -1024,14 +1024,14 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
               <>
                 <button
                   onClick={() => handleSkip(-10)}
-                  className="p-2 text-zinc-300 hover:text-white hover:bg-white/10 rounded-2xl transition cursor-pointer"
+                  className="p-2 text-label-secondary hover:text-label hover:bg-white/10 rounded-2xl transition cursor-pointer"
                   title="Indietro 10 secondi (Freccia Sinistra)"
                 >
                   <RotateCcw className="w-5 h-5 sm:w-6 sm:h-6" />
                 </button>
                 <button
                   onClick={() => handleSkip(10)}
-                  className="p-2 text-zinc-300 hover:text-white hover:bg-white/10 rounded-2xl transition cursor-pointer"
+                  className="p-2 text-label-secondary hover:text-label hover:bg-white/10 rounded-2xl transition cursor-pointer"
                   title="Avanti 10 secondi (Freccia Destra)"
                 >
                   <RotateCw className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -1043,11 +1043,11 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
             <div className="flex items-center gap-1.5 ml-1 sm:ml-2 group/vol">
               <button
                 onClick={toggleMute}
-                className="p-2 text-zinc-300 hover:text-white hover:bg-white/10 rounded-2xl transition cursor-pointer"
+                className="p-2 text-label-secondary hover:text-label hover:bg-white/10 rounded-2xl transition cursor-pointer"
                 title={isMuted ? 'Riattiva audio (M)' : 'Silenzia (M)'}
               >
                 {isMuted || volume === 0 ? (
-                  <VolumeX className="w-5 h-5 sm:w-6 sm:h-6 text-rose-400" />
+                  <VolumeX className="w-5 h-5 sm:w-6 sm:h-6 text-danger" />
                 ) : (
                   <Volume2 className="w-5 h-5 sm:w-6 sm:h-6" />
                 )}
@@ -1059,13 +1059,13 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
                 step={0.05}
                 value={isMuted ? 0 : volume}
                 onChange={handleVolumeChange}
-                className="w-16 sm:w-24 h-1.5 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-emerald-500 opacity-80 group-hover/vol:opacity-100 transition-opacity"
+                className="w-16 sm:w-24 h-1.5 bg-surface-2 rounded-lg appearance-none cursor-pointer accent opacity-80 group-hover/vol:opacity-100 transition-opacity"
               />
             </div>
 
             {media.type === 'live' && (
-              <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-xl bg-rose-950/80 border border-rose-800/60 text-rose-400 text-xs sm:text-sm font-bold">
-                <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse"></span>
+              <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-xl bg-live/80 border border-live/60 text-on-accent text-xs sm:text-sm font-bold">
+                <span className="w-2.5 h-2.5 rounded-full bg-on-accent animate-pulse"></span>
                 DIRETTA TV
               </div>
             )}
@@ -1075,10 +1075,10 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
             {/* Aspect Ratio Toggle (Adatta / 16:9 / 4:3 / Zoom / Riempi) */}
             <button
               onClick={cycleAspectRatio}
-              className="px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-bold text-zinc-100 hover:text-white bg-zinc-800 hover:bg-zinc-700 rounded-xl border border-zinc-600 transition cursor-pointer flex items-center gap-2 shadow-md"
+              className="px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-bold text-label hover:text-label bg-surface-1 hover:bg-surface-2 rounded-xl border border-separator-strong transition cursor-pointer flex items-center gap-2 shadow-md"
               title="Cambia formato video: Adatta 100% (non taglia), 16:9, 4:3, Zoom, Riempi"
             >
-              <Ratio className="w-4 h-4 text-emerald-400" />
+              <Ratio className="w-4 h-4 text-accent-strong" />
               <span>{getAspectLabel()}</span>
             </button>
 
@@ -1087,19 +1087,19 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
               <div className="relative">
                 <button
                   onClick={() => setShowSettings(!showSettings)}
-                  className="px-3 py-2 text-xs sm:text-sm font-bold text-zinc-300 hover:text-white hover:bg-white/10 rounded-xl border border-zinc-700 transition cursor-pointer"
+                  className="px-3 py-2 text-xs sm:text-sm font-bold text-label-secondary hover:text-label hover:bg-white/10 rounded-xl border border-separator-strong transition cursor-pointer"
                   title="Velocità di riproduzione"
                 >
                   {playbackSpeed}x
                 </button>
                 {showSettings && (
-                  <div className="absolute bottom-full right-0 mb-2 py-1 px-1 bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl flex flex-col gap-1 min-w-28 z-30">
+                  <div className="absolute bottom-full right-0 mb-2 py-1 px-1 bg-surface-0 border border-separator-strong rounded-xl shadow-2xl flex flex-col gap-1 min-w-28 z-30">
                     {[0.5, 0.75, 1, 1.25, 1.5, 2].map((s) => (
                       <button
                         key={s}
                         onClick={() => handleSpeedChange(s)}
-                        className={`px-3 py-1.5 text-xs sm:text-sm text-left rounded-lg hover:bg-zinc-800 transition cursor-pointer ${
-                          playbackSpeed === s ? 'text-emerald-400 font-bold' : 'text-zinc-300 font-medium'
+                        className={`px-3 py-1.5 text-xs sm:text-sm text-left rounded-lg hover:bg-surface-1 transition cursor-pointer ${
+                          playbackSpeed === s ? 'text-accent-strong font-bold' : 'text-label-secondary font-medium'
                         }`}
                       >
                         {s}x {s === 1 && '(Normale)'}
@@ -1113,7 +1113,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
             {/* PiP Button */}
             <button
               onClick={togglePiP}
-              className="p-2 sm:p-2.5 text-zinc-300 hover:text-white hover:bg-white/10 rounded-2xl transition cursor-pointer"
+              className="p-2 sm:p-2.5 text-label-secondary hover:text-label hover:bg-white/10 rounded-2xl transition cursor-pointer"
               title="Picture in Picture (Finestra fluttuante)"
             >
               <Cast className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -1122,11 +1122,11 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
             {/* Fullscreen Button */}
             <button
               onClick={toggleFullscreen}
-              className="p-2 sm:p-2.5 text-zinc-300 hover:text-white hover:bg-white/10 rounded-2xl transition cursor-pointer"
+              className="p-2 sm:p-2.5 text-label-secondary hover:text-label hover:bg-white/10 rounded-2xl transition cursor-pointer"
               title={isFullscreen || isWindowFullscreen ? 'Esci da schermo intero (F / Esc)' : 'Schermo intero (F)'}
             >
               {isFullscreen || isWindowFullscreen ? (
-                <Minimize2 className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-400" />
+                <Minimize2 className="w-5 h-5 sm:w-6 sm:h-6 text-accent-strong" />
               ) : (
                 <Maximize2 className="w-5 h-5 sm:w-6 sm:h-6" />
               )}

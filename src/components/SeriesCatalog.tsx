@@ -214,11 +214,11 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
       {/* Master - Detail Dual Column Layout */}
       <div className="media-browser-layout flex flex-col lg:flex-row gap-4 sm:gap-6 items-stretch">
         {/* Left Column: Categories List (extended down to bottom of page) */}
-        <aside className="media-category-panel w-full lg:w-80 xl:w-96 shrink-0 bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 sm:p-5 flex flex-col shadow-xl h-[calc(100vh-210px)] min-h-[680px]">
+        <aside className="media-category-panel w-full lg:w-80 xl:w-96 shrink-0 bg-surface-0/90 border border-separator rounded-3xl p-4 sm:p-5 flex flex-col shadow-xl h-[calc(100vh-210px)] min-h-[680px]">
           <div className="flex items-center justify-between px-1 shrink-0">
             <div className="flex items-center gap-2.5">
-              <Layers className="w-6 h-6 text-blue-400" />
-              <h3 className="text-base sm:text-lg font-black text-white tracking-wide uppercase">
+              <Layers className="w-6 h-6 text-series" />
+              <h3 className="text-base sm:text-lg font-black text-label tracking-wide uppercase">
                 Categorie Serie ({categories.length})
               </h3>
             </div>
@@ -227,7 +227,7 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
               <button
                 type="button"
                 onClick={() => scrollCategories('up')}
-                className="p-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition cursor-pointer shadow-xs"
+                className="p-1.5 rounded-xl bg-surface-1 hover:bg-surface-2 text-label-secondary hover:text-label transition cursor-pointer shadow-xs"
                 title="Scorri categorie su (▲)"
               >
                 <ChevronUp className="w-4 h-4" />
@@ -235,7 +235,7 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
               <button
                 type="button"
                 onClick={() => scrollCategories('down')}
-                className="p-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition cursor-pointer shadow-xs"
+                className="p-1.5 rounded-xl bg-surface-1 hover:bg-surface-2 text-label-secondary hover:text-label transition cursor-pointer shadow-xs"
                 title="Scorri categorie giù (▼)"
               >
                 <ChevronDown className="w-4 h-4" />
@@ -245,13 +245,13 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
 
           {/* Search Category */}
           <div className="relative shrink-0 mt-3">
-            <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" />
+            <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-label-secondary" />
             <input
               type="text"
               value={categorySearch}
               onChange={(e) => setCategorySearch(e.target.value)}
               placeholder="Filtra categorie serie..."
-              className="w-full pl-12 pr-4 py-3 bg-zinc-950 border border-zinc-700/80 rounded-2xl text-sm sm:text-base font-medium text-white placeholder-zinc-500 focus:outline-hidden focus:border-blue-500 transition shadow-inner"
+              className="w-full pl-12 pr-4 py-3 bg-surface-0 border border-separator-strong/80 rounded-2xl text-sm sm:text-base font-medium text-label placeholder-label-tertiary focus:outline-hidden focus:border-series transition shadow-inner"
             />
           </div>
 
@@ -261,7 +261,7 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
             className="flex-1 min-h-0 space-y-2 overflow-y-auto scroll-smooth pr-1.5 mt-3"
           >
             {filteredCategories.length === 0 ? (
-              <div className="py-10 text-center text-zinc-500 text-sm sm:text-base font-medium">
+              <div className="py-10 text-center text-label-tertiary text-sm sm:text-base font-medium">
                 Nessuna categoria trovata
               </div>
             ) : (
@@ -277,16 +277,16 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                     }}
                     className={`w-full text-left px-4 py-3 sm:py-3.5 rounded-2xl text-sm sm:text-base font-bold flex items-center justify-between transition cursor-pointer group ${
                       isSelected
-                        ? 'bg-blue-600 text-white shadow-xl shadow-blue-950/60 scale-[1.02]'
-                        : 'text-zinc-200 hover:bg-zinc-850 hover:text-white bg-zinc-950/40 border border-zinc-850'
+                        ? 'bg-series text-on-accent shadow-xl  scale-[1.02]'
+                        : 'text-label hover:bg-surface-1 hover:text-label bg-surface-0/40 border border-separator'
                     }`}
                   >
                     <span className="truncate pr-2">{cat.category_name}</span>
                     <span
-                      className={`text-xs sm:text-sm font-mono font-bold px-2.5 py-0.5 rounded-full shrink-0 ${
+                      className={`text-xs sm:text-sm  font-bold px-2.5 py-0.5 rounded-full shrink-0 ${
                         isSelected
-                          ? 'bg-blue-800 text-white'
-                          : 'bg-zinc-800 text-zinc-300 group-hover:text-white'
+                          ? 'bg-series text-on-accent'
+                          : 'bg-surface-1 text-label-secondary group-hover:text-label'
                       }`}
                     >
                       {count}
@@ -299,12 +299,12 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
         </aside>
 
         {/* Right Column: Series in the Selected Category (extended down to bottom of page) */}
-        <section className="media-content-panel flex-1 w-full min-w-0 bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 sm:p-6 flex flex-col shadow-xl h-[calc(100vh-210px)] min-h-[680px]">
+        <section className="media-content-panel flex-1 w-full min-w-0 bg-surface-0/90 border border-separator rounded-3xl p-4 sm:p-6 flex flex-col shadow-xl h-[calc(100vh-210px)] min-h-[680px]">
           {/* Header of the Selected Category */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-800 shrink-0">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-separator shrink-0">
             <div className="min-w-0">
-              <h2 className="text-xl sm:text-2xl font-black text-white flex items-center gap-3 truncate">
-                <Tv className="w-7 h-7 text-blue-400 shrink-0" />
+              <h2 className="text-xl sm:text-2xl font-black text-label flex items-center gap-3 truncate">
+                <Tv className="w-7 h-7 text-series shrink-0" />
                 <span className="truncate">{currentCategory?.category_name || 'Serie TV'}</span>
               </h2>
               <ListPositionIndicator
@@ -318,12 +318,12 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
 
             {/* Controls: Sort, Search & Scroll Arrows */}
             <div className="flex flex-wrap items-center gap-3 shrink-0">
-              <div className="flex items-center gap-2 bg-zinc-950 border border-zinc-800 rounded-2xl px-3 py-2 text-xs sm:text-sm font-semibold">
-                <ArrowDownUp className="w-4 h-4 text-zinc-400 shrink-0" />
+              <div className="flex items-center gap-2 bg-surface-0 border border-separator rounded-2xl px-3 py-2 text-xs sm:text-sm font-semibold">
+                <ArrowDownUp className="w-4 h-4 text-label-secondary shrink-0" />
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value as any)}
-                  className="bg-transparent text-zinc-100 text-xs sm:text-sm font-bold focus:outline-hidden cursor-pointer"
+                  className="bg-transparent text-label text-xs sm:text-sm font-bold focus:outline-hidden cursor-pointer"
                 >
                   <option value="recent">🕒 Più Recenti</option>
                   <option value="rating">⭐ Valutazione</option>
@@ -333,22 +333,22 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
               </div>
 
               <div className="relative flex-1 sm:w-72">
-                <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" />
+                <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-label-secondary" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Cerca serie TV in questa categoria..."
-                  className="w-full pl-12 pr-4 py-2.5 bg-zinc-950 border border-zinc-700/80 rounded-2xl text-xs sm:text-base text-white placeholder-zinc-500 focus:outline-hidden focus:border-blue-500 transition shadow-inner font-medium"
+                  className="w-full pl-12 pr-4 py-2.5 bg-surface-0 border border-separator-strong/80 rounded-2xl text-xs sm:text-base text-label placeholder-label-tertiary focus:outline-hidden focus:border-series transition shadow-inner font-medium"
                 />
               </div>
 
               {/* Up/Down Scroll Buttons for Series */}
-              <div className="flex items-center gap-1 bg-zinc-950 border border-zinc-800 p-1 rounded-2xl">
+              <div className="flex items-center gap-1 bg-surface-0 border border-separator p-1 rounded-2xl">
                 <button
                   type="button"
                   onClick={() => scrollSeries('up')}
-                  className="p-2 rounded-xl bg-zinc-850 hover:bg-zinc-750 text-zinc-300 hover:text-white transition cursor-pointer"
+                  className="p-2 rounded-xl bg-surface-1 hover:bg-surface-2 text-label-secondary hover:text-label transition cursor-pointer"
                   title="Scorri serie su (▲)"
                 >
                   <ChevronUp className="w-4 h-4" />
@@ -356,7 +356,7 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                 <button
                   type="button"
                   onClick={() => scrollSeries('down')}
-                  className="p-2 rounded-xl bg-zinc-850 hover:bg-zinc-750 text-zinc-300 hover:text-white transition cursor-pointer"
+                  className="p-2 rounded-xl bg-surface-1 hover:bg-surface-2 text-label-secondary hover:text-label transition cursor-pointer"
                   title="Scorri serie giù (▼)"
                 >
                   <ChevronDown className="w-4 h-4" />
@@ -370,14 +370,14 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
             {isLoading ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
                 {Array.from({ length: 10 }).map((_, i) => (
-                  <div key={i} className="aspect-2/3 bg-zinc-900 animate-pulse rounded-xl border border-zinc-800"></div>
+                  <div key={i} className="aspect-2/3 bg-surface-0 animate-pulse rounded-xl border border-separator"></div>
                 ))}
               </div>
             ) : filteredSeries.length === 0 ? (
-              <div className="py-20 text-center text-zinc-400 bg-zinc-900/30 rounded-2xl border border-dashed border-zinc-800">
-                <Tv className="w-14 h-14 mx-auto text-zinc-600 mb-3" />
-                <p className="text-base font-semibold text-zinc-300">Nessuna serie TV trovata in questa categoria</p>
-                <p className="text-xs text-zinc-500 mt-1">
+              <div className="py-20 text-center text-label-secondary bg-surface-0/30 rounded-2xl border border-dashed border-separator">
+                <Tv className="w-14 h-14 mx-auto text-label-tertiary mb-3" />
+                <p className="text-base font-semibold text-label-secondary">Nessuna serie TV trovata in questa categoria</p>
+                <p className="text-xs text-label-tertiary mt-1">
                   {searchQuery ? 'Prova a modificare i termini di ricerca' : 'Seleziona un\'altra categoria a sinistra'}
                 </p>
               </div>
@@ -400,12 +400,12 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                       onClick={() => handleOpenSeries(series)}
                       className={`group relative rounded-2xl overflow-hidden shadow-lg transition-all duration-300 flex flex-col cursor-pointer ${
                         isPlayingThis
-                          ? 'bg-blue-950/80 border-2 border-blue-400 ring-4 ring-blue-500/50 shadow-2xl shadow-blue-950/90 scale-[1.02]'
-                          : 'bg-zinc-900 border border-zinc-800/80 hover:border-blue-500/60 hover:-translate-y-1'
+                          ? 'bg-series/80 border-2 border-series ring-4 ring-series/50 shadow-2xl  scale-[1.02]'
+                          : 'bg-surface-0 border border-separator/80 hover:border-series/60 hover:-translate-y-1'
                       }`}
                     >
                     {/* Cover Container */}
-                    <div className="relative aspect-2/3 bg-zinc-950 overflow-hidden">
+                    <div className="relative aspect-2/3 bg-surface-0 overflow-hidden">
                       {series.cover ? (
                         <RemoteImage
                           src={getSecureImageUrl(series.cover)}
@@ -421,17 +421,17 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                       ) : null}
 
                       {/* Fallback TV icon */}
-                      <div className="absolute inset-0 -z-10 flex flex-col items-center justify-center p-3 text-zinc-600 bg-zinc-950">
-                        <Tv className="w-12 h-12 mb-2 opacity-50 text-blue-500" />
-                        <span className="text-xs text-center line-clamp-2 text-zinc-400">
+                      <div className="absolute inset-0 -z-10 flex flex-col items-center justify-center p-3 text-label-tertiary bg-surface-0">
+                        <Tv className="w-12 h-12 mb-2 opacity-50 text-series" />
+                        <span className="text-xs text-center line-clamp-2 text-label-secondary">
                           {series.name}
                         </span>
                       </div>
 
                       {/* Rating */}
                       {series.rating && series.rating !== '0' && (
-                        <div className="absolute top-2 left-2 px-2.5 py-0.5 rounded-lg bg-black/80 backdrop-blur-xs text-amber-400 border border-amber-500/30 text-xs font-bold flex items-center gap-1">
-                          <Star className="w-3.5 h-3.5 fill-amber-400" />
+                        <div className="absolute top-2 left-2 px-2.5 py-0.5 rounded-lg bg-surface-1/80 backdrop-blur-xs text-favorite border border-favorite/30 text-xs font-bold flex items-center gap-1">
+                          <Star className="w-3.5 h-3.5 fill-favorite" />
                           {series.rating}
                         </div>
                       )}
@@ -451,14 +451,14 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                           refreshFavorites((value) => value + 1);
                         }}
                         aria-label={isFav ? "Rimuovi dai preferiti" : "Aggiungi ai preferiti"}
-                        className="absolute z-30 top-2 right-2 p-2 rounded-xl bg-black/80 hover:bg-black text-zinc-300 hover:text-amber-400 transition cursor-pointer"
+                        className="absolute z-30 top-2 right-2 p-2 rounded-xl bg-surface-1/80 hover:bg-surface-1 text-label-secondary hover:text-favorite transition cursor-pointer"
                       >
-                        <Star className={`w-4 h-4 ${isFav ? 'fill-amber-400 text-amber-400' : ''}`} />
+                        <Star className={`w-4 h-4 ${isFav ? 'fill-favorite text-favorite' : ''}`} />
                       </button>
 
                       {/* Hover Overlay */}
-                      <div className="absolute inset-0 bg-black/75 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col items-center justify-center p-3 gap-2">
-                        <span className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-lg transform transition hover:scale-105">
+                      <div className="absolute inset-0 bg-surface-1/75 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col items-center justify-center p-3 gap-2">
+                        <span className="px-4 py-2 rounded-xl bg-series hover:brightness-110 text-on-accent text-xs font-bold flex items-center gap-1.5 shadow-lg transform transition hover:scale-105">
                           <Play className="w-4 h-4 fill-white" />
                           Sfoglia Episodi
                         </span>
@@ -468,12 +468,12 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                     {/* Card Title & Info */}
                     <div className="p-3 flex-1 flex flex-col justify-between">
                       <h3
-                        className="text-sm sm:text-base font-bold text-zinc-200 line-clamp-2 group-hover:text-blue-400 transition-colors"
+                        className="text-sm sm:text-base font-bold text-label line-clamp-2 group-hover:text-series transition-colors"
                         title={series.name}
                       >
                         {series.name}
                       </h3>
-                      <div className="flex items-center justify-between text-xs text-zinc-500 mt-2 pt-1.5 border-t border-zinc-800/60 font-mono">
+                      <div className="flex items-center justify-between text-xs text-label-tertiary mt-2 pt-1.5 border-t border-separator/60 ">
                         <span>SERIE TV</span>
                         <span>#{series.series_id}</span>
                       </div>
@@ -489,19 +489,19 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
 
       {/* Episode Selection Modal */}
       {activeSeriesDetail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl max-w-4xl w-full overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-surface-1/85 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-surface-0 border border-separator rounded-3xl max-w-4xl w-full overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
             {/* Modal Header */}
-            <div className="p-4 sm:p-5 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/50">
+            <div className="p-4 sm:p-5 border-b border-separator flex items-center justify-between bg-surface-0/50">
               <div className="flex items-center gap-3 min-w-0 pr-4">
-                <div className="p-2.5 rounded-2xl bg-blue-500/20 text-blue-400 border border-blue-500/30 shrink-0">
+                <div className="p-2.5 rounded-2xl bg-series/20 text-series border border-series/30 shrink-0">
                   <Tv className="w-6 h-6" />
                 </div>
                 <div className="min-w-0">
-                  <h3 className="text-base sm:text-lg font-bold text-white truncate">
+                  <h3 className="text-base sm:text-lg font-bold text-label truncate">
                     {activeSeriesDetail.series.name}
                   </h3>
-                  <p className="text-xs sm:text-sm text-zinc-400">Seleziona stagione ed episodio</p>
+                  <p className="text-xs sm:text-sm text-label-secondary">Seleziona stagione ed episodio</p>
                 </div>
               </div>
 
@@ -510,7 +510,7 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                   setActiveSeriesDetail(null);
                   if (onClearSelectedSeries) onClearSelectedSeries();
                 }}
-                className="p-1.5 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition cursor-pointer"
+                className="p-1.5 rounded-xl text-label-secondary hover:text-label hover:bg-surface-1 transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -519,15 +519,15 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
             {/* Modal Content */}
             <div className="p-4 sm:p-6 overflow-y-auto space-y-6">
               {activeSeriesDetail.isLoading ? (
-                <div className="py-20 flex flex-col items-center justify-center text-zinc-400">
-                  <div className="w-12 h-12 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mb-3"></div>
+                <div className="py-20 flex flex-col items-center justify-center text-label-secondary">
+                  <div className="w-12 h-12 border-4 border-series/20 border-t-series rounded-full animate-spin mb-3"></div>
                   <span className="text-sm font-medium">Caricamento stagioni ed episodi...</span>
                 </div>
               ) : activeSeriesDetail.info?.episodes && Object.keys(activeSeriesDetail.info.episodes).length > 0 ? (
                 <>
                   {/* Season Selection Pills */}
                   <div>
-                    <h4 className="text-xs sm:text-sm font-bold text-zinc-400 mb-3 uppercase tracking-wider">
+                    <h4 className="text-xs sm:text-sm font-bold text-label-secondary mb-3 uppercase tracking-wider">
                       Stagioni
                     </h4>
                     <div className="flex flex-wrap gap-2">
@@ -541,8 +541,8 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                           }
                           className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition cursor-pointer ${
                             activeSeriesDetail.selectedSeason === seasonNum
-                              ? 'bg-blue-600 text-white shadow-md'
-                              : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800'
+                              ? 'bg-series text-on-accent shadow-md'
+                              : 'bg-surface-0 hover:bg-surface-1 text-label-secondary border border-separator'
                           }`}
                         >
                           Stagione {seasonNum}
@@ -553,7 +553,7 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
 
                   {/* Episodes List for Selected Season */}
                   <div>
-                    <h4 className="text-xs sm:text-sm font-bold text-zinc-400 mb-3 uppercase tracking-wider">
+                    <h4 className="text-xs sm:text-sm font-bold text-label-secondary mb-3 uppercase tracking-wider">
                       Episodi (Stagione {activeSeriesDetail.selectedSeason})
                     </h4>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -562,19 +562,19 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                       ).map((ep) => (
                         <div
                           key={ep.id}
-                          className="flex items-center justify-between p-3.5 rounded-2xl bg-zinc-900 border border-zinc-800/80 hover:border-blue-500/40 transition gap-3 shadow-sm"
+                          className="flex items-center justify-between p-3.5 rounded-2xl bg-surface-0 border border-separator/80 hover:border-series/40 transition gap-3 shadow-sm"
                         >
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 mb-1">
-                              <span className="text-xs sm:text-sm font-mono font-bold text-blue-400 shrink-0">
+                              <span className="text-xs sm:text-sm  font-bold text-series shrink-0">
                                 E{ep.episode_num}
                               </span>
-                              <h5 className="text-xs sm:text-sm font-bold text-white truncate" title={ep.title}>
+                              <h5 className="text-xs sm:text-sm font-bold text-label truncate" title={ep.title}>
                                 {ep.title || `Episodio ${ep.episode_num}`}
                               </h5>
                             </div>
                             {ep.info?.duration_secs && (
-                              <p className="text-xs text-zinc-400 font-mono">
+                              <p className="text-xs text-label-secondary ">
                                 {formatDuration(ep.info.duration_secs)}
                               </p>
                             )}
@@ -609,7 +609,7 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                                 }}
                                 title="Scarica nella cartella locale dell’app"
                                 aria-label="Scarica episodio"
-                                className="p-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-cyan-400 hover:text-white transition cursor-pointer"
+                                className="p-2 rounded-xl bg-surface-1 hover:bg-surface-2 text-series hover:text-label transition cursor-pointer"
                               >
                                 <Download className="w-4 h-4" />
                               </button>
@@ -619,7 +619,7 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                               onClick={() =>
                                 handlePlayEpisode(ep, activeSeriesDetail.selectedSeason)
                               }
-                              className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs sm:text-sm font-bold flex items-center gap-1.5 transition shrink-0 cursor-pointer shadow-md"
+                              className="px-3.5 py-1.5 rounded-xl bg-series hover:brightness-110 text-on-accent text-xs sm:text-sm font-bold flex items-center gap-1.5 transition shrink-0 cursor-pointer shadow-md"
                             >
                               <Play className="w-3.5 h-3.5 fill-white" />
                               Guarda
@@ -631,7 +631,7 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                   </div>
                 </>
               ) : (
-                <div className="py-12 text-center text-zinc-400 text-sm">
+                <div className="py-12 text-center text-label-secondary text-sm">
                   Nessun episodio disponibile per questa serie.
                 </div>
               )}
