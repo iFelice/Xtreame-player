@@ -161,7 +161,7 @@ export const UrlInputBar: React.FC<UrlInputBarProps> = ({
   );
 
   return (
-    <div className="w-full bg-surface-0/90 border border-separator rounded-2xl p-4 sm:p-5 shadow-xl backdrop-blur-md">
+    <div className="w-full bg-surface-0 border border-separator rounded-2xl p-4 sm:p-5 shadow-xl">
       {/* Top row: Label & quick actions */}
       <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
         <div className="flex items-center gap-2">

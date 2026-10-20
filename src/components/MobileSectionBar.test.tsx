@@ -19,6 +19,10 @@ describe('mobile section bar', () => {
 
     const nav = renderer!.root.findByProps({ 'aria-label': 'Sezioni' });
     expect(nav.type).toBe('nav');
+    expect(nav.props.className).toContain('glass');
+    expect(nav.props.className).toContain('border-t');
+    expect(nav.props.className).toContain('border-glass-edge');
+    expect(nav.props.className).not.toContain('bg-surface-1');
     const buttons = nav.findAllByType('button');
     expect(buttons.length).toBe(5);
 

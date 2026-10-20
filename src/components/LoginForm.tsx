@@ -69,7 +69,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
     <>
     <div className="tv-login-shell w-full max-w-xl mx-auto py-8 sm:py-14 px-3">
       {/* Main Login Card */}
-      <div className="tv-login-card bg-surface-0/95 border border-separator rounded-3xl p-6 sm:p-9 shadow-2xl backdrop-blur-xl">
+      <div className="tv-login-card bg-surface-0 border border-separator rounded-3xl p-6 sm:p-9 shadow-2xl">
         {/* Brand Header */}
         <div className="tv-login-brand flex flex-col items-center text-center mb-6 sm:mb-8">
           <img

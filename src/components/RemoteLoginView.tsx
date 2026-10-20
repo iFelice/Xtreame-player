@@ -99,7 +99,7 @@ export const RemoteLoginView: React.FC<RemoteLoginViewProps> = ({ onBackToApp, i
 
   return (
     <div className="min-h-screen bg-surface-0 text-label flex flex-col justify-center items-center p-4 sm:p-6 selection:bg-accent/15 selection:text-accent-strong">
-      <div className="w-full max-w-md bg-surface-0/90 border border-separator rounded-3xl p-6 sm:p-8 shadow-2xl backdrop-blur-xl relative overflow-hidden">
+      <div className="w-full max-w-md bg-surface-0 border border-separator rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
         {/* Glow ambient background effect */}
         <div className="absolute -top-24 -right-24 w-48 h-48 bg-accent/10 rounded-full blur-3xl pointer-events-none"></div>
         <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-series/10 rounded-full blur-3xl pointer-events-none"></div>

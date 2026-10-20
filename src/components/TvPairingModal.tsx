@@ -296,10 +296,10 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
   const formattedTime = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 
   return (
-    <div className="tv-pairing-modal fixed inset-0 z-50 flex items-center justify-center bg-surface-1/85 backdrop-blur-md p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
-      <div className="tv-pairing-panel bg-surface-0 border border-separator-strong/80 rounded-3xl max-w-2xl w-full shadow-2xl overflow-hidden relative my-auto">
+    <div className="tv-pairing-modal fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
+      <div className="tv-pairing-panel glass border border-glass-edge rounded-3xl max-w-2xl w-full shadow-2xl overflow-hidden relative my-auto">
         {/* Header Tabs */}
-        <div className="flex items-center justify-between border-b border-separator p-4 sm:p-5 bg-surface-0/70">
+        <div className="flex items-center justify-between border-b border-separator p-4 sm:p-5">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-accent/10 border border-accent/30 flex items-center justify-center text-accent-strong">
               {mode === 'tv' ? <Tv className="w-5 h-5" /> : <Smartphone className="w-5 h-5" />}

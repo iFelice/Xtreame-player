@@ -56,10 +56,10 @@ export const SettingsSyncModal: React.FC<SettingsSyncModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-surface-1/85 backdrop-blur-sm animate-in fade-in">
-      <div className="bg-surface-0 border border-separator rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/50 animate-in fade-in">
+      <div className="glass border border-glass-edge rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col">
         {/* Modal Header */}
-        <div className="px-5 py-4    border-b border-separator flex items-center justify-between gap-3">
+        <div className="px-5 py-4 border-b border-separator flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-accent/20 text-accent-strong border border-accent/30 flex items-center justify-center shrink-0">
               <Server className="w-5 h-5" />

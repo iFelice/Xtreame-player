@@ -1,6 +1,7 @@
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import * as downloadHelper from '../utils/downloadHelper';
 import { LiveChannelListRow } from './LiveChannelRow';
 
 afterEach(() => {
@@ -81,6 +82,60 @@ describe('mobile live channel row', () => {
     const allTexts = collectTexts(root);
     expect(allTexts).toContain('LIVE');
     expect(allTexts).toContain('Guarda');
+
+    // Compact mobile spacing below md (< 768px) with untouched md+ classes.
+    const outer = root.findByProps({ id: 'live-channel-101' });
+    expect(outer.props.className).toContain('p-2.5');
+    expect(outer.props.className).toContain('md:p-4');
+    expect(outer.props.className).toContain('gap-2');
+    expect(outer.props.className).toContain('md:gap-5');
+
+    const leftBlock = outer.children[0] as any;
+    expect(leftBlock.props.className).toContain('gap-2.5');
+    expect(leftBlock.props.className).toContain('md:gap-5');
+
+    const logoBox = leftBlock.children[1] as any;
+    expect(logoBox.props.className).toContain('w-10');
+    expect(logoBox.props.className).toContain('h-10');
+    expect(logoBox.props.className).toContain('md:w-14');
+    expect(logoBox.props.className).toContain('md:h-14');
+
+    await act(async () => {
+      renderer!.unmount();
+    });
+  });
+
+  it('preserves previous spacing classes in TV mode', async () => {
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    vi.spyOn(downloadHelper, 'isTvEnvironment').mockReturnValue(true);
+
+    let renderer: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(
+        <LiveChannelListRow
+          stream={{ name: 'Canale 5 HD', stream_id: 105, category_id: '1' }}
+          index={1}
+          isFavorite={false}
+          isPlaying={false}
+          onPlay={() => {}}
+          onToggleFavorite={() => {}}
+        />
+      );
+    });
+
+    const outer = renderer!.root.findByProps({ id: 'live-channel-105' });
+    expect(outer.props.className).toContain('p-3.5');
+    expect(outer.props.className).toContain('sm:p-4');
+    expect(outer.props.className).toContain('gap-3');
+    expect(outer.props.className).toContain('sm:gap-5');
+
+    const leftBlock = outer.children[0] as any;
+    expect(leftBlock.props.className).toContain('gap-3.5');
+    expect(leftBlock.props.className).toContain('sm:gap-5');
+
+    const logoBox = leftBlock.children[1] as any;
+    expect(logoBox.props.className).toContain('w-12');
+    expect(logoBox.props.className).toContain('h-12');
 
     await act(async () => {
       renderer!.unmount();

@@ -7,6 +7,8 @@ const palette = ['slate','gray','zinc','neutral','stone','red','orange','amber',
 const utility = ['bg','text','border','ring','ring-offset','from','via','to','shadow','outline','fill','stroke','divide','placeholder','caret','accent','decoration'].join('|');
 const bannedPaletteClass = new RegExp('\\b(?:' + utility + ')-(' + palette + ')-\\d');
 const bannedMono = 'font' + '-mono';
+const bannedBackdropBlur = 'backdrop' + '-blur';
+const bannedBackdropFilter = 'backdrop' + '-filter';
 const filledColors = ['accent','accent-strong','live','series','fresh','favorite','danger'];
 const fillBases = filledColors.map((color) => 'bg-' + color);
 const forbiddenText = ['text-' + 'label', 'text-' + 'white', 'text-' + 'label-secondary'];
@@ -160,6 +162,54 @@ function onAccentViolations(value: string): string[] {
   return errors;
 }
 
+export function backdropViolationsInFile(relativePath: string, content: string): string[] {
+  const normalized = relativePath.replace(/\\/g, '/');
+  if (normalized === 'index.css' || normalized === 'src/index.css') return [];
+  if (!/\.(ts|tsx)$/.test(normalized)) return [];
+  const label = normalized.startsWith('src/') ? normalized : `src/${normalized}`;
+  const violations: string[] = [];
+  const lines = content.split(/\r?\n/);
+  lines.forEach((line, index) => {
+    if (line.includes(bannedBackdropBlur) || line.includes(bannedBackdropFilter)) {
+      violations.push(
+        `${label}:${index + 1}: il vetro si ottiene solo con la classe glass (${line.trim()})`
+      );
+    }
+  });
+  return violations;
+}
+
+export function rootOverflowHiddenViolations(relativePath: string, content: string): string[] {
+  const normalized = relativePath.replace(/\\/g, '/');
+  const label = normalized.startsWith('src/') ? normalized : `src/${normalized}`;
+  const violations: string[] = [];
+
+  if (normalized === 'index.css' || normalized === 'src/index.css') {
+    const blocks = /(^|})\s*([^{}]+)\{([^{}]*)\}/g;
+    let block: RegExpExecArray | null;
+    while ((block = blocks.exec(content))) {
+      const selectors = block[2].split(',').map((selector) => selector.trim());
+      if (!selectors.some((selector) => /^(?:html|body|#root)$/.test(selector))) continue;
+      const declaration = /overflow-x\s*:\s*hidden\b/i.exec(block[3]);
+      if (!declaration) continue;
+      const declarationOffset = block.index + block[0].indexOf(block[3]) + declaration.index;
+      const line = content.slice(0, declarationOffset).split(/\r?\n/).length;
+      violations.push(`${label}:${line}: overflow-x hidden sul root può impedire lo sticky`);
+    }
+  }
+
+  if (/(^|\/)App\.tsx$/.test(normalized)) {
+    for (const { value, offset } of classNameValues(content)) {
+      const tokens = value.split(/\s+/).filter(Boolean);
+      if (!tokens.includes('min-h-screen') || !tokens.includes('overflow-x-hidden')) continue;
+      const line = content.slice(0, offset).split(/\r?\n/).length;
+      violations.push(`${label}:${line}: overflow-x-hidden sul contenitore radice può impedire lo sticky`);
+    }
+  }
+
+  return violations;
+}
+
 describe('theme token guard', () => {
   it('does not use default Tailwind palette classes or monospace font utility', () => {
     const violations: string[] = [];
@@ -228,5 +278,55 @@ describe('theme token guard', () => {
       }
     }
     expect(violations, violations.join('\n')).toEqual([]);
+  });
+
+  it('forbids direct backdrop blur/filter utilities in TypeScript files (use glass only)', () => {
+    const violations: string[] = [];
+    for (const file of sourceFiles(root)) {
+      const rel = relative(root, file);
+      violations.push(...backdropViolationsInFile(rel, readFileSync(file, 'utf8')));
+    }
+    expect(violations, violations.join('\n')).toEqual([]);
+
+    expect(
+      backdropViolationsInFile(
+        'components/Example.tsx',
+        `const ok = 1;\n<div className="${bannedBackdropBlur}-md" />\nconst css = "${bannedBackdropFilter}: blur(4px)";`
+      )
+    ).toEqual([
+      `src/components/Example.tsx:2: il vetro si ottiene solo con la classe glass (<div className="${bannedBackdropBlur}-md" />)`,
+      `src/components/Example.tsx:3: il vetro si ottiene solo con la classe glass (const css = "${bannedBackdropFilter}: blur(4px)";)`,
+    ]);
+    expect(
+      backdropViolationsInFile('index.css', readFileSync(join(root, 'index.css'), 'utf8'))
+    ).toEqual([]);
+  });
+
+  it('prevents overflow-x hidden on document roots and the App root that would break sticky navigation', () => {
+    const violations: string[] = [];
+    for (const file of sourceFiles(root)) {
+      const rel = relative(root, file);
+      violations.push(...rootOverflowHiddenViolations(rel, readFileSync(file, 'utf8')));
+    }
+    expect(violations, violations.join('\n')).toEqual([]);
+
+    expect(
+      rootOverflowHiddenViolations(
+        'index.css',
+        ['html,', 'body,', '#root {', '  overflow-x: hidden !important;', '}'].join('\n')
+      )
+    ).toEqual(['src/index.css:4: overflow-x hidden sul root può impedire lo sticky']);
+    expect(
+      rootOverflowHiddenViolations(
+        'App.tsx',
+        `<div className="min-h-screen flex overflow-x-hidden">\n<main className="overflow-x-hidden">`
+      )
+    ).toEqual(['src/App.tsx:1: overflow-x-hidden sul contenitore radice può impedire lo sticky']);
+    expect(
+      rootOverflowHiddenViolations(
+        'App.tsx',
+        `<div className="min-h-screen flex overflow-x-clip">\n<main className="overflow-x-hidden">`
+      )
+    ).toEqual([]);
   });
 });
