@@ -1,0 +1,7 @@
+[
+  {
+    "nome": "Server principale",
+    "codici": ["001"],
+    "server": "http://server.esempio:8080"
+  }
+]

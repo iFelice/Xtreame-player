@@ -28,6 +28,7 @@ import {
   PlayableMediaItem,
 } from './types/xtream';
 import { xtreamClient } from './services/xtreamClient';
+import { pingPairingRelayHealth } from './services/pairingRequests';
 import { storage, SavedAccount } from './services/storage';
 import { buildStreamUrl } from './utils/parseXtreamUrl';
 import { cleanupLegacyNativeDownloads, isTvEnvironment } from './utils/downloadHelper';
@@ -80,6 +81,10 @@ export default function App() {
   // implementation. This one-time migration immediately recovers that space.
   useEffect(() => {
     void cleanupLegacyNativeDownloads();
+  }, []);
+
+  useEffect(() => {
+    pingPairingRelayHealth();
   }, []);
 
   useEffect(() => {

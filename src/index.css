@@ -226,8 +226,8 @@ body.tv-mode .tv-pairing-panel {
 }
 
 body.tv-mode .tv-pairing-panel img[alt="QR Code per accoppiamento TV"] {
-  width: 190px;
-  height: 190px;
+  width: 208px;
+  height: 208px;
 }
 
 @media (max-height: 650px) {
