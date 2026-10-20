@@ -26,7 +26,7 @@ export const MobileSectionBar: React.FC<MobileSectionBarProps> = ({ activeTab, o
   return (
     <nav
       aria-label="Sezioni"
-      className="mobile-section-bar fixed bottom-0 left-0 right-0 z-40 bg-surface-1 border-t border-separator md:hidden"
+      className="mobile-section-bar fixed bottom-0 left-0 right-0 z-40 glass border-t border-glass-edge md:hidden"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
       <div className="flex h-14">

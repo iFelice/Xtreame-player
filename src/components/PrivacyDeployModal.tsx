@@ -43,10 +43,10 @@ npm run dev
 http://localhost:3000`;
 
   return (
-    <div className="fixed inset-0 z-50 bg-surface-1/85 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-      <div className="relative w-full max-w-2xl bg-surface-0 border border-separator rounded-3xl overflow-hidden shadow-2xl animate-in fade-in duration-200 my-8">
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 overflow-y-auto">
+      <div className="relative w-full max-w-2xl glass border border-glass-edge rounded-3xl overflow-hidden shadow-2xl animate-in fade-in duration-200 my-8">
         {/* Header */}
-        <div className="p-6    border-b border-separator flex items-start justify-between gap-4">
+        <div className="p-6 border-b border-separator flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-accent/20 text-accent-strong flex items-center justify-center border border-accent/30">
               <ShieldCheck className="w-6 h-6" />

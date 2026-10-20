@@ -211,7 +211,7 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
         />
 
         {/* Right Column: Series in the Selected Category (extended down to bottom of page) */}
-        <section className="media-content-panel flex-1 w-full min-w-0 bg-surface-0/90 border border-separator rounded-3xl p-4 sm:p-6 flex flex-col shadow-xl h-[calc(100vh-210px)] min-h-[680px]">
+        <section className={`media-content-panel flex-1 w-full min-w-0 bg-surface-0/90 border border-separator rounded-3xl ${isTv ? 'p-4 sm:p-6' : 'p-2.5 md:p-6'} flex flex-col shadow-xl h-[calc(100vh-210px)] min-h-[680px]`}>
           {/* Header of the Selected Category */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-separator shrink-0">
             <div className="min-w-0">
@@ -342,7 +342,7 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
 
                       {/* Rating */}
                       {series.rating && series.rating !== '0' && (
-                        <div className="absolute top-2 left-2 px-2.5 py-0.5 rounded-lg bg-surface-1/80 backdrop-blur-xs text-favorite border border-favorite/30 text-xs font-bold flex items-center gap-1">
+                        <div className="absolute top-2 left-2 px-2.5 py-0.5 rounded-lg bg-surface-0/85 text-favorite border border-favorite/30 text-xs font-bold flex items-center gap-1">
                           <Star className="w-3.5 h-3.5 fill-favorite" />
                           {series.rating}
                         </div>
@@ -401,10 +401,10 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
 
       {/* Episode Selection Modal */}
       {activeSeriesDetail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-surface-1/85 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-surface-0 border border-separator rounded-3xl max-w-4xl w-full overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/50 animate-in fade-in">
+          <div className="glass border border-glass-edge rounded-3xl max-w-4xl w-full overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
             {/* Modal Header */}
-            <div className="p-4 sm:p-5 border-b border-separator flex items-center justify-between bg-surface-0/50">
+            <div className="p-4 sm:p-5 border-b border-separator flex items-center justify-between">
               <div className="flex items-center gap-3 min-w-0 pr-4">
                 <div className="p-2.5 rounded-2xl bg-series/20 text-series border border-series/30 shrink-0">
                   <Tv className="w-6 h-6" />

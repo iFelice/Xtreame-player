@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Tv, Star, Play, Radio } from 'lucide-react';
 import { XtreamLiveStream } from '../types/xtream';
+import { isTvEnvironment } from '../utils/downloadHelper';
 import { getSecureImageUrl } from '../utils/imageUrl';
 import { RemoteImage } from './RemoteImage';
 
@@ -64,23 +65,25 @@ export const LiveChannelListRow: React.FC<LiveChannelListRowProps> = ({
   onPlay,
   onToggleFavorite,
 }) => {
+  const isTv = isTvEnvironment();
+
   return (
     <div
       id={`live-channel-${stream.stream_id}`}
       data-media-index={index + 1}
       tabIndex={0}
       onClick={() => onPlay(stream)}
-      className={`group flex items-center justify-between p-3.5 sm:p-4 rounded-2xl transition-all cursor-pointer gap-3 sm:gap-5 shadow-sm scroll-mt-2 ${
+      className={`group flex items-center justify-between ${isTv ? 'p-3.5 sm:p-4 gap-3 sm:gap-5' : 'p-2.5 md:p-4 gap-2 md:gap-5'} rounded-2xl transition-all cursor-pointer shadow-sm scroll-mt-2 ${
         isPlaying
           ? 'bg-live/15 border-2 border-live ring-2 ring-live/40 shadow-2xl scale-[1.01]'
           : 'bg-surface-0/60 hover:bg-surface-1 border border-separator/90 hover:border-live/50'
       }`}
     >
-      <div className="flex items-center gap-3.5 sm:gap-5 min-w-0 flex-1">
+      <div className={`flex items-center ${isTv ? 'gap-3.5 sm:gap-5' : 'gap-2.5 md:gap-5'} min-w-0 flex-1`}>
         <span className="live-row-desktop-number hidden md:block text-sm sm:text-base font-bold text-label-secondary w-8 sm:w-10 text-right shrink-0">
           {index + 1}
         </span>
-        <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-surface-0 border border-separator p-1 flex items-center justify-center overflow-hidden shrink-0 shadow-inner">
+        <div className={`${isTv ? 'w-12 h-12 sm:w-14 sm:h-14' : 'w-10 h-10 md:w-14 md:h-14'} rounded-2xl bg-surface-0 border border-separator p-1 flex items-center justify-center overflow-hidden shrink-0 shadow-inner`}>
           <ChannelLogo icon={stream.stream_icon} name={stream.name} size="sm" />
         </div>
         {/* Mobile center: name on two lines max, dot + id below. */}

@@ -7,6 +7,8 @@ const palette = ['slate','gray','zinc','neutral','stone','red','orange','amber',
 const utility = ['bg','text','border','ring','ring-offset','from','via','to','shadow','outline','fill','stroke','divide','placeholder','caret','accent','decoration'].join('|');
 const bannedPaletteClass = new RegExp('\\b(?:' + utility + ')-(' + palette + ')-\\d');
 const bannedMono = 'font' + '-mono';
+const bannedBackdropBlur = 'backdrop' + '-blur';
+const bannedBackdropFilter = 'backdrop' + '-filter';
 const filledColors = ['accent','accent-strong','live','series','fresh','favorite','danger'];
 const fillBases = filledColors.map((color) => 'bg-' + color);
 const forbiddenText = ['text-' + 'label', 'text-' + 'white', 'text-' + 'label-secondary'];
@@ -160,6 +162,23 @@ function onAccentViolations(value: string): string[] {
   return errors;
 }
 
+export function backdropViolationsInFile(relativePath: string, content: string): string[] {
+  const normalized = relativePath.replace(/\\/g, '/');
+  if (normalized === 'index.css' || normalized === 'src/index.css') return [];
+  if (!/\.(ts|tsx)$/.test(normalized)) return [];
+  const label = normalized.startsWith('src/') ? normalized : `src/${normalized}`;
+  const violations: string[] = [];
+  const lines = content.split(/\r?\n/);
+  lines.forEach((line, index) => {
+    if (line.includes(bannedBackdropBlur) || line.includes(bannedBackdropFilter)) {
+      violations.push(
+        `${label}:${index + 1}: il vetro si ottiene solo con la classe glass (${line.trim()})`
+      );
+    }
+  });
+  return violations;
+}
+
 describe('theme token guard', () => {
   it('does not use default Tailwind palette classes or monospace font utility', () => {
     const violations: string[] = [];
@@ -228,5 +247,27 @@ describe('theme token guard', () => {
       }
     }
     expect(violations, violations.join('\n')).toEqual([]);
+  });
+
+  it('forbids direct backdrop blur/filter utilities in TypeScript files (use glass only)', () => {
+    const violations: string[] = [];
+    for (const file of sourceFiles(root)) {
+      const rel = relative(root, file);
+      violations.push(...backdropViolationsInFile(rel, readFileSync(file, 'utf8')));
+    }
+    expect(violations, violations.join('\n')).toEqual([]);
+
+    expect(
+      backdropViolationsInFile(
+        'components/Example.tsx',
+        `const ok = 1;\n<div className="${bannedBackdropBlur}-md" />\nconst css = "${bannedBackdropFilter}: blur(4px)";`
+      )
+    ).toEqual([
+      `src/components/Example.tsx:2: il vetro si ottiene solo con la classe glass (<div className="${bannedBackdropBlur}-md" />)`,
+      `src/components/Example.tsx:3: il vetro si ottiene solo con la classe glass (const css = "${bannedBackdropFilter}: blur(4px)";)`,
+    ]);
+    expect(
+      backdropViolationsInFile('index.css', readFileSync(join(root, 'index.css'), 'utf8'))
+    ).toEqual([]);
   });
 });

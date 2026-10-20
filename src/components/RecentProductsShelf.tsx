@@ -177,14 +177,14 @@ export const RecentProductsShelf: React.FC<RecentProductsShelfProps> = ({
                   </div>
 
                   {/* Date Added Badge */}
-                  <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-surface-1/80 backdrop-blur-xs text-accent-strong border border-accent/30 text-[10px] font-medium flex items-center gap-1">
+                  <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-surface-0/85 text-accent-strong border border-accent/30 text-[10px] font-medium flex items-center gap-1">
                     <Calendar className="w-3 h-3 text-accent-strong" />
                     {dateStr}
                   </div>
 
                   {/* Rating */}
                   {movie.rating && movie.rating !== '0' && (
-                    <div className="absolute bottom-2 left-2 px-1.5 py-0.5 rounded bg-surface-1/80 backdrop-blur-xs text-favorite border border-favorite/30 text-[10px] font-semibold flex items-center gap-1">
+                    <div className="absolute bottom-2 left-2 px-1.5 py-0.5 rounded bg-surface-0/85 text-favorite border border-favorite/30 text-[10px] font-semibold flex items-center gap-1">
                       <Star className="w-2.5 h-2.5 fill-favorite" />
                       {typeof movie.rating === 'number' ? movie.rating.toFixed(1) : movie.rating}
                     </div>
@@ -311,14 +311,14 @@ export const RecentProductsShelf: React.FC<RecentProductsShelfProps> = ({
                   </div>
 
                   {/* Date Added Badge */}
-                  <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-surface-1/80 backdrop-blur-xs text-fresh border border-fresh/30 text-[10px] font-medium flex items-center gap-1">
+                  <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-surface-0/85 text-fresh border border-fresh/30 text-[10px] font-medium flex items-center gap-1">
                     <Calendar className="w-3 h-3 text-fresh" />
                     {dateStr}
                   </div>
 
                   {/* Rating */}
                   {series.rating && series.rating !== '0' && (
-                    <div className="absolute bottom-2 left-2 px-1.5 py-0.5 rounded bg-surface-1/80 backdrop-blur-xs text-favorite border border-favorite/30 text-[10px] font-semibold flex items-center gap-1">
+                    <div className="absolute bottom-2 left-2 px-1.5 py-0.5 rounded bg-surface-0/85 text-favorite border border-favorite/30 text-[10px] font-semibold flex items-center gap-1">
                       <Star className="w-2.5 h-2.5 fill-favorite" />
                       {series.rating}
                     </div>

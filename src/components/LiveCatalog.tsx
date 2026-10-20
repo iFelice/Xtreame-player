@@ -12,6 +12,7 @@ import {
 import { XtreamCategory, XtreamLiveStream, PlayableMediaItem } from '../types/xtream';
 import { buildStreamUrl } from '../utils/parseXtreamUrl';
 import { storage } from '../services/storage';
+import { isTvEnvironment } from '../utils/downloadHelper';
 import { ListPositionIndicator } from './ListPositionIndicator';
 import { CollapsibleCategoryPanel } from './CollapsibleCategoryPanel';
 import { ChannelLogo, LiveChannelListRow } from './LiveChannelRow';
@@ -41,6 +42,7 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
 }) => {
   const [, refreshFavorites] = useState(0);
   const channelsListRef = useRef<HTMLDivElement | null>(null);
+  const isTv = isTvEnvironment();
 
   // Always default to the FIRST category (never "all" to prevent freezing)
   const [selectedCategory, setSelectedCategory] = useState<string>(() => {
@@ -192,7 +194,7 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
         />
 
         {/* Right Column: Channels of the Selected Category (extended down to bottom of page) */}
-        <section className="media-content-panel flex-1 w-full min-w-0 bg-surface-0/90 border border-separator rounded-3xl p-4 sm:p-6 flex flex-col shadow-xl h-[calc(100vh-210px)] min-h-[680px]">
+        <section className={`media-content-panel flex-1 w-full min-w-0 bg-surface-0/90 border border-separator rounded-3xl ${isTv ? 'p-4 sm:p-6' : 'p-2.5 md:p-6'} flex flex-col shadow-xl h-[calc(100vh-210px)] min-h-[680px]`}>
           {/* Header of the Selected Category */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-separator shrink-0">
             <div className="min-w-0">

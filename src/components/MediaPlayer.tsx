@@ -890,7 +890,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
             e.stopPropagation();
             onPrevious();
           }}
-          className={`absolute left-4 top-1/2 -translate-y-1/2 p-3 sm:p-4 rounded-full bg-surface-1/75 text-label hover:bg-live hover:text-on-accent shadow-2xl backdrop-blur-md border border-white/20 transition-all z-20 cursor-pointer ${
+          className={`absolute left-4 top-1/2 -translate-y-1/2 p-3 sm:p-4 rounded-full bg-surface-0/85 text-label hover:bg-live hover:text-on-accent shadow-2xl border border-white/20 transition-all z-20 cursor-pointer ${
             controlsVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'
           }`}
           title="Canale Precedente (⏮️ / Freccia Sinistra / P)"
@@ -906,7 +906,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
             e.stopPropagation();
             onNext();
           }}
-          className={`absolute right-4 top-1/2 -translate-y-1/2 p-3 sm:p-4 rounded-full bg-surface-1/75 text-label hover:bg-live hover:text-on-accent shadow-2xl backdrop-blur-md border border-white/20 transition-all z-20 cursor-pointer ${
+          className={`absolute right-4 top-1/2 -translate-y-1/2 p-3 sm:p-4 rounded-full bg-surface-0/85 text-label hover:bg-live hover:text-on-accent shadow-2xl border border-white/20 transition-all z-20 cursor-pointer ${
             controlsVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'
           }`}
           title="Canale Successivo (⏭️ / Freccia Destra / N)"
@@ -1051,7 +1051,11 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
         )}
 
         {/* Buttons Row: single line on mobile, untouched layout from md upwards */}
-        <div className={`flex items-center justify-between ${isMobile ? 'gap-1 flex-nowrap' : 'gap-2 flex-wrap'}`}>
+        <div
+          className={`flex items-center justify-between ${isMobile ? 'gap-1 flex-nowrap' : 'gap-2 flex-wrap'}${
+            !isTv ? ' glass rounded-full border border-glass-edge px-2 py-1' : ''
+          }`}
+        >
           <div className={`flex items-center ${isMobile ? 'gap-1' : 'gap-2 sm:gap-3'}`}>
             <button
               onClick={togglePlay}

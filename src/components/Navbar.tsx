@@ -75,7 +75,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     : 'Aggiorna catalogo';
 
   return (
-    <header className="sticky top-0 z-40 w-full max-w-full bg-surface-0/98 backdrop-blur-md border-b border-separator shadow-xl">
+    <header className="sticky top-0 z-40 w-full max-w-full glass border-b border-glass-edge shadow-xl">
       {/* Mobile header: visible below md, never rendered on TV. */}
       {!isTv && (
         <div className="flex md:hidden w-full max-w-[2400px] mx-auto px-3 h-16 items-center justify-between gap-2">
@@ -110,7 +110,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   </button>
 
                   {showMobileAccountMenu && (
-                    <div ref={mobileMenuRef} className="fixed top-[72px] right-3 w-80 max-w-[calc(100vw-24px)] bg-surface-0 border border-separator-strong rounded-2xl shadow-2xl p-3 z-40 animate-in fade-in">
+                    <div ref={mobileMenuRef} className="fixed top-[72px] right-3 w-80 max-w-[calc(100vw-24px)] glass border border-glass-edge rounded-2xl shadow-2xl p-3 z-40 animate-in fade-in">
                       <div className="text-xs sm:text-sm font-bold text-label-secondary px-3 py-2 border-b border-separator flex items-center justify-between">
                         <span>Server e Account</span>
                         {onOpenSettingsSync && (
@@ -248,7 +248,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </button>
 
                 {showDesktopAccountMenu && (
-                  <div className="absolute right-0 mt-2 w-80 bg-surface-0 border border-separator-strong rounded-2xl shadow-2xl p-3 z-50 animate-in fade-in">
+                  <div className="absolute right-0 mt-2 w-80 glass border border-glass-edge rounded-2xl shadow-2xl p-3 z-50 animate-in fade-in">
                     <div className="text-xs sm:text-sm font-bold text-label-secondary px-3 py-2 border-b border-separator flex items-center justify-between">
                       <span>Server e Account</span>
                       {onOpenSettingsSync && (
