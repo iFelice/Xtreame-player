@@ -17,6 +17,8 @@ import worker, {
   type SqlStorageLike,
 } from '../src/index.ts';
 
+const expectedServerFor001 = (rubricaJson as Array<{ server: string }>)[0]?.server ?? '';
+
 function createSqliteStorageAdapter(db = new DatabaseSync(':memory:')) {
   let scheduledAlarm: number | null = null;
 
@@ -111,15 +113,15 @@ describe('services/pairing-relay', () => {
   });
 
   it('validates rubrica.json and rejects duplicate codes across entries', () => {
-    expect(rubricaJson).toEqual([
+    const rubricaDiProva = [
       {
-        nome: 'Server principale',
+        nome: 'Server di prova',
         codici: ['001'],
-        server: 'http://server.esempio:8080',
+        server: 'http://server-di-prova.example:8080',
       },
-    ]);
-    expect(buildRubricaIndex(DEFAULT_RUBRICA_ENTRIES).get('001')).toBe(
-      'http://server.esempio:8080',
+    ];
+    expect(buildRubricaIndex(rubricaDiProva).get('001')).toBe(
+      'http://server-di-prova.example:8080',
     );
 
     expect(() =>
@@ -442,7 +444,7 @@ describe('services/pairing-relay', () => {
       status: 'ready',
       credentials: {
         v: 1,
-        server: 'http://server.esempio:8080',
+        server: expectedServerFor001,
         username: 'mario',
         password: 'pwd',
       },
@@ -495,7 +497,7 @@ describe('services/pairing-relay', () => {
       }),
     );
     expect(foundRes.status).toBe(200);
-    expect(await foundRes.json()).toEqual({ server: 'http://server.esempio:8080' });
+    expect(await foundRes.json()).toEqual({ server: expectedServerFor001 });
 
     const missingRes = await fetch(
       new Request('https://relay.example.workers.dev/api/rubrica/999', {
