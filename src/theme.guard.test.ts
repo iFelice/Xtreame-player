@@ -115,6 +115,32 @@ function classViolations(value: string): string[] {
 }
 
 
+const gradientStopClass = /^(?:[^:\s]+:)*(?:from|via|to)-/i;
+const gradientClass = /^(?:[^:\s]+:)*bg-(?:linear|radial|conic)-/i;
+
+const filledTintClass = /^(?:[^:\s]+:)*bg-(?:accent|accent-strong|live|series|fresh|favorite|danger)\/(\d{1,3})$/i;
+const onAccentTextClass = /^(?:[^:\s]+:)*text-on-accent$/i;
+
+function semiOpaqueFillViolations(value: string): string[] {
+  const tokens = value.split(/\s+/).filter(Boolean);
+  if (tokens.some((token) => onAccentTextClass.test(token))) return [];
+  return tokens.flatMap((token) => {
+    const match = token.match(filledTintClass);
+    if (!match) return [];
+    const opacity = Number(match[1]);
+    if (opacity < 30 || opacity > 99) return [];
+    return [`semi-opaque fill without text-on-accent: ${token}`];
+  });
+}
+
+function gradientStopViolations(value: string): string[] {
+  const tokens = value.split(/\s+/).filter(Boolean);
+  if (tokens.some((token) => gradientClass.test(token))) return [];
+  return tokens
+    .filter((token) => gradientStopClass.test(token))
+    .map((token) => `gradient color stop without bg-linear/bg-radial/bg-conic: ${token}`);
+}
+
 function onAccentViolations(value: string): string[] {
   const tokens = value.split(/\s+/).filter(Boolean);
   const errors: string[] = [];
@@ -154,6 +180,34 @@ describe('theme token guard', () => {
       const source = readFileSync(file, 'utf8');
       for (const { value, offset } of classNameValues(source)) {
         for (const violation of classViolations(value)) {
+          const line = source.slice(0, offset).split('\n').length;
+          violations.push(`${relative(root, file)}:${line}: ${violation} [${value}]`);
+        }
+      }
+    }
+    expect(violations, violations.join('\n')).toEqual([]);
+  });
+
+  it('does not use semi-opaque colored fills without on-accent text', () => {
+    const violations: string[] = [];
+    for (const file of sourceFiles(root)) {
+      const source = readFileSync(file, 'utf8');
+      for (const { value, offset } of classNameValues(source)) {
+        for (const violation of semiOpaqueFillViolations(value)) {
+          const line = source.slice(0, offset).split('\n').length;
+          violations.push(`${relative(root, file)}:${line}: ${violation} [${value}]`);
+        }
+      }
+    }
+    expect(violations, violations.join('\n')).toEqual([]);
+  });
+
+  it('does not leave gradient color stops without a gradient class', () => {
+    const violations: string[] = [];
+    for (const file of sourceFiles(root)) {
+      const source = readFileSync(file, 'utf8');
+      for (const { value, offset } of classNameValues(source)) {
+        for (const violation of gradientStopViolations(value)) {
           const line = source.slice(0, offset).split('\n').length;
           violations.push(`${relative(root, file)}:${line}: ${violation} [${value}]`);
         }

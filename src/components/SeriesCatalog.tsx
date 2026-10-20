@@ -312,7 +312,7 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                       onClick={() => handleOpenSeries(series)}
                       className={`group relative rounded-2xl overflow-hidden shadow-lg transition-all duration-300 flex flex-col cursor-pointer ${
                         isPlayingThis
-                          ? 'bg-series/80 border-2 border-series ring-4 ring-series/50 shadow-2xl  scale-[1.02]'
+                          ? 'bg-series/15 border-2 border-series ring-2 ring-series/40 shadow-2xl scale-[1.02]'
                           : 'bg-surface-0 border border-separator/80 hover:border-series/60 hover:-translate-y-1'
                       }`}
                     >

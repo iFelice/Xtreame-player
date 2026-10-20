@@ -14,9 +14,7 @@ describe('mobile section bar', () => {
     const onSelect = vi.fn();
     let renderer: ReturnType<typeof create>;
     await act(async () => {
-      renderer = create(
-        <MobileSectionBar activeTab="movies" onSelect={onSelect} activeMedia={null} />
-      );
+      renderer = create(<MobileSectionBar activeTab="movies" onSelect={onSelect} />);
     });
 
     const nav = renderer!.root.findByProps({ 'aria-label': 'Sezioni' });
@@ -49,25 +47,15 @@ describe('mobile section bar', () => {
     });
   });
 
-  it('renders nothing when the player is open', async () => {
+  it('stays rendered while the player is open (visibility is decided by the app shell)', async () => {
     (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     let renderer: ReturnType<typeof create>;
     await act(async () => {
-      renderer = create(
-        <MobileSectionBar
-          activeTab="live"
-          onSelect={() => {}}
-          activeMedia={{
-            id: 'live_1',
-            title: 'Test channel',
-            type: 'live',
-            streamUrl: 'https://example.com/live.m3u8',
-          }}
-        />
-      );
+      renderer = create(<MobileSectionBar activeTab="live" onSelect={() => {}} />);
     });
 
-    expect(renderer!.toJSON()).toBeNull();
+    const nav = renderer!.root.findByProps({ 'aria-label': 'Sezioni' });
+    expect(nav.findAllByType('button').length).toBe(5);
 
     await act(async () => {
       renderer!.unmount();

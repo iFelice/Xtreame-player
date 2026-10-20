@@ -289,7 +289,7 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                     }}
                     className={`group relative rounded-2xl overflow-hidden shadow-lg transition-all duration-300 flex flex-col ${
                       isPlayingThis
-                        ? 'bg-accent/80 border-2 border-accent ring-4 ring-accent/50 shadow-2xl  scale-[1.02]'
+                        ? 'bg-accent/15 border-2 border-accent ring-2 ring-accent/40 shadow-2xl scale-[1.02]'
                         : 'bg-surface-0 border border-separator/80 hover:border-accent/50 hover:-translate-y-1'
                     }`}
                   >

@@ -33,12 +33,15 @@ import { initialPlaybackState, isPlaybackLoading, playbackReducer } from '../pla
 import { destroyMediaEngines, releaseVideoElement, selectMediaEngine } from '../player/mediaEngine';
 import { HLS_CONFIG, MPEGTS_CONFIG } from '../player/engineConfig';
 import { canFallbackToMpegTs, isPublicMockStream, normalizeLiveStreamUrl } from '../player/streamFormat';
+import { useIsMobileViewport } from '../utils/mobileLayout';
+import { MobilePlayerErrorPanel } from './MobilePlayerErrorPanel';
 
 interface MediaPlayerProps {
   media: PlayableMediaItem | null;
   onClose: () => void;
   onNext?: () => void;
   onPrevious?: () => void;
+  onFullscreenChange?: (isFullscreen: boolean) => void;
   accountKey?: string;
 }
 
@@ -47,6 +50,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   onClose,
   onNext,
   onPrevious,
+  onFullscreenChange,
   accountKey,
 }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -82,6 +86,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   const [isWindowFullscreen, setIsWindowFullscreen] = useState<boolean>(false);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
   const isTv = isTvEnvironment();
+  const isMobile = useIsMobileViewport();
   const isNative = typeof window !== 'undefined' && (Capacitor.isNativePlatform() || window.location.protocol === 'capacitor:');
   const isSafeMode = typeof window !== 'undefined' && !isNative && sessionStorage.getItem('xtream_safe_mode') === '1';
   const canSwitchLiveFormat = Boolean(media?.type === 'live' && !isPublicMockStream(media.streamUrl));
@@ -135,6 +140,14 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     return () => window.clearInterval(timer);
   }, [playback.status, media?.id]);
 
+  // Keep the app shell (mobile section bar and page padding) in sync with the
+  // player takeover, whether it comes from the document or the window mode.
+  useEffect(() => {
+    onFullscreenChange?.(Boolean(isFullscreen || isWindowFullscreen));
+  }, [isFullscreen, isWindowFullscreen, onFullscreenChange]);
+
+  useEffect(() => () => onFullscreenChange?.(false), [onFullscreenChange]);
+
   // Sync fullscreen state with native browser events
   useEffect(() => {
     const handleFsChange = () => {
@@ -151,6 +164,19 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       document.removeEventListener('webkitfullscreenchange', handleFsChange);
     };
   }, [isWindowFullscreen]);
+
+  // iOS plays fullscreen through the native video element and only reports the
+  // exit with webkitendfullscreen, so mirror it back into the player state.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const handleNativeFullscreenEnd = () => {
+      setIsFullscreen(false);
+      setIsWindowFullscreen(false);
+    };
+    video.addEventListener('webkitendfullscreen', handleNativeFullscreenEnd);
+    return () => video.removeEventListener('webkitendfullscreen', handleNativeFullscreenEnd);
+  }, [media?.id]);
 
   // Derive source URL: either through backend proxy or direct
   const getEffectiveUrl = useCallback(() => {
@@ -735,8 +761,12 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
 
       {/* Loading Spinner */}
       {(playback.status === 'loading' || showBufferingIndicator) && !errorMessage && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-surface-1/70 pointer-events-none overflow-hidden">
-          {(media.backdrop || media.poster) && (
+        <div
+          className={`absolute inset-0 flex flex-col items-center justify-center bg-surface-1/70 pointer-events-none overflow-hidden ${
+            isMobile ? 'px-4 py-16' : ''
+          }`}
+        >
+          {!isMobile && (media.backdrop || media.poster) && (
             <RemoteImage
               src={getSecureImageUrl(media.backdrop || media.poster || '')}
               alt=""
@@ -744,85 +774,116 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
               className="absolute inset-0 h-full w-full object-cover opacity-25 blur-sm scale-105"
             />
           )}
-          <div className="absolute inset-0 from-black via-black/55 to-black/70" />
-          <div className="relative z-10 flex flex-col items-center px-6 text-center">
-            <div className="w-14 h-14 border-4 border-accent/20 border-t-accent rounded-full animate-spin mb-4"></div>
-            <span className="text-label text-sm sm:text-base font-bold tracking-wide">
-              {showBufferingIndicator
-                ? 'Buffering del flusso…'
-                : startupSeconds < 3
-                  ? 'Connessione al server…'
-                  : startupSeconds < 7
-                    ? 'Preparazione del video…'
-                    : 'Il canale sta rispondendo, ancora un momento…'}
-            </span>
-            <span className="mt-2 max-w-md truncate text-xs text-label-secondary">{media.title}</span>
-          </div>
+          <div className="absolute inset-0 bg-linear-to-b from-black via-black/55 to-black/70" />
+          {isMobile ? (
+            <div className="relative z-10 flex flex-col items-center text-center">
+              <div className="w-8 h-8 border-[3px] border-accent/20 border-t-accent rounded-full animate-spin mb-1.5"></div>
+              <span className="text-label text-xs leading-4 font-bold tracking-wide">
+                {showBufferingIndicator ? 'Buffering…' : 'Caricamento…'}
+              </span>
+            </div>
+          ) : (
+            <div className="relative z-10 flex flex-col items-center px-6 text-center">
+              <div className="w-14 h-14 border-4 border-accent/20 border-t-accent rounded-full animate-spin mb-4"></div>
+              <span className="text-label text-sm sm:text-base font-bold tracking-wide">
+                {showBufferingIndicator
+                  ? 'Buffering del flusso…'
+                  : startupSeconds < 3
+                    ? 'Connessione al server…'
+                    : startupSeconds < 7
+                      ? 'Preparazione del video…'
+                      : 'Il canale sta rispondendo, ancora un momento…'}
+              </span>
+              <span className="mt-2 max-w-md truncate text-xs text-label-secondary">{media.title}</span>
+            </div>
+          )}
         </div>
       )}
 
       {/* Error Overlay */}
-      {errorMessage && (!videoRef.current || videoRef.current.paused || videoRef.current.currentTime === 0) && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-surface-0/95 p-6 text-center z-30">
-          <AlertCircle className="w-14 h-14 text-danger mb-3 animate-pulse" />
-          <h3 className="text-lg sm:text-xl font-bold text-label mb-2">Impossibile riprodurre lo stream</h3>
-          <p className="text-sm sm:text-base text-label-secondary max-w-md mb-6 leading-relaxed">{errorMessage}</p>
+      {errorMessage && (!videoRef.current || videoRef.current.paused || videoRef.current.currentTime === 0) &&
+        (isMobile ? (
+          <MobilePlayerErrorPanel
+            message={errorMessage}
+            canSwitchFormat={canSwitchLiveFormat}
+            formatLabel={`Passa a formato ${liveFormat === 'm3u8' ? 'MPEG-TS (.ts)' : 'HLS (.m3u8)'}`}
+            showProxyOption={!isNative && !isSafeMode}
+            proxyLabel={useProxy ? '⚡ Passa a Stream Diretto' : '🛡️ Attiva Proxy HTTPS'}
+            proxyFilled={!useProxy}
+            onRetry={() => dispatchPlayback({ type: 'RETRY' })}
+            onClose={onClose}
+            onToggleFormat={() => setLiveFormat(liveFormat === 'm3u8' ? 'ts' : 'm3u8')}
+            onToggleProxy={() => {
+              const nextVal = !useProxy;
+              setUseProxy(nextVal);
+              try {
+                localStorage.setItem('xtream_use_proxy', String(nextVal));
+              } catch {}
+              setErrorMessage(null);
+              setIsLoading(true);
+            }}
+          />
+        ) : (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-surface-0/95 p-6 text-center z-30">
+            <AlertCircle className="w-14 h-14 text-danger mb-3 animate-pulse" />
+            <h3 className="text-lg sm:text-xl font-bold text-label mb-2">Impossibile riprodurre lo stream</h3>
+            <p className="text-sm sm:text-base text-label-secondary max-w-md mb-6 leading-relaxed">{errorMessage}</p>
 
-          <div className="flex flex-wrap items-center justify-center gap-3">
-            <button
-              onClick={() => {
-                dispatchPlayback({ type: 'RETRY' });
-              }}
-              className="px-5 py-3 bg-accent hover:bg-accent-strong text-on-accent rounded-xl text-sm sm:text-base font-bold flex items-center gap-2 transition cursor-pointer shadow-lg"
-            >
-              <RefreshCw className="w-4 h-4" />
-              Riprova
-            </button>
-
-            <button
-              onClick={onClose}
-              className="px-5 py-3 bg-surface-1 hover:bg-surface-2 text-label rounded-xl text-sm sm:text-base font-bold flex items-center gap-2 transition cursor-pointer border border-separator-strong"
-            >
-              <X className="w-4 h-4" />
-              Torna al catalogo
-            </button>
-
-            {canSwitchLiveFormat && (
-              <button
-                onClick={() => setLiveFormat(liveFormat === 'm3u8' ? 'ts' : 'm3u8')}
-                className="px-5 py-3 bg-live hover:brightness-110 text-on-accent rounded-xl text-sm sm:text-base font-bold flex items-center gap-2 transition cursor-pointer shadow-lg"
-              >
-                Passa a formato {liveFormat === 'm3u8' ? 'MPEG-TS (.ts)' : 'HLS (.m3u8)'}
-              </button>
-            )}
-
-            {!isNative && !isSafeMode && (
+            <div className="flex flex-wrap items-center justify-center gap-3">
               <button
                 onClick={() => {
-                  const nextVal = !useProxy;
-                  setUseProxy(nextVal);
-                  try {
-                    localStorage.setItem('xtream_use_proxy', String(nextVal));
-                  } catch {}
-                  setErrorMessage(null);
-                  setIsLoading(true);
+                  dispatchPlayback({ type: 'RETRY' });
                 }}
-                className={`px-5 py-3 rounded-xl text-sm sm:text-base font-bold flex items-center gap-2 transition cursor-pointer shadow-lg ${
-                  !useProxy
-                    ? 'bg-accent hover:bg-accent-strong text-on-accent '
-                    : 'bg-surface-1 hover:bg-surface-2 text-label border border-separator-strong'
-                }`}
+                className="px-5 py-3 bg-accent hover:bg-accent-strong text-on-accent rounded-xl text-sm sm:text-base font-bold flex items-center gap-2 transition cursor-pointer shadow-lg"
               >
-                {useProxy ? '⚡ Passa a Stream Diretto' : '🛡️ Attiva Proxy HTTPS'}
+                <RefreshCw className="w-4 h-4" />
+                Riprova
               </button>
-            )}
 
+              <button
+                onClick={onClose}
+                className="px-5 py-3 bg-surface-1 hover:bg-surface-2 text-label rounded-xl text-sm sm:text-base font-bold flex items-center gap-2 transition cursor-pointer border border-separator-strong"
+              >
+                <X className="w-4 h-4" />
+                Torna al catalogo
+              </button>
+
+              {canSwitchLiveFormat && (
+                <button
+                  onClick={() => setLiveFormat(liveFormat === 'm3u8' ? 'ts' : 'm3u8')}
+                  className="px-5 py-3 bg-live hover:brightness-110 text-on-accent rounded-xl text-sm sm:text-base font-bold flex items-center gap-2 transition cursor-pointer shadow-lg"
+                >
+                  Passa a formato {liveFormat === 'm3u8' ? 'MPEG-TS (.ts)' : 'HLS (.m3u8)'}
+                </button>
+              )}
+
+              {!isNative && !isSafeMode && (
+                <button
+                  onClick={() => {
+                    const nextVal = !useProxy;
+                    setUseProxy(nextVal);
+                    try {
+                      localStorage.setItem('xtream_use_proxy', String(nextVal));
+                    } catch {}
+                    setErrorMessage(null);
+                    setIsLoading(true);
+                  }}
+                  className={`px-5 py-3 rounded-xl text-sm sm:text-base font-bold flex items-center gap-2 transition cursor-pointer shadow-lg ${
+                    !useProxy
+                      ? 'bg-accent hover:bg-accent-strong text-on-accent '
+                      : 'bg-surface-1 hover:bg-surface-2 text-label border border-separator-strong'
+                  }`}
+                >
+                  {useProxy ? '⚡ Passa a Stream Diretto' : '🛡️ Attiva Proxy HTTPS'}
+                </button>
+              )}
+
+            </div>
           </div>
-        </div>
-      )}
+        ))}
 
-      {/* Side floating channel zapping buttons for Live TV */}
-      {media.type === 'live' && onPrevious && (
+      {/* Side floating channel zapping buttons for Live TV (not on mobile) */}
+      {!isMobile && media.type === 'live' && onPrevious && (
         <button
           type="button"
           onClick={(e) => {
@@ -838,7 +899,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
         </button>
       )}
 
-      {media.type === 'live' && onNext && (
+      {!isMobile && media.type === 'live' && onNext && (
         <button
           type="button"
           onClick={(e) => {
@@ -856,11 +917,11 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
 
       {/* Top Header Bar (Title & Actions - clean without duplicate format buttons) */}
       <div
-        className={`absolute top-0 left-0 right-0 p-4 sm:p-6 from-black/95 via-black/60 to-transparent transition-opacity duration-300 z-20 flex items-center justify-between ${
+        className={`absolute top-0 left-0 right-0 p-4 sm:p-6 bg-linear-to-b from-black/95 via-black/60 to-transparent transition-opacity duration-300 z-20 flex items-center justify-between ${isMobile ? 'gap-2' : ''} ${
           controlsVisible || !isPlaying ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
       >
-        <div className="flex items-center gap-3 min-w-0">
+        <div className={`flex items-center gap-3 min-w-0 ${isMobile ? 'flex-1' : ''}`}>
           <div className="p-2 sm:p-2.5 rounded-2xl bg-accent/20 text-accent-strong border border-accent/30 shrink-0">
             {media.type === 'movie' ? (
               <Film className="w-6 h-6" />
@@ -868,9 +929,9 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
               <Tv className="w-6 h-6" />
             )}
           </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h2 className="text-label font-bold text-base sm:text-xl truncate drop-shadow-md">
+          <div className={`min-w-0 ${isMobile ? 'flex-1' : ''}`}>
+            <div className="flex min-w-0 items-center gap-2">
+              <h2 className="min-w-0 text-label font-bold text-base sm:text-xl truncate whitespace-nowrap drop-shadow-md">
                 {media.title}
               </h2>
               {media.type === 'live' && (
@@ -879,7 +940,9 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
                     <button
                       type="button"
                       onClick={onPrevious}
-                      className="p-1 sm:p-1.5 rounded-lg bg-surface-1/90 hover:bg-live text-label-secondary hover:text-on-accent transition cursor-pointer border border-separator-strong/60"
+                      className={`flex items-center justify-center rounded-lg bg-surface-1/90 hover:bg-live text-label-secondary hover:text-on-accent transition cursor-pointer border border-separator-strong/60 ${
+                        isMobile ? 'w-10 h-10 p-0' : 'p-1 sm:p-1.5'
+                      }`}
                       title="Canale Precedente"
                     >
                       <ChevronLeft className="w-4 h-4" />
@@ -889,7 +952,9 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
                     <button
                       type="button"
                       onClick={onNext}
-                      className="p-1 sm:p-1.5 rounded-lg bg-surface-1/90 hover:bg-live text-label-secondary hover:text-on-accent transition cursor-pointer border border-separator-strong/60"
+                      className={`flex items-center justify-center rounded-lg bg-surface-1/90 hover:bg-live text-label-secondary hover:text-on-accent transition cursor-pointer border border-separator-strong/60 ${
+                        isMobile ? 'w-10 h-10 p-0' : 'p-1 sm:p-1.5'
+                      }`}
                       title="Canale Successivo"
                     >
                       <ChevronRight className="w-4 h-4" />
@@ -956,9 +1021,9 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
 
       {/* Bottom Controls Bar */}
       <div
-        className={`absolute bottom-0 left-0 right-0 p-4 sm:p-6 from-black/95 via-black/75 to-transparent transition-opacity duration-300 z-20 ${
-          controlsVisible || !isPlaying ? 'opacity-100' : 'opacity-0 pointer-events-none'
-        }`}
+        className={`absolute bottom-0 left-0 right-0 bg-linear-to-t from-black/95 via-black/75 to-transparent transition-opacity duration-300 z-20 ${
+          isMobile ? 'px-2 py-3' : 'p-4 sm:p-6'
+        } ${controlsVisible || !isPlaying ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
       >
         {/* Timeline Scrub Bar */}
         {media.type !== 'live' && duration > 0 && (
@@ -985,19 +1050,21 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
           </div>
         )}
 
-        {/* Buttons Row */}
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div className="flex items-center gap-2 sm:gap-3">
+        {/* Buttons Row: single line on mobile, untouched layout from md upwards */}
+        <div className={`flex items-center justify-between ${isMobile ? 'gap-1 flex-nowrap' : 'gap-2 flex-wrap'}`}>
+          <div className={`flex items-center ${isMobile ? 'gap-1' : 'gap-2 sm:gap-3'}`}>
             <button
               onClick={togglePlay}
-              className="p-2 sm:p-2.5 text-label hover:text-accent-strong hover:bg-white/10 rounded-2xl transition cursor-pointer"
+              className={`flex items-center justify-center text-label hover:text-accent-strong hover:bg-white/10 rounded-2xl transition cursor-pointer ${
+                isMobile ? 'w-10 h-10 p-0' : 'p-2 sm:p-2.5'
+              }`}
               title={desiredPlayingRef.current ? 'Pausa (Spazio)' : 'Riproduci (Spazio)'}
             >
               {desiredPlayingRef.current ? <Pause className="w-6 h-6 fill-current" /> : <Play className="w-6 h-6 fill-current" />}
             </button>
 
-            {/* Live TV Previous & Next Channel buttons */}
-            {media.type === 'live' && (
+            {/* Live TV Previous & Next Channel buttons (mobile uses the header arrows) */}
+            {!isMobile && media.type === 'live' && (
               <>
                 {onPrevious && (
                   <button
@@ -1024,14 +1091,18 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
               <>
                 <button
                   onClick={() => handleSkip(-10)}
-                  className="p-2 text-label-secondary hover:text-label hover:bg-white/10 rounded-2xl transition cursor-pointer"
+                  className={`flex items-center justify-center text-label-secondary hover:text-label hover:bg-white/10 rounded-2xl transition cursor-pointer ${
+                    isMobile ? 'w-10 h-10 p-0' : 'p-2'
+                  }`}
                   title="Indietro 10 secondi (Freccia Sinistra)"
                 >
                   <RotateCcw className="w-5 h-5 sm:w-6 sm:h-6" />
                 </button>
                 <button
                   onClick={() => handleSkip(10)}
-                  className="p-2 text-label-secondary hover:text-label hover:bg-white/10 rounded-2xl transition cursor-pointer"
+                  className={`flex items-center justify-center text-label-secondary hover:text-label hover:bg-white/10 rounded-2xl transition cursor-pointer ${
+                    isMobile ? 'w-10 h-10 p-0' : 'p-2'
+                  }`}
                   title="Avanti 10 secondi (Freccia Destra)"
                 >
                   <RotateCw className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -1039,11 +1110,13 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
               </>
             )}
 
-            {/* Volume Control */}
-            <div className="flex items-center gap-1.5 ml-1 sm:ml-2 group/vol">
+            {/* Volume Control: iOS cannot set video volume from JS, so mobile keeps only mute */}
+            <div className={`flex items-center group/vol ${isMobile ? 'gap-0' : 'gap-1.5 ml-1 sm:ml-2'}`}>
               <button
                 onClick={toggleMute}
-                className="p-2 text-label-secondary hover:text-label hover:bg-white/10 rounded-2xl transition cursor-pointer"
+                className={`flex items-center justify-center text-label-secondary hover:text-label hover:bg-white/10 rounded-2xl transition cursor-pointer ${
+                  isMobile ? 'w-10 h-10 p-0' : 'p-2'
+                }`}
                 title={isMuted ? 'Riattiva audio (M)' : 'Silenzia (M)'}
               >
                 {isMuted || volume === 0 ? (
@@ -1052,15 +1125,17 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
                   <Volume2 className="w-5 h-5 sm:w-6 sm:h-6" />
                 )}
               </button>
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.05}
-                value={isMuted ? 0 : volume}
-                onChange={handleVolumeChange}
-                className="w-16 sm:w-24 h-1.5 bg-surface-2 rounded-lg appearance-none cursor-pointer accent opacity-80 group-hover/vol:opacity-100 transition-opacity"
-              />
+              {!isMobile && (
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={isMuted ? 0 : volume}
+                  onChange={handleVolumeChange}
+                  className="w-16 sm:w-24 h-1.5 bg-surface-2 rounded-lg appearance-none cursor-pointer accent opacity-80 group-hover/vol:opacity-100 transition-opacity"
+                />
+              )}
             </div>
 
             {media.type === 'live' && (
@@ -1071,19 +1146,22 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
             )}
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* Aspect Ratio Toggle (Adatta / 16:9 / 4:3 / Zoom / Riempi) */}
+          <div className={`flex items-center ${isMobile ? 'gap-1' : 'gap-2'}`}>
+            {/* Aspect Ratio Toggle (icon only on mobile, label kept for screen readers) */}
             <button
               onClick={cycleAspectRatio}
-              className="px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-bold text-label hover:text-label bg-surface-1 hover:bg-surface-2 rounded-xl border border-separator-strong transition cursor-pointer flex items-center gap-2 shadow-md"
+              aria-label={`Formato video: ${getAspectLabel()}`}
+              className={`text-xs sm:text-sm font-bold text-label hover:text-label bg-surface-1 hover:bg-surface-2 rounded-xl border border-separator-strong transition cursor-pointer flex items-center justify-center shadow-md ${
+                isMobile ? 'w-10 h-10 p-0' : 'px-3.5 sm:px-4 py-2 gap-2'
+              }`}
               title="Cambia formato video: Adatta 100% (non taglia), 16:9, 4:3, Zoom, Riempi"
             >
               <Ratio className="w-4 h-4 text-accent-strong" />
-              <span>{getAspectLabel()}</span>
+              {!isMobile && <span>{getAspectLabel()}</span>}
             </button>
 
-            {/* Playback Speed (for VOD) */}
-            {media.type !== 'live' && (
+            {/* Playback Speed (for VOD, desktop/TV only) */}
+            {!isMobile && media.type !== 'live' && (
               <div className="relative">
                 <button
                   onClick={() => setShowSettings(!showSettings)}
@@ -1113,7 +1191,9 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
             {/* PiP Button */}
             <button
               onClick={togglePiP}
-              className="p-2 sm:p-2.5 text-label-secondary hover:text-label hover:bg-white/10 rounded-2xl transition cursor-pointer"
+              className={`flex items-center justify-center text-label-secondary hover:text-label hover:bg-white/10 rounded-2xl transition cursor-pointer ${
+                isMobile ? 'w-10 h-10 p-0' : 'p-2 sm:p-2.5'
+              }`}
               title="Picture in Picture (Finestra fluttuante)"
             >
               <Cast className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -1122,7 +1202,9 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
             {/* Fullscreen Button */}
             <button
               onClick={toggleFullscreen}
-              className="p-2 sm:p-2.5 text-label-secondary hover:text-label hover:bg-white/10 rounded-2xl transition cursor-pointer"
+              className={`flex items-center justify-center text-label-secondary hover:text-label hover:bg-white/10 rounded-2xl transition cursor-pointer ${
+                isMobile ? 'w-10 h-10 p-0' : 'p-2 sm:p-2.5'
+              }`}
               title={isFullscreen || isWindowFullscreen ? 'Esci da schermo intero (F / Esc)' : 'Schermo intero (F)'}
             >
               {isFullscreen || isWindowFullscreen ? (

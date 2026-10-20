@@ -1,13 +1,12 @@
 import React from 'react';
 import { Tv, Film, Layers, Sparkles, Star } from 'lucide-react';
-import { PlayableMediaItem } from '../types/xtream';
+import type { SectionTab } from '../utils/navigation';
 
-export type SectionTab = 'live' | 'movies' | 'series' | 'recent' | 'favorites';
+export type { SectionTab } from '../utils/navigation';
 
 interface MobileSectionBarProps {
   activeTab: SectionTab;
   onSelect: (tab: SectionTab) => void;
-  activeMedia?: PlayableMediaItem | null;
 }
 
 const ITEMS: Array<{
@@ -23,13 +22,7 @@ const ITEMS: Array<{
   { tab: 'favorites', label: 'Preferiti', Icon: Star, activeClass: 'text-favorite' },
 ];
 
-export const MobileSectionBar: React.FC<MobileSectionBarProps> = ({
-  activeTab,
-  onSelect,
-  activeMedia = null,
-}) => {
-  if (activeMedia) return null;
-
+export const MobileSectionBar: React.FC<MobileSectionBarProps> = ({ activeTab, onSelect }) => {
   return (
     <nav
       aria-label="Sezioni"
