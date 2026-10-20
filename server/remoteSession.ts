@@ -1,25 +1,28 @@
-import { createHash, randomBytes, randomInt, timingSafeEqual } from 'crypto';
 import type { Request, Response } from 'express';
+import {
+  constantTimeEqual,
+  createPin as defaultCreatePin,
+  createPollToken as defaultCreatePollToken,
+  hashTokenSync,
+  isValidPin,
+  MAX_FAILED_SUBMITS,
+  MAX_SESSIONS,
+  MAX_SESSIONS_PER_IP,
+  readCredentials,
+  REMOTE_SESSION_TTL_MS,
+  REMOTE_SESSION_TTL_SECONDS,
+  SUBMIT_BLOCK_MS,
+  SUBMIT_WINDOW_MS,
+  type Credentials,
+} from '../shared/pairing';
 
-export const REMOTE_SESSION_TTL_MS = 10 * 60 * 1000;
-const MAX_SESSIONS = 100;
-const MAX_SESSIONS_PER_IP = 5;
-const SUBMIT_WINDOW_MS = 10 * 60 * 1000;
-const SUBMIT_BLOCK_MS = 15 * 60 * 1000;
-const MAX_FAILED_SUBMITS = 10;
-
-interface Credentials {
-  server: string;
-  username: string;
-  password: string;
-  originalLink?: string;
-}
+export { REMOTE_SESSION_TTL_MS, readCredentials, type Credentials };
 
 interface RemoteSession {
   createdAt: number;
   credentials: Credentials | null;
   ip: string;
-  pollTokenHash: Buffer;
+  pollTokenHash: string;
 }
 
 interface AttemptState {
@@ -34,54 +37,14 @@ interface RemoteSessionOptions {
   createPollToken?: () => string;
 }
 
-function hashToken(token: string): Buffer {
-  return createHash('sha256').update(token).digest();
-}
-
 function requestIp(req: Request): string {
   return req.ip || req.socket.remoteAddress || 'unknown';
 }
 
-function readString(value: unknown, maxLength: number): string | null {
-  if (typeof value !== 'string') return null;
-  const clean = value.trim();
-  if (!clean || clean.length > maxLength) return null;
-  return clean;
-}
-
-function readCredentials(body: unknown): Credentials | null {
-  if (!body || typeof body !== 'object') return null;
-  const values = body as Record<string, unknown>;
-  const server = readString(values.server, 2048);
-  const username = readString(values.username, 512);
-  const password = readString(values.password, 512);
-  if (!server || !username || !password) return null;
-
-  try {
-    const parsed = new URL(server);
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
-  } catch {
-    return null;
-  }
-
-  const originalLinkValue = values.originalLink === undefined
-    ? undefined
-    : readString(values.originalLink, 4096);
-  if (values.originalLink !== undefined && !originalLinkValue) return null;
-  const originalLink = originalLinkValue || undefined;
-
-  return {
-    server: server.replace(/\/+$/, ''),
-    username,
-    password,
-    originalLink,
-  };
-}
-
 export function createRemoteSessionService(options: RemoteSessionOptions = {}) {
   const now = options.now || Date.now;
-  const createPin = options.createPin || (() => randomInt(100000, 1000000).toString());
-  const createPollToken = options.createPollToken || (() => randomBytes(32).toString('hex'));
+  const createPin = options.createPin || (() => defaultCreatePin());
+  const createPollToken = options.createPollToken || (() => defaultCreatePollToken());
   const sessions = new Map<string, RemoteSession>();
   const submitAttempts = new Map<string, AttemptState>();
 
@@ -125,12 +88,12 @@ export function createRemoteSessionService(options: RemoteSessionOptions = {}) {
       createdAt: timestamp,
       credentials: null,
       ip,
-      pollTokenHash: hashToken(pollToken),
+      pollTokenHash: hashTokenSync(pollToken),
     });
     return res.json({
       code,
       pollToken,
-      expiresInSeconds: REMOTE_SESSION_TTL_MS / 1000,
+      expiresInSeconds: REMOTE_SESSION_TTL_SECONDS,
     });
   };
 
@@ -155,7 +118,7 @@ export function createRemoteSessionService(options: RemoteSessionOptions = {}) {
     }
 
     const code = typeof req.body?.code === 'string' ? req.body.code.trim() : '';
-    const session = /^\d{6}$/.test(code) ? sessions.get(code) : undefined;
+    const session = isValidPin(code) ? sessions.get(code) : undefined;
     if (!session) {
       return res.status(failedSubmit(ip, timestamp)).json({ error: 'SESSION_NOT_FOUND' });
     }
@@ -178,9 +141,9 @@ export function createRemoteSessionService(options: RemoteSessionOptions = {}) {
     const code = req.params.code;
     const session = sessions.get(code);
     const suppliedToken = req.get('X-Poll-Token');
-    const suppliedHash = hashToken(suppliedToken || '');
+    const suppliedHash = hashTokenSync(suppliedToken || '');
     const tokenMatches = Boolean(
-      session && suppliedToken && timingSafeEqual(session.pollTokenHash, suppliedHash),
+      session && suppliedToken && constantTimeEqual(session.pollTokenHash, suppliedHash),
     );
     if (!session || !tokenMatches) {
       return res.status(404).json({ error: 'SESSION_NOT_FOUND' });

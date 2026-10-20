@@ -1,0 +1,23 @@
+{
+  // Configurazione Cloudflare Workers per il servizio pubblico di abbinamento TV
+  "name": "felixvision-pairing-relay",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-04-01",
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "PAIRING_HUB",
+        "class_name": "PairingHub"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["PairingHub"]
+    }
+  ],
+  "vars": {
+    "ALLOWED_ORIGINS": ""
+  }
+}

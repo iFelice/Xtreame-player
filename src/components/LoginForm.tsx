@@ -11,6 +11,7 @@ import {
   QrCode,
 } from 'lucide-react';
 import { SavedAccount, storage } from '../services/storage';
+import { getPairingRelayUrl, resolveRubricaServerUrl } from '../services/pairingRequests';
 import { isTvEnvironment } from '../utils/downloadHelper';
 import { TvPairingModal } from './TvPairingModal';
 
@@ -31,14 +32,40 @@ export const LoginForm: React.FC<LoginFormProps> = ({
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [showPairing, setShowPairing] = useState<boolean>(false);
   const [pairingReceived, setPairingReceived] = useState<boolean>(false);
+  const [serverCodeError, setServerCodeError] = useState<string | null>(null);
+  const [isResolvingCode, setIsResolvingCode] = useState<boolean>(false);
   const [editingField, setEditingField] = useState<'server' | 'username' | 'password' | null>(null);
   const [savedAccounts, setSavedAccounts] = useState<SavedAccount[]>(() => storage.getAccounts());
   const isTv = isTvEnvironment();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!serverUrl.trim() || !username.trim() || !password.trim()) return;
-    onLogin(serverUrl.trim(), username.trim(), password.trim());
+    const rawServer = serverUrl.trim();
+    const cleanUser = username.trim();
+    const cleanPass = password.trim();
+    if (!rawServer || !cleanUser || !cleanPass) return;
+
+    setServerCodeError(null);
+
+    const relayUrl = getPairingRelayUrl();
+    if (relayUrl && !rawServer.includes('://')) {
+      setIsResolvingCode(true);
+      try {
+        const resolved = await resolveRubricaServerUrl(rawServer, relayUrl);
+        if (!resolved.ok) {
+          setServerCodeError(resolved.message);
+          return;
+        }
+        onLogin(resolved.server, cleanUser, cleanPass);
+      } catch {
+        setServerCodeError('Codice server non trovato');
+      } finally {
+        setIsResolvingCode(false);
+      }
+      return;
+    }
+
+    onLogin(rawServer, cleanUser, cleanPass);
   };
 
   const handleSelectAccount = (acc: SavedAccount) => {
@@ -64,6 +91,8 @@ export const LoginForm: React.FC<LoginFormProps> = ({
       input.click();
     }, 0);
   };
+
+  const busy = isLoading || isResolvingCode;
 
   return (
     <>
@@ -92,6 +121,14 @@ export const LoginForm: React.FC<LoginFormProps> = ({
               Credenziali ricevute. Premi “Accedi al Catalogo”.
             </div>
           )}
+          {serverCodeError && (
+            <div
+              role="alert"
+              className="rounded-xl border border-danger/40 bg-danger/15 px-3 py-2 text-sm font-bold text-label"
+            >
+              {serverCodeError}
+            </div>
+          )}
           {/* Server URL */}
           <div>
             <label className="block text-sm sm:text-base font-bold text-label mb-1.5">
@@ -102,7 +139,10 @@ export const LoginForm: React.FC<LoginFormProps> = ({
               <input
                 type="text"
                 value={serverUrl}
-                onChange={(e) => setServerUrl(e.target.value)}
+                onChange={(e) => {
+                  setServerUrl(e.target.value);
+                  if (serverCodeError) setServerCodeError(null);
+                }}
                 readOnly={isTv && editingField !== 'server'}
                 inputMode={isTv && editingField !== 'server' ? 'none' : 'url'}
                 onClick={(e) => activateTvInput('server', e.currentTarget)}
@@ -191,10 +231,10 @@ export const LoginForm: React.FC<LoginFormProps> = ({
             <button
               id="tv-login-submit"
               type="submit"
-              disabled={isLoading}
+              disabled={busy}
               className="w-full py-4 bg-accent hover:bg-accent-strong text-on-accent font-extrabold rounded-2xl text-base sm:text-lg transition flex items-center justify-center gap-2.5 shadow-xl  cursor-pointer disabled:opacity-60"
             >
-              {isLoading ? (
+              {busy ? (
                 <>
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                   <span>Connessione in corso...</span>
