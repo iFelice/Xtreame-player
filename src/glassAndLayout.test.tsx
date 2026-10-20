@@ -86,7 +86,7 @@ function tokensOf(className: unknown): string[] {
 describe('glass material and navigation layer', () => {
   it('defines exact root tokens, @theme glass edge, @utility glass without border, and all three fallbacks', () => {
     const css = readFileSync(join(import.meta.dirname, 'index.css'), 'utf8');
-    expect(css).toContain('--glass-alpha: 0.72;');
+    expect(css).toContain('--glass-alpha: 0.82;');
     expect(css).toContain('--glass-blur: 20px;');
     expect(css).toContain('--glass-saturate: 180%;');
     expect(css).toContain('--color-glass-edge: rgb(255 255 255 / 0.12);');
@@ -104,7 +104,18 @@ describe('glass material and navigation layer', () => {
     expect(css.match(/#2C2C2E/g)?.length ?? 0).toBeGreaterThanOrEqual(4);
   });
 
-  it('applies glass to sticky Navbar header (bottom edge only) and both mobile and desktop account menus', async () => {
+  it('uses a stacked sticky App header and breakpoint-aware scroll offsets', () => {
+    const css = readFileSync(join(import.meta.dirname, 'index.css'), 'utf8');
+    const app = readFileSync(join(import.meta.dirname, 'App.tsx'), 'utf8');
+    expect(css).toContain('scroll-padding-top: 72px;');
+    expect(css).toContain('scroll-padding-top: 96px;');
+    expect(css).toContain('overflow-x: clip !important;');
+    expect(app).toContain('max-w-full overflow-x-clip');
+    expect(app).toMatch(/<div className="sticky top-0 z-40">\s*\{safeMode &&/);
+    expect((app.match(/<Navbar\b/g) ?? []).length).toBe(1);
+  });
+
+  it('applies glass to Navbar header (sticky behavior is provided by App) and both account menus', async () => {
     (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     vi.spyOn(downloadHelper, 'isTvEnvironment').mockReturnValue(false);
 
@@ -128,6 +139,8 @@ describe('glass material and navigation layer', () => {
     expect(headerTokens).toContain('border-b');
     expect(headerTokens).toContain('border-glass-edge');
     expect(headerTokens).not.toContain('border');
+    expect(headerTokens).not.toContain('sticky');
+    expect(headerTokens).not.toContain('top-0');
 
     // Open mobile account menu and desktop account menu.
     const accountButtons = renderer!.root.findAll(
@@ -148,6 +161,12 @@ describe('glass material and navigation layer', () => {
         tokensOf(node.props.className).includes('border-glass-edge')
     );
     expect(glassMenus.length).toBe(2);
+    expect(
+      glassMenus.some((menu) => {
+        const tokens = tokensOf(menu.props.className);
+        return tokens.includes('fixed') && tokens.includes('top-[72px]');
+      })
+    ).toBe(true);
 
     await act(async () => {
       renderer!.unmount();

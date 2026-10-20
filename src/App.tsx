@@ -407,13 +407,27 @@ export default function App() {
 
   return (
     <Suspense fallback={<div className="min-h-screen bg-surface-0 text-label-secondary flex items-center justify-center">Caricamento…</div>}>
-    <div className="min-h-screen bg-surface-0 text-label flex flex-col selection:bg-accent/15 selection:text-accent-strong w-full max-w-full overflow-x-hidden">
-      {safeMode && (
-        <div className="sticky top-0 z-[110] flex items-center justify-center gap-2 border-b border-accent/40 bg-accent px-3 py-1.5 text-xs font-bold tracking-[0.16em] text-on-accent shadow-lg" role="status">
-          <span className="h-2 w-2 rounded-full bg-on-accent" aria-hidden="true" />
-          MODALITÀ SICURA · MOCK LOCALE
-        </div>
-      )}
+    <div className="min-h-screen bg-surface-0 text-label flex flex-col selection:bg-accent/15 selection:text-accent-strong w-full max-w-full overflow-x-clip">
+      <div className="sticky top-0 z-40">
+        {safeMode && (
+          <div className="flex items-center justify-center gap-2 border-b border-accent/40 bg-accent px-3 py-1.5 text-xs font-bold tracking-[0.16em] text-on-accent shadow-lg" role="status">
+            <span className="h-2 w-2 rounded-full bg-on-accent" aria-hidden="true" />
+            MODALITÀ SICURA · MOCK LOCALE
+          </div>
+        )}
+        <Navbar
+          serverUrl={serverUrl}
+          username={username}
+          authData={authData}
+          onSelectAccount={handleSelectSavedAccount}
+          onOpenServerInfo={() => setShowServerInfo(true)}
+          onDisconnect={handleDisconnect}
+          onOpenSettingsSync={() => setShowSettingsSyncModal(true)}
+          onRefreshCatalog={handleRefreshCatalog}
+          isRefreshingCatalog={isRefreshingCatalog}
+          lastRefreshedAt={lastRefreshedAt}
+        />
+      </div>
       {downloadFeedback && (
         <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[100] max-w-[90vw] px-5 py-3 rounded-2xl bg-surface-0/95 border border-series/70 text-label shadow-2xl flex items-center gap-3">
           {downloadFeedback.status === 'finished' ? (
@@ -433,20 +447,6 @@ export default function App() {
           </div>
         </div>
       )}
-
-      {/* Top banner remains visible on TV, matching the original TV layout. */}
-      <Navbar
-        serverUrl={serverUrl}
-        username={username}
-        authData={authData}
-        onSelectAccount={handleSelectSavedAccount}
-        onOpenServerInfo={() => setShowServerInfo(true)}
-        onDisconnect={handleDisconnect}
-        onOpenSettingsSync={() => setShowSettingsSyncModal(true)}
-        onRefreshCatalog={handleRefreshCatalog}
-        isRefreshingCatalog={isRefreshingCatalog}
-        lastRefreshedAt={lastRefreshedAt}
-      />
 
       {/* Main Content Area */}
       <main className={`flex-1 w-full max-w-[2400px] mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-6 overflow-x-hidden ${showMobileBar ? 'pb-[calc(56px+env(safe-area-inset-bottom)+1.5rem)] md:pb-6' : ''}`}>

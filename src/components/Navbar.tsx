@@ -75,7 +75,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     : 'Aggiorna catalogo';
 
   return (
-    <header className="sticky top-0 z-40 w-full max-w-full glass border-b border-glass-edge shadow-xl">
+    <header className="w-full max-w-full glass border-b border-glass-edge shadow-xl">
       {/* Mobile header: visible below md, never rendered on TV. */}
       {!isTv && (
         <div className="flex md:hidden w-full max-w-[2400px] mx-auto px-3 h-16 items-center justify-between gap-2">
