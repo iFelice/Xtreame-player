@@ -17,5 +17,6 @@
     "test/**/*.ts",
     "rubrica.json",
     "../../shared/pairing/**/*.ts"
-  ]
+  ],
+  "exclude": ["../../shared/**/*.test.ts"]
 }
