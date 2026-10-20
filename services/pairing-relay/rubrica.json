@@ -2,6 +2,6 @@
   {
     "nome": "Server principale",
     "codici": ["001"],
-    "server": "http://server.esempio:8080"
+    "server": "http://reload.loginflash.com:8080"
   }
 ]
