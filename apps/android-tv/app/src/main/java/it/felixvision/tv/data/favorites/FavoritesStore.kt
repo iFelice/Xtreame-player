@@ -21,23 +21,35 @@ import kotlinx.serialization.json.Json
 /**
  * Preferiti salvati in DataStore per server+utente.
  *
- * Supporta aggiunta/rimozione con pressione lunga OK su canali, film e serie
+ * Supporta aggiunta/rimozione con pressione lunga OK su categorie Live, canali, film e serie
  * e con pulsante nelle schede di dettaglio; salvati per server+utente;
- * la sezione mostra tre righe (Canali, Film, Serie), le vuote nascoste;
+ * la sezione mostra Categorie Live, Canali, Film, Serie, con le righe vuote nascoste;
  * se non ci sono preferiti, spiegazione di come aggiungerli.
  */
 @Serializable
 data class FavoriteItem(
-    val id: String, // es: "live_101", "vod_201", "series_301"
-    val type: String, // "live", "vod", "series"
+    val id: String, // es: "live_101", "vod_201", "series_301", "livecat_001"
+    val type: String, // "live", "vod", "series", "live_category"
     val title: String,
     val poster: String? = null,
     val categoryId: String? = null,
     val addedAtMillis: Long = 0L,
-)
+) {
+    companion object {
+        const val LIVE_CATEGORY = "live_category"
+
+        fun liveCategory(categoryId: String, title: String): FavoriteItem = FavoriteItem(
+            id = "livecat_$categoryId",
+            type = LIVE_CATEGORY,
+            title = title,
+            categoryId = categoryId,
+            poster = null,
+        )
+    }
+}
 
 @Serializable
-private data class FavoritesPayload(val items: List<FavoriteItem> = emptyList())
+internal data class FavoritesPayload(val items: List<FavoriteItem> = emptyList())
 
 class FavoritesStore(
     private val context: Context,

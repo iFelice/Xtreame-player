@@ -7,6 +7,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -15,11 +17,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -46,7 +50,9 @@ fun CollapsingCategoryColumn(
     listState: LazyListState,
     focusRequesters: Map<String, FocusRequester>,
     testTagPrefix: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    favoriteCategoryIds: Set<String> = emptySet(),
+    onLongPressCategory: ((Category) -> Unit)? = null,
 ) {
     val animatedWidth by animateDpAsState(
         targetValue = if (expanded) scale.dp(260f) else scale.dp(56f),
@@ -74,20 +80,53 @@ fun CollapsingCategoryColumn(
             itemsIndexed(categories, key = { _, c -> c.categoryId }) { index, cat ->
                 val selected = cat.categoryId == debouncedCategoryId
                 val fr = remember(cat.categoryId, focusRequesters) { focusRequesters[cat.categoryId] ?: FocusRequester() }
-                if (expanded) {
+                val isFavorite = cat.categoryId in favoriteCategoryIds
+                val longPressModifier = if (onLongPressCategory != null) {
+                    Modifier.fvpLongPress { onLongPressCategory(cat) }
+                } else Modifier
+                // Live keeps the same focusable item in both states, including during expansion.
+                // Film/Serie retain their original collapsed presentation and behavior.
+                if (expanded || onLongPressCategory != null) {
                     ListItem(
                         selected = selected,
                         onClick = { onFocusedCategoryId(cat.categoryId) },
                         headlineContent = {
-                            Text(
-                                text = cat.categoryName ?: "Senza nome",
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                            if (onLongPressCategory == null) {
+                                Text(
+                                    text = cat.categoryName ?: "Senza nome",
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            } else if (expanded) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = cat.categoryName ?: "Senza nome",
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f, fill = false),
+                                    )
+                                    if (isFavorite) CategoryFavoriteStar(scale, "${testTagPrefix}_category_${cat.categoryId}_fav_star")
+                                }
+                            } else {
+                                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxWidth()) {
+                                    Text(
+                                        text = cat.categoryName?.trim()?.firstOrNull()?.uppercase()
+                                            ?: cat.categoryId.firstOrNull()?.uppercase() ?: "•",
+                                        modifier = Modifier.testTag("${testTagPrefix}_category_collapsed_initial"),
+                                    )
+                                    if (isFavorite) CategoryFavoriteStar(
+                                        scale,
+                                        "${testTagPrefix}_category_${cat.categoryId}_fav_star",
+                                        Modifier.align(Alignment.TopEnd),
+                                    )
+                                }
+                            }
                         },
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("${testTagPrefix}_category_${cat.categoryId}")
+                            .then(if (!expanded) Modifier.testTag("${testTagPrefix}_category_${cat.categoryId}_collapsed") else Modifier)
+                            .then(longPressModifier)
                             .focusRequester(fr)
                             .onFocusChanged {
                                 if (it.isFocused) {
@@ -132,5 +171,16 @@ fun CollapsingCategoryColumn(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun CategoryFavoriteStar(scale: UiScale, tag: String, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier.size(scale.dp(22f)).clip(CircleShape)
+            .background(Color(0xCC1C1C1E)).testTag(tag),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(text = "★", color = Color(0xFFFBBF24), fontSize = scale.sp(12f))
     }
 }

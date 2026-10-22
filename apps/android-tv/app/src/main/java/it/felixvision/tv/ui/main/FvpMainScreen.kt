@@ -78,6 +78,9 @@ fun FvpMainScreen(
     var currentUsername by remember { mutableStateOf(username) }
     var currentPassword by remember { mutableStateOf(password) }
     var selectedTab by remember { mutableStateOf(DrawerSection.Novita) }
+    // One-shot return route, scoped to the current account and cleared by menu navigation.
+    var liveCategoryEntry by remember(currentServer, currentUsername) { mutableStateOf<FavoriteItem?>(null) }
+    var restoreCategoryFavoriteId by remember(currentServer, currentUsername) { mutableStateOf<String?>(null) }
     var showExitConfirm by remember { mutableStateOf(false) }
     var showPlaybackMessage by remember { mutableStateOf<String?>(null) }
     var favoritesTick by remember { mutableStateOf(0L) }
@@ -154,6 +157,8 @@ fun FvpMainScreen(
         }
         if (drawerState.currentValue == DrawerValue.Open) {
             if (selectedTab != DrawerSection.Novita) {
+                liveCategoryEntry = null
+                restoreCategoryFavoriteId = null
                 selectedTab = DrawerSection.Novita
                 // Drawer will auto-focus Novità via LaunchedEffect; ensure request
                 scope.launch {
@@ -164,6 +169,12 @@ fun FvpMainScreen(
             } else {
                 showExitConfirm = true
             }
+            return@BackHandler
+        }
+        if (selectedTab == DrawerSection.Live && liveCategoryEntry != null) {
+            restoreCategoryFavoriteId = liveCategoryEntry?.id
+            liveCategoryEntry = null
+            selectedTab = DrawerSection.Preferiti
             return@BackHandler
         }
         // In content -> focus menu
@@ -182,7 +193,11 @@ fun FvpMainScreen(
 
     FvpNavigationDrawer(
         selected = selectedTab,
-        onSelect = { selectedTab = it },
+        onSelect = {
+            liveCategoryEntry = null
+            restoreCategoryFavoriteId = null
+            selectedTab = it
+        },
         scale = scale,
         drawerState = drawerState,
         contentFocusRequester = contentFocusRequester,
@@ -221,6 +236,10 @@ fun FvpMainScreen(
                                 modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
                             )
                             DrawerSection.Live -> LiveSection(
+                                initialCategoryId = liveCategoryEntry?.categoryId,
+                                onLongPressCategory = { category ->
+                                    toggleFavorite(FavoriteItem.liveCategory(category.categoryId, category.categoryName ?: "Senza nome"))
+                                },
                                 categories = catalog.liveCategories,
                                 streams = catalog.liveStreams,
                                 scale = scale,
@@ -269,13 +288,24 @@ fun FvpMainScreen(
                                 modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
                             )
                             DrawerSection.Preferiti -> {
-                                val favs by produceState<List<FavoriteItem>>(initialValue = emptyList(), favoritesTick, currentServer, currentUsername) {
-                                    value = container.favoritesStore.getFavorites(currentServer, currentUsername)
-                                }
                                 FavoritesSection(
-                                    favorites = favs,
+                                    favorites = allFavorites,
+                                    liveCategories = catalog.liveCategories,
+                                    liveStreams = catalog.liveStreams,
+                                    restoreCategoryFavoriteId = restoreCategoryFavoriteId,
+                                    onCategoryFocusRestored = { restoreCategoryFavoriteId = null },
                                     scale = scale,
-                                    onSelectFavorite = { showPlaybackMessage = "Riproduzione disponibile nel prossimo aggiornamento" },
+                                    onSelectFavorite = { favorite ->
+                                        if (favorite.type == FavoriteItem.LIVE_CATEGORY) {
+                                            if (catalog.liveCategories.any { it.categoryId == favorite.categoryId }) {
+                                                liveCategoryEntry = favorite
+                                                restoreCategoryFavoriteId = null
+                                                selectedTab = DrawerSection.Live
+                                            }
+                                        } else {
+                                            showPlaybackMessage = "Riproduzione disponibile nel prossimo aggiornamento"
+                                        }
+                                    },
                                     onToggleFavorite = { toggleFavorite(it) },
                                     catalogViewModel = catalogViewModel,
                                     contentFocusRequester = contentFocusRequester,
