@@ -65,6 +65,7 @@ fun FvpMainScreen(
     server: String,
     username: String,
     password: String,
+    serverCode: String? = null,
     accountStatus: String,
     expiresAtEpochSeconds: Long?,
     maxConnections: Int?,
@@ -281,7 +282,7 @@ fun FvpMainScreen(
                                     modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
                                 )
                             }
-                            DrawerSection.Impostazioni -> SettingsScreen(viewModel = settingsViewModel, scale = scale)
+                            DrawerSection.Impostazioni -> SettingsScreen(viewModel = settingsViewModel, scale = scale, modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester), contentFocusRequester = contentFocusRequester)
                         }
                     } else {
                         EmptyState(title = "Catalogo vuoto", description = "Il server non ha restituito contenuti. Premi Riprova.", scale = scale)

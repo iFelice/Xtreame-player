@@ -2,10 +2,8 @@
 
 package it.felixvision.tv.ui.detail
 
-import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,8 +32,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -84,9 +83,8 @@ fun SeriesDetailOverlay(
     var lastSeason by remember { mutableStateOf<String?>(null) }
     var showPlotDialog by remember { mutableStateOf(false) }
     var hasPlotOverflow by remember { mutableStateOf(false) }
+    val favoriteFocus = remember { FocusRequester() }
     val readMoreFocus = remember { FocusRequester() }
-    val dialogPlotFocus = remember { FocusRequester() }
-    val dialogCloseFocus = remember { FocusRequester() }
     val closeFocus = remember { FocusRequester() }
     val retryFocus = remember { FocusRequester() }
 
@@ -118,7 +116,9 @@ fun SeriesDetailOverlay(
         episodesForSelected.associate { it.id to FocusRequester() }
     }
 
-    // Focus in ogni stato: prima stagione > Riprova > Chiudi. Quando compaiono stagioni, vai alla prima.
+    val firstSeasonNumber = derivedSeasons.firstOrNull()?.seasonNumber
+    val firstEpisodeId = episodesForSelected.firstOrNull()?.id
+
     LaunchedEffect(derivedSeasons, isLoading, error, selectedSeason) {
         if (selectedSeason != null) return@LaunchedEffect
         when {
@@ -129,7 +129,6 @@ fun SeriesDetailOverlay(
                 retryFocus.requestFocus()
             }
             else -> {
-                // caricamento o senza stagioni
                 closeFocus.requestFocus()
             }
         }
@@ -139,7 +138,6 @@ fun SeriesDetailOverlay(
             episodeFocusRequesters[episodesForSelected.first().id]?.requestFocus()
         }
     }
-    // Ritorno episodi -> stagioni: attendi frame, porta in vista, poi focus
     LaunchedEffect(selectedSeason) {
         if (selectedSeason == null && lastSeason != null) {
             withFrameNanos { }
@@ -151,7 +149,6 @@ fun SeriesDetailOverlay(
             seasonFocusRequesters[lastSeason]?.requestFocus()
         }
     }
-    // Ritorno da Leggi tutto
     LaunchedEffect(showPlotDialog) {
         if (!showPlotDialog) {
             withFrameNanos { }
@@ -161,261 +158,303 @@ fun SeriesDetailOverlay(
         }
     }
 
-    BackHandler(enabled = true) {
-        if (showPlotDialog) {
-            showPlotDialog = false
-        } else if (selectedSeason != null) {
-            selectedSeason = null
-        } else {
-            onDismiss()
-        }
-    }
-
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(FvpColors.Background.copy(alpha = 0.85f))
-            .padding(scale.dp(28f))
-            .testTag(rootTestTag),
-        contentAlignment = Alignment.Center
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
     ) {
-        Column(
-            modifier = Modifier
-                .clip(RoundedCornerShape(scale.dp(16f)))
-                .background(FvpColors.Surface)
-                .padding(scale.dp(18f))
-                .fillMaxWidth(0.90f)
-                .heightIn(max = scale.dp(560f))
-                .testTag("serie_detail_content")
-                .focusProperties { exit = { FocusRequester.Cancel } },
-            verticalArrangement = Arrangement.spacedBy(scale.dp(8f))
-        ) {
-            Text(
-                text = headerTitle,
-                color = FvpColors.TextPrimary,
-                fontWeight = FontWeight.Bold,
-                fontSize = scale.sp(20f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.testTag("detail_title")
-            )
-
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(scale.dp(10f)),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                FvpSecondaryButton(
-                    text = if (isFavorite) "★ Rimuovi dai Preferiti" else "★ Aggiungi ai Preferiti",
-                    onClick = onToggleFavorite,
-                    scale = scale,
-                    modifier = Modifier.testTag("detail_favorite")
-                )
-                FvpSecondaryButton(
-                    text = "Chiudi",
-                    onClick = {
-                        if (selectedSeason != null) selectedSeason = null else onDismiss()
-                    },
-                    scale = scale,
-                    modifier = Modifier
-                        .focusRequester(closeFocus)
-                        .testTag("detail_close")
-                )
+        BackHandler(enabled = true) {
+            if (showPlotDialog) {
+                showPlotDialog = false
+            } else if (selectedSeason != null) {
+                selectedSeason = null
+            } else {
+                onDismiss()
             }
-
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(scale.dp(14f)),
-                modifier = Modifier.weight(1f).fillMaxWidth()
+        }
+        Box(
+            modifier = modifier
+                .fillMaxSize()
+                .background(FvpColors.Background.copy(alpha = 0.85f))
+                .padding(scale.dp(28f))
+                .testTag(rootTestTag),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(scale.dp(16f)))
+                    .background(FvpColors.Surface)
+                    .padding(scale.dp(18f))
+                    .fillMaxWidth(0.90f)
+                    .heightIn(max = scale.dp(560f))
+                    .testTag("serie_detail_content"),
+                verticalArrangement = Arrangement.spacedBy(scale.dp(8f))
             ) {
-                Box(
-                    modifier = Modifier
-                        .width(scale.dp(160f))
-                        .aspectRatio(2f / 3f)
-                        .clip(RoundedCornerShape(scale.dp(10f)))
-                        .background(FvpColors.SurfaceElevated)
+                Text(
+                    text = headerTitle,
+                    color = FvpColors.TextPrimary,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = scale.sp(20f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.testTag("detail_title")
+                )
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(scale.dp(10f)),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    CatalogPosterImage(
-                        imageUrl = serie.cover ?: info?.info?.cover,
-                        title = serie.name,
+                    FvpSecondaryButton(
+                        text = if (isFavorite) "★ Rimuovi dai Preferiti" else "★ Aggiungi ai Preferiti",
+                        onClick = onToggleFavorite,
                         scale = scale,
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier
+                            .focusRequester(favoriteFocus)
+                            .then(
+                                if (derivedSeasons.isNotEmpty() || episodesForSelected.isNotEmpty()) {
+                                    Modifier.focusProperties {
+                                        down = when {
+                                            selectedSeason == null && firstSeasonNumber != null ->
+                                                seasonFocusRequesters[firstSeasonNumber] ?: FocusRequester.Default
+                                            selectedSeason != null && firstEpisodeId != null ->
+                                                episodeFocusRequesters[firstEpisodeId] ?: FocusRequester.Default
+                                            else -> FocusRequester.Default
+                                        }
+                                    }
+                                } else Modifier
+                            )
+                            .testTag("detail_favorite")
+                    )
+                    FvpSecondaryButton(
+                        text = "Chiudi",
+                        onClick = {
+                            if (selectedSeason != null) selectedSeason = null else onDismiss()
+                        },
+                        scale = scale,
+                        modifier = Modifier
+                            .focusRequester(closeFocus)
+                            .then(
+                                if (derivedSeasons.isNotEmpty() || episodesForSelected.isNotEmpty()) {
+                                    Modifier.focusProperties {
+                                        down = when {
+                                            selectedSeason == null && firstSeasonNumber != null ->
+                                                seasonFocusRequesters[firstSeasonNumber] ?: FocusRequester.Default
+                                            selectedSeason != null && firstEpisodeId != null ->
+                                                episodeFocusRequesters[firstEpisodeId] ?: FocusRequester.Default
+                                            else -> FocusRequester.Default
+                                        }
+                                    }
+                                } else Modifier
+                            )
+                            .testTag("detail_close")
                     )
                 }
 
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(scale.dp(6f))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(scale.dp(14f)),
+                    modifier = Modifier.weight(1f).fillMaxWidth()
                 ) {
-                    when {
-                        isLoading -> {
-                            Text(
-                                text = "Caricamento...",
-                                color = FvpColors.TextSecondary,
-                                modifier = Modifier.testTag("detail_loading")
-                            )
-                        }
-                        error != null -> {
-                            Text(
-                                text = "Informazioni non disponibili",
-                                color = FvpColors.TextSecondary,
-                                modifier = Modifier.testTag("detail_error")
-                            )
-                            FvpSecondaryButton(
-                                text = "Riprova",
-                                onClick = onRetry,
-                                scale = scale,
-                                modifier = Modifier
-                                    .focusRequester(retryFocus)
-                                    .testTag("detail_retry")
-                            )
-                        }
-                        info != null -> {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(scale.dp(12f)),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                yearText?.let {
-                                    Text(text = "Anno: $it", color = FvpColors.TextSecondary, fontSize = scale.sp(13f))
-                                }
-                                ratingText?.let {
-                                    Text(text = "Valutazione: $it", color = FvpColors.TextSecondary, fontSize = scale.sp(13f))
-                                }
-                            }
-                            if (plotText.isNotBlank()) {
-                                Text(
-                                    text = plotText,
-                                    color = FvpColors.TextSecondary,
-                                    fontSize = scale.sp(14f),
-                                    maxLines = 6,
-                                    overflow = TextOverflow.Ellipsis,
-                                    onTextLayout = { result ->
-                                        hasPlotOverflow = result.hasVisualOverflow
-                                    },
-                                    modifier = Modifier.testTag("detail_plot")
-                                )
-                                if (hasPlotOverflow) {
-                                    FvpSecondaryButton(
-                                        text = "Leggi tutto",
-                                        onClick = { showPlotDialog = true },
-                                        scale = scale,
-                                        modifier = Modifier
-                                            .focusRequester(readMoreFocus)
-                                            .testTag("detail_read_more")
-                                    )
-                                }
-                            }
+                    Box(
+                        modifier = Modifier
+                            .width(scale.dp(160f))
+                            .aspectRatio(2f / 3f)
+                            .clip(RoundedCornerShape(scale.dp(10f)))
+                            .background(FvpColors.SurfaceElevated)
+                    ) {
+                        CatalogPosterImage(
+                            imageUrl = serie.cover ?: info?.info?.cover,
+                            title = serie.name,
+                            scale = scale,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
 
-                            if (selectedSeason == null) {
-                                if (derivedSeasons.isNotEmpty()) {
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(scale.dp(6f))
+                    ) {
+                        when {
+                            isLoading -> {
+                                Text(
+                                    text = "Caricamento...",
+                                    color = FvpColors.TextSecondary,
+                                    modifier = Modifier.testTag("detail_loading")
+                                )
+                            }
+                            error != null -> {
+                                Text(
+                                    text = "Informazioni non disponibili",
+                                    color = FvpColors.TextSecondary,
+                                    modifier = Modifier.testTag("detail_error")
+                                )
+                                FvpSecondaryButton(
+                                    text = "Riprova",
+                                    onClick = onRetry,
+                                    scale = scale,
+                                    modifier = Modifier
+                                        .focusRequester(retryFocus)
+                                        .testTag("detail_retry")
+                                )
+                            }
+                            info != null -> {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(scale.dp(12f)),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    yearText?.let {
+                                        Text(text = "Anno: $it", color = FvpColors.TextSecondary, fontSize = scale.sp(13f))
+                                    }
+                                    ratingText?.let {
+                                        Text(text = "Valutazione: $it", color = FvpColors.TextSecondary, fontSize = scale.sp(13f))
+                                    }
+                                }
+                                if (plotText.isNotBlank()) {
                                     Text(
-                                        text = "Stagioni",
+                                        text = plotText,
+                                        color = FvpColors.TextSecondary,
+                                        fontSize = scale.sp(14f),
+                                        maxLines = 6,
+                                        overflow = TextOverflow.Ellipsis,
+                                        onTextLayout = { result ->
+                                            hasPlotOverflow = result.hasVisualOverflow
+                                        },
+                                        modifier = Modifier.testTag("detail_plot")
+                                    )
+                                    if (hasPlotOverflow) {
+                                        FvpSecondaryButton(
+                                            text = "Leggi tutto",
+                                            onClick = { showPlotDialog = true },
+                                            scale = scale,
+                                            modifier = Modifier
+                                                .focusRequester(readMoreFocus)
+                                                .focusProperties {
+                                                    down = when {
+                                                        selectedSeason == null && firstSeasonNumber != null ->
+                                                            seasonFocusRequesters[firstSeasonNumber] ?: FocusRequester.Default
+                                                        selectedSeason != null && firstEpisodeId != null ->
+                                                            episodeFocusRequesters[firstEpisodeId] ?: FocusRequester.Default
+                                                        else -> FocusRequester.Default
+                                                    }
+                                                }
+                                                .testTag("detail_read_more")
+                                        )
+                                    }
+                                }
+
+                                if (selectedSeason == null) {
+                                    if (derivedSeasons.isNotEmpty()) {
+                                        Text(
+                                            text = "Stagioni",
+                                            color = FvpColors.TextPrimary,
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontSize = scale.sp(15f),
+                                            modifier = Modifier.padding(top = scale.dp(6f), bottom = scale.dp(4f))
+                                        )
+                                        LazyColumn(
+                                            state = seasonsListState,
+                                            verticalArrangement = Arrangement.spacedBy(scale.dp(6f)),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .weight(1f)
+                                                .testTag("serie_seasons_list")
+                                        ) {
+                                            items(derivedSeasons, key = { it.seasonNumber }) { season ->
+                                                val isFirst = season.seasonNumber == firstSeasonNumber
+                                                val fr = remember(season.seasonNumber, seasonFocusRequesters) { seasonFocusRequesters[season.seasonNumber] ?: FocusRequester() }
+                                                val count = season.episodeCount
+                                                val countText = if (count != null) " · $count episodi" else ""
+                                                ListItem(
+                                                    selected = false,
+                                                    onClick = {
+                                                        lastSeason = season.seasonNumber
+                                                        selectedSeason = season.seasonNumber
+                                                    },
+                                                    headlineContent = {
+                                                        Text(
+                                                            text = "${season.name}$countText",
+                                                            maxLines = 1,
+                                                            overflow = TextOverflow.Ellipsis
+                                                        )
+                                                    },
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .focusRequester(fr)
+                                                        .then(
+                                                            if (isFirst) {
+                                                                Modifier.focusProperties {
+                                                                    up = if (hasPlotOverflow) readMoreFocus else favoriteFocus
+                                                                }
+                                                            } else Modifier
+                                                        )
+                                                        .testTag("detail_season_${season.seasonNumber}"),
+                                                    colors = ListItemDefaults.colors(
+                                                        containerColor = FvpColors.SurfaceElevated,
+                                                        contentColor = FvpColors.TextPrimary,
+                                                        focusedContainerColor = FvpColors.SurfaceElevated
+                                                    ),
+                                                    scale = ListItemDefaults.scale(focusedScale = 1.04f),
+                                                    border = ListItemDefaults.border(
+                                                        focusedBorder = Border(BorderStroke(2.dp, FvpColors.GreenFocus))
+                                                    ),
+                                                    shape = ListItemDefaults.shape(shape = RoundedCornerShape(scale.dp(8f)))
+                                                )
+                                            }
+                                        }
+                                    } else {
+                                        Text(text = "Nessuna stagione disponibile", color = FvpColors.TextSecondary, modifier = Modifier.weight(1f))
+                                    }
+                                } else {
+                                    Text(
+                                        text = "Episodi · Stagione $selectedSeason",
                                         color = FvpColors.TextPrimary,
                                         fontWeight = FontWeight.SemiBold,
                                         fontSize = scale.sp(15f),
                                         modifier = Modifier.padding(top = scale.dp(6f), bottom = scale.dp(4f))
                                     )
-                                    LazyColumn(
-                                        state = seasonsListState,
-                                        verticalArrangement = Arrangement.spacedBy(scale.dp(6f)),
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .weight(1f)
-                                            .testTag("serie_seasons_list")
-                                    ) {
-                                        items(derivedSeasons, key = { it.seasonNumber }) { season ->
-                                            val fr = remember(season.seasonNumber, seasonFocusRequesters) { seasonFocusRequesters[season.seasonNumber] ?: FocusRequester() }
-                                            val count = season.episodeCount
-                                            val countText = if (count != null) " · $count episodi" else ""
-                                            ListItem(
-                                                selected = false,
-                                                onClick = {
-                                                    lastSeason = season.seasonNumber
-                                                    selectedSeason = season.seasonNumber
-                                                },
-                                                headlineContent = {
-                                                    Text(
-                                                        text = "${season.name}$countText",
-                                                        maxLines = 1,
-                                                        overflow = TextOverflow.Ellipsis
-                                                    )
-                                                },
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .focusRequester(fr)
-                                                    .testTag("detail_season_${season.seasonNumber}"),
-                                                colors = ListItemDefaults.colors(
-                                                    containerColor = FvpColors.SurfaceElevated,
-                                                    contentColor = FvpColors.TextPrimary,
-                                                    focusedContainerColor = FvpColors.SurfaceElevated
-                                                ),
-                                                scale = ListItemDefaults.scale(focusedScale = 1.04f),
-                                                border = ListItemDefaults.border(
-                                                    focusedBorder = Border(BorderStroke(2.dp, FvpColors.GreenFocus))
-                                                ),
-                                                shape = ListItemDefaults.shape(shape = RoundedCornerShape(scale.dp(8f)))
-                                            )
-                                        }
-                                    }
-                                } else {
-                                    Text(text = "Nessuna stagione disponibile", color = FvpColors.TextSecondary, modifier = Modifier.weight(1f))
-                                }
-                            } else {
-                                Text(
-                                    text = "Episodi · Stagione $selectedSeason",
-                                    color = FvpColors.TextPrimary,
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = scale.sp(15f),
-                                    modifier = Modifier.padding(top = scale.dp(6f), bottom = scale.dp(4f))
-                                )
-                                if (episodesForSelected.isEmpty()) {
-                                    Text(text = "Nessun episodio disponibile", color = FvpColors.TextSecondary, modifier = Modifier.weight(1f))
-                                } else {
-                                    LazyColumn(
-                                        state = episodesListState,
-                                        verticalArrangement = Arrangement.spacedBy(scale.dp(6f)),
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .weight(1f)
-                                            .testTag("serie_episodes_list")
-                                    ) {
-                                        items(episodesForSelected, key = { it.id }) { ep ->
-                                            val fr = remember(ep.id, episodeFocusRequesters) { episodeFocusRequesters[ep.id] ?: FocusRequester() }
-                                            val epTitle = ep.title.ifBlank { "Episodio ${ep.episodeNum}" }
-                                            val duration = ep.info?.duration ?: ep.info?.durationSecs?.let { secs -> formatDuration(secs) }
-                                            EpisodeRowItem(
-                                                episode = ep,
-                                                title = epTitle,
-                                                duration = duration,
-                                                scale = scale,
-                                                focusRequester = fr,
-                                                onPlay = { onPlayEpisode(ep) }
-                                            )
+                                    if (episodesForSelected.isEmpty()) {
+                                        Text(text = "Nessun episodio disponibile", color = FvpColors.TextSecondary, modifier = Modifier.weight(1f))
+                                    } else {
+                                        LazyColumn(
+                                            state = episodesListState,
+                                            verticalArrangement = Arrangement.spacedBy(scale.dp(6f)),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .weight(1f)
+                                                .testTag("serie_episodes_list")
+                                        ) {
+                                            items(episodesForSelected, key = { it.id }) { ep ->
+                                                val isFirst = ep.id == firstEpisodeId
+                                                val fr = remember(ep.id, episodeFocusRequesters) { episodeFocusRequesters[ep.id] ?: FocusRequester() }
+                                                val epTitle = ep.title.ifBlank { "Episodio ${ep.episodeNum}" }
+                                                val duration = ep.info?.duration ?: ep.info?.durationSecs?.let { secs -> formatDuration(secs) }
+                                                EpisodeRowItem(
+                                                    episode = ep,
+                                                    title = epTitle,
+                                                    duration = duration,
+                                                    scale = scale,
+                                                    focusRequester = fr,
+                                                    upFocus = if (isFirst) {
+                                                        if (hasPlotOverflow) readMoreFocus else favoriteFocus
+                                                    } else null,
+                                                    onPlay = { onPlayEpisode(ep) }
+                                                )
+                                            }
                                         }
                                     }
                                 }
                             }
-                        }
-                        else -> {
-                            Text(text = serie.name, color = FvpColors.TextSecondary, modifier = Modifier.weight(1f))
+                            else -> {
+                                Text(text = serie.name, color = FvpColors.TextSecondary, modifier = Modifier.weight(1f))
+                            }
                         }
                     }
                 }
             }
         }
-    }
-
-    if (showPlotDialog) {
-        Dialog(
-            onDismissRequest = { showPlotDialog = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
-        ) {
-            BackHandler { showPlotDialog = false }
-            LaunchedEffect(Unit) { dialogPlotFocus.requestFocus() }
-            SeriesPlotDialog(
+        if (showPlotDialog) {
+            PlotDialog(
                 title = headerTitle,
                 plotText = plotText,
                 scale = scale,
-                plotFocus = dialogPlotFocus,
-                closeFocus = dialogCloseFocus,
                 onClose = { showPlotDialog = false }
             )
         }
@@ -423,87 +462,89 @@ fun SeriesDetailOverlay(
 }
 
 @Composable
-private fun SeriesPlotDialog(
+private fun PlotDialog(
     title: String,
     plotText: String,
     scale: UiScale,
-    plotFocus: FocusRequester,
-    closeFocus: FocusRequester,
     onClose: () -> Unit
 ) {
     val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
-    val halfPx = with(density) { scale.dp(180f).toPx() }
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(FvpColors.Background.copy(alpha = 0.85f))
-            .padding(scale.dp(24f))
-            .testTag("detail_plot_dialog"),
-        contentAlignment = Alignment.Center
+    val halfViewportPx = with(density) { scale.dp(180f).toPx() }
+    val closeFocus = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) { closeFocus.requestFocus() }
+
+    Dialog(
+        onDismissRequest = onClose,
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
     ) {
-        Column(
+        BackHandler { onClose() }
+        Box(
             modifier = Modifier
-                .clip(RoundedCornerShape(scale.dp(16f)))
-                .background(FvpColors.Surface)
-                .padding(scale.dp(20f))
-                .fillMaxWidth(0.84f)
-                .heightIn(max = scale.dp(520f))
-                .focusProperties { exit = { FocusRequester.Cancel } },
-            verticalArrangement = Arrangement.spacedBy(scale.dp(12f))
-        ) {
-            Text(
-                text = title,
-                color = FvpColors.TextPrimary,
-                fontWeight = FontWeight.Bold,
-                fontSize = scale.sp(18f),
-                modifier = Modifier.testTag("detail_plot_dialog_title")
-            )
-            Text(
-                text = plotText,
-                color = FvpColors.TextSecondary,
-                fontSize = scale.sp(15f),
-                modifier = Modifier
-                    .weight(1f, fill = false)
-                    .verticalScroll(scrollState)
-                    .focusRequester(plotFocus)
-                    .focusable()
-                    .onPreviewKeyEvent { event ->
-                        if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                        when (event.key) {
-                            Key.DirectionDown -> {
-                                if (scrollState.canScrollForward) {
-                                    scope.launch { scrollState.animateScrollBy(halfPx) }
-                                    true
-                                } else {
-                                    closeFocus.requestFocus()
-                                    true
-                                }
-                            }
-                            Key.DirectionUp -> {
-                                if (scrollState.canScrollBackward) {
-                                    scope.launch { scrollState.animateScrollBy(-halfPx) }
-                                    true
-                                } else false
-                            }
-                            else -> false
+                .fillMaxSize()
+                .background(FvpColors.Background.copy(alpha = 0.85f))
+                .padding(scale.dp(24f))
+                .testTag("detail_plot_dialog")
+                .onPreviewKeyEvent { event ->
+                    if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                    when (event.key) {
+                        Key.DirectionDown -> {
+                            if (scrollState.canScrollForward) {
+                                scope.launch { scrollState.animateScrollBy(halfViewportPx) }
+                                true
+                            } else false
                         }
+                        Key.DirectionUp -> {
+                            if (scrollState.canScrollBackward) {
+                                scope.launch { scrollState.animateScrollBy(-halfViewportPx) }
+                                true
+                            } else false
+                        }
+                        else -> false
                     }
-                    .testTag("detail_plot_full")
-            )
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(scale.dp(12f)),
-                modifier = Modifier.fillMaxWidth()
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(scale.dp(16f)))
+                    .background(FvpColors.Surface)
+                    .padding(scale.dp(20f))
+                    .fillMaxWidth(0.84f)
+                    .heightIn(max = scale.dp(520f)),
+                verticalArrangement = Arrangement.spacedBy(scale.dp(12f))
             ) {
-                FvpSecondaryButton(
-                    text = "Chiudi",
-                    onClick = onClose,
-                    scale = scale,
-                    modifier = Modifier
-                        .focusRequester(closeFocus)
-                        .testTag("detail_plot_dialog_close")
+                Text(
+                    text = title,
+                    color = FvpColors.TextPrimary,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = scale.sp(18f),
+                    modifier = Modifier.testTag("detail_plot_dialog_title")
                 )
+                Text(
+                    text = plotText,
+                    color = FvpColors.TextSecondary,
+                    fontSize = scale.sp(15f),
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .verticalScroll(scrollState)
+                        .testTag("detail_plot_full")
+                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(scale.dp(12f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    FvpSecondaryButton(
+                        text = "Chiudi",
+                        onClick = onClose,
+                        scale = scale,
+                        modifier = Modifier
+                            .focusRequester(closeFocus)
+                            .testTag("detail_plot_dialog_close")
+                    )
+                }
             }
         }
     }
@@ -516,6 +557,7 @@ private fun EpisodeRowItem(
     duration: String?,
     scale: UiScale,
     focusRequester: FocusRequester,
+    upFocus: FocusRequester?,
     onPlay: () -> Unit
 ) {
     ListItem(
@@ -549,6 +591,11 @@ private fun EpisodeRowItem(
         modifier = Modifier
             .fillMaxWidth()
             .focusRequester(focusRequester)
+            .then(
+                if (upFocus != null) {
+                    Modifier.focusProperties { up = upFocus }
+                } else Modifier
+            )
             .testTag("detail_episode_${episode.id}"),
         colors = ListItemDefaults.colors(containerColor = FvpColors.SurfaceElevated),
         scale = ListItemDefaults.scale(focusedScale = 1.04f),

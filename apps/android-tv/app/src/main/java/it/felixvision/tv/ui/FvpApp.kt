@@ -59,6 +59,7 @@ fun FvpApp(container: AppContainer) {
                         server = creds.server,
                         username = creds.username,
                         password = creds.password,
+                        serverCode = creds.serverCode,
                         accountStatus = screen.summary.status.name,
                         expiresAtEpochSeconds = screen.summary.expiresAtEpochSeconds,
                         maxConnections = screen.summary.maxConnections,

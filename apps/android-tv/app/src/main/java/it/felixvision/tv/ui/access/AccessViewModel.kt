@@ -144,6 +144,7 @@ class AccessViewModel(private val container: AppContainer) : ViewModel() {
                     password = password,
                     banner = null,
                     persist = true,
+                    serverCode = outcome.serverCode
                 )
                 is LoginOutcome.Failure -> _ui.update {
                     it.copy(busy = false, errorMessage = outcome.message)
@@ -227,6 +228,7 @@ class AccessViewModel(private val container: AppContainer) : ViewModel() {
                 password = credentials.password,
                 banner = REMOTE_CONFIGURED_MESSAGE,
                 persist = true,
+                serverCode = outcome.serverCode
             )
 
             is LoginOutcome.Failure -> {
@@ -257,13 +259,13 @@ class AccessViewModel(private val container: AppContainer) : ViewModel() {
     // --- Accesso ---
 
     private suspend fun login(serverInput: String, username: String, password: String): LoginOutcome {
-        val server = when (val resolution = resolveServer(serverInput)) {
-            is ServerResolution.Resolved -> resolution.server
-            is ServerResolution.Failed -> return LoginOutcome.Failure(resolution.message)
+        val resolution = when (val r = resolveServer(serverInput)) {
+            is ServerResolution.Resolved -> r
+            is ServerResolution.Failed -> return LoginOutcome.Failure(r.message)
         }
 
-        return when (val result = container.xtreamClient.login(server, username, password)) {
-            is LoginResult.Success -> LoginOutcome.Success(result.account)
+        return when (val result = container.xtreamClient.login(resolution.server, username, password)) {
+            is LoginResult.Success -> LoginOutcome.Success(result.account, resolution.serverCode)
             LoginResult.InvalidCredentials ->
                 LoginOutcome.Failure("Utente o password non validi.", credentialsRejected = true)
             is LoginResult.AccountExpired ->
@@ -299,12 +301,12 @@ class AccessViewModel(private val container: AppContainer) : ViewModel() {
     private suspend fun resolveServer(input: String): ServerResolution {
         return when (val parsed = ServerInput.classify(input)) {
             is ServerInput.Address -> ServerAddress.normalize(parsed.raw)
-                ?.let { ServerResolution.Resolved(it) }
+                ?.let { ServerResolution.Resolved(it, null) }
                 ?: ServerResolution.Failed("Indirizzo del server non valido.")
 
             is ServerInput.Code -> when (val result = container.pairingClient.resolveRubrica(parsed.code)) {
                 is ApiResult.Ok -> ServerAddress.normalize(result.value)
-                    ?.let { ServerResolution.Resolved(it) }
+                    ?.let { ServerResolution.Resolved(it, parsed.code) }
                     ?: ServerResolution.Failed("Codice server non trovato")
                 is ApiResult.Http -> if (result.code == 404) {
                     ServerResolution.Failed("Codice server non trovato")
@@ -320,7 +322,8 @@ class AccessViewModel(private val container: AppContainer) : ViewModel() {
 
     fun updateCredentialsFromRemote(server: String, username: String, password: String, account: XtreamAccount) {
         viewModelScope.launch {
-            currentCredentials = StoredCredentials(server = server, username = username, password = password)
+            // Se server è un codice già risolto altrove, tentiamo di preservarlo se corrisponde
+            currentCredentials = StoredCredentials(server = server, username = username, password = password, serverCode = null)
             runCatching { container.credentialStore.save(currentCredentials!!) }
             _ui.update {
                 it.copy(screen = Screen.Account(summary = account.toSummary(), banner = REMOTE_CONFIGURED_MESSAGE))
@@ -333,8 +336,11 @@ class AccessViewModel(private val container: AppContainer) : ViewModel() {
         password: String,
         banner: String?,
         persist: Boolean,
+        serverCode: String? = null
     ) {
-        currentCredentials = StoredCredentials(server = account.server, username = account.username, password = password)
+        // Usa codice risolto se presente, altrimenti conserva quello già salvato se corrisponde
+        val effectiveCode = serverCode ?: currentCredentials?.serverCode?.takeIf { it.isNotBlank() }
+        currentCredentials = StoredCredentials(server = account.server, username = account.username, password = password, serverCode = effectiveCode)
         if (persist) {
             val saved = runCatching {
                 container.credentialStore.save(
@@ -342,6 +348,7 @@ class AccessViewModel(private val container: AppContainer) : ViewModel() {
                         server = account.server,
                         username = account.username,
                         password = password,
+                        serverCode = effectiveCode,
                     ),
                 )
             }.isSuccess
@@ -394,11 +401,13 @@ class AccessViewModel(private val container: AppContainer) : ViewModel() {
                 is LoginOutcome.Success -> {
                     pairingAllowed = false // non serve pairing, siamo loggati
                     verificationFinished = true
+                    // Preserva codice salvato se login diretto ha funzionato
                     onLoggedIn(
                         account = outcome.account,
                         password = stored.password,
                         banner = null,
                         persist = false,
+                        serverCode = stored.serverCode
                     )
                 }
                 is LoginOutcome.Failure -> {
@@ -431,12 +440,12 @@ class AccessViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     private sealed interface ServerResolution {
-        data class Resolved(val server: String) : ServerResolution
+        data class Resolved(val server: String, val serverCode: String?) : ServerResolution
         data class Failed(val message: String) : ServerResolution
     }
 
     private sealed interface LoginOutcome {
-        data class Success(val account: XtreamAccount) : LoginOutcome
+        data class Success(val account: XtreamAccount, val serverCode: String? = null) : LoginOutcome
 
         data class Failure(
             val message: String,

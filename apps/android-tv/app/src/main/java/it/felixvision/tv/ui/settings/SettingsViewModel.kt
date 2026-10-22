@@ -7,6 +7,7 @@ import it.felixvision.tv.data.pairing.PairingCoordinator
 import it.felixvision.tv.data.pairing.PairingPanelState
 import it.felixvision.tv.data.pairing.PairingStep
 import it.felixvision.tv.data.store.StoredCredentials
+import it.felixvision.tv.data.store.serverLabel
 import it.felixvision.tv.data.xtream.LoginResult
 import it.felixvision.tv.data.xtream.ServerAddress
 import it.felixvision.tv.data.xtream.ServerInput
@@ -24,6 +25,7 @@ import kotlinx.coroutines.launch
 data class SettingsUiState(
     val username: String = "",
     val serverHost: String = "",
+    val serverLabel: String = "Personalizzato",
     val status: String = "",
     val expiresAtEpochSeconds: Long? = null,
     val maxConnections: Int? = null,
@@ -50,10 +52,12 @@ class SettingsViewModel(
 ) : ViewModel() {
 
     private val coordinator: PairingCoordinator = container.newPairingCoordinator()
+    private var currentServerCode: String? = null
     private val _ui = MutableStateFlow(
         SettingsUiState(
             username = username,
             serverHost = extractHost(server),
+            serverLabel = "Personalizzato",
             status = status,
             expiresAtEpochSeconds = expiresAtEpochSeconds,
             maxConnections = maxConnections,
@@ -69,10 +73,15 @@ class SettingsViewModel(
         viewModelScope.launch {
             coordinator.state.collect { panel -> _ui.update { it.copy(pairing = panel) } }
         }
-        // Carica last update
+        // Carica last update e server label da credenziali salvate
         viewModelScope.launch {
             val last = container.catalogCache.lastUpdateMillis(server, username)
             _ui.update { it.copy(lastUpdateMillis = last) }
+            val stored = container.credentialStore.load()
+            if (stored != null && stored.server == server && stored.username == username) {
+                currentServerCode = stored.serverCode
+                _ui.update { it.copy(serverLabel = serverLabel(stored.serverCode)) }
+            }
         }
     }
 
@@ -119,19 +128,19 @@ class SettingsViewModel(
     private fun handleRemoteCredentials(remoteServer: String, remoteUser: String, remotePass: String) {
         viewModelScope.launch {
             _ui.update { it.copy(isRefreshing = true, error = null, message = null) }
-            val normalizedServer = resolveServer(remoteServer) ?: run {
+            val resolved = resolveServer(remoteServer) ?: run {
                 _ui.update { it.copy(isRefreshing = false, error = "Codice server non trovato") }
                 coordinator.reset()
                 return@launch
             }
-            when (val result = container.xtreamClient.login(normalizedServer, remoteUser, remotePass)) {
+            when (val result = container.xtreamClient.login(resolved.server, remoteUser, remotePass)) {
                 is LoginResult.Success -> {
                     // Sostituisce credenziali salvate, cancella cache precedente, ricarica e mostra "Configurato da remoto"
                     val oldServer = server
                     val oldUser = username
                     runCatching { container.catalogCache.clear(oldServer, oldUser) }
                     runCatching {
-                        container.credentialStore.save(StoredCredentials(server = result.account.server, username = result.account.username, password = remotePass))
+                        container.credentialStore.save(StoredCredentials(server = result.account.server, username = result.account.username, password = remotePass, serverCode = resolved.serverCode))
                     }
                     _ui.update { it.copy(isRefreshing = false, message = "Configurato da remoto") }
                     onCredentialsReplaced(result.account.server, result.account.username, remotePass)
@@ -156,15 +165,17 @@ class SettingsViewModel(
         }
     }
 
-    private suspend fun resolveServer(input: String): String? {
+    private suspend fun resolveServer(input: String): ResolvedServer? {
         return when (val parsed = ServerInput.classify(input)) {
-            is ServerInput.Address -> ServerAddress.normalize(parsed.raw)
+            is ServerInput.Address -> ServerAddress.normalize(parsed.raw)?.let { ResolvedServer(it, null) }
             is ServerInput.Code -> when (val result = container.pairingClient.resolveRubrica(parsed.code)) {
-                is ApiResult.Ok -> ServerAddress.normalize(result.value)
+                is ApiResult.Ok -> ServerAddress.normalize(result.value)?.let { ResolvedServer(it, parsed.code) }
                 else -> null
             }
         }
     }
+
+    private data class ResolvedServer(val server: String, val serverCode: String?)
 
     fun onRefreshCatalog() {
         viewModelScope.launch {

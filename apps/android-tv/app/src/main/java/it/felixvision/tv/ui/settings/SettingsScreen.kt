@@ -42,6 +42,7 @@ fun SettingsScreen(
     viewModel: SettingsViewModel,
     scale: UiScale,
     modifier: Modifier = Modifier,
+    contentFocusRequester: FocusRequester? = null,
 ) {
     val state by viewModel.ui.collectAsState()
 
@@ -61,11 +62,19 @@ fun SettingsScreen(
             SettingsRow(label = "Stato", value = state.status, scale = scale)
             SettingsRow(label = "Scadenza", value = formatExpiry(state.expiresAtEpochSeconds), scale = scale)
             SettingsRow(label = "Connessioni", value = formatConnections(state.activeConnections, state.maxConnections), scale = scale)
-            SettingsRow(label = "Server", value = state.serverHost, scale = scale)
+            SettingsRow(label = "Server", value = state.serverLabel, scale = scale, rowTestTag = "settings_server_row")
         }
 
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(scale.dp(12f))) {
-            FvpPrimaryButton(text = if (state.isRefreshing) "Aggiornamento…" else "Aggiorna catalogo", onClick = { viewModel.onRefreshCatalog() }, scale = scale, enabled = !state.isRefreshing, modifier = Modifier.testTag("settings_refresh"))
+            FvpPrimaryButton(
+                text = if (state.isRefreshing) "Aggiornamento…" else "Aggiorna catalogo",
+                onClick = { viewModel.onRefreshCatalog() },
+                scale = scale,
+                enabled = !state.isRefreshing,
+                modifier = Modifier
+                    .then(if (contentFocusRequester != null) Modifier.focusRequester(contentFocusRequester) else Modifier)
+                    .testTag("settings_refresh")
+            )
             state.lastUpdateMillis?.let { ts ->
                 Text(text = "Ultimo aggiornamento: ${formatTimestamp(ts)}", color = FvpColors.TextSecondary, fontSize = scale.sp(13f))
             } ?: Text(text = "Mai aggiornato", color = FvpColors.TextSecondary, fontSize = scale.sp(13f))
@@ -116,8 +125,8 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun SettingsRow(label: String, value: String, scale: UiScale) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+private fun SettingsRow(label: String, value: String, scale: UiScale, rowTestTag: String? = null) {
+    Row(modifier = Modifier.fillMaxWidth().then(if (rowTestTag != null) Modifier.testTag(rowTestTag) else Modifier), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(text = label, color = FvpColors.TextSecondary, fontSize = scale.sp(14f))
         Text(text = value, color = FvpColors.TextPrimary, fontSize = scale.sp(14f))
     }
