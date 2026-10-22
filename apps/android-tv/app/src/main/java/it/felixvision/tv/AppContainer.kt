@@ -8,6 +8,10 @@ import it.felixvision.tv.core.Clock
 import it.felixvision.tv.core.FvpJson
 import it.felixvision.tv.core.HttpClientFactory
 import it.felixvision.tv.core.SystemClock
+import it.felixvision.tv.data.catalog.CatalogCache
+import it.felixvision.tv.data.catalog.CatalogClient
+import it.felixvision.tv.data.favorites.FavoritesStore
+import it.felixvision.tv.data.images.FvpImageLoader
 import it.felixvision.tv.data.pairing.PairingClient
 import it.felixvision.tv.data.pairing.PairingCoordinator
 import it.felixvision.tv.data.store.CredentialStore
@@ -32,8 +36,25 @@ class AppContainer(private val context: Context) {
     /** Un solo [OkHttpClient] per tutta l'app (vedi [HttpClientFactory]). */
     val httpClient: OkHttpClient by lazy { HttpClientFactory.create() }
 
+    /** Client dedicato alle immagini: max 4 download simultanee, nessuna retry, cache 200MB via Coil. */
+    val imageHttpClient: OkHttpClient by lazy { FvpImageLoader.createImageHttpClient() }
+
+    val imageLoader by lazy { FvpImageLoader.create(context) }
+
     val xtreamClient: XtreamClient by lazy {
         XtreamClient(http = httpClient, json = json, clock = clock)
+    }
+
+    val catalogClient: CatalogClient by lazy {
+        CatalogClient(http = httpClient, json = json)
+    }
+
+    val catalogCache: CatalogCache by lazy {
+        CatalogCache(context = context, json = json)
+    }
+
+    val favoritesStore: FavoritesStore by lazy {
+        FavoritesStore(context = context, json = json, clock = clock)
     }
 
     val pairingClient: PairingClient by lazy {

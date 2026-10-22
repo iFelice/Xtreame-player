@@ -157,7 +157,10 @@ app/src/main/java/it/felixvision/tv/
 ├── data/xtream/               normalizzazione indirizzo, client Xtream, modelli
 ├── data/pairing/              client del relay, macchina a stati dell'abbinamento
 ├── data/store/                cifrario Keystore AES-GCM, DataStore, archivio credenziali
-└── ui/                        tema, controlli TV, QR, schermate di accesso e account
+├── data/catalog/              modelli tolleranti, client sequenziale, cache 24h
+├── data/favorites/            DataStore dei preferiti per server+utente
+├── data/images/               ImageLoader Coil 3 con client dedicato (max 4, 200 MB)
+└── ui/                        tema, controlli TV, QR, cataloghi e impostazioni
 ```
 
 ### Rete (protezioni anti-blocco)
@@ -208,6 +211,27 @@ server Xtream raggiunti con indirizzo privato non risponderebbero.
    l'errore è mostrato e una nuova sessione è già pronta.
 6. Prima della prima creazione una richiesta a `/healthz` gira in sottofondo all'avvio.
 
+### Catalogo (PR2)
+
+- **Caricamento sequenziale**: `get_live_categories → get_live_streams → get_vod_categories → get_vod_streams → get_series_categories → get_series`. Ogni richiesta parte solo dopo la precedente; parsing JSON su dispatcher di background con modelli tolleranti; nessun retry automatico, errore con "Riprova".
+- **Cache su disco** legata a `server+utente` con timestamp: all'avvio si mostra subito la cache; nessun auto-refresh più di una volta ogni 24h; manuale da Impostazioni; durante l'aggiornamento resta disponibile la versione precedente.
+- **Immagini con Coil 3** su client dedicato: max 4 download simultanei, nessun retry, cache 200 MB, solo visibili + immediate vicine; placeholder con iniziali se fallisce.
+- **Navigazione a cassetto**: a riposo colonna di icone, si espande al focus; voci nell'ordine Novità, Live, Film, Serie, Preferiti, Impostazioni; colori attivi Live #FF9F0A, Film #10B981, Serie #2DD4BF, Novità #A3E635, Preferiti #FBBF24, Impostazioni bianco; inattive #AEAEB2; focus con bordo #34D399 e leggero ingrandimento; sfondi #1C1C1E/#2C2C2E/#3A3A3C.
+- **Sezioni**: Novità (ultimi film per `added`, ultime serie per `last_modified`, 40 ciascuna); Live con categorie a sinistra e debounce 300 ms; Film/Serie con griglia 5 colonne e dettaglio on-demand (`get_vod_info`/`get_series_info`); Preferiti con pressione lunga OK e DataStore per account; liste con `LazyColumn`/`LazyVerticalGrid` e chiavi stabili fino a 20k elementi.
+- **Impostazioni**: dati account (utente, stato, scadenza con giorni rimanenti, connessioni, server come host), "Aggiorna catalogo" con orario, "Configura da remoto" con QR (verifica login, sostituisce credenziali e cancella cache se riesce, altrimenti mantiene le vecchie), "Esci" con conferma che cancella credenziali, cache e preferiti.
+- **Correzioni abbinamento**: nessuna sessione durante verifica credenziali salvate; dopo 3 scadenze consecutive (30 min) si ferma con "Codice scaduto" e pulsante "Mostra un nuovo codice"; pannello Impostazioni attivo solo quando visibile.
+
+### Traffico in chiaro
+
+`res/xml/network_security_config.xml` consente esplicitamente il traffico HTTP: molti
+pannelli Xtream servono gli elenchi su `http://` (porte 8080/25461) o su indirizzi della
+rete di casa. Il motivo è documentato nel file stesso.
+
+Da Android 17 (API 37) l'accesso alla rete locale richiede il permesso runtime
+`ACCESS_LOCAL_NETWORK`: è dichiarato nel manifest e richiesto all'avvio, altrimenti i
+server Xtream raggiunti con indirizzo privato non risponderebbero.
+
+
 ---
 
 ## 6. Test
@@ -227,10 +251,43 @@ simulato e implementazioni finte per cifrario e preferenze:
 | `ServerAddressTest`, `ServerInputTest` | regola "codice o indirizzo" e normalizzazione dell'indirizzo |
 | `QrMatrixTest` | il QR decodifica in `<PAIRING_RELAY_URL>/?code=<PIN>` |
 | `EncryptedCredentialStoreTest` | cifratura dietro interfaccia, nessun dato in chiaro, cancellazione quando la decifratura fallisce |
+| `CatalogModelsTest` | JSON reali tipici con stream_id numerico/testuale, added testuale, campi null, ordine Novità |
+| `CatalogClientSequentialTest` | nessuna richiesta concorrente, errore interrompe sequenza senza retry |
+| `CatalogCacheTest` | lettura all'avvio, regola 24h, separazione per server+utente, clear su Esci |
+| `FavoritesStoreTest` | aggiunta/rimozione, separazione per account, cancellazione con Esci |
+| `PairingExpiryTest` | niente sessione durante verifica credenziali salvate, stop dopo 3 scadenze, ripartenza con nuovo codice, riconfigurazione da Impostazioni |
+| `ImageClientLimitTest` | limite 4 immagini contemporanee, nessun retry, placeholder iniziali |
 
 ---
 
-## 7. Note di conformità
+## 7. Come provare con il server Xtream finto dalla TV
+
+Il repository include un mock Xtream che simula le API senza account reali (`tools/xtream-mock/server.ts`):
+
+Sul Mac, nella radice del repository:
+
+```bash
+npm run mock:xtream:visual
+```
+
+Il server ascolta su `0.0.0.0:3333` (porta configurabile con `XTREAM_MOCK_PORT`). Dalla TV, sulla stessa rete Wi-Fi/LAN del Mac:
+
+- **Server:** `http://IP-DEL-MAC:3333` (sostituisci `IP-DEL-MAC` con l'indirizzo LAN del Mac, es. `192.168.1.50:3333` — non usare `localhost`, che per la TV è se stessa)
+- **Utente:** `demo`
+- **Password:** `demo`
+
+Per trovare l'IP del Mac:
+
+```bash
+ifconfig | grep 192.
+# oppure su macOS 13+: ipconfig getifaddr en0
+```
+
+Sulla TV inserisci `http://192.168.1.XX:3333` (esempio) e premi Accedi. Il catalogo visuale contiene 144 film, 220 canali e 42 serie con copertine generate localmente; i profili `small` e `stress` sono disponibili con `npm run mock:xtream:small` e `npm run mock:xtream:stress`.
+
+---
+
+## 8. Note di conformità
 
 - Progetto e codice sono originali: del materiale di riferimento dell'APK sono stati
   considerati solo responsabilità, flussi di focus e proporzioni (vedi

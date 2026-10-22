@@ -17,11 +17,11 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.tv.material3.Text
 import it.felixvision.tv.AppContainer
 import it.felixvision.tv.ui.access.AccessViewModel
-import it.felixvision.tv.ui.access.AccountScreen
 import it.felixvision.tv.ui.access.LoginScreen
 import it.felixvision.tv.ui.access.Screen
 import it.felixvision.tv.ui.components.FvpScreen
 import it.felixvision.tv.ui.components.UiScale
+import it.felixvision.tv.ui.main.FvpMainScreen
 import it.felixvision.tv.ui.theme.FvpColors
 
 @Composable
@@ -48,14 +48,40 @@ fun FvpApp(container: AppContainer) {
                 onTogglePasswordVisible = viewModel::togglePasswordVisible,
                 onPairingVisible = viewModel::onPairingVisible,
                 onPairingHidden = viewModel::onPairingHidden,
+                onRenewCode = viewModel::onRenewPairingCode,
             )
 
-            is Screen.Account -> AccountScreen(
-                summary = screen.summary,
-                banner = screen.banner,
-                scale = scale,
-                onSignOut = viewModel::signOut,
-            )
+            is Screen.Account -> {
+                val creds = viewModel.getCurrentCredentials()
+                if (creds != null) {
+                    FvpMainScreen(
+                        container = container,
+                        server = creds.server,
+                        username = creds.username,
+                        password = creds.password,
+                        accountStatus = screen.summary.status.name,
+                        expiresAtEpochSeconds = screen.summary.expiresAtEpochSeconds,
+                        maxConnections = screen.summary.maxConnections,
+                        activeConnections = screen.summary.activeConnections,
+                        scale = scale,
+                        accessViewModel = viewModel,
+                        onSignOut = viewModel::signOut,
+                    )
+                } else {
+                    LoginScreen(
+                        state = state,
+                        scale = scale,
+                        onSubmit = viewModel::submit,
+                        onServerChange = viewModel::onServerChange,
+                        onUsernameChange = viewModel::onUsernameChange,
+                        onPasswordChange = viewModel::onPasswordChange,
+                        onTogglePasswordVisible = viewModel::togglePasswordVisible,
+                        onPairingVisible = viewModel::onPairingVisible,
+                        onPairingHidden = viewModel::onPairingHidden,
+                        onRenewCode = viewModel::onRenewPairingCode,
+                    )
+                }
+            }
         }
     }
 }

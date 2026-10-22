@@ -75,8 +75,10 @@ data class AccessUiState(
  * Logica della schermata di accesso: modulo manuale, login automatico con le
  * credenziali salvate e abbinamento remoto.
  *
- * Tutte le chiamate di rete passano dal client Xtream, che garantisce un solo
- * login alla volta e nessun nuovo tentativo automatico.
+ * Correzioni PR2:
+ * - Se ci sono credenziali salvate, la sessione di abbinamento non viene creata
+ *   finché la verifica delle credenziali salvate non è fallita.
+ * - Limite di 3 sessioni scadute consecutive: si ferma e mostra "Codice scaduto".
  */
 class AccessViewModel(private val container: AppContainer) : ViewModel() {
 
@@ -87,7 +89,14 @@ class AccessViewModel(private val container: AppContainer) : ViewModel() {
 
     private var pairingJob: Job? = null
     private var pairingVisible = false
+    // Correzione E.1: all'avvio, se ci sono credenziali salvate, non creare sessione finché verifica non fallisce
+    private var pairingAllowed = false
+    private var savedCredentialsExist: Boolean = false
+    private var verificationFinished = false
     private var prefillCounter = 0L
+    private var currentCredentials: StoredCredentials? = null
+
+    fun getCurrentCredentials(): StoredCredentials? = currentCredentials
 
     init {
         viewModelScope.launch {
@@ -148,7 +157,19 @@ class AccessViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             runCatching { container.credentialStore.clear() }
             coordinator.reset()
+            pairingAllowed = true
+            verificationFinished = true
             _ui.value = AccessUiState(screen = Screen.Access)
+        }
+    }
+
+    fun onRenewPairingCode() {
+        coordinator.reset()
+        // Riparte da capo
+        if (pairingVisible && pairingAllowed) {
+            pairingJob?.cancel()
+            pairingJob = null
+            startPairingLoop()
         }
     }
 
@@ -157,6 +178,11 @@ class AccessViewModel(private val container: AppContainer) : ViewModel() {
     fun onPairingVisible() {
         if (pairingVisible) return
         pairingVisible = true
+        if (!pairingAllowed) {
+            // E.1: non creare sessione finché verifica credenziali salvate non è fallita
+            // Resta in attesa; la creazione avverrà quando verificationFinished consentirà
+            return
+        }
         startPairingLoop()
     }
 
@@ -168,6 +194,7 @@ class AccessViewModel(private val container: AppContainer) : ViewModel() {
 
     private fun startPairingLoop() {
         if (pairingJob?.isActive == true) return
+        if (!pairingAllowed) return
         pairingJob = viewModelScope.launch {
             while (isActive && pairingVisible) {
                 val step = try {
@@ -291,16 +318,24 @@ class AccessViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    fun updateCredentialsFromRemote(server: String, username: String, password: String, account: XtreamAccount) {
+        viewModelScope.launch {
+            currentCredentials = StoredCredentials(server = server, username = username, password = password)
+            runCatching { container.credentialStore.save(currentCredentials!!) }
+            _ui.update {
+                it.copy(screen = Screen.Account(summary = account.toSummary(), banner = REMOTE_CONFIGURED_MESSAGE))
+            }
+        }
+    }
+
     private suspend fun onLoggedIn(
         account: XtreamAccount,
         password: String,
         banner: String?,
         persist: Boolean,
     ) {
+        currentCredentials = StoredCredentials(server = account.server, username = account.username, password = password)
         if (persist) {
-            // Solo credenziali validate vengono salvate, e solo in forma cifrata.
-            // Un errore del Keystore non deve impedire l'accesso: si prosegue
-            // senza salvataggio e l'utente rifarà l'accesso al prossimo avvio.
             val saved = runCatching {
                 container.credentialStore.save(
                     StoredCredentials(
@@ -331,10 +366,18 @@ class AccessViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             val stored = container.credentialStore.load()
             if (stored == null) {
-                // Nessuna credenziale (o dati illeggibili già cancellati): accesso manuale.
+                // Nessuna credenziale: accesso manuale, pairing consentito
+                pairingAllowed = true
+                verificationFinished = true
                 _ui.update { it.copy(screen = Screen.Access) }
+                // Se il pannello era già visibile (es. rotazione), ora può partire
+                if (pairingVisible) startPairingLoop()
                 return@launch
             }
+
+            savedCredentialsExist = true
+            pairingAllowed = false
+            verificationFinished = false
 
             _ui.update {
                 it.copy(
@@ -348,18 +391,22 @@ class AccessViewModel(private val container: AppContainer) : ViewModel() {
             }
 
             when (val outcome = login(stored.server, stored.username, stored.password)) {
-                is LoginOutcome.Success -> onLoggedIn(
-                    account = outcome.account,
-                    password = stored.password,
-                    banner = null,
-                    persist = false,
-                )
+                is LoginOutcome.Success -> {
+                    pairingAllowed = false // non serve pairing, siamo loggati
+                    verificationFinished = true
+                    onLoggedIn(
+                        account = outcome.account,
+                        password = stored.password,
+                        banner = null,
+                        persist = false,
+                    )
+                }
                 is LoginOutcome.Failure -> {
                     if (outcome.credentialsRejected) {
-                        // Credenziali non più valide: si cancellano, così l'avvio
-                        // successivo non riprova all'infinito.
                         runCatching { container.credentialStore.clear() }
                     }
+                    pairingAllowed = true
+                    verificationFinished = true
                     _ui.update {
                         it.copy(
                             busy = false,
@@ -368,6 +415,7 @@ class AccessViewModel(private val container: AppContainer) : ViewModel() {
                             errorMessage = outcome.message,
                         )
                     }
+                    if (pairingVisible) startPairingLoop()
                 }
             }
         }

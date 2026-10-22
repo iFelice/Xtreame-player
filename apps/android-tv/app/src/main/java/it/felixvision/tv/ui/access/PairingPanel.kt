@@ -26,6 +26,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.tv.material3.Text
 import it.felixvision.tv.BuildConfig
 import it.felixvision.tv.data.pairing.PairingPanelState
+import it.felixvision.tv.ui.components.FvpSecondaryButton
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.qr.QrBitmap
 import it.felixvision.tv.ui.theme.FvpColors
@@ -40,6 +41,7 @@ fun PairingPanel(
     state: PairingPanelState,
     scale: UiScale,
     modifier: Modifier = Modifier,
+    onRenewCode: (() -> Unit)? = null,
 ) {
     Column(
         modifier = modifier
@@ -65,7 +67,23 @@ fun PairingPanel(
         Spacer(Modifier.height(scale.dp(16f)))
 
         val payload = state.qrPayload
-        if (payload == null) {
+        if (state.isExpired) {
+            Box(
+                modifier = Modifier
+                    .size(scale.dp(196f))
+                    .clip(RoundedCornerShape(scale.dp(12f)))
+                    .background(FvpColors.SurfaceElevated),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "Codice scaduto",
+                    color = FvpColors.Error,
+                    fontSize = scale.sp(16f),
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        } else if (payload == null) {
             PairingPlaceholder(state = state, scale = scale)
         } else {
             QrCodeImage(payload = payload, scale = scale)
@@ -74,39 +92,52 @@ fun PairingPanel(
         Spacer(Modifier.height(scale.dp(14f)))
 
         val code = state.code
-        Text(
-            text = code?.let(::formatPin) ?: "– – – – – –",
-            color = FvpColors.Green,
-            fontSize = scale.sp(30f),
-            fontWeight = FontWeight.Bold,
-        )
-        Spacer(Modifier.height(scale.dp(6f)))
-        Text(
-            text = shortRelayAddress(BuildConfig.PAIRING_RELAY_URL),
-            color = FvpColors.TextSecondary,
-            fontSize = scale.sp(12f),
-        )
-
-        val remaining = rememberRemainingSeconds(state.expiresAtMillis)
-        if (remaining != null) {
-            Spacer(Modifier.height(scale.dp(10f)))
+        if (state.isExpired) {
             Text(
-                text = "Tempo residuo ${formatCountdown(remaining)}",
-                color = FvpColors.TextSecondary,
-                fontSize = scale.sp(14f),
-            )
-        }
-
-        val failure = state.failureMessage
-        if (failure != null) {
-            Spacer(Modifier.height(scale.dp(10f)))
-            Text(
-                text = state.retryInSeconds?.let { "$failure Riprovo tra $it s." } ?: failure,
+                text = "Codice scaduto",
                 color = FvpColors.Error,
-                fontSize = scale.sp(13f),
-                lineHeight = scale.sp(18f),
-                textAlign = TextAlign.Center,
+                fontSize = scale.sp(18f),
+                fontWeight = FontWeight.Bold,
             )
+            if (onRenewCode != null) {
+                Spacer(Modifier.height(scale.dp(10f)))
+                FvpSecondaryButton(text = "Mostra un nuovo codice", onClick = onRenewCode, scale = scale)
+            }
+        } else {
+            Text(
+                text = code?.let(::formatPin) ?: "– – – – – –",
+                color = FvpColors.Green,
+                fontSize = scale.sp(30f),
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.height(scale.dp(6f)))
+            Text(
+                text = shortRelayAddress(BuildConfig.PAIRING_RELAY_URL),
+                color = FvpColors.TextSecondary,
+                fontSize = scale.sp(12f),
+            )
+
+            val remaining = rememberRemainingSeconds(state.expiresAtMillis)
+            if (remaining != null) {
+                Spacer(Modifier.height(scale.dp(10f)))
+                Text(
+                    text = "Tempo residuo ${formatCountdown(remaining)}",
+                    color = FvpColors.TextSecondary,
+                    fontSize = scale.sp(14f),
+                )
+            }
+
+            val failure = state.failureMessage
+            if (failure != null) {
+                Spacer(Modifier.height(scale.dp(10f)))
+                Text(
+                    text = state.retryInSeconds?.let { "$failure Riprovo tra $it s." } ?: failure,
+                    color = FvpColors.Error,
+                    fontSize = scale.sp(13f),
+                    lineHeight = scale.sp(18f),
+                    textAlign = TextAlign.Center,
+                )
+            }
         }
     }
 }

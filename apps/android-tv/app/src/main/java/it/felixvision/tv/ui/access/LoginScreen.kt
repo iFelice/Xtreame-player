@@ -57,14 +57,13 @@ fun LoginScreen(
     onTogglePasswordVisible: () -> Unit,
     onPairingVisible: () -> Unit,
     onPairingHidden: () -> Unit,
+    onRenewCode: (() -> Unit)? = null,
 ) {
     val serverState = rememberTextFieldState(state.server)
     val usernameState = rememberTextFieldState(state.username)
     val passwordState = rememberTextFieldState(state.password)
     val serverFocus = remember { FocusRequester() }
 
-    // Il testo vive nei campi; il ViewModel ne riceve una copia per validare e
-    // inviare. Il flusso si interrompe quando la schermata viene chiusa.
     LaunchedEffect(serverState) {
         snapshotFlow { serverState.text.toString() }
             .distinctUntilChanged()
@@ -81,7 +80,6 @@ fun LoginScreen(
             .collect { value -> onPasswordChange(value) }
     }
 
-    // Credenziali ricevute dal telefono e rifiutate: si riportano nei campi.
     LaunchedEffect(state.prefill?.id) {
         val prefill = state.prefill ?: return@LaunchedEffect
         serverState.setTextAndPlaceCursorAtEnd(prefill.server)
@@ -124,6 +122,7 @@ fun LoginScreen(
                 state = state.pairing,
                 scale = scale,
                 modifier = Modifier.width(scale.dp(340f)),
+                onRenewCode = onRenewCode,
             )
         }
     }
@@ -214,8 +213,6 @@ private fun LoginForm(
             )
         }
 
-        // Spazio riservato ai messaggi: evita che il modulo "salti" quando
-        // compare un errore, e tiene il pulsante sempre nella stessa posizione.
         Box(modifier = Modifier.height(scale.dp(42f))) {
             val error = state.errorMessage
             val status = state.statusMessage
