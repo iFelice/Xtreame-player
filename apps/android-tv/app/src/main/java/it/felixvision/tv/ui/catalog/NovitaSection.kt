@@ -1,5 +1,7 @@
 package it.felixvision.tv.ui.catalog
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -171,7 +173,7 @@ fun NovitaSection(
                 ) {
                     itemsIndexed(recentFilms, key = { _, f -> f.streamId }) { index, film ->
                         val isFav = favorites.any { it.id == "vod_${film.streamId}" }
-                        val itemFr = filmItemFocusRequesters[film.streamId] ?: FocusRequester()
+                        val itemFr = remember(film.streamId, filmItemFocusRequesters) { filmItemFocusRequesters[film.streamId] ?: FocusRequester() }
                         Card(
                             onClick = {
                                 filmRestoreHelper.onOpen(film.streamId, index)
@@ -235,7 +237,7 @@ fun NovitaSection(
                 ) {
                     itemsIndexed(recentSeries, key = { _, s -> s.seriesId }) { index, serie ->
                         val isFav = favorites.any { it.id == "series_${serie.seriesId}" }
-                        val itemFr = serieItemFocusRequesters[serie.seriesId] ?: FocusRequester()
+                        val itemFr = remember(serie.seriesId, serieItemFocusRequesters) { serieItemFocusRequesters[serie.seriesId] ?: FocusRequester() }
                         Card(
                             onClick = {
                                 serieRestoreHelper.onOpen(serie.seriesId, index)

@@ -1,5 +1,8 @@
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+
 package it.felixvision.tv.ui.detail
 
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable

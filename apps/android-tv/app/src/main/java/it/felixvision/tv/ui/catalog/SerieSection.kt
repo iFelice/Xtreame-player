@@ -1,5 +1,6 @@
 package it.felixvision.tv.ui.catalog
 
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -171,7 +172,7 @@ fun SerieSection(
                 itemsIndexed(filtered, key = { _, s -> s.seriesId }) { index, serie ->
                     val isLeftEdge = index % columns == 0
                     val isFav = favorites.any { it.id == "series_${serie.seriesId}" }
-                    val itemFr = itemFocusRequesters[serie.seriesId] ?: FocusRequester()
+                    val itemFr = remember(serie.seriesId, itemFocusRequesters) { itemFocusRequesters[serie.seriesId] ?: FocusRequester() }
                     Card(
                         onClick = {
                             restoreHelper.onOpen(serie.seriesId, index)

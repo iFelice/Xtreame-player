@@ -1,5 +1,6 @@
 package it.felixvision.tv.ui.catalog
 
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -171,7 +172,7 @@ fun FilmSection(
                 itemsIndexed(filtered, key = { _, f -> f.streamId }) { index, film ->
                     val isLeftEdge = index % columns == 0
                     val isFav = favorites.any { it.id == "vod_${film.streamId}" }
-                    val itemFr = itemFocusRequesters[film.streamId] ?: FocusRequester()
+                    val itemFr = remember(film.streamId, itemFocusRequesters) { itemFocusRequesters[film.streamId] ?: FocusRequester() }
                     Card(
                         onClick = {
                             restoreHelper.onOpen(film.streamId, index)

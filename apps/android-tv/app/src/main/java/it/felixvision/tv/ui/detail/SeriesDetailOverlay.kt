@@ -1,5 +1,8 @@
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+
 package it.felixvision.tv.ui.detail
 
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
@@ -319,7 +322,7 @@ fun SeriesDetailOverlay(
                                             .testTag("serie_seasons_list")
                                     ) {
                                         items(derivedSeasons, key = { it.seasonNumber }) { season ->
-                                            val fr = seasonFocusRequesters[season.seasonNumber] ?: FocusRequester()
+                                            val fr = remember(season.seasonNumber, seasonFocusRequesters) { seasonFocusRequesters[season.seasonNumber] ?: FocusRequester() }
                                             val count = season.episodeCount
                                             val countText = if (count != null) " · $count episodi" else ""
                                             ListItem(
@@ -375,7 +378,7 @@ fun SeriesDetailOverlay(
                                             .testTag("serie_episodes_list")
                                     ) {
                                         items(episodesForSelected, key = { it.id }) { ep ->
-                                            val fr = episodeFocusRequesters[ep.id] ?: FocusRequester()
+                                            val fr = remember(ep.id, episodeFocusRequesters) { episodeFocusRequesters[ep.id] ?: FocusRequester() }
                                             val epTitle = ep.title.ifBlank { "Episodio ${ep.episodeNum}" }
                                             val duration = ep.info?.duration ?: ep.info?.durationSecs?.let { secs -> formatDuration(secs) }
                                             EpisodeRowItem(

@@ -322,7 +322,7 @@ private fun FavoriteRow(
             modifier = Modifier.testTag("favorites_row_$title")
         ) {
             itemsIndexed(items, key = { _, f -> f.id }) { index, fav ->
-                val itemFr = focusMap[fav.id] ?: FocusRequester()
+                val itemFr = remember(fav.id, focusMap) { focusMap[fav.id] ?: FocusRequester() }
                 Card(
                     onClick = {
                         if (fav.type == "live") onSelect(fav) else onDetail?.invoke(fav) ?: onSelect(fav)
