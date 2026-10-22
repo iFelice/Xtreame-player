@@ -47,6 +47,8 @@ import it.felixvision.tv.data.catalog.Episode
 import it.felixvision.tv.data.catalog.SeriesInfoResponse
 import it.felixvision.tv.data.catalog.SeriesItem
 import it.felixvision.tv.data.favorites.FavoriteItem
+import it.felixvision.tv.data.playback.SeriesPlayback
+import it.felixvision.tv.data.progress.WatchProgress
 import it.felixvision.tv.ui.components.CatalogPosterImage
 import it.felixvision.tv.ui.components.CollapsingCategoryColumn
 import it.felixvision.tv.ui.components.EmptyState
@@ -66,10 +68,13 @@ fun SerieSection(
     onSelectSerie: (SeriesItem) -> Unit = {},
     onLongPressSerie: (SeriesItem) -> Unit = {},
     onPlaySerie: (SeriesItem) -> Unit = {},
-    onPlayEpisode: (Episode) -> Unit = {},
+    onPlayEpisode: (Episode, SeriesPlayback) -> Unit = { _, _ -> },
     favorites: List<FavoriteItem> = emptyList(),
     catalogViewModel: CatalogViewModel? = null,
     contentFocusRequester: FocusRequester = remember { FocusRequester() },
+    progress: Map<String, WatchProgress> = emptyMap(),
+    refocusTick: Int = 0,
+    focusEpisodeId: String? = null,
     modifier: Modifier = Modifier,
 ) {
     var selectedCategoryId by remember { mutableStateOf(categories.firstOrNull()?.categoryId) }
@@ -236,7 +241,10 @@ fun SerieSection(
             },
             onToggleFavorite = { onLongPressSerie(serie) },
             onPlayEpisode = onPlayEpisode,
-            onRetry = { retryKey++ }
+            onRetry = { retryKey++ },
+            refocusTick = refocusTick,
+            focusEpisodeId = focusEpisodeId,
+            progress = progress,
         )
     }
 }

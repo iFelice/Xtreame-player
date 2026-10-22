@@ -42,15 +42,21 @@ import androidx.tv.material3.Card
 import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.Text
 import it.felixvision.tv.data.catalog.Category
+import it.felixvision.tv.data.catalog.Episode
 import it.felixvision.tv.data.catalog.LiveStream
 import it.felixvision.tv.data.catalog.SeriesInfoResponse
 import it.felixvision.tv.data.catalog.SeriesItem
 import it.felixvision.tv.data.catalog.VodInfoResponse
 import it.felixvision.tv.data.catalog.VodStream
 import it.felixvision.tv.data.favorites.FavoriteItem
+import it.felixvision.tv.data.playback.SeriesPlayback
+import it.felixvision.tv.data.progress.ProgressKeys
+import it.felixvision.tv.data.progress.WatchProgress
 import it.felixvision.tv.ui.components.CatalogPosterImage
 import it.felixvision.tv.ui.components.FvpSecondaryButton
 import it.felixvision.tv.ui.components.UiScale
+import it.felixvision.tv.ui.components.WatchProgressLine
+import it.felixvision.tv.ui.components.WatchSeenBadge
 import it.felixvision.tv.ui.components.fvpLongPress
 import it.felixvision.tv.ui.components.rememberListDetailFocusRestore
 import it.felixvision.tv.ui.detail.FilmDetailOverlay
@@ -71,6 +77,12 @@ fun FavoritesSection(
     liveStreams: List<LiveStream> = emptyList(),
     restoreCategoryFavoriteId: String? = null,
     onCategoryFocusRestored: () -> Unit = {},
+    onPlayLive: (LiveStream) -> Unit = {},
+    onPlayVod: (VodStream) -> Unit = {},
+    onPlayEpisode: (Episode, SeriesPlayback) -> Unit = { _, _ -> },
+    progress: Map<String, WatchProgress> = emptyMap(),
+    refocusTick: Int = 0,
+    focusEpisodeId: String? = null,
 ) {
     var detailFavorite by remember { mutableStateOf<FavoriteItem?>(null) }
     var detailVodInfo by remember { mutableStateOf<VodInfoResponse?>(null) }
@@ -194,7 +206,8 @@ fun FavoritesSection(
                     detailFavorite = fav
                 },
                 listState = liveListState,
-                focusMap = liveFocusMap
+                focusMap = liveFocusMap,
+                progress = progress,
             )
         }
         if (vod.isNotEmpty()) {
@@ -217,7 +230,8 @@ fun FavoritesSection(
                     detailFavorite = fav
                 },
                 listState = vodListState,
-                focusMap = vodFocusMap
+                focusMap = vodFocusMap,
+                progress = progress,
             )
         }
         if (series.isNotEmpty()) {
@@ -240,7 +254,8 @@ fun FavoritesSection(
                     detailFavorite = fav
                 },
                 listState = seriesListState,
-                focusMap = seriesFocusMap
+                focusMap = seriesFocusMap,
+                progress = progress,
             )
         }
     }
@@ -275,7 +290,12 @@ fun FavoritesSection(
                         ) {
                             FvpSecondaryButton(
                                 text = "Riproduci",
-                                onClick = { onSelectFavorite(fav); detailFavorite = null; liveRestore.onClose() },
+                                onClick = {
+                                    val stream = liveStreams.firstOrNull { it.streamId == fav.id.removePrefix("live_") }
+                                    if (stream != null) onPlayLive(stream)
+                                    detailFavorite = null
+                                    liveRestore.onClose()
+                                },
                                 scale = scale,
                                 modifier = Modifier.testTag("detail_play")
                             )
@@ -315,9 +335,10 @@ fun FavoritesSection(
                             detailFavorite = null
                             vodRestore.onClose()
                         },
-                        onPlay = { onSelectFavorite(fav) },
+                        onPlay = { onPlayVod(vodStream) },
                         onToggleFavorite = { onToggleFavorite(fav) },
-                        onRetry = { retryKey++ }
+                        onRetry = { retryKey++ },
+                        refocusTick = refocusTick,
                     )
                 }
             }
@@ -342,8 +363,11 @@ fun FavoritesSection(
                             seriesRestore.onClose()
                         },
                         onToggleFavorite = { onToggleFavorite(fav) },
-                        onPlayEpisode = { onSelectFavorite(fav) },
-                        onRetry = { retryKey++ }
+                        onPlayEpisode = onPlayEpisode,
+                        onRetry = { retryKey++ },
+                        refocusTick = refocusTick,
+                        focusEpisodeId = focusEpisodeId,
+                        progress = progress,
                     )
                 }
             }
@@ -363,7 +387,8 @@ private fun FavoriteRow(
     isFirstRow: Boolean,
     onDetail: ((FavoriteItem) -> Unit)? = null,
     listState: androidx.compose.foundation.lazy.LazyListState,
-    focusMap: Map<String, FocusRequester>
+    focusMap: Map<String, FocusRequester>,
+    progress: Map<String, WatchProgress> = emptyMap(),
 ) {
     Column {
         Text(text = title, color = FvpColors.TextPrimary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = scale.dp(8f)))
@@ -375,6 +400,11 @@ private fun FavoriteRow(
         ) {
             itemsIndexed(items, key = { _, f -> f.id }) { index, fav ->
                 val itemFr = remember(fav.id, focusMap) { focusMap[fav.id] ?: FocusRequester() }
+                val favoriteProgress = if (fav.type == "vod") {
+                    progress[ProgressKeys.movie(fav.id.removePrefix("vod_"))]
+                } else {
+                    null
+                }
                 Card(
                     onClick = {
                         if (fav.type == "live") onSelect(fav) else onDetail?.invoke(fav) ?: onSelect(fav)
@@ -395,6 +425,18 @@ private fun FavoriteRow(
                                 modifier = Modifier.align(Alignment.TopEnd).padding(scale.dp(6f)).size(scale.dp(22f)).clip(CircleShape).background(Color(0xCC1C1C1E)).testTag("favorite_${fav.id}_fav_star"),
                                 contentAlignment = Alignment.Center
                             ) { Text(text = "★", color = Color(0xFFFBBF24), fontSize = scale.sp(12f)) }
+                            if (favoriteProgress?.isWatched == true) {
+                                WatchSeenBadge(
+                                    scale = scale,
+                                    modifier = Modifier.align(Alignment.TopStart).padding(scale.dp(6f))
+                                        .testTag("favorite_${fav.id}_seen"),
+                                )
+                            }
+                            WatchProgressLine(
+                                progress = favoriteProgress,
+                                scale = scale,
+                                modifier = Modifier.align(Alignment.BottomCenter),
+                            )
                         }
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(scale.dp(4f)), modifier = Modifier.padding(top = scale.dp(6f))) {
                             Text(text = fav.title, color = FvpColors.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))

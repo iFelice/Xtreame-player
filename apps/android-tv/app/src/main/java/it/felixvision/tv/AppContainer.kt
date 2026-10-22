@@ -14,6 +14,8 @@ import it.felixvision.tv.data.favorites.FavoritesStore
 import it.felixvision.tv.data.images.FvpImageLoader
 import it.felixvision.tv.data.pairing.PairingClient
 import it.felixvision.tv.data.pairing.PairingCoordinator
+import it.felixvision.tv.data.playback.PlaybackActivityTracker
+import it.felixvision.tv.data.progress.ProgressStore
 import it.felixvision.tv.data.store.CredentialStore
 import it.felixvision.tv.data.store.DataStoreSecurePreferences
 import it.felixvision.tv.data.store.EncryptedCredentialStore
@@ -21,6 +23,8 @@ import it.felixvision.tv.data.store.KeystoreCredentialCipher
 import it.felixvision.tv.data.xtream.XtreamClient
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 
@@ -32,6 +36,12 @@ class AppContainer(private val context: Context) {
 
     val json = FvpJson
     val clock: Clock = SystemClock
+
+    /** Scope di processo per le scritture che devono sopravvivere alla UI (avanzamento player). */
+    val applicationScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /** Vero mentre questa TV ha una riproduzione aperta. */
+    val playbackActivity = PlaybackActivityTracker()
 
     /** Un solo [OkHttpClient] per tutta l'app (vedi [HttpClientFactory]). */
     val httpClient: OkHttpClient by lazy { HttpClientFactory.create() }
@@ -55,6 +65,10 @@ class AppContainer(private val context: Context) {
 
     val favoritesStore: FavoritesStore by lazy {
         FavoritesStore(context = context, json = json, clock = clock)
+    }
+
+    val progressStore: ProgressStore by lazy {
+        ProgressStore(context = context, json = json, clock = clock)
     }
 
     val pairingClient: PairingClient by lazy {

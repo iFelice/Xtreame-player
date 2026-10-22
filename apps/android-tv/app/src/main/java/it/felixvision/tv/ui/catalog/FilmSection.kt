@@ -46,11 +46,15 @@ import it.felixvision.tv.data.catalog.Category
 import it.felixvision.tv.data.catalog.VodInfoResponse
 import it.felixvision.tv.data.catalog.VodStream
 import it.felixvision.tv.data.favorites.FavoriteItem
+import it.felixvision.tv.data.progress.ProgressKeys
+import it.felixvision.tv.data.progress.WatchProgress
 import it.felixvision.tv.ui.components.CatalogPosterImage
 import it.felixvision.tv.ui.components.CollapsingCategoryColumn
 import it.felixvision.tv.ui.components.DetailFocusRestoreHelper
 import it.felixvision.tv.ui.components.EmptyState
 import it.felixvision.tv.ui.components.UiScale
+import it.felixvision.tv.ui.components.WatchProgressLine
+import it.felixvision.tv.ui.components.WatchSeenBadge
 import it.felixvision.tv.ui.components.fvpLongPress
 import it.felixvision.tv.ui.components.rememberGridDetailFocusRestore
 import it.felixvision.tv.ui.detail.FilmDetailOverlay
@@ -69,6 +73,8 @@ fun FilmSection(
     favorites: List<FavoriteItem> = emptyList(),
     catalogViewModel: CatalogViewModel? = null,
     contentFocusRequester: FocusRequester = remember { FocusRequester() },
+    progress: Map<String, WatchProgress> = emptyMap(),
+    refocusTick: Int = 0,
     modifier: Modifier = Modifier,
 ) {
     var selectedCategoryId by remember { mutableStateOf(categories.firstOrNull()?.categoryId) }
@@ -172,6 +178,7 @@ fun FilmSection(
                 itemsIndexed(filtered, key = { _, f -> f.streamId }) { index, film ->
                     val isLeftEdge = index % columns == 0
                     val isFav = favorites.any { it.id == "vod_${film.streamId}" }
+                    val filmProgress = progress[ProgressKeys.movie(film.streamId)]
                     val itemFr = remember(film.streamId, itemFocusRequesters) { itemFocusRequesters[film.streamId] ?: FocusRequester() }
                     Card(
                         onClick = {
@@ -203,6 +210,20 @@ fun FilmSection(
                                 modifier = Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(scale.dp(10f))).background(FvpColors.SurfaceElevated)
                             ) {
                                 CatalogPosterImage(imageUrl = film.streamIcon, title = film.name, scale = scale, modifier = Modifier.fillMaxSize())
+                                WatchProgressLine(
+                                    progress = filmProgress,
+                                    scale = scale,
+                                    modifier = Modifier.align(Alignment.BottomCenter),
+                                )
+                                if (filmProgress?.isWatched == true) {
+                                    WatchSeenBadge(
+                                        scale = scale,
+                                        modifier = Modifier
+                                            .align(Alignment.TopStart)
+                                            .padding(scale.dp(6f))
+                                            .testTag("film_${film.streamId}_seen"),
+                                    )
+                                }
                                 if (isFav) {
                                     Box(
                                         modifier = Modifier.align(Alignment.TopEnd).padding(scale.dp(6f)).size(scale.dp(22f)).clip(CircleShape).background(Color(0xCC1C1C1E)).testTag("film_${film.streamId}_fav_star"),
@@ -237,7 +258,8 @@ fun FilmSection(
             },
             onPlay = { onPlayFilm(film) },
             onToggleFavorite = { onLongPressFilm(film) },
-            onRetry = { retryKey++ }
+            onRetry = { retryKey++ },
+            refocusTick = refocusTick,
         )
     }
 }

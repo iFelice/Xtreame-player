@@ -66,6 +66,7 @@ fun FilmDetailOverlay(
     onPlay: () -> Unit,
     onToggleFavorite: () -> Unit,
     onRetry: () -> Unit,
+    refocusTick: Int = 0,
     modifier: Modifier = Modifier,
     rootTestTag: String = "film_detail_root"
 ) {
@@ -81,6 +82,14 @@ fun FilmDetailOverlay(
 
     LaunchedEffect(Unit) {
         playFocus.requestFocus()
+    }
+
+    // Al ritorno dal player il focus torna su "Riproduci".
+    LaunchedEffect(refocusTick) {
+        if (refocusTick > 0) {
+            withFrameNanos { }
+            playFocus.requestFocus()
+        }
     }
 
     LaunchedEffect(showPlotDialog) {

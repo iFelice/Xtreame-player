@@ -55,10 +55,18 @@ import androidx.compose.foundation.BorderStroke
 import it.felixvision.tv.data.catalog.Episode
 import it.felixvision.tv.data.catalog.SeriesItem
 import it.felixvision.tv.data.catalog.SeriesInfoResponse
+import it.felixvision.tv.data.playback.EpisodeOrder
+import it.felixvision.tv.data.playback.SeriesPlayback
+import it.felixvision.tv.data.playback.buildEpisodeQueue
+import it.felixvision.tv.data.playback.indexOfEpisode
+import it.felixvision.tv.data.progress.ProgressKeys
+import it.felixvision.tv.data.progress.WatchProgress
 import it.felixvision.tv.ui.catalog.SeasonDisplay
 import it.felixvision.tv.ui.catalog.deriveSeasons
 import it.felixvision.tv.ui.components.CatalogPosterImage
 import it.felixvision.tv.ui.components.FvpSecondaryButton
+import it.felixvision.tv.ui.components.WatchProgressLine
+import it.felixvision.tv.ui.components.WatchSeenBadge
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.theme.FvpColors
 import kotlinx.coroutines.launch
@@ -74,8 +82,11 @@ fun SeriesDetailOverlay(
     contentFocusRequester: FocusRequester,
     onDismiss: () -> Unit,
     onToggleFavorite: () -> Unit,
-    onPlayEpisode: (Episode) -> Unit,
+    onPlayEpisode: (Episode, SeriesPlayback) -> Unit,
     onRetry: () -> Unit,
+    refocusTick: Int = 0,
+    focusEpisodeId: String? = null,
+    progress: Map<String, WatchProgress> = emptyMap(),
     modifier: Modifier = Modifier,
     rootTestTag: String = "serie_detail_root"
 ) {
@@ -99,6 +110,13 @@ fun SeriesDetailOverlay(
 
     val episodesForSelected: List<Episode> = remember(info?.episodes, selectedSeason) {
         if (selectedSeason != null) info?.episodes?.get(selectedSeason) ?: emptyList() else emptyList()
+    }
+
+    val playbackQueue = remember(derivedSeasons, info?.episodes) {
+        buildEpisodeQueue(
+            seasonOrder = derivedSeasons.map { it.seasonNumber },
+            episodes = info?.episodes ?: emptyMap(),
+        )
     }
 
     val headerTitle = remember(info?.info?.name, serie.name, selectedSeason) {
@@ -133,9 +151,31 @@ fun SeriesDetailOverlay(
             }
         }
     }
-    LaunchedEffect(selectedSeason, episodesForSelected) {
+    LaunchedEffect(selectedSeason, episodesForSelected, focusEpisodeId, refocusTick) {
         if (selectedSeason != null && episodesForSelected.isNotEmpty()) {
-            episodeFocusRequesters[episodesForSelected.first().id]?.requestFocus()
+            val target = if (refocusTick > 0) focusEpisodeId else null
+            if (target != null && episodesForSelected.none { it.id == target }) {
+                // L'episodio è in un'altra stagione: aspetta il cambio stagione.
+                return@LaunchedEffect
+            }
+            val targetId = target ?: episodesForSelected.first().id
+            val targetIndex = episodesForSelected.indexOfFirst { it.id == targetId }.coerceAtLeast(0)
+            episodesListState.scrollToItem(targetIndex)
+            withFrameNanos { }
+            episodeFocusRequesters[targetId]?.requestFocus()
+        }
+    }
+
+    // Al ritorno dal player si riapre la stagione dell'episodio guardato.
+    LaunchedEffect(refocusTick) {
+        if (refocusTick <= 0) return@LaunchedEffect
+        val targetId = focusEpisodeId ?: return@LaunchedEffect
+        val seasonKey = info?.episodes?.entries
+            ?.firstOrNull { entry -> entry.value.any { it.id == targetId } }
+            ?.key
+        if (seasonKey != null) {
+            selectedSeason = seasonKey
+            lastSeason = seasonKey
         }
     }
     LaunchedEffect(selectedSeason) {
@@ -433,7 +473,27 @@ fun SeriesDetailOverlay(
                                                     upFocus = if (isFirst) {
                                                         if (hasPlotOverflow) readMoreFocus else favoriteFocus
                                                     } else null,
-                                                    onPlay = { onPlayEpisode(ep) }
+                                                    progress = progress[ProgressKeys.episode(ep.id)],
+                                                    onPlay = {
+                                                        val queueIndex = indexOfEpisode(playbackQueue, ep.id)
+                                                        val queue = if (queueIndex >= 0) {
+                                                            playbackQueue
+                                                        } else {
+                                                            listOf(EpisodeOrder(selectedSeason.orEmpty(), ep))
+                                                        }
+                                                        onPlayEpisode(
+                                                            ep,
+                                                            SeriesPlayback(
+                                                                seriesId = serie.seriesId,
+                                                                title = info?.info?.name
+                                                                    ?.takeIf { it.isNotBlank() }
+                                                                    ?: serie.name,
+                                                                categoryId = serie.categoryId,
+                                                                queue = queue,
+                                                                startIndex = if (queueIndex >= 0) queueIndex else 0,
+                                                            ),
+                                                        )
+                                                    }
                                                 )
                                             }
                                         }
@@ -556,8 +616,10 @@ private fun EpisodeRowItem(
     scale: UiScale,
     focusRequester: FocusRequester,
     upFocus: FocusRequester?,
+    progress: WatchProgress?,
     onPlay: () -> Unit
 ) {
+    Box {
     ListItem(
         selected = false,
         onClick = { onPlay() },
@@ -584,7 +646,18 @@ private fun EpisodeRowItem(
             duration?.let { Text(text = it, color = FvpColors.TextSecondary) }
         },
         trailingContent = {
-            Text(text = "▶", color = FvpColors.TextSecondary)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(scale.dp(6f)),
+            ) {
+                if (progress?.isWatched == true) {
+                    WatchSeenBadge(
+                        scale = scale,
+                        modifier = Modifier.testTag("detail_episode_${episode.id}_seen"),
+                    )
+                }
+                Text(text = "▶", color = FvpColors.TextSecondary)
+            }
         },
         modifier = Modifier
             .fillMaxWidth()
@@ -600,6 +673,12 @@ private fun EpisodeRowItem(
         border = ListItemDefaults.border(focusedBorder = Border(BorderStroke(2.dp, FvpColors.GreenFocus))),
         shape = ListItemDefaults.shape(shape = RoundedCornerShape(scale.dp(8f)))
     )
+    WatchProgressLine(
+        progress = progress,
+        scale = scale,
+        modifier = Modifier.align(Alignment.BottomCenter).padding(horizontal = scale.dp(8f)),
+    )
+    }
 }
 
 private fun formatDuration(secs: Int): String {

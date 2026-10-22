@@ -64,6 +64,9 @@ fun LiveSection(
     onBackToDrawer: (() -> Unit)? = null,
     initialCategoryId: String? = null,
     onLongPressCategory: ((Category) -> Unit)? = null,
+    focusChannelId: String? = null,
+    focusChannelTick: Int = 0,
+    onChannelFocusRestored: () -> Unit = {},
 ) {
     val initialSelection = categories.firstOrNull { it.categoryId == initialCategoryId }?.categoryId
     var focusedCategoryId by remember(initialCategoryId) {
@@ -84,7 +87,9 @@ fun LiveSection(
 
     val categoryListState = rememberLazyListState()
     val channelsListState = rememberLazyListState()
-    val channelsFirstFocus = remember { FocusRequester() }
+    val channelFocusRequesters = remember(filtered) {
+        filtered.associate { it.streamId to FocusRequester() }
+    }
 
     val categoryFocusRequesters = remember(categories) {
         categories.associate { it.categoryId to FocusRequester() }
@@ -95,14 +100,15 @@ fun LiveSection(
     }
 
     // Only the Favorites entry path moves focus automatically. Normal Live entry is unchanged.
-    LaunchedEffect(initialCategoryId) {
+    LaunchedEffect(initialCategoryId, focusChannelTick) {
+        if (focusChannelId != null) return@LaunchedEffect
         val index = categories.indexOfFirst { it.categoryId == initialCategoryId }
         if (initialCategoryId != null && index >= 0) {
             categoryListState.scrollToItem(index)
             if (filtered.isNotEmpty()) {
                 channelsListState.scrollToItem(0)
                 withFrameNanos { }
-                channelsFirstFocus.requestFocus()
+                channelFocusRequesters[filtered.first().streamId]?.requestFocus()
             } else {
                 // A valid but empty category has no first channel: keep navigation usable.
                 categoryExpanded = true
@@ -110,6 +116,39 @@ fun LiveSection(
                 categoryFocusRequesters[initialCategoryId]?.requestFocus()
             }
         }
+    }
+
+    // Ritorno dal player: apre la categoria del canale guardato.
+    LaunchedEffect(focusChannelId, focusChannelTick) {
+        val targetId = focusChannelId ?: return@LaunchedEffect
+        val targetCategory = streams.firstOrNull { it.streamId == targetId }?.categoryId
+        if (targetCategory != null &&
+            (targetCategory != focusedCategoryId || targetCategory != debouncedCategoryId)
+        ) {
+            val index = categories.indexOfFirst { it.categoryId == targetCategory }
+            if (index >= 0) categoryListState.scrollToItem(index)
+            focusedCategoryId = targetCategory
+            debouncedCategoryId = targetCategory
+        }
+    }
+
+    // Ritorno dal player: focus sull'ultimo canale guardato.
+    LaunchedEffect(filtered, focusChannelId) {
+        val targetId = focusChannelId ?: return@LaunchedEffect
+        val target = filtered.firstOrNull { it.streamId == targetId }
+        if (target == null) {
+            val expectedCategory = streams.firstOrNull { it.streamId == targetId }?.categoryId
+            if (expectedCategory == null || expectedCategory == debouncedCategoryId) {
+                onChannelFocusRestored()
+            }
+            return@LaunchedEffect
+        }
+        val index = filtered.indexOfFirst { it.streamId == targetId }
+        channelsListState.scrollToItem(index)
+        withFrameNanos { }
+        channelFocusRequesters[targetId]?.requestFocus()
+        categoryExpanded = false
+        onChannelFocusRestored()
     }
 
     Row(modifier = modifier.fillMaxWidth().padding(scale.dp(12f)), horizontalArrangement = Arrangement.spacedBy(scale.dp(12f))) {
@@ -144,6 +183,7 @@ fun LiveSection(
                 ) {
                     itemsIndexed(filtered, key = { _, ch -> ch.streamId }) { index, channel ->
                         val isFav = favorites.any { it.id == "live_${channel.streamId}" }
+                        val channelFr = channelFocusRequesters[channel.streamId]
                         ListItem(
                             selected = false,
                             onClick = { onSelectChannel(channel) },
@@ -173,7 +213,8 @@ fun LiveSection(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .testTag("live_channel_${channel.streamId}")
-                                .then(if (index == 0) Modifier.focusRequester(channelsFirstFocus).focusRequester(contentFocusRequester) else Modifier)
+                                .then(if (channelFr != null) Modifier.focusRequester(channelFr) else Modifier)
+                                .then(if (index == 0) Modifier.focusRequester(contentFocusRequester) else Modifier)
                                 .onFocusChanged { if (it.isFocused) categoryExpanded = false }
                                 .onPreviewKeyEvent { event ->
                                     if (event.key == Key.DirectionLeft) {

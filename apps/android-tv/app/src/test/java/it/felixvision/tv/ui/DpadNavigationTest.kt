@@ -238,7 +238,7 @@ class DpadNavigationTest {
                                 toggleFav(fav)
                             },
                             onPlaySerie = { showPlaybackMessage = "Riproduzione disponibile nel prossimo aggiornamento" },
-                            onPlayEpisode = { showPlaybackMessage = "Riproduzione disponibile nel prossimo aggiornamento" },
+                            onPlayEpisode = { _, _ -> showPlaybackMessage = "Riproduzione disponibile nel prossimo aggiornamento" },
                             favorites = favoritesInMemory.get("http://server.esempio:8080", "demo"),
                             contentFocusRequester = contentFocusRequester,
                             modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester).testTag("serie_section")

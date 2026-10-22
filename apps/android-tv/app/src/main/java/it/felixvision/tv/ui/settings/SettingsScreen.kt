@@ -61,7 +61,12 @@ fun SettingsScreen(
             SettingsRow(label = "Utente", value = state.username, scale = scale)
             SettingsRow(label = "Stato", value = state.status, scale = scale)
             SettingsRow(label = "Scadenza", value = formatExpiry(state.expiresAtEpochSeconds), scale = scale)
-            SettingsRow(label = "Connessioni", value = formatConnections(state.activeConnections, state.maxConnections), scale = scale)
+            SettingsRow(
+                label = "Connessioni in uso (tutti i dispositivi)",
+                value = formatConnections(state.activeConnections, state.maxConnections),
+                scale = scale,
+                rowTestTag = "settings_connections_row",
+            )
             SettingsRow(label = "Server", value = state.serverLabel, scale = scale, rowTestTag = "settings_server_row")
         }
 
@@ -78,6 +83,27 @@ fun SettingsScreen(
             state.lastUpdateMillis?.let { ts ->
                 Text(text = "Ultimo aggiornamento: ${formatTimestamp(ts)}", color = FvpColors.TextSecondary, fontSize = scale.sp(13f))
             } ?: Text(text = "Mai aggiornato", color = FvpColors.TextSecondary, fontSize = scale.sp(13f))
+        }
+
+        val accountReadAt = state.lastAccountReadMillis
+        if (accountReadAt != null) {
+            Text(
+                text = if (state.isReadingAccount) "Lettura account…" else "Letto alle ${formatClock(accountReadAt)}",
+                color = FvpColors.TextSecondary,
+                fontSize = scale.sp(13f),
+                modifier = Modifier.testTag("settings_account_read"),
+            )
+        } else if (state.isReadingAccount) {
+            Text(text = "Lettura account…", color = FvpColors.TextSecondary, fontSize = scale.sp(13f))
+        }
+
+        if (state.connectionsWarning) {
+            Text(
+                text = ConnectionsAdvisory.MESSAGE,
+                color = FvpColors.Error,
+                fontSize = scale.sp(14f),
+                modifier = Modifier.testTag("settings_connections_warning"),
+            )
         }
 
         state.message?.let { FvpStatusText(message = it, scale = scale) }
@@ -149,6 +175,13 @@ private fun formatConnections(active: Int?, max: Int?): String = when {
     max != null -> "massimo $max"
     active != null -> "$active in uso"
     else -> "Non indicato dal server"
+}
+
+private fun formatClock(millis: Long): String {
+    return try {
+        val formatter = DateTimeFormatter.ofPattern("HH:mm")
+        formatter.format(Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()))
+    } catch (_: Exception) { "" }
 }
 
 private fun formatTimestamp(millis: Long): String {

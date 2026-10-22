@@ -1,10 +1,10 @@
 # FelixVisionPlayer · Android TV (`apps/android-tv`)
 
 Applicazione Android TV nativa di FelixVisionPlayer, in Kotlin e Jetpack Compose for TV.
-Questa prima parte copre **progetto, client Xtream, archiviazione sicura, schermata di
-accesso e abbinamento remoto**. Cataloghi e player arriveranno nelle parti successive;
-dopo l'accesso l'app mostra una schermata provvisoria con utente, scadenza e stato
-dell'account.
+Copre **progetto, client Xtream, archiviazione sicura, accesso e abbinamento remoto
+(PR1), cataloghi, preferiti e impostazioni (PR2), player live/VOD con avanzamento (PR3)**.
+Dopo l'accesso si apre il catalogo; ogni contenuto avviabile apre il player a tutto
+schermo.
 
 - `applicationId`: `it.felixvision.tv`
 - nome visualizzato: **FelixVP**
@@ -159,8 +159,10 @@ app/src/main/java/it/felixvision/tv/
 ├── data/store/                cifrario Keystore AES-GCM, DataStore, archivio credenziali
 ├── data/catalog/              modelli tolleranti, client sequenziale, cache 24h
 ├── data/favorites/            DataStore dei preferiti per server+utente
+├── data/playback/             URL Xtream, redazione credenziali, coda episodi, zapping
+├── data/progress/             archivio avanzamento e regole 30 s / 90% (DataStore)
 ├── data/images/               ImageLoader Coil 3 con client dedicato (max 4, 200 MB)
-└── ui/                        tema, controlli TV, QR, cataloghi e impostazioni
+└── ui/                        tema, controlli TV, QR, cataloghi, player e impostazioni
 ```
 
 ### Rete (protezioni anti-blocco)
@@ -218,19 +220,46 @@ server Xtream raggiunti con indirizzo privato non risponderebbero.
 - **Immagini con Coil 3** su client dedicato: max 4 download simultanei, nessun retry, cache 200 MB, solo visibili + immediate vicine; placeholder con iniziali se fallisce.
 - **Navigazione a cassetto**: a riposo colonna di icone, si espande al focus; voci nell'ordine Novità, Live, Film, Serie, Preferiti, Impostazioni; colori attivi Live #FF9F0A, Film #10B981, Serie #2DD4BF, Novità #A3E635, Preferiti #FBBF24, Impostazioni bianco; inattive #AEAEB2; focus con bordo #34D399 e leggero ingrandimento; sfondi #1C1C1E/#2C2C2E/#3A3A3C.
 - **Sezioni**: Novità (ultimi film per `added`, ultime serie per `last_modified`, 40 ciascuna); Live con categorie a sinistra e debounce 300 ms; Film/Serie con griglia 5 colonne e dettaglio on-demand (`get_vod_info`/`get_series_info`); Preferiti con pressione lunga OK e DataStore per account; liste con `LazyColumn`/`LazyVerticalGrid` e chiavi stabili fino a 20k elementi.
-- **Impostazioni**: dati account (utente, stato, scadenza con giorni rimanenti, connessioni, server come host), "Aggiorna catalogo" con orario, "Configura da remoto" con QR (verifica login, sostituisce credenziali e cancella cache se riesce, altrimenti mantiene le vecchie), "Esci" con conferma che cancella credenziali, cache e preferiti.
+- **Impostazioni**: dati account riletti dal server a ogni apertura con orario "Letto alle hh:mm" (utente, stato, scadenza con giorni rimanenti, "Connessioni in uso (tutti i dispositivi)"), avviso "L'account è in uso su un altro dispositivo" quando le connessioni attive raggiungono il massimo e questa TV non sta riproducendo, "Aggiorna catalogo" con orario, "Configura da remoto" con QR (verifica login, sostituisce credenziali e cancella cache se riesce, altrimenti mantiene le vecchie), "Esci" con conferma che cancella credenziali, cache, preferiti e avanzamento.
 - **Correzioni abbinamento**: nessuna sessione durante verifica credenziali salvate; dopo 3 scadenze consecutive (30 min) si ferma con "Codice scaduto" e pulsante "Mostra un nuovo codice"; pannello Impostazioni attivo solo quando visibile.
 
-### Traffico in chiaro
+### Player (PR3)
 
-`res/xml/network_security_config.xml` consente esplicitamente il traffico HTTP: molti
-pannelli Xtream servono gli elenchi su `http://` (porte 8080/25461) o su indirizzi della
-rete di casa. Il motivo è documentato nel file stesso.
-
-Da Android 17 (API 37) l'accesso alla rete locale richiede il permesso runtime
-`ACCESS_LOCAL_NETWORK`: è dichiarato nel manifest e richiesto all'avvio, altrimenti i
-server Xtream raggiunti con indirizzo privato non risponderebbero.
-
+- **Media3 1.9.0** (`media3-exoplayer`, `media3-exoplayer-hls`, `media3-ui`) con
+  `org.jellyfin.media3:media3-ffmpeg-decoder:1.9.0+1`: decodifica di sistema preferita,
+  FFmpeg solo come ripiego audio per AC3/EAC3/DTS (`EXTENSION_RENDERER_MODE_ON`).
+  Nessun nuovo tentativo automatico (`DefaultLoadErrorHandlingPolicy(0)`).
+- **URL** in `StreamUrls`: live `/live/{utente}/{password}/{id}.ts`, con `.m3u8` solo se
+  l'account non ammette `ts` ma ammette `m3u8`; film `/movie/…`; episodi `/series/…`;
+  estensione da `container_extension`, default `mp4`; credenziali codificate per il
+  percorso. Ogni log passa da `StreamUrls.redactStreamUrl` (`***` al posto di utente e
+  password): nessun URL con credenziali in log, errori o report.
+- **Schermata** a tutto schermo con `PlayerView` (SurfaceView, `useController = false`) e
+  comandi Compose; schermo sempre acceso; ExoPlayer rilasciato in `onStop` e all'uscita
+  salvando la posizione.
+- **Live**: Su/Giù cambiano canale nella categoria di partenza (circolare) con banner di
+  4 s (numero, nome, categoria, logo); OK mostra/nasconde il banner; Sinistra apre la
+  lista canali della categoria con focus sul canale in onda; Indietro chiude banner/lista
+  o torna alla lista Live con focus sull'ultimo canale guardato.
+- **Film/episodi**: OK pausa/riprende e mostra la barra (titolo, tempi, avanzamento) che
+  si nasconde dopo 5 s; Sinistra/Destra −10/+10 s con accelerazione 10→30→60 s tenendo
+  premuto; pulsanti Audio e Sottotitoli (voce "Disattivati"); Indietro chiude la barra o
+  torna alla scheda di origine con focus sul contenuto.
+- **Errori**: messaggio comprensibile senza URL; per 401/403/409/429/456 "Connessioni
+  esaurite o accesso negato: l'account potrebbe essere in uso su un altro dispositivo";
+  pulsanti Riprova e Indietro, nessun retry automatico.
+- **Avanzamento**: archivio per server+utente (`vod_<id>`/`ep_<id>`), salvataggio ogni
+  10 s, in pausa e all'uscita, posizioni sotto 30 s ignorate, visto al 90%; icona occhio
+  (Lucide) in alto a sinistra della copertina e a destra nella riga episodio, barra verde
+  sottile tra 30 s e 90%; riprendendo un contenuto iniziato compare "Riprendi da mm:ss" /
+  "Dall'inizio" con focus su Riprendi.
+- **Fine episodio**: riquadro "Prossimo episodio tra 10 s" con titolo, "Guarda ora" e
+  "Annulla" (focus su Guarda ora); alla scadenza parte il successivo; ultimo episodio
+  torna alla scheda.
+- **Riscontro strutturale APK**: del riferimento sono state considerate solo le
+  responsabilità ad alto livello (schermata di riproduzione separata dal catalogo,
+  gestione del ciclo di vita e del focus da telecomando, banner canale, barra comandi e
+  selezione tracce), senza riuso di codice, stringhe, layout o risorse.
 
 ---
 
@@ -257,6 +286,11 @@ simulato e implementazioni finte per cifrario e preferenze:
 | `FavoritesStoreTest` | aggiunta/rimozione, separazione per account, cancellazione con Esci |
 | `PairingExpiryTest` | niente sessione durante verifica credenziali salvate, stop dopo 3 scadenze, ripartenza con nuovo codice, riconfigurazione da Impostazioni |
 | `ImageClientLimitTest` | limite 4 immagini contemporanee, nessun retry, placeholder iniziali |
+| `StreamUrlsTest` | live `.ts`/`.m3u8`, film/episodio con e senza estensione, codifica credenziali, `redactStreamUrl` |
+| `WatchRulesTest`, `ProgressStoreInMemoryTest`, `ProgressStoreTest` | soglia 30 s, visto al 90%, ripresa, durata mantenuta, separazione per account, archivio vuoto |
+| `EpisodeQueueTest` | ordine stagioni/episodi, episodio successivo nella stessa stagione e nella seguente, ultimo episodio |
+| `LiveZappingTest`, `PlaybackFormattingTest` | zapping circolare, accelerazione 10/30/60 s, tempi `mm:ss` e `h:mm:ss` |
+| `ConnectionsAdvisoryTest` | avviso solo a connessioni piene e TV non in riproduzione |
 
 ---
 
@@ -294,5 +328,7 @@ Sulla TV inserisci `http://192.168.1.XX:3333` (esempio) e premi Accedi. Il catal
   `docs/APK_STRUCTURE_REFERENCE.md`), senza riuso di codice, stringhe o risorse.
 - Logo, banner 320×180 e icona dell'app sono generati da `public/brand/fvp-icon-large.png`
   con fondo `#1C1C1E` e glifo centrato.
-- Media3 **non** è ancora una dipendenza: la versione è già fissata nel catalogo
-  (`gradle/libs.versions.toml`) e servirà al player nella parte 3.
+- Media3 1.9.0 è usata dal player (Apache 2.0). L'estensione FFmpeg
+  `org.jellyfin.media3:media3-ffmpeg-decoder:1.9.0+1` è distribuita con licenza GPL-3.0:
+  la sua inclusione nell'APK comporta gli obblighi della licenza, descritti in
+  `THIRD_PARTY_NOTICES.md`.

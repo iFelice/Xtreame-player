@@ -53,6 +53,7 @@ class XtreamClientTest {
         expDate: String = "1800000000",
         maxConnections: String = "2",
         activeCons: String = "1",
+        outputFormats: String = "\"ts\"",
     ): String = """
         {
           "user_info": {
@@ -63,7 +64,8 @@ class XtreamClientTest {
             "exp_date": "$expDate",
             "is_trial": "0",
             "active_cons": "$activeCons",
-            "max_connections": "$maxConnections"
+            "max_connections": "$maxConnections",
+            "allowed_output_formats": $outputFormats
           },
           "server_info": {
             "url": "server.esempio",
@@ -90,6 +92,26 @@ class XtreamClientTest {
 
         val request = server.takeRequest()
         assertEquals("/player_api.php?username=demo&password=demo", request.path)
+    }
+
+    @Test
+    fun `login espone allowed_output_formats come lista`() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(200).setBody(successBody(outputFormats = """["m3u8","ts"]""")))
+
+        val result = client().login("${server.hostName}:${server.port}", "demo", "demo")
+
+        val account = (result as LoginResult.Success).account
+        assertEquals(listOf("m3u8", "ts"), account.allowedOutputFormats)
+    }
+
+    @Test
+    fun `allowed_output_formats in formato csv`() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(200).setBody(successBody(outputFormats = "\"m3u8\"")))
+
+        val result = client().login("${server.hostName}:${server.port}", "demo", "demo")
+
+        val account = (result as LoginResult.Success).account
+        assertEquals(listOf("m3u8"), account.allowedOutputFormats)
     }
 
     @Test

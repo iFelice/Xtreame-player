@@ -1,7 +1,49 @@
 package it.felixvision.tv.data.xtream
 
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
+
+/**
+ * `allowed_output_formats` è nella maggior parte dei pannelli un array di
+ * stringhe (`["ts","m3u8"]`), ma alcuni lo inviano come stringa separata da
+ * virgole. Il formato non deve mai far fallire il login: in caso di valore
+ * inatteso il campo resta nullo.
+ */
+object FlexibleStringListSerializer : KSerializer<List<String>?> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("FlexibleStringList", PrimitiveKind.STRING)
+
+    override fun deserialize(decoder: Decoder): List<String>? {
+        if (decoder is JsonDecoder) {
+            return when (val element = decoder.decodeJsonElement()) {
+                is JsonNull -> null
+                is JsonArray -> element.mapNotNull { item ->
+                    (item as? JsonPrimitive)?.content?.takeIf { it.isNotBlank() }
+                }
+                is JsonPrimitive -> element.content
+                    .split(',')
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+                else -> null
+            }
+        }
+        return null
+    }
+
+    override fun serialize(encoder: Encoder, value: List<String>?) {
+        if (value == null) encoder.encodeNull() else encoder.encodeString(value.joinToString(","))
+    }
+}
 
 /**
  * Risposta di `GET <server>/player_api.php?username=…&password=…`.
@@ -25,6 +67,8 @@ data class UserInfo(
     @SerialName("max_connections") val maxConnections: String? = null,
     val username: String? = null,
     val message: String? = null,
+    @Serializable(with = FlexibleStringListSerializer::class)
+    @SerialName("allowed_output_formats") val allowedOutputFormats: List<String>? = null,
 )
 
 @Serializable
@@ -60,6 +104,8 @@ data class XtreamAccount(
     val maxConnections: Int? = null,
     val activeConnections: Int? = null,
     val serverTimezone: String? = null,
+    /** Formati di output ammessi per il live (`allowed_output_formats`). */
+    val allowedOutputFormats: List<String> = emptyList(),
 )
 
 /** Esito dell'operazione di accesso. */

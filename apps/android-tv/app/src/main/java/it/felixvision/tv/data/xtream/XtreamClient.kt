@@ -107,6 +107,7 @@ class XtreamClient(
             maxConnections = userInfo.maxConnections?.trim()?.toIntOrNull(),
             activeConnections = userInfo.activeCons?.trim()?.toIntOrNull(),
             serverTimezone = payload.serverInfo?.timezone?.takeIf { it.isNotBlank() },
+            allowedOutputFormats = userInfo.allowedOutputFormats.orEmpty(),
         )
 
         return when (status) {

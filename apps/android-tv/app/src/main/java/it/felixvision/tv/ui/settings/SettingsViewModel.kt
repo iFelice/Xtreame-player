@@ -11,6 +11,7 @@ import it.felixvision.tv.data.store.serverLabel
 import it.felixvision.tv.data.xtream.LoginResult
 import it.felixvision.tv.data.xtream.ServerAddress
 import it.felixvision.tv.data.xtream.ServerInput
+import it.felixvision.tv.ui.access.statusLabel
 import it.felixvision.tv.data.pairing.ApiResult
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -31,6 +32,9 @@ data class SettingsUiState(
     val maxConnections: Int? = null,
     val activeConnections: Int? = null,
     val lastUpdateMillis: Long? = null,
+    val lastAccountReadMillis: Long? = null,
+    val isReadingAccount: Boolean = false,
+    val connectionsWarning: Boolean = false,
     val pairing: PairingPanelState = PairingPanelState(),
     val isRefreshing: Boolean = false,
     val message: String? = null,
@@ -68,6 +72,7 @@ class SettingsViewModel(
 
     private var pairingJob: Job? = null
     private var pairingVisible = false
+    private var accountReadJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -86,9 +91,48 @@ class SettingsViewModel(
     }
 
     fun onSettingsVisible() {
+        refreshAccountInfo()
         if (pairingVisible) return
         pairingVisible = true
         startPairingLoop()
+    }
+
+    /**
+     * Rilegge le informazioni dell'account dal server a ogni apertura delle
+     * impostazioni. In caso di errore restano i valori dell'ultima lettura.
+     */
+    fun refreshAccountInfo() {
+        if (accountReadJob?.isActive == true) return
+        accountReadJob = viewModelScope.launch {
+            _ui.update { it.copy(isReadingAccount = true) }
+            val result = runCatching { container.xtreamClient.login(server, username, password) }.getOrNull()
+            val account = when (result) {
+                is LoginResult.Success -> result.account
+                is LoginResult.AccountExpired -> result.account
+                is LoginResult.AccountDisabled -> result.account
+                else -> null
+            }
+            if (account == null) {
+                _ui.update { it.copy(isReadingAccount = false) }
+                return@launch
+            }
+            val playing = container.playbackActivity.isActive.value
+            _ui.update {
+                it.copy(
+                    status = statusLabel(account.status),
+                    expiresAtEpochSeconds = account.expiresAtEpochSeconds,
+                    maxConnections = account.maxConnections,
+                    activeConnections = account.activeConnections,
+                    lastAccountReadMillis = container.clock.nowMillis(),
+                    connectionsWarning = ConnectionsAdvisory.shouldWarn(
+                        activeConnections = account.activeConnections,
+                        maxConnections = account.maxConnections,
+                        devicePlaying = playing,
+                    ),
+                    isReadingAccount = false,
+                )
+            }
+        }
     }
 
     fun onSettingsHidden() {
@@ -206,9 +250,21 @@ class SettingsViewModel(
             runCatching { container.credentialStore.clear() }
             runCatching { container.catalogCache.clear(server, username) }
             runCatching { container.favoritesStore.clearForAccount(server, username) }
+            runCatching { container.progressStore.clearForAccount(server, username) }
             _ui.update { it.copy(showExitConfirm = false) }
             onSignOut()
         }
+    }
+
+    override fun onCleared() {
+        // Le letture account e il ciclo di abbinamento non devono sopravvivere
+        // alla schermata che li ha avviati.
+        accountReadJob?.cancel()
+        accountReadJob = null
+        pairingJob?.cancel()
+        pairingJob = null
+        pairingVisible = false
+        super.onCleared()
     }
 
     private fun extractHost(server: String): String {

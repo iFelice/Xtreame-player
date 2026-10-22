@@ -48,6 +48,8 @@ data class AccountSummary(
     val isTrial: Boolean,
     val maxConnections: Int?,
     val activeConnections: Int?,
+    /** Formati live ammessi dall'account, usati per scegliere `.ts` o `.m3u8`. */
+    val allowedOutputFormats: List<String> = emptyList(),
 )
 
 /** Valori da riportare nei campi del modulo, per esempio dopo un abbinamento fallito. */
@@ -483,4 +485,5 @@ private fun XtreamAccount.toSummary(): AccountSummary = AccountSummary(
     isTrial = isTrial,
     maxConnections = maxConnections,
     activeConnections = activeConnections,
+    allowedOutputFormats = allowedOutputFormats,
 )
