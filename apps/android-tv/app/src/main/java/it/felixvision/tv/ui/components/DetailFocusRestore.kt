@@ -1,5 +1,6 @@
 package it.felixvision.tv.ui.components
 
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.runtime.Composable
@@ -109,8 +110,9 @@ fun rememberGridDetailFocusRestore(
 ): DetailFocusRestoreHelper {
     val scope = rememberCoroutineScope()
     val windowInfo = LocalWindowInfo.current
+    val latestRequesters = rememberUpdatedState(focusRequesters)
     return remember(gridState, fallback, windowInfo) {
-        DetailFocusRestoreHelper(scope, gridState, null, focusRequesters, fallback, windowInfo)
+        DetailFocusRestoreHelper(scope, gridState, null, { latestRequesters.value() }, fallback, windowInfo)
     }
 }
 
@@ -122,7 +124,8 @@ fun rememberListDetailFocusRestore(
 ): DetailFocusRestoreHelper {
     val scope = rememberCoroutineScope()
     val windowInfo = LocalWindowInfo.current
+    val latestRequesters = rememberUpdatedState(focusRequesters)
     return remember(listState, fallback, windowInfo) {
-        DetailFocusRestoreHelper(scope, null, listState, focusRequesters, fallback, windowInfo)
+        DetailFocusRestoreHelper(scope, null, listState, { latestRequesters.value() }, fallback, windowInfo)
     }
 }
