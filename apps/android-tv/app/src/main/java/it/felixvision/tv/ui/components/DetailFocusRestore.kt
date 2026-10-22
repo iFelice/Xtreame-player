@@ -8,27 +8,38 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.platform.WindowInfo
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Helper condiviso per riportare il focus sulla locandina da cui è stata aperta una scheda.
  * Usato da FilmSection, SerieSection, NovitaSection, FavoritesSection.
  *
- * Logica:
- * - all'apertura memorizza chiave e indice;
- * - alla chiusura, dopo rimozione scheda e un frame, se l'elemento non è visibile fa scrollToItem;
- * - poi chiede focus all'elemento (FocusRequester agganciato solo a quella chiave);
- * - se requestFocus fallisce, riprova al frame successivo e solo dopo ripiega su fallback.
+ * Correzione TCL Dialog: la scheda è una finestra separata; al momento di onClose
+ * la finestra principale non ha ancora riottenuto il focus. Attendiamo che
+ * windowInfo.isWindowFocused torni true (timeout 1s) prima di richiedere focus.
+ * Fallback su contentFocusRequester solo se la chiave non è più nella lista corrente.
  */
+
+fun shouldFallbackToContent(pendingKey: String?, currentKeys: Set<String>): Boolean {
+    if (pendingKey == null) return false
+    return pendingKey !in currentKeys
+}
+
 class DetailFocusRestoreHelper(
     private val scope: CoroutineScope,
     private val gridState: LazyGridState?,
     private val listState: LazyListState?,
     private val focusRequesters: () -> Map<String, FocusRequester>,
-    private val fallback: FocusRequester
+    private val fallback: FocusRequester,
+    private val windowInfo: WindowInfo?
 ) {
     var pendingKey: String? by mutableStateOf(null)
     var pendingIndex: Int by mutableStateOf(-1)
@@ -47,8 +58,20 @@ class DetailFocusRestoreHelper(
             return
         }
         scope.launch {
-            // attende rimozione scheda e un frame
+            // Attendi che la finestra principale riottenga il focus (Dialog si è chiusa)
+            if (windowInfo != null) {
+                withTimeoutOrNull(1000) {
+                    snapshotFlow { windowInfo.isWindowFocused }.first { it }
+                }
+            }
             withFrameNanos { }
+            val currentKeys = focusRequesters().keys
+            if (shouldFallbackToContent(key, currentKeys)) {
+                fallback.requestFocus()
+                pendingKey = null
+                pendingIndex = -1
+                return@launch
+            }
             val isVisible = when {
                 gridState != null -> gridState.layoutInfo.visibleItemsInfo.any { it.key == key }
                 listState != null -> listState.layoutInfo.visibleItemsInfo.any { it.key == key }
@@ -62,11 +85,10 @@ class DetailFocusRestoreHelper(
                 withFrameNanos { }
             }
             val fr = focusRequesters()[key]
-            var ok = fr?.requestFocus() ?: false
+            var ok = try { fr?.requestFocus() == true } catch (_: Exception) { false }
             if (!ok) {
                 withFrameNanos { }
-                ok = fr?.requestFocus() ?: false
-                if (!ok) fallback.requestFocus()
+                try { fr?.requestFocus() } catch (_: Exception) { }
             }
             pendingKey = null
             pendingIndex = -1
@@ -86,8 +108,9 @@ fun rememberGridDetailFocusRestore(
     fallback: FocusRequester
 ): DetailFocusRestoreHelper {
     val scope = rememberCoroutineScope()
-    return remember(gridState, fallback) {
-        DetailFocusRestoreHelper(scope, gridState, null, focusRequesters, fallback)
+    val windowInfo = LocalWindowInfo.current
+    return remember(gridState, fallback, windowInfo) {
+        DetailFocusRestoreHelper(scope, gridState, null, focusRequesters, fallback, windowInfo)
     }
 }
 
@@ -98,7 +121,8 @@ fun rememberListDetailFocusRestore(
     fallback: FocusRequester
 ): DetailFocusRestoreHelper {
     val scope = rememberCoroutineScope()
-    return remember(listState, fallback) {
-        DetailFocusRestoreHelper(scope, null, listState, focusRequesters, fallback)
+    val windowInfo = LocalWindowInfo.current
+    return remember(listState, fallback, windowInfo) {
+        DetailFocusRestoreHelper(scope, null, listState, focusRequesters, fallback, windowInfo)
     }
 }

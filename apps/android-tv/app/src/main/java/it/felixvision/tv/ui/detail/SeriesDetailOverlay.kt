@@ -226,9 +226,7 @@ fun SeriesDetailOverlay(
                     )
                     FvpSecondaryButton(
                         text = "Chiudi",
-                        onClick = {
-                            if (selectedSeason != null) selectedSeason = null else onDismiss()
-                        },
+                        onClick = onDismiss,
                         scale = scale,
                         modifier = Modifier
                             .focusRequester(closeFocus)
