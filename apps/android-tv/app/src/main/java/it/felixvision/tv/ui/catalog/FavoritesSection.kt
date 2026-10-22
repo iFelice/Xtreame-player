@@ -2,6 +2,8 @@ package it.felixvision.tv.ui.catalog
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,6 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,6 +41,8 @@ import androidx.tv.material3.Border
 import androidx.tv.material3.Card
 import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.Text
+import it.felixvision.tv.data.catalog.Category
+import it.felixvision.tv.data.catalog.LiveStream
 import it.felixvision.tv.data.catalog.SeriesInfoResponse
 import it.felixvision.tv.data.catalog.SeriesItem
 import it.felixvision.tv.data.catalog.VodInfoResponse
@@ -62,6 +67,10 @@ fun FavoritesSection(
     catalogViewModel: CatalogViewModel? = null,
     contentFocusRequester: FocusRequester = remember { FocusRequester() },
     modifier: Modifier = Modifier,
+    liveCategories: List<Category> = emptyList(),
+    liveStreams: List<LiveStream> = emptyList(),
+    restoreCategoryFavoriteId: String? = null,
+    onCategoryFocusRestored: () -> Unit = {},
 ) {
     var detailFavorite by remember { mutableStateOf<FavoriteItem?>(null) }
     var detailVodInfo by remember { mutableStateOf<VodInfoResponse?>(null) }
@@ -99,20 +108,46 @@ fun FavoritesSection(
     }
 
     if (favorites.isEmpty()) {
+        LaunchedEffect(restoreCategoryFavoriteId) {
+            if (restoreCategoryFavoriteId != null) onCategoryFocusRestored()
+        }
         Column(modifier = modifier.padding(scale.dp(24f))) {
             Text(text = "Nessun preferito", color = FvpColors.TextPrimary, fontWeight = FontWeight.Bold)
             Text(
-                text = "Tieni premuto il tasto OK su un canale, un film o una serie per aggiungerlo ai preferiti. Puoi farlo anche dal dettaglio con il pulsante dedicato.",
+                text = "Tieni premuto il tasto OK su una categoria Live, un canale, un film o una serie per aggiungerlo ai preferiti. Puoi farlo anche dal dettaglio con il pulsante dedicato.",
                 color = FvpColors.TextSecondary,
                 modifier = Modifier.padding(top = scale.dp(8f)),
             )
         }
         return
     }
+    val categoryFavorites = remember(favorites, liveCategories, liveStreams) {
+        liveCategoryFavorites(favorites, liveCategories, liveStreams)
+    }
     val live = favorites.filter { it.type == "live" }
     val vod = favorites.filter { it.type == "vod" }
     val series = favorites.filter { it.type == "series" }
     val firstFocus = remember { FocusRequester() }
+
+    val categoryListState = rememberLazyListState()
+    val categoryFocusMap = remember(categoryFavorites.map { it.favorite.id }) {
+        categoryFavorites.associate { it.favorite.id to FocusRequester() }
+    }
+    val verticalScrollState = rememberScrollState()
+    LaunchedEffect(restoreCategoryFavoriteId, categoryFocusMap) {
+        val id = restoreCategoryFavoriteId ?: return@LaunchedEffect
+        val index = categoryFavorites.indexOfFirst { it.favorite.id == id }
+        if (index >= 0) {
+            verticalScrollState.scrollTo(0)
+            categoryListState.scrollToItem(index)
+            withFrameNanos { }
+            categoryFocusMap.getValue(id).requestFocus()
+        } else {
+            withFrameNanos { }
+            firstFocus.requestFocus()
+        }
+        onCategoryFocusRestored()
+    }
 
     val liveListState = rememberLazyListState()
     val vodListState = rememberLazyListState()
@@ -127,9 +162,22 @@ fun FavoritesSection(
     val seriesRestore = rememberListDetailFocusRestore(seriesListState, { seriesFocusMap }, firstFocus)
 
     Column(
-        modifier = modifier.padding(horizontal = scale.dp(16f), vertical = scale.dp(12f)),
+        modifier = modifier.verticalScroll(verticalScrollState)
+            .padding(horizontal = scale.dp(16f), vertical = scale.dp(12f)),
         verticalArrangement = Arrangement.spacedBy(scale.dp(18f))
     ) {
+        if (categoryFavorites.isNotEmpty()) {
+            LiveCategoryFavoriteRow(
+                items = categoryFavorites,
+                scale = scale,
+                onSelect = onSelectFavorite,
+                onToggle = onToggleFavorite,
+                firstFocus = firstFocus,
+                contentFocusRequester = contentFocusRequester,
+                listState = categoryListState,
+                focusMap = categoryFocusMap,
+            )
+        }
         if (live.isNotEmpty()) {
             FavoriteRow(
                 title = "Canali",
@@ -137,8 +185,9 @@ fun FavoritesSection(
                 scale = scale,
                 onSelect = onSelectFavorite,
                 onToggle = onToggleFavorite,
-                firstFocus = firstFocus,
+                firstFocus = if (categoryFavorites.isEmpty()) firstFocus else remember { FocusRequester() },
                 contentFocusRequester = contentFocusRequester,
+                isFirstRow = categoryFavorites.isEmpty(),
                 onDetail = { fav ->
                     val idx = live.indexOfFirst { it.id == fav.id }
                     liveRestore.onOpen(fav.id, idx)
@@ -159,8 +208,9 @@ fun FavoritesSection(
                     detailFavorite = fav
                 },
                 onToggle = onToggleFavorite,
-                firstFocus = if (live.isEmpty()) firstFocus else remember { FocusRequester() },
+                firstFocus = if (categoryFavorites.isEmpty() && live.isEmpty()) firstFocus else remember { FocusRequester() },
                 contentFocusRequester = contentFocusRequester,
+                isFirstRow = categoryFavorites.isEmpty() && live.isEmpty(),
                 onDetail = { fav ->
                     val idx = vod.indexOfFirst { it.id == fav.id }
                     vodRestore.onOpen(fav.id, idx)
@@ -181,8 +231,9 @@ fun FavoritesSection(
                     detailFavorite = fav
                 },
                 onToggle = onToggleFavorite,
-                firstFocus = if (live.isEmpty() && vod.isEmpty()) firstFocus else remember { FocusRequester() },
+                firstFocus = if (categoryFavorites.isEmpty() && live.isEmpty() && vod.isEmpty()) firstFocus else remember { FocusRequester() },
                 contentFocusRequester = contentFocusRequester,
+                isFirstRow = categoryFavorites.isEmpty() && live.isEmpty() && vod.isEmpty(),
                 onDetail = { fav ->
                     val idx = series.indexOfFirst { it.id == fav.id }
                     seriesRestore.onOpen(fav.id, idx)
@@ -309,6 +360,7 @@ private fun FavoriteRow(
     onToggle: (FavoriteItem) -> Unit,
     firstFocus: FocusRequester,
     contentFocusRequester: FocusRequester,
+    isFirstRow: Boolean,
     onDetail: ((FavoriteItem) -> Unit)? = null,
     listState: androidx.compose.foundation.lazy.LazyListState,
     focusMap: Map<String, FocusRequester>
@@ -329,7 +381,7 @@ private fun FavoriteRow(
                     },
                     modifier = Modifier.width(scale.dp(140f)).testTag("favorite_${fav.id}")
                         .focusRequester(itemFr)
-                        .then(if (index == 0 && title == "Canali") Modifier.focusRequester(firstFocus).focusRequester(contentFocusRequester) else if (index == 0) Modifier.focusRequester(firstFocus) else Modifier)
+                        .then(if (index == 0 && isFirstRow) Modifier.focusRequester(firstFocus).focusRequester(contentFocusRequester) else if (index == 0) Modifier.focusRequester(firstFocus) else Modifier)
                         .fvpLongPress { onToggle(fav) },
                     scale = CardDefaults.scale(focusedScale = 1.04f),
                     border = CardDefaults.border(focusedBorder = Border(BorderStroke(2.dp, FvpColors.GreenFocus))),
@@ -352,6 +404,59 @@ private fun FavoriteRow(
                                 }
                             }
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LiveCategoryFavoriteRow(
+    items: List<LiveCategoryFavorite>,
+    scale: UiScale,
+    onSelect: (FavoriteItem) -> Unit,
+    onToggle: (FavoriteItem) -> Unit,
+    firstFocus: FocusRequester,
+    contentFocusRequester: FocusRequester,
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    focusMap: Map<String, FocusRequester>,
+) {
+    Column {
+        Text(
+            text = "Categorie Live", color = FvpColors.TextPrimary, fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(bottom = scale.dp(8f)),
+        )
+        LazyRow(
+            state = listState,
+            horizontalArrangement = Arrangement.spacedBy(scale.dp(12f)),
+            contentPadding = PaddingValues(end = scale.dp(16f)),
+            modifier = Modifier.testTag("favorites_row_Categorie Live"),
+        ) {
+            itemsIndexed(items, key = { _, item -> item.favorite.id }) { index, item ->
+                val favorite = item.favorite
+                // Unavailable cards stay focusable so a long press can still remove them.
+                Card(
+                    onClick = { if (item.available) onSelect(favorite) },
+                    modifier = Modifier.width(scale.dp(220f)).testTag("favorite_${favorite.id}")
+                        .focusRequester(focusMap.getValue(favorite.id))
+                        .then(if (index == 0) Modifier.focusRequester(firstFocus).focusRequester(contentFocusRequester) else Modifier)
+                        .fvpLongPress { onToggle(favorite) },
+                    scale = CardDefaults.scale(focusedScale = 1.04f),
+                    border = CardDefaults.border(focusedBorder = Border(BorderStroke(2.dp, FvpColors.GreenFocus))),
+                    colors = CardDefaults.colors(containerColor = FvpColors.Surface),
+                    shape = CardDefaults.shape(shape = RoundedCornerShape(scale.dp(10f))),
+                ) {
+                    Column(modifier = Modifier.padding(scale.dp(16f))) {
+                        Text(
+                            text = favorite.title,
+                            color = if (item.available) FvpColors.TextPrimary else FvpColors.TextSecondary,
+                            maxLines = 2, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium,
+                        )
+                        Text(
+                            text = item.supportingText, color = FvpColors.TextSecondary,
+                            modifier = Modifier.padding(top = scale.dp(8f)),
+                        )
                     }
                 }
             }

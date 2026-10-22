@@ -21,6 +21,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -61,10 +62,15 @@ fun LiveSection(
     modifier: Modifier = Modifier,
     contentFocusRequester: FocusRequester = remember { FocusRequester() },
     onBackToDrawer: (() -> Unit)? = null,
+    initialCategoryId: String? = null,
+    onLongPressCategory: ((Category) -> Unit)? = null,
 ) {
-    var focusedCategoryId by remember { mutableStateOf(categories.firstOrNull()?.categoryId) }
-    var debouncedCategoryId by remember { mutableStateOf(focusedCategoryId) }
-    var categoryExpanded by remember { mutableStateOf(true) }
+    val initialSelection = categories.firstOrNull { it.categoryId == initialCategoryId }?.categoryId
+    var focusedCategoryId by remember(initialCategoryId) {
+        mutableStateOf(initialSelection ?: categories.firstOrNull()?.categoryId)
+    }
+    var debouncedCategoryId by remember(initialCategoryId) { mutableStateOf(focusedCategoryId) }
+    var categoryExpanded by remember(initialCategoryId) { mutableStateOf(initialSelection == null) }
 
     LaunchedEffect(focusedCategoryId) {
         delay(300L)
@@ -84,6 +90,28 @@ fun LiveSection(
         categories.associate { it.categoryId to FocusRequester() }
     }
 
+    val favoriteCategoryIds = remember(favorites) {
+        favorites.filter { it.type == FavoriteItem.LIVE_CATEGORY }.mapNotNull { it.categoryId }.toSet()
+    }
+
+    // Only the Favorites entry path moves focus automatically. Normal Live entry is unchanged.
+    LaunchedEffect(initialCategoryId) {
+        val index = categories.indexOfFirst { it.categoryId == initialCategoryId }
+        if (initialCategoryId != null && index >= 0) {
+            categoryListState.scrollToItem(index)
+            if (filtered.isNotEmpty()) {
+                channelsListState.scrollToItem(0)
+                withFrameNanos { }
+                channelsFirstFocus.requestFocus()
+            } else {
+                // A valid but empty category has no first channel: keep navigation usable.
+                categoryExpanded = true
+                withFrameNanos { }
+                categoryFocusRequesters[initialCategoryId]?.requestFocus()
+            }
+        }
+    }
+
     Row(modifier = modifier.fillMaxWidth().padding(scale.dp(12f)), horizontalArrangement = Arrangement.spacedBy(scale.dp(12f))) {
         if (categories.isEmpty()) {
             EmptyState(title = "Nessuna categoria", description = "Il server non ha restituito categorie live.", scale = scale, modifier = Modifier.weight(0.3f))
@@ -99,6 +127,8 @@ fun LiveSection(
                 listState = categoryListState,
                 focusRequesters = categoryFocusRequesters,
                 testTagPrefix = "live",
+                favoriteCategoryIds = favoriteCategoryIds,
+                onLongPressCategory = onLongPressCategory,
                 modifier = Modifier
             )
         }
