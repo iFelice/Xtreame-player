@@ -55,6 +55,7 @@ class EncryptedCredentialStore(
             server = credentials.server,
             username = credentials.username,
             password = credentials.password,
+            serverCode = credentials.serverCode,
         )
         val plaintext = json.encodeToString(record).toByteArray(Charsets.UTF_8)
         val blob = cipher.encrypt(plaintext)
@@ -75,10 +76,11 @@ class EncryptedCredentialStore(
         val server: String,
         val username: String,
         val password: String,
+        val serverCode: String? = null,
     ) {
         fun toStoredCredentials(): StoredCredentials? {
             if (server.isBlank() || username.isBlank() || password.isEmpty()) return null
-            return StoredCredentials(server = server, username = username, password = password)
+            return StoredCredentials(server = server, username = username, password = password, serverCode = serverCode?.takeIf { it.isNotBlank() })
         }
     }
 

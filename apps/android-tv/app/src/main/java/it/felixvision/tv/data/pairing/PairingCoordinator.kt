@@ -17,9 +17,11 @@ data class PairingPanelState(
     val failureMessage: String? = null,
     /** Vero quando le credenziali sono state consegnate e il pannello ha finito. */
     val completed: Boolean = false,
+    /** Vero quando 3 sessioni consecutive sono scadute senza invio: mostra "Codice scaduto". */
+    val isExpired: Boolean = false,
 ) {
     val isPreparing: Boolean
-        get() = code == null && failureMessage == null
+        get() = code == null && failureMessage == null && !isExpired
 }
 
 /** Esito di un singolo passo del ciclo di abbinamento. */
@@ -41,6 +43,8 @@ sealed interface PairingStep {
  * - stato interrogato ogni 2 secondi;
  * - in caso di errore di rete si riprova dopo 5, 10 e poi 30 secondi: mai più
  *   velocemente di così;
+ * - dopo 3 sessioni consecutive scadute senza invio (30 minuti) l'interrogazione
+ *   si ferma e il pannello mostra "Codice scaduto" con pulsante per ripartire;
  * - la visibilità della schermata è gestita da chi consuma [step] (il ciclo
  *   viene fermato in pausa e ripreso al ritorno sulla schermata).
  */
@@ -62,24 +66,49 @@ class PairingCoordinator(
 
     private var consecutiveFailures = 0
     private var delivered = false
+    private var expiredConsecutiveCount = 0
+    private var isHaltedDueToExpiry = false
 
     /** Ricomincia da zero: nuova sessione, nuovo PIN, nuovo QR. */
     fun reset() {
         session = null
         consecutiveFailures = 0
         delivered = false
+        expiredConsecutiveCount = 0
+        isHaltedDueToExpiry = false
         _state.value = PairingPanelState()
     }
 
     /**
      * Esegue un passo: crea la sessione se serve, altrimenti interroga lo stato
      * o la rigenera alla scadenza. Restituisce l'attesa prima del passo seguente.
+     *
+     * Se sono scadute 3 sessioni consecutive senza invio, non esegue più
+     * richieste (spec E.2) e mantiene lo stato "Codice scaduto" finché
+     * non viene chiamato [reset] dal pulsante "Mostra un nuovo codice".
      */
     suspend fun step(): PairingStep {
         if (delivered) return PairingStep.Wait(pollIntervalMillis)
+        if (isHaltedDueToExpiry) {
+            // Nessuna richiesta al servizio mentre è fermo
+            return PairingStep.Wait(pollIntervalMillis)
+        }
 
         val current = session
         if (current == null || clock.nowMillis() >= current.expiresAtMillis) {
+            // Sessione scaduta naturalmente: contiamo per il limite di 3
+            if (current != null) {
+                expiredConsecutiveCount += 1
+                if (expiredConsecutiveCount >= MAX_EXPIRED_SESSIONS) {
+                    isHaltedDueToExpiry = true
+                    _state.value = PairingPanelState(
+                        isExpired = true,
+                        failureMessage = EXPIRED_MESSAGE,
+                    )
+                    // Nessuna richiesta ulteriore
+                    return PairingStep.Wait(pollIntervalMillis)
+                }
+            }
             return createSession()
         }
 
@@ -92,6 +121,7 @@ class PairingCoordinator(
                 }
                 is PairingStatus.Ready -> {
                     consecutiveFailures = 0
+                    expiredConsecutiveCount = 0
                     delivered = true
                     _state.value = _state.value.copy(
                         failureMessage = null,
@@ -102,6 +132,7 @@ class PairingCoordinator(
                 }
                 PairingStatus.Gone -> {
                     // Sessione consumata o scaduta sul relay: se ne crea subito un'altra.
+                    // Non è scadenza naturale, non incrementiamo contatore
                     session = null
                     createSession()
                 }
@@ -155,9 +186,11 @@ class PairingCoordinator(
     companion object {
         const val POLL_INTERVAL_MILLIS = 2_000L
         val RETRY_DELAYS_MILLIS = listOf(5_000L, 10_000L, 30_000L)
+        const val MAX_EXPIRED_SESSIONS = 3
 
         private const val RETRY_MESSAGE =
             "Servizio di abbinamento non raggiungibile. Nuovo tentativo in corso."
+        const val EXPIRED_MESSAGE = "Codice scaduto"
 
         /** Contenuto esatto del QR: `<PAIRING_RELAY_URL>/?code=<PIN>`. */
         fun buildQrPayload(relayUrl: String, code: String): String =

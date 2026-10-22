@@ -47,8 +47,7 @@ android {
     }
 
     testOptions {
-        // I test JVM non devono fallire per le API Android non implementate negli
-        // stub: la logica verificata è tutta indipendente dal framework.
+        unitTests.isIncludeAndroidResources = true
         unitTests.isReturnDefaultValues = true
     }
 
@@ -86,10 +85,20 @@ dependencies {
     // QR generato in locale (nessuna dipendenza da servizi esterni).
     implementation(libs.zxing.core)
 
+    // Immagini: Coil 3 con client di rete dedicato (max 4 download simultanei).
+    implementation(libs.coil3.compose)
+    implementation(libs.coil3.network.okhttp)
+
     // Media3 non è ancora una dipendenza (PR 3): la versione resta nel catalogo.
 
     testImplementation(libs.junit)
     testImplementation(libs.okhttp.mockwebserver)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.zxing.core)
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
+    testImplementation(libs.androidx.test.ext.junit)
 }

@@ -16,6 +16,25 @@ object FvpColors {
     val OnGreen = Color(0xFF1C1C1E)
     val GreenFocus = Color(0xFF34D399)
     val Error = Color(0xFFFF453A)
+
+    // Colori specifici per le voci del menu laterale (PR2)
+    val LiveActive = Color(0xFFFF9F0A)
+    val FilmActive = Color(0xFF10B981)
+    val SerieActive = Color(0xFF2DD4BF)
+    val NovitaActive = Color(0xFFA3E635)
+    val PreferitiActive = Color(0xFFFBBF24)
+    val ImpostazioniActive = Color(0xFFFFFFFF)
+    val Inactive = Color(0xFFAEAEB2)
+}
+
+object DrawerColors {
+    val Live = FvpColors.LiveActive
+    val Film = FvpColors.FilmActive
+    val Serie = FvpColors.SerieActive
+    val Novita = FvpColors.NovitaActive
+    val Preferiti = FvpColors.PreferitiActive
+    val Impostazioni = FvpColors.ImpostazioniActive
+    val Inactive = FvpColors.Inactive
 }
 
 @Composable

@@ -188,7 +188,7 @@ private fun FieldContainer(
     }
 }
 
-/** Pulsante principale: riempimento verde con testo scuro. */
+/** Pulsante principale: a riposo grigio scuro, solo con focus verde pieno. */
 @Composable
 fun FvpPrimaryButton(
     text: String,
@@ -201,13 +201,13 @@ fun FvpPrimaryButton(
         onClick = onClick,
         modifier = modifier,
         enabled = enabled,
-        scale = ButtonDefaults.scale(focusedScale = 1.04f),
+        scale = ButtonDefaults.scale(focusedScale = 1.05f),
         colors = ButtonDefaults.colors(
-            containerColor = FvpColors.Green,
-            contentColor = FvpColors.OnGreen,
+            containerColor = FvpColors.SurfaceElevated,
+            contentColor = FvpColors.TextPrimary,
             focusedContainerColor = FvpColors.Green,
             focusedContentColor = FvpColors.OnGreen,
-            pressedContainerColor = FvpColors.GreenFocus,
+            pressedContainerColor = FvpColors.Green,
             pressedContentColor = FvpColors.OnGreen,
             disabledContainerColor = FvpColors.SurfaceElevated,
             disabledContentColor = FvpColors.TextSecondary,
@@ -229,7 +229,7 @@ fun FvpPrimaryButton(
     }
 }
 
-/** Pulsante secondario: superficie elevata, focus verde. */
+/** Pulsante secondario: stessi colori, peso testo diverso. */
 @Composable
 fun FvpSecondaryButton(
     text: String,
@@ -242,13 +242,13 @@ fun FvpSecondaryButton(
         onClick = onClick,
         modifier = modifier,
         enabled = enabled,
-        scale = ButtonDefaults.scale(focusedScale = 1.04f),
+        scale = ButtonDefaults.scale(focusedScale = 1.05f),
         colors = ButtonDefaults.colors(
             containerColor = FvpColors.SurfaceElevated,
             contentColor = FvpColors.TextPrimary,
-            focusedContainerColor = FvpColors.GreenFocus,
+            focusedContainerColor = FvpColors.Green,
             focusedContentColor = FvpColors.OnGreen,
-            pressedContainerColor = FvpColors.GreenFocus,
+            pressedContainerColor = FvpColors.Green,
             pressedContentColor = FvpColors.OnGreen,
             disabledContainerColor = FvpColors.Surface,
             disabledContentColor = FvpColors.TextSecondary,
