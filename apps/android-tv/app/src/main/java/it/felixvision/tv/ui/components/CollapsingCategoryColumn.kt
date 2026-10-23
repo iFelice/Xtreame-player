@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -54,8 +55,13 @@ fun CollapsingCategoryColumn(
     favoriteCategoryIds: Set<String> = emptySet(),
     onLongPressCategory: ((Category) -> Unit)? = null,
 ) {
+    // Il margine sicuro del focus sta dentro la colonna, quindi la larghezza
+    // cresce di FocusSafePadding per lato: la voce con il focus (con il suo
+    // ingrandimento e la sua cornice) resta interamente visibile senza
+    // rimpicciolire il contenuto delle voci.
+    val safePadding = scale.focusSafePadding
     val animatedWidth by animateDpAsState(
-        targetValue = if (expanded) scale.dp(260f) else scale.dp(56f),
+        targetValue = if (expanded) scale.dp(260f) + safePadding * 2f else scale.dp(56f) + safePadding * 2f,
         animationSpec = tween(durationMillis = 200),
         label = "categoryWidth"
     )
@@ -74,6 +80,7 @@ fun CollapsingCategoryColumn(
         LazyColumn(
             state = listState,
             verticalArrangement = Arrangement.spacedBy(scale.dp(6f)),
+            contentPadding = PaddingValues(safePadding),
             modifier = Modifier.fillMaxHeight()
                 .then(if (!expanded) Modifier.testTag("${testTagPrefix}_category_collapsed") else Modifier)
         ) {

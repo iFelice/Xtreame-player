@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -66,10 +67,11 @@ import it.felixvision.tv.ui.catalog.SeasonDisplay
 import it.felixvision.tv.ui.catalog.deriveSeasons
 import it.felixvision.tv.ui.components.CatalogPosterImage
 import it.felixvision.tv.ui.components.FvpSecondaryButton
+import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.components.WatchProgressLine
 import it.felixvision.tv.ui.components.WatchSeenBadge
+import it.felixvision.tv.ui.components.focusSafePadding
 import it.felixvision.tv.ui.components.fvpLongPress
-import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.theme.FvpColors
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -402,6 +404,8 @@ fun SeriesDetailOverlay(
                                         LazyColumn(
                                             state = seasonsListState,
                                             verticalArrangement = Arrangement.spacedBy(scale.dp(6f)),
+                                            // Ingrandimento e cornice delle voci restano nella lista.
+                                            contentPadding = PaddingValues(scale.focusSafePadding),
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .weight(1f)
@@ -474,6 +478,8 @@ fun SeriesDetailOverlay(
                                         LazyColumn(
                                             state = episodesListState,
                                             verticalArrangement = Arrangement.spacedBy(scale.dp(6f)),
+                                            // Ingrandimento e cornice delle voci restano nella lista.
+                                            contentPadding = PaddingValues(scale.focusSafePadding),
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .weight(1f)

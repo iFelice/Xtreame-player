@@ -5,6 +5,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
@@ -55,6 +56,7 @@ import it.felixvision.tv.ui.components.EmptyState
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.components.WatchProgressLine
 import it.felixvision.tv.ui.components.WatchSeenBadge
+import it.felixvision.tv.ui.components.focusSafePadding
 import it.felixvision.tv.ui.components.fvpLongPress
 import it.felixvision.tv.ui.components.rememberGridDetailFocusRestore
 import it.felixvision.tv.ui.detail.FilmDetailOverlay
@@ -148,7 +150,9 @@ fun FilmSection(
         fallback = contentFocusRequester
     )
 
-    Row(modifier = modifier.fillMaxWidth().padding(scale.dp(12f)), horizontalArrangement = Arrangement.spacedBy(scale.dp(12f))) {
+    // Il margine sicuro del focus sta nel contentPadding della griglia: la Row
+    // resta senza padding per non sommare due volte la stessa quantità.
+    Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(scale.dp(12f))) {
         if (categories.isEmpty()) {
             EmptyState(title = "Nessuna categoria", description = "Il server non ha restituito categorie.", scale = scale, modifier = Modifier.weight(0.3f))
         } else {
@@ -174,6 +178,8 @@ fun FilmSection(
                 columns = GridCells.Fixed(columns),
                 verticalArrangement = Arrangement.spacedBy(scale.dp(12f)),
                 horizontalArrangement = Arrangement.spacedBy(scale.dp(12f)),
+                // Ingrandimento e cornice del focus restano dentro la griglia.
+                contentPadding = PaddingValues(scale.focusSafePadding),
                 modifier = Modifier.weight(1f).fillMaxHeight().testTag("film_grid_5"),
             ) {
                 itemsIndexed(filtered, key = { _, f -> f.streamId }) { index, film ->

@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -43,6 +44,7 @@ import it.felixvision.tv.ui.components.CatalogPosterImage
 import it.felixvision.tv.ui.components.EmptyState
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.components.WatchProgressLine
+import it.felixvision.tv.ui.components.focusSafePadding
 import it.felixvision.tv.ui.components.fvpLongPress
 import it.felixvision.tv.ui.theme.FvpColors
 import kotlinx.coroutines.delay
@@ -95,7 +97,9 @@ fun ContinueWatchingSection(
         runCatching { itemFocusRequesters[target]?.requestFocus() }
     }
 
-    Box(modifier = modifier.fillMaxSize().padding(scale.dp(12f))) {
+    // Il margine sicuro del focus sta nel contentPadding della griglia: il Box
+    // resta senza padding per non sommare due volte la stessa quantità.
+    Box(modifier = modifier.fillMaxSize()) {
         if (entries.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester)) {
                 EmptyState(
@@ -112,7 +116,9 @@ fun ContinueWatchingSection(
                         text = message,
                         color = FvpColors.Error,
                         fontSize = scale.sp(15f),
-                        modifier = Modifier.padding(bottom = scale.dp(8f)).testTag("continua_error"),
+                        modifier = Modifier
+                            .padding(start = scale.focusSafePadding, end = scale.focusSafePadding, bottom = scale.dp(8f))
+                            .testTag("continua_error"),
                     )
                 }
                 LazyVerticalGrid(
@@ -120,6 +126,8 @@ fun ContinueWatchingSection(
                     columns = GridCells.Fixed(columns),
                     verticalArrangement = Arrangement.spacedBy(scale.dp(12f)),
                     horizontalArrangement = Arrangement.spacedBy(scale.dp(12f)),
+                    // Ingrandimento e cornice del focus restano dentro la griglia.
+                    contentPadding = PaddingValues(scale.focusSafePadding),
                     modifier = Modifier.weight(1f).fillMaxHeight().testTag("continua_grid_5"),
                 ) {
                     itemsIndexed(entries, key = { _, entry -> entry.key }) { index, entry ->

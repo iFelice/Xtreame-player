@@ -49,6 +49,7 @@ import it.felixvision.tv.ui.components.CatalogPosterImage
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.components.WatchProgressLine
 import it.felixvision.tv.ui.components.WatchSeenBadge
+import it.felixvision.tv.ui.components.focusSafePadding
 import it.felixvision.tv.ui.components.fvpLongPress
 import it.felixvision.tv.ui.components.rememberListDetailFocusRestore
 import it.felixvision.tv.ui.detail.FilmDetailOverlay
@@ -162,7 +163,9 @@ fun NovitaSection(
     )
 
     Column(
-        modifier = modifier.padding(horizontal = scale.dp(16f), vertical = scale.dp(12f)),
+        // 4 + FocusSafePadding delle righe = i 16 di prima: il margine del focus
+        // sta nel contentPadding, non nel contenitore.
+        modifier = modifier.padding(horizontal = scale.dp(4f)),
         verticalArrangement = Arrangement.spacedBy(scale.dp(18f))
     ) {
         Column {
@@ -170,7 +173,8 @@ fun NovitaSection(
                 text = "Ultimi film",
                 color = FvpColors.TextPrimary,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = scale.dp(8f))
+                // Il titolo si allinea alla prima card, dentro il contentPadding della riga.
+                modifier = Modifier.padding(start = scale.focusSafePadding, bottom = scale.dp(8f))
             )
             if (recentFilms.isEmpty()) {
                 Text(text = "Nessun film disponibile", color = FvpColors.TextSecondary)
@@ -178,7 +182,7 @@ fun NovitaSection(
                 LazyRow(
                     state = filmsListState,
                     horizontalArrangement = Arrangement.spacedBy(scale.dp(12f)),
-                    contentPadding = PaddingValues(end = scale.dp(16f)),
+                    contentPadding = PaddingValues(scale.focusSafePadding),
                     modifier = Modifier.fillMaxWidth().testTag("novita_films_row"),
                 ) {
                     itemsIndexed(recentFilms, key = { _, f -> f.streamId }) { index, film ->
@@ -247,7 +251,8 @@ fun NovitaSection(
                 text = "Ultime serie",
                 color = FvpColors.TextPrimary,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = scale.dp(8f))
+                // Il titolo si allinea alla prima card, dentro il contentPadding della riga.
+                modifier = Modifier.padding(start = scale.focusSafePadding, bottom = scale.dp(8f))
             )
             if (recentSeries.isEmpty()) {
                 Text(text = "Nessuna serie disponibile", color = FvpColors.TextSecondary)
@@ -255,7 +260,7 @@ fun NovitaSection(
                 LazyRow(
                     state = seriesListState,
                     horizontalArrangement = Arrangement.spacedBy(scale.dp(12f)),
-                    contentPadding = PaddingValues(end = scale.dp(16f)),
+                    contentPadding = PaddingValues(scale.focusSafePadding),
                     modifier = Modifier.fillMaxWidth().testTag("novita_series_row"),
                 ) {
                     itemsIndexed(recentSeries, key = { _, s -> s.seriesId }) { index, serie ->

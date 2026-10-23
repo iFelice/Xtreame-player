@@ -26,6 +26,17 @@ value class UiScale(val factor: Float) {
     fun sp(base: Float): TextUnit = (base * factor).sp
 }
 
+/**
+ * Margine minimo, su tutti i lati, delle liste e delle griglie con elementi
+ * focalizzabili: contiene l'ingrandimento dell'elemento con il focus
+ * (1.04–1.05) e la sua cornice, così nessun bordo viene tagliato dal
+ * contenitore. Unico punto di verità per tutte le liste dell'app.
+ */
+const val FOCUS_SAFE_PADDING_BASE = 12f
+
+/** [FOCUS_SAFE_PADDING_BASE] nella scala corrente. */
+val UiScale.focusSafePadding: Dp get() = dp(FOCUS_SAFE_PADDING_BASE)
+
 const val DESIGN_WIDTH_DP = 960f
 const val DESIGN_HEIGHT_DP = 600f
 

@@ -16,6 +16,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -148,6 +149,9 @@ fun FvpNavigationDrawer(
                             pendingContentFocus = true
                         },
                         leadingContent = {
+                            // L'icona va centrata nel riquadro della voce: a menu
+                            // chiuso il riquadro è IconSize × ContainerHeightOneLine,
+                            // a menu aperto lo slot cresce con la scala.
                             Box(
                                 modifier = if (expanded) {
                                     Modifier.padding(start = extraInset, end = openGap - 8.dp)
@@ -155,6 +159,7 @@ fun FvpNavigationDrawer(
                                 } else {
                                     Modifier.size(NavigationDrawerItemDefaults.IconSize)
                                 },
+                                contentAlignment = Alignment.Center,
                             ) {
                                 Icon(
                                     painter = painterResource(id = section.iconRes),

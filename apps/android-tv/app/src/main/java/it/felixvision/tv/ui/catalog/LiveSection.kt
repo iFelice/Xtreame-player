@@ -5,10 +5,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -47,6 +47,7 @@ import it.felixvision.tv.ui.components.ChannelLogoImage
 import it.felixvision.tv.ui.components.CollapsingCategoryColumn
 import it.felixvision.tv.ui.components.EmptyState
 import it.felixvision.tv.ui.components.UiScale
+import it.felixvision.tv.ui.components.focusSafePadding
 import it.felixvision.tv.ui.components.fvpLongPress
 import it.felixvision.tv.ui.theme.FvpColors
 import kotlinx.coroutines.delay
@@ -151,7 +152,9 @@ fun LiveSection(
         onChannelFocusRestored()
     }
 
-    Row(modifier = modifier.fillMaxWidth().padding(scale.dp(12f)), horizontalArrangement = Arrangement.spacedBy(scale.dp(12f))) {
+    // Il margine sicuro del focus sta nel contentPadding della lista: la Row
+    // resta senza padding per non sommare due volte la stessa quantità.
+    Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(scale.dp(12f))) {
         if (categories.isEmpty()) {
             EmptyState(title = "Nessuna categoria", description = "Il server non ha restituito categorie live.", scale = scale, modifier = Modifier.weight(0.3f))
         } else {
@@ -179,6 +182,8 @@ fun LiveSection(
                 LazyColumn(
                     state = channelsListState,
                     verticalArrangement = Arrangement.spacedBy(scale.dp(6f)),
+                    // Ingrandimento e cornice del focus restano dentro la lista.
+                    contentPadding = PaddingValues(scale.focusSafePadding),
                     modifier = Modifier.fillMaxWidth().testTag("live_channels_list"),
                 ) {
                     itemsIndexed(filtered, key = { _, ch -> ch.streamId }) { index, channel ->

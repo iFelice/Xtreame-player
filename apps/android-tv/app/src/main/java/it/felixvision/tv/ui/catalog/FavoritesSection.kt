@@ -57,6 +57,7 @@ import it.felixvision.tv.ui.components.FvpSecondaryButton
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.components.WatchProgressLine
 import it.felixvision.tv.ui.components.WatchSeenBadge
+import it.felixvision.tv.ui.components.focusSafePadding
 import it.felixvision.tv.ui.components.fvpLongPress
 import it.felixvision.tv.ui.components.rememberListDetailFocusRestore
 import it.felixvision.tv.ui.detail.FilmDetailOverlay
@@ -176,8 +177,10 @@ fun FavoritesSection(
     val seriesRestore = rememberListDetailFocusRestore(seriesListState, { seriesFocusMap }, firstFocus)
 
     Column(
+        // 4 + FocusSafePadding delle righe = i 16 di prima: il margine del focus
+        // sta nel contentPadding, non nel contenitore.
         modifier = modifier.verticalScroll(verticalScrollState)
-            .padding(horizontal = scale.dp(16f), vertical = scale.dp(12f)),
+            .padding(horizontal = scale.dp(4f)),
         verticalArrangement = Arrangement.spacedBy(scale.dp(18f))
     ) {
         if (categoryFavorites.isNotEmpty()) {
@@ -402,11 +405,12 @@ private fun FavoriteRow(
     progress: Map<String, WatchProgress> = emptyMap(),
 ) {
     Column {
-        Text(text = title, color = FvpColors.TextPrimary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = scale.dp(8f)))
+        // Il titolo si allinea alla prima card, dentro il contentPadding della riga.
+        Text(text = title, color = FvpColors.TextPrimary, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = scale.focusSafePadding, bottom = scale.dp(8f)))
         LazyRow(
             state = listState,
             horizontalArrangement = Arrangement.spacedBy(scale.dp(12f)),
-            contentPadding = PaddingValues(end = scale.dp(16f)),
+            contentPadding = PaddingValues(scale.focusSafePadding),
             modifier = Modifier.testTag("favorites_row_$title")
         ) {
             itemsIndexed(items, key = { _, f -> f.id }) { index, fav ->
@@ -478,12 +482,13 @@ private fun LiveCategoryFavoriteRow(
     Column {
         Text(
             text = "Categorie Live", color = FvpColors.TextPrimary, fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = scale.dp(8f)),
+            // Il titolo si allinea alla prima card, dentro il contentPadding della riga.
+            modifier = Modifier.padding(start = scale.focusSafePadding, bottom = scale.dp(8f)),
         )
         LazyRow(
             state = listState,
             horizontalArrangement = Arrangement.spacedBy(scale.dp(12f)),
-            contentPadding = PaddingValues(end = scale.dp(16f)),
+            contentPadding = PaddingValues(scale.focusSafePadding),
             modifier = Modifier.testTag("favorites_row_Categorie Live"),
         ) {
             itemsIndexed(items, key = { _, item -> item.favorite.id }) { index, item ->

@@ -70,6 +70,7 @@ import it.felixvision.tv.ui.components.FvpTextField
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.components.WatchProgressLine
 import it.felixvision.tv.ui.components.WatchSeenBadge
+import it.felixvision.tv.ui.components.focusSafePadding
 import it.felixvision.tv.ui.components.fvpLongPress
 import it.felixvision.tv.ui.detail.FilmDetailOverlay
 import it.felixvision.tv.ui.detail.SeriesDetailOverlay
@@ -229,7 +230,9 @@ fun SearchSection(
         }
     }
 
-    Column(modifier = modifier.fillMaxSize().padding(horizontal = scale.dp(16f), vertical = scale.dp(12f))) {
+    // Il margine del focus sta nel contentPadding delle righe: il contenitore
+    // tiene solo i 4dp che completano i 16 di prima.
+    Column(modifier = modifier.fillMaxSize().padding(horizontal = scale.dp(4f))) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -279,7 +282,9 @@ fun SearchSection(
         LazyColumn(
             state = listState,
             verticalArrangement = Arrangement.spacedBy(scale.dp(14f)),
-            contentPadding = PaddingValues(bottom = scale.dp(12f)),
+            // Le righe hanno già il proprio margine orizzontale: qui serve solo
+            // quello verticale del primo e dell'ultimo risultato.
+            contentPadding = PaddingValues(vertical = scale.focusSafePadding),
             modifier = Modifier.weight(1f).fillMaxWidth().testTag("search_results"),
         ) {
             if (results.live.isNotEmpty()) {
@@ -479,7 +484,9 @@ private fun SearchRow(
     rowTestTag: String,
     content: LazyListScope.() -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxWidth()) {
+    // Il titolo della riga si allinea alla prima card, che sta dentro il
+    // contentPadding della LazyRow.
+    Column(modifier = Modifier.fillMaxWidth().padding(start = scale.focusSafePadding)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = title,
@@ -496,8 +503,8 @@ private fun SearchRow(
         }
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(scale.dp(10f)),
-            contentPadding = PaddingValues(end = scale.dp(16f)),
-            modifier = Modifier.fillMaxWidth().padding(top = scale.dp(6f)).testTag(rowTestTag),
+            contentPadding = PaddingValues(scale.focusSafePadding),
+            modifier = Modifier.fillMaxWidth().testTag(rowTestTag),
             content = content,
         )
     }
