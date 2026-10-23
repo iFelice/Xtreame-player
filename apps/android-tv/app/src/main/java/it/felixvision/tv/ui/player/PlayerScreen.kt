@@ -2,6 +2,7 @@
 
 package it.felixvision.tv.ui.player
 
+import androidx.annotation.OptIn
 import android.os.SystemClock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable

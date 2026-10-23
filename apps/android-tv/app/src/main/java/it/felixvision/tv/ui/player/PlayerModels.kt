@@ -1,5 +1,8 @@
+@file:OptIn(androidx.media3.common.util.UnstableApi::class)
+
 package it.felixvision.tv.ui.player
 
+import androidx.annotation.OptIn
 import androidx.media3.common.TrackGroup
 import it.felixvision.tv.data.catalog.LiveStream
 import it.felixvision.tv.data.catalog.VodStream

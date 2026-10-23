@@ -2,6 +2,7 @@
 
 package it.felixvision.tv.ui.player
 
+import androidx.annotation.OptIn
 import androidx.media3.datasource.HttpDataSource
 
 /**

@@ -2,6 +2,7 @@
 
 package it.felixvision.tv.ui.player
 
+import androidx.annotation.OptIn
 import android.content.Context
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
