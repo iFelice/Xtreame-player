@@ -220,7 +220,7 @@ server Xtream raggiunti con indirizzo privato non risponderebbero.
 - **Immagini con Coil 3** su client dedicato: max 4 download simultanei, nessun retry, cache 200 MB, solo visibili + immediate vicine; placeholder con iniziali se fallisce.
 - **Navigazione a cassetto**: a riposo colonna di icone, si espande al focus; voci nell'ordine Novità, Live, Film, Serie, Preferiti, Impostazioni; colori attivi Live #FF9F0A, Film #10B981, Serie #2DD4BF, Novità #A3E635, Preferiti #FBBF24, Impostazioni bianco; inattive #AEAEB2; focus con bordo #34D399 e leggero ingrandimento; sfondi #1C1C1E/#2C2C2E/#3A3A3C.
 - **Sezioni**: Novità (ultimi film per `added`, ultime serie per `last_modified`, 40 ciascuna); Live con categorie a sinistra e debounce 300 ms; Film/Serie con griglia 5 colonne e dettaglio on-demand (`get_vod_info`/`get_series_info`); Preferiti con pressione lunga OK e DataStore per account; liste con `LazyColumn`/`LazyVerticalGrid` e chiavi stabili fino a 20k elementi.
-- **Impostazioni**: dati account riletti dal server a ogni apertura con orario "Letto alle hh:mm" (utente, stato, scadenza con giorni rimanenti, "Connessioni in uso (tutti i dispositivi)"), avviso "L'account è in uso su un altro dispositivo" quando le connessioni attive raggiungono il massimo e questa TV non sta riproducendo, "Aggiorna catalogo" con orario, "Configura da remoto" con QR (verifica login, sostituisce credenziali e cancella cache se riesce, altrimenti mantiene le vecchie), "Esci" con conferma che cancella credenziali, cache, preferiti e avanzamento.
+- **Impostazioni**: dati account riletti dal server a ogni apertura con orario "Dati account aggiornati alle hh:mm" e "Aggiornamento dati account…" durante la lettura (utente, stato, scadenza con giorni rimanenti, "Connessioni in uso (tutti i dispositivi)"), avviso "L'account è in uso su un altro dispositivo" quando le connessioni attive raggiungono il massimo e questa TV non sta riproducendo, "Aggiorna catalogo" che apre una finestra con le righe Live, Film, Serie e gli stati "In attesa", "Scaricamento…", "Completato (N elementi)", "Errore" (nessuna percentuale, ordine e sequenzialità delle richieste invariati), "Chiudi" attivo a fine aggiornamento con focus; durante lo scaricamento Indietro chiude la finestra senza interrompere il lavoro, "Configura da remoto" con QR (verifica login, sostituisce credenziali e cancella cache se riesce, altrimenti mantiene le vecchie), "Esci" con conferma che cancella credenziali, cache, preferiti e avanzamento.
 - **Correzioni abbinamento**: nessuna sessione durante verifica credenziali salvate; dopo 3 scadenze consecutive (30 min) si ferma con "Codice scaduto" e pulsante "Mostra un nuovo codice"; pannello Impostazioni attivo solo quando visibile.
 
 ### Player (PR3)
@@ -241,10 +241,18 @@ server Xtream raggiunti con indirizzo privato non risponderebbero.
   4 s (numero, nome, categoria, logo); OK mostra/nasconde il banner; Sinistra apre la
   lista canali della categoria con focus sul canale in onda; Indietro chiude banner/lista
   o torna alla lista Live con focus sull'ultimo canale guardato.
-- **Film/episodi**: OK pausa/riprende e mostra la barra (titolo, tempi, avanzamento) che
-  si nasconde dopo 5 s; Sinistra/Destra −10/+10 s con accelerazione 10→30→60 s tenendo
-  premuto; pulsanti Audio e Sottotitoli (voce "Disattivati"); Indietro chiude la barra o
-  torna alla scheda di origine con focus sul contenuto.
+- **Formato audio**: nella barra dei comandi e nel banner Live, etichetta ricavata dal
+  `Format` della traccia selezionata (`sampleMimeType` + `channelCount`): Dolby Digital,
+  Dolby Digital Plus, Dolby Atmos, Dolby AC-4, DTS/DTS-HD, AAC, MP3 e canali `2.0`/`5.1`/
+  `7.1`; accanto, il contrassegno "FFmpeg" quando l'audio passa dal decoder
+  dell'estensione (`AnalyticsListener.onAudioDecoderInitialized`). Mappatura in
+  `AudioFormatLabels`, funzione pura coperta da test.
+- **Film/episodi**: OK pausa/riprende e mostra la barra (titolo, tempi, avanzamento); Su
+  mostra la barra senza mettere in pausa; la barra si nasconde dopo 5 s senza tasti;
+  Sinistra/Destra −10/+10 s con etichetta "+10 s"/"−10 s" per 1,5 s sul lato del tasto e
+  somme delle pressioni ravvicinate ("+30 s"); tenendo premuto resta l'accelerazione
+  10→30→60 s con la barra visibile; pulsanti Audio e Sottotitoli (voce "Disattivati");
+  Indietro chiude la barra o torna alla scheda di origine con focus sul contenuto.
 - **Errori**: messaggio comprensibile senza URL; per 401/403/409/429/456 "Connessioni
   esaurite o accesso negato: l'account potrebbe essere in uso su un altro dispositivo";
   pulsanti Riprova e Indietro, nessun retry automatico.
@@ -253,9 +261,18 @@ server Xtream raggiunti con indirizzo privato non risponderebbero.
   (Lucide) in alto a sinistra della copertina e a destra nella riga episodio, barra verde
   sottile tra 30 s e 90%; riprendendo un contenuto iniziato compare "Riprendi da mm:ss" /
   "Dall'inizio" con focus su Riprendi.
-- **Fine episodio**: riquadro "Prossimo episodio tra 10 s" con titolo, "Guarda ora" e
-  "Annulla" (focus su Guarda ora); alla scadenza parte il successivo; ultimo episodio
-  torna alla scheda.
+- **Visto/non visto a mano**: nella scheda film il pulsante "Segna come visto"/"Segna come
+  non visto" dopo Preferiti; negli episodi la pressione lunga su OK alterna lo stato con il
+  messaggio "Segnato come visto"/"Segnato come non visto". "Visto" salva la posizione alla
+  durata nota (solo il contrassegno se la durata è ignota), "non visto" cancella la voce:
+  occhio, barra e "Riprendi" spariscono subito.
+- **Prossimo episodio**: riquadro tre minuti prima della fine (per gli episodi sotto i
+  10 minuti nell'ultimo 10%) con titolo, "Guarda ora" (focus), "Posticipa" e "Annulla".
+  "Posticipa" lo nasconde e lo fa tornare negli ultimi 15 s con il conto alla rovescia,
+  allo scadere parte il successivo; "Annulla" lo nasconde per questo episodio e a fine
+  video si torna alla scheda; se il video finisce con il riquadro aperto parte il
+  successivo. La riproduzione continua mentre il riquadro è visibile. Tempi in
+  `NextEpisodeRules`, funzione pura coperta da test.
 - **Riscontro strutturale APK**: del riferimento sono state considerate solo le
   responsabilità ad alto livello (schermata di riproduzione separata dal catalogo,
   gestione del ciclo di vita e del focus da telecomando, banner canale, barra comandi e
@@ -291,6 +308,11 @@ simulato e implementazioni finte per cifrario e preferenze:
 | `EpisodeQueueTest` | ordine stagioni/episodi, episodio successivo nella stessa stagione e nella seguente, ultimo episodio |
 | `LiveZappingTest`, `PlaybackFormattingTest` | zapping circolare, accelerazione 10/30/60 s, tempi `mm:ss` e `h:mm:ss` |
 | `ConnectionsAdvisoryTest` | avviso solo a connessioni piene e TV non in riproduzione |
+| `AudioFormatLabelsTest` | mappatura dei mime audio, varianti DTS, canali `2.0`/`5.1`/`7.1`, riconoscimento del decoder FFmpeg |
+| `SeekFeedbackTest` | etichette `+10 s`/`−10 s`, somma entro 1,5 s, ripartenza al cambio di verso, passo accelerato |
+| `WatchToggleRulesTest`, `ProgressStoreWatchedTest` | visto/non visto sull'archivio in memoria e su DataStore, durata nota e ignota, altre voci intatte |
+| `NextEpisodeRulesTest` | tre minuti, episodio corto, durata ignota, conto alla rovescia dopo "Posticipa" |
+| `CatalogRefreshTest` | righe Live/Film/Serie, ordine, "In attesa"/"Scaricamento…"/"Completato (N elementi)"/"Errore", fine aggiornamento |
 
 ---
 

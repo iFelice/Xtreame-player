@@ -42,6 +42,8 @@ import androidx.media3.ui.PlayerView
 import androidx.tv.material3.Text
 import it.felixvision.tv.AppContainer
 import it.felixvision.tv.data.playback.SeekAcceleration
+import it.felixvision.tv.data.playback.SeekAccumulator
+import it.felixvision.tv.data.playback.SeekFeedback
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.theme.FvpColors
 import kotlinx.coroutines.delay
@@ -80,6 +82,7 @@ fun PlayerScreen(
     var seekDirection by remember { mutableStateOf(0) }
     var seekStartedAt by remember { mutableStateOf(0L) }
     var lastSeekAt by remember { mutableStateOf(0L) }
+    var seekFeedback by remember { mutableStateOf<SeekFeedback?>(null) }
 
     LaunchedEffect(engine) { engine.start() }
 
@@ -124,6 +127,8 @@ fun PlayerScreen(
     }
 
     fun handleSeek(direction: Int) {
+        // I salti riguardano film ed episodi: nel Live Sinistra/Destra non toccano nulla.
+        if (session.source is PlaybackSource.Live) return
         val now = SystemClock.elapsedRealtime()
         if (seekDirection != direction || now - lastSeekAt > 700L) {
             seekDirection = direction
@@ -132,6 +137,17 @@ fun PlayerScreen(
         lastSeekAt = now
         val step = SeekAcceleration.secondsForHold(now - seekStartedAt)
         engine.seekBySeconds(direction * step)
+        // Etichetta sul lato del tasto: le pressioni ravvicinate si sommano.
+        seekFeedback = SeekAccumulator.next(seekFeedback, direction, step, now)
+    }
+
+    // L'etichetta dei salti sparisce 1,5 s dopo l'ultima pressione.
+    LaunchedEffect(seekFeedback) {
+        val shown = seekFeedback ?: return@LaunchedEffect
+        delay(SeekAccumulator.WINDOW_MILLIS)
+        if (seekFeedback?.updatedAtMillis == shown.updatedAtMillis) {
+            seekFeedback = null
+        }
     }
 
     fun handleBack() {
@@ -197,7 +213,12 @@ fun PlayerScreen(
                                     true
                                 }
                                 Key.DirectionUp -> {
-                                    engine.onUp()
+                                    if (session.source is PlaybackSource.Live) {
+                                        engine.onUp()
+                                    } else {
+                                        // La barra appare senza mettere in pausa.
+                                        engine.showControls()
+                                    }
                                     true
                                 }
                                 Key.DirectionDown -> {
@@ -285,6 +306,8 @@ fun PlayerScreen(
                     onAudio = { engine.openTrackPanel(TrackPanelType.AUDIO) },
                     onSubtitles = { engine.openTrackPanel(TrackPanelType.SUBTITLES) },
                     modifier = Modifier.align(Alignment.BottomCenter),
+                    audioFormatLabel = state.audioFormatLabel,
+                    ffmpegActive = state.ffmpegActive,
                 )
             }
 
@@ -296,6 +319,23 @@ fun PlayerScreen(
                         modifier = Modifier
                             .align(Alignment.BottomStart)
                             .padding(scale.dp(28f)),
+                        audioFormatLabel = state.audioFormatLabel,
+                        ffmpegActive = state.ffmpegActive,
+                    )
+                }
+            }
+
+            seekFeedback?.let { feedback ->
+                if (!state.hasModalOverlay) {
+                    PlayerSeekFeedback(
+                        feedback = feedback,
+                        scale = scale,
+                        modifier = Modifier
+                            .align(
+                                if (feedback.direction < 0) Alignment.CenterStart else Alignment.CenterEnd
+                            )
+                            .padding(horizontal = scale.dp(52f))
+                            .padding(top = scale.dp(80f)),
                     )
                 }
             }
@@ -366,6 +406,7 @@ fun PlayerScreen(
                         engine.playNextEpisode()
                         rootFocus.requestFocus()
                     },
+                    onPostpone = { engine.postponeNextEpisode() },
                     onCancel = { engine.cancelNextEpisode() },
                 )
             }

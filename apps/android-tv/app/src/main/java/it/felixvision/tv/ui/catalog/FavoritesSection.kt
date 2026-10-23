@@ -80,6 +80,8 @@ fun FavoritesSection(
     onPlayLive: (LiveStream) -> Unit = {},
     onPlayVod: (VodStream) -> Unit = {},
     onPlayEpisode: (Episode, SeriesPlayback) -> Unit = { _, _ -> },
+    onSetEpisodeWatched: (Episode, Boolean, Long) -> Unit = { _, _, _ -> },
+    onToggleWatched: (VodStream, Boolean, Long) -> Unit = { _, _, _ -> },
     progress: Map<String, WatchProgress> = emptyMap(),
     refocusTick: Int = 0,
     focusEpisodeId: String? = null,
@@ -338,6 +340,14 @@ fun FavoritesSection(
                         onPlay = { onPlayVod(vodStream) },
                         onToggleFavorite = { onToggleFavorite(fav) },
                         onRetry = { retryKey++ },
+                        isWatched = progress[ProgressKeys.movie(vodStream.streamId)]?.isWatched == true,
+                        onToggleWatched = { durationMillis ->
+                            onToggleWatched(
+                                vodStream,
+                                progress[ProgressKeys.movie(vodStream.streamId)]?.isWatched != true,
+                                durationMillis,
+                            )
+                        },
                         refocusTick = refocusTick,
                     )
                 }
@@ -365,6 +375,7 @@ fun FavoritesSection(
                         onToggleFavorite = { onToggleFavorite(fav) },
                         onPlayEpisode = onPlayEpisode,
                         onRetry = { retryKey++ },
+                        onSetEpisodeWatched = onSetEpisodeWatched,
                         refocusTick = refocusTick,
                         focusEpisodeId = focusEpisodeId,
                         progress = progress,

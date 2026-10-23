@@ -108,6 +108,52 @@ class ProgressStore(
         }
     }
 
+    /**
+     * "Segna come visto" dal catalogo: ignora la soglia dei 30 s perché non è
+     * una posizione di visione ma un contrassegno esplicito. Se la durata non è
+     * nota resta il solo contrassegno.
+     */
+    suspend fun markWatched(
+        server: String,
+        username: String,
+        contentKey: String,
+        durationMillis: Long,
+    ): Boolean = mutex.withLock {
+        withContext(io) {
+            val key = keyFor(server, username)
+            val current = decode(dataStore.data.map { it[key] }.first()).toMutableMap()
+            val previous = current[contentKey]
+            val effectiveDuration = if (durationMillis > 0L) {
+                durationMillis
+            } else {
+                previous?.durationMillis ?: 0L
+            }
+            current[contentKey] = WatchRules.watchedEntry(effectiveDuration, clock.nowMillis())
+            persist(key, current)
+            _revision.value = _revision.value + 1L
+            true
+        }
+    }
+
+    /**
+     * "Segna come non visto": cancella la voce dall'archivio, così spariscono
+     * occhio, barra e proposta di ripresa.
+     */
+    suspend fun remove(
+        server: String,
+        username: String,
+        contentKey: String,
+    ): Boolean = mutex.withLock {
+        withContext(io) {
+            val key = keyFor(server, username)
+            val current = decode(dataStore.data.map { it[key] }.first()).toMutableMap()
+            if (current.remove(contentKey) == null) return@withContext false
+            persist(key, current)
+            _revision.value = _revision.value + 1L
+            true
+        }
+    }
+
     suspend fun clearForAccount(server: String, username: String) {
         mutex.withLock {
             withContext(io) {
@@ -169,6 +215,30 @@ class ProgressStore(
                 updatedAtMillis = clock.nowMillis(),
             )
             return true
+        }
+
+        /** Stesse regole di [ProgressStore.markWatched]. */
+        fun markWatched(
+            server: String,
+            username: String,
+            contentKey: String,
+            durationMillis: Long,
+        ): Boolean {
+            val items = data.getOrPut(accountKey(server, username)) { mutableMapOf() }
+            val previous = items[contentKey]
+            val effectiveDuration = if (durationMillis > 0L) {
+                durationMillis
+            } else {
+                previous?.durationMillis ?: 0L
+            }
+            items[contentKey] = WatchRules.watchedEntry(effectiveDuration, clock.nowMillis())
+            return true
+        }
+
+        /** "Segna come non visto": rimuove la voce, `false` se non c'era. */
+        fun remove(server: String, username: String, contentKey: String): Boolean {
+            val items = data[accountKey(server, username)] ?: return false
+            return items.remove(contentKey) != null
         }
 
         fun clear(server: String, username: String) {

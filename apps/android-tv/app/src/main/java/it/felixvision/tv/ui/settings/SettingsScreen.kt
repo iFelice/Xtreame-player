@@ -1,5 +1,6 @@
 package it.felixvision.tv.ui.settings
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,7 +16,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -26,6 +30,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.tv.material3.Text
+import it.felixvision.tv.data.catalog.CatalogRefresh
+import it.felixvision.tv.data.catalog.CatalogSectionProgress
+import it.felixvision.tv.data.catalog.CatalogSectionStatus
 import it.felixvision.tv.ui.access.AccessViewModel
 import it.felixvision.tv.ui.access.PairingPanel
 import it.felixvision.tv.ui.components.FvpPrimaryButton
@@ -43,8 +50,15 @@ fun SettingsScreen(
     scale: UiScale,
     modifier: Modifier = Modifier,
     contentFocusRequester: FocusRequester? = null,
+    /** Righe Live/Film/Serie dell'ultimo aggiornamento, dal CatalogViewModel. */
+    catalogSections: List<CatalogSectionProgress> = CatalogRefresh.idle(),
+    catalogRefreshing: Boolean = false,
+    catalogLastUpdateMillis: Long? = null,
+    onRefreshCatalog: () -> Unit = {},
 ) {
     val state by viewModel.ui.collectAsState()
+    var showCatalogDialog by remember { mutableStateOf(false) }
+    val catalogCloseFocus = remember { FocusRequester() }
 
     LaunchedEffect(Unit) {
         viewModel.onSettingsVisible()
@@ -72,15 +86,18 @@ fun SettingsScreen(
 
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(scale.dp(12f))) {
             FvpPrimaryButton(
-                text = if (state.isRefreshing) "Aggiornamento…" else "Aggiorna catalogo",
-                onClick = { viewModel.onRefreshCatalog() },
+                text = if (catalogRefreshing) "Aggiornamento…" else "Aggiorna catalogo",
+                onClick = {
+                    showCatalogDialog = true
+                    onRefreshCatalog()
+                },
                 scale = scale,
-                enabled = !state.isRefreshing,
+                enabled = !catalogRefreshing,
                 modifier = Modifier
                     .then(if (contentFocusRequester != null) Modifier.focusRequester(contentFocusRequester) else Modifier)
                     .testTag("settings_refresh")
             )
-            state.lastUpdateMillis?.let { ts ->
+            (catalogLastUpdateMillis ?: state.lastUpdateMillis)?.let { ts ->
                 Text(text = "Ultimo aggiornamento: ${formatTimestamp(ts)}", color = FvpColors.TextSecondary, fontSize = scale.sp(13f))
             } ?: Text(text = "Mai aggiornato", color = FvpColors.TextSecondary, fontSize = scale.sp(13f))
         }
@@ -88,13 +105,17 @@ fun SettingsScreen(
         val accountReadAt = state.lastAccountReadMillis
         if (accountReadAt != null) {
             Text(
-                text = if (state.isReadingAccount) "Lettura account…" else "Letto alle ${formatClock(accountReadAt)}",
+                text = if (state.isReadingAccount) {
+                    "Aggiornamento dati account…"
+                } else {
+                    "Dati account aggiornati alle ${formatClock(accountReadAt)}"
+                },
                 color = FvpColors.TextSecondary,
                 fontSize = scale.sp(13f),
                 modifier = Modifier.testTag("settings_account_read"),
             )
         } else if (state.isReadingAccount) {
-            Text(text = "Lettura account…", color = FvpColors.TextSecondary, fontSize = scale.sp(13f))
+            Text(text = "Aggiornamento dati account…", color = FvpColors.TextSecondary, fontSize = scale.sp(13f))
         }
 
         if (state.connectionsWarning) {
@@ -121,6 +142,79 @@ fun SettingsScreen(
 
         Row {
             FvpSecondaryButton(text = "Esci", onClick = { viewModel.onExitClicked() }, scale = scale, modifier = Modifier.testTag("settings_exit"))
+        }
+    }
+
+    if (showCatalogDialog) {
+        LaunchedEffect(catalogRefreshing) {
+            if (!catalogRefreshing) {
+                withFrameNanos { }
+                catalogCloseFocus.requestFocus()
+            }
+        }
+        Dialog(
+            onDismissRequest = { showCatalogDialog = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            // Indietro chiude la finestra senza interrompere l'aggiornamento:
+            // il lavoro continua nel CatalogViewModel.
+            BackHandler { showCatalogDialog = false }
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(FvpColors.Background.copy(alpha = 0.8f))
+                    .padding(scale.dp(32f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    modifier = Modifier
+                        .background(FvpColors.Surface, shape = RoundedCornerShape(scale.dp(12f)))
+                        .padding(scale.dp(20f))
+                        .fillMaxWidth(0.5f)
+                        .testTag("settings_catalog_dialog"),
+                    verticalArrangement = Arrangement.spacedBy(scale.dp(10f))
+                ) {
+                    Text(
+                        text = "Aggiornamento catalogo",
+                        color = FvpColors.TextPrimary,
+                        fontSize = scale.sp(18f),
+                        fontWeight = FontWeight.Bold
+                    )
+                    catalogSections.forEach { section ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("settings_catalog_${section.section.name.lowercase()}"),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(text = section.section.label, color = FvpColors.TextPrimary, fontSize = scale.sp(15f))
+                            Text(
+                                text = section.statusLabel,
+                                color = if (section.status == CatalogSectionStatus.ERROR) {
+                                    FvpColors.Error
+                                } else {
+                                    FvpColors.TextSecondary
+                                },
+                                fontSize = scale.sp(14f),
+                                modifier = Modifier.testTag(
+                                    "settings_catalog_${section.section.name.lowercase()}_status"
+                                )
+                            )
+                        }
+                    }
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        FvpPrimaryButton(
+                            text = "Chiudi",
+                            onClick = { showCatalogDialog = false },
+                            scale = scale,
+                            enabled = !catalogRefreshing,
+                            modifier = Modifier
+                                .focusRequester(catalogCloseFocus)
+                                .testTag("settings_catalog_close")
+                        )
+                    }
+                }
+            }
         }
     }
 

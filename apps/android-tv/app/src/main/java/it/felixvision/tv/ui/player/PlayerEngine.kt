@@ -16,12 +16,15 @@ import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import it.felixvision.tv.AppContainer
 import it.felixvision.tv.core.AppLog
 import it.felixvision.tv.data.catalog.LiveStream
+import it.felixvision.tv.data.playback.AudioFormatLabels
 import it.felixvision.tv.data.playback.LiveZapping
+import it.felixvision.tv.data.playback.NextEpisodeRules
 import it.felixvision.tv.data.playback.StreamTarget
 import it.felixvision.tv.data.playback.StreamUrls
 import it.felixvision.tv.data.progress.ProgressKeys
@@ -75,8 +78,15 @@ class PlayerEngine(
     private var hostStopped = false
     private var wasPlayingBeforeStop = false
     private var lastPositionBeforeStop = 0L
-    private var countdownJob: Job? = null
     private var bannerJob: Job? = null
+
+    /**
+     * Stato del riquadro "Prossimo episodio" per l'episodio in corso:
+     * `DISMISSED` significa "Annulla", quindi a fine video si torna alla scheda.
+     */
+    private enum class NextPromptState { NONE, SHOWN, POSTPONED, DISMISSED }
+
+    private var nextPromptState = NextPromptState.NONE
 
     private val playerListener = object : Player.Listener {
 
@@ -105,6 +115,20 @@ class PlayerEngine(
 
         override fun onTracksChanged(tracks: Tracks) {
             refreshTracks()
+        }
+    }
+
+    /** Nome del decoder audio: "ffmpeg<versione>-<codec>" per l'estensione FFmpeg. */
+    private val analyticsListener = object : AnalyticsListener {
+
+        override fun onAudioDecoderInitialized(
+            eventTime: AnalyticsListener.EventTime,
+            decoderName: String,
+            initializedTimestampMs: Long,
+            initializationDurationMs: Long,
+        ) {
+            val ffmpeg = AudioFormatLabels.isFfmpegDecoder(decoderName)
+            if (state.ffmpegActive != ffmpeg) state = state.copy(ffmpegActive = ffmpeg)
         }
     }
 
@@ -176,7 +200,6 @@ class PlayerEngine(
                 }
             }
         }
-        countdownJob?.cancel()
         bannerJob?.cancel()
         destroyPlayer()
         container.playbackActivity.setActive(false)
@@ -186,7 +209,6 @@ class PlayerEngine(
     fun requestExit() {
         if (exited) return
         exited = true
-        countdownJob?.cancel()
         bannerJob?.cancel()
         val exitInfo = PlayerExitInfo(
             lastLiveChannelId = currentLiveChannel()?.streamId,
@@ -240,6 +262,7 @@ class PlayerEngine(
             .setMediaSourceFactory(mediaSourceFactory)
             .build()
         newPlayer.addListener(playerListener)
+        newPlayer.addAnalyticsListener(analyticsListener)
         val mediaItem = MediaItem.Builder()
             .setUri(url)
             .setMediaMetadata(MediaMetadata.Builder().setTitle(titleForCurrent()).build())
@@ -256,6 +279,8 @@ class PlayerEngine(
             currentTitle = titleForCurrent(),
             currentChannelIndex = liveIndex,
             totalChannels = channels.size,
+            audioFormatLabel = "",
+            ffmpegActive = false,
         )
     }
 
@@ -263,6 +288,7 @@ class PlayerEngine(
         val player = exoPlayer ?: return
         exoPlayer = null
         player.removeListener(playerListener)
+        player.removeAnalyticsListener(analyticsListener)
         player.release()
     }
 
@@ -326,6 +352,10 @@ class PlayerEngine(
             positionMillis = position,
             durationMillis = if (duration > 0L) duration else state.durationMillis,
             isPlaying = player.isPlaying,
+        )
+        updateNextEpisodePrompt(
+            positionMillis = position,
+            durationMillis = if (duration > 0L) duration else state.durationMillis,
         )
     }
 
@@ -542,12 +572,12 @@ class PlayerEngine(
 
     fun playNextEpisode() {
         val seriesSource = source as? PlaybackSource.Series ?: return
-        countdownJob?.cancel()
         val nextIndex = episodeIndex + 1
         if (nextIndex >= seriesSource.playback.queue.size) {
             requestExit()
             return
         }
+        nextPromptState = NextPromptState.NONE
         episodeIndex = nextIndex
         state = state.copy(
             nextEpisode = null,
@@ -557,19 +587,37 @@ class PlayerEngine(
             durationMillis = 0L,
             isPlaying = false,
             isBuffering = true,
+            audioFormatLabel = "",
+            ffmpegActive = false,
             currentTitle = seriesSource.playback.queue[nextIndex].displayTitle,
         )
         destroyPlayer()
         buildPlayer(startPositionMillis = 0L, autoPlay = true)
     }
 
+    /**
+     * "Posticipa": il riquadro sparisce e ricompare negli ultimi 15 secondi con
+     * il conto alla rovescia; allo scadere parte il prossimo episodio.
+     */
+    fun postponeNextEpisode() {
+        if (state.nextEpisode == null) return
+        nextPromptState = NextPromptState.POSTPONED
+        state = state.copy(nextEpisode = null)
+    }
+
+    /**
+     * "Annulla": niente più riquadro per questo episodio; a fine video si torna
+     * alla scheda della serie.
+     */
     fun cancelNextEpisode() {
-        requestExit()
+        nextPromptState = NextPromptState.DISMISSED
+        state = state.copy(nextEpisode = null)
     }
 
     fun retry() {
         if (exited) return
         val startPosition = state.positionMillis
+        nextPromptState = NextPromptState.NONE
         state = state.copy(errorMessage = null, nextEpisode = null)
         destroyPlayer()
         buildPlayer(startPositionMillis = startPosition, autoPlay = true)
@@ -587,15 +635,13 @@ class PlayerEngine(
                 requestExit()
                 return
             }
-            state = state.copy(
-                isPlaying = false,
-                controlsVisible = false,
-                nextEpisode = NextEpisodePrompt(
-                    title = next.displayTitle,
-                    secondsRemaining = NEXT_EPISODE_SECONDS,
-                ),
-            )
-            startNextCountdown()
+            // "Annulla" chiuso dall'utente: a fine video si torna alla scheda.
+            if (nextPromptState == NextPromptState.DISMISSED) {
+                requestExit()
+                return
+            }
+            // Col riquadro aperto (o senza riquadro) parte il successivo.
+            playNextEpisode()
             return
         }
         state = state.copy(
@@ -605,19 +651,52 @@ class PlayerEngine(
         )
     }
 
-    private fun startNextCountdown() {
-        countdownJob?.cancel()
-        countdownJob = scope.launch {
-            var remaining = NEXT_EPISODE_SECONDS
-            while (remaining > 0 && !exited && state.nextEpisode != null) {
-                state = state.copy(
-                    nextEpisode = state.nextEpisode?.copy(secondsRemaining = remaining),
-                )
-                delay(1_000L)
-                remaining--
+    /**
+     * Riquadro "Prossimo episodio" guidato dalla posizione: compare 3 minuti
+     * prima della fine (10% finale se l'episodio è corto), dopo "Posticipa"
+     * ricompare negli ultimi 15 secondi con il conto alla rovescia.
+     */
+    private fun updateNextEpisodePrompt(positionMillis: Long, durationMillis: Long) {
+        val seriesSource = source as? PlaybackSource.Series ?: return
+        if (exited || state.errorMessage != null || state.resumePositionMillis != null ||
+            state.trackPanel != null
+        ) {
+            return
+        }
+        val next = seriesSource.playback.queue.getOrNull(episodeIndex + 1) ?: return
+
+        when (nextPromptState) {
+            NextPromptState.DISMISSED -> return
+            NextPromptState.POSTPONED -> {
+                if (!NextEpisodeRules.shouldStartCountdown(positionMillis, durationMillis)) {
+                    // Un salto indietro oltre gli ultimi 15 s nasconde il conto alla rovescia.
+                    if (state.nextEpisode != null) state = state.copy(nextEpisode = null)
+                    return
+                }
+                if (NextEpisodeRules.countdownFinished(positionMillis, durationMillis)) {
+                    playNextEpisode()
+                    return
+                }
+                val seconds = NextEpisodeRules.countdownSeconds(positionMillis, durationMillis)
+                val current = state.nextEpisode
+                if (current?.countdownSeconds != seconds) {
+                    state = state.copy(
+                        nextEpisode = NextEpisodePrompt(
+                            title = next.displayTitle,
+                            countdownSeconds = seconds,
+                            canPostpone = false,
+                        ),
+                    )
+                }
+                return
             }
-            if (!exited && state.nextEpisode != null) {
-                playNextEpisode()
+            NextPromptState.SHOWN -> return
+            NextPromptState.NONE -> {
+                if (!NextEpisodeRules.shouldPrompt(positionMillis, durationMillis)) return
+                nextPromptState = NextPromptState.SHOWN
+                state = state.copy(
+                    nextEpisode = NextEpisodePrompt(title = next.displayTitle),
+                )
             }
         }
     }
@@ -628,6 +707,7 @@ class PlayerEngine(
                 StreamUrls.redactStreamUrl(currentUrl()),
         )
         saveProgress()
+        nextPromptState = NextPromptState.NONE
         state = state.copy(
             errorMessage = PlaybackErrors.messageFor(error),
             isBuffering = false,
@@ -648,11 +728,20 @@ class PlayerEngine(
         val subtitles = mutableListOf<TrackOption>()
         var audioNumber = 0
         var subtitleNumber = 0
+
+        // Formato della traccia audio effettivamente selezionata: mime e canali.
+        var selectedAudioMime: String? = null
+        var selectedAudioChannels: Int? = null
         for (group in player.currentTracks.groups) {
             when (group.type) {
                 C.TRACK_TYPE_AUDIO -> {
                     for (index in 0 until group.length) {
                         if (!group.isTrackSupported(index)) continue
+                        if (group.isTrackSelected(index)) {
+                            val format = group.getTrackFormat(index)
+                            selectedAudioMime = format.sampleMimeType
+                            selectedAudioChannels = format.channelCount.takeIf { it > 0 }
+                        }
                         audioNumber++
                         audio.add(
                             TrackOption(
@@ -692,6 +781,7 @@ class PlayerEngine(
             audioTracks = audio,
             subtitleTracks = subtitles,
             subtitlesDisabled = subtitles.none { it.selected },
+            audioFormatLabel = AudioFormatLabels.label(selectedAudioMime, selectedAudioChannels),
         )
     }
 
@@ -707,6 +797,5 @@ class PlayerEngine(
 
     private companion object {
         const val BANNER_DURATION_MILLIS = 4_000L
-        const val NEXT_EPISODE_SECONDS = 10
     }
 }

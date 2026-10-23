@@ -37,6 +37,7 @@ import androidx.tv.material3.ListItemDefaults
 import androidx.tv.material3.Text
 import it.felixvision.tv.data.catalog.LiveStream
 import it.felixvision.tv.data.playback.PlaybackFormatting
+import it.felixvision.tv.data.playback.SeekFeedback
 import it.felixvision.tv.ui.components.ChannelLogoImage
 import it.felixvision.tv.ui.components.FvpPrimaryButton
 import it.felixvision.tv.ui.components.FvpSecondaryButton
@@ -49,6 +50,8 @@ fun PlayerChannelBanner(
     banner: ChannelBanner,
     scale: UiScale,
     modifier: Modifier = Modifier,
+    audioFormatLabel: String = "",
+    ffmpegActive: Boolean = false,
 ) {
     Row(
         modifier = modifier
@@ -84,6 +87,53 @@ fun PlayerChannelBanner(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+            PlayerAudioFormat(
+                label = audioFormatLabel,
+                ffmpegActive = ffmpegActive,
+                scale = scale,
+                modifier = Modifier.testTag("player_banner_audio"),
+            )
+        }
+    }
+}
+
+/**
+ * Formato della traccia audio in riproduzione e, quando presente, il piccolo
+ * contrassegno "FFmpeg" del decoder software.
+ */
+@Composable
+fun PlayerAudioFormat(
+    label: String,
+    ffmpegActive: Boolean,
+    scale: UiScale,
+    modifier: Modifier = Modifier,
+) {
+    if (label.isBlank() && !ffmpegActive) return
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(scale.dp(8f)),
+    ) {
+        if (label.isNotBlank()) {
+            Text(
+                text = label,
+                color = FvpColors.TextSecondary,
+                fontSize = scale.sp(13f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (ffmpegActive) {
+            Text(
+                text = "FFmpeg",
+                color = FvpColors.Green,
+                fontSize = scale.sp(12f),
+                modifier = Modifier
+                    .clip(RoundedCornerShape(scale.dp(6f)))
+                    .background(FvpColors.SurfaceElevated)
+                    .padding(horizontal = scale.dp(6f), vertical = scale.dp(2f))
+                    .testTag("player_ffmpeg_badge"),
+            )
         }
     }
 }
@@ -206,6 +256,8 @@ fun PlayerControlsBar(
     onAudio: () -> Unit,
     onSubtitles: () -> Unit,
     modifier: Modifier = Modifier,
+    audioFormatLabel: String = "",
+    ffmpegActive: Boolean = false,
 ) {
     Column(
         modifier = modifier
@@ -253,6 +305,12 @@ fun PlayerControlsBar(
                 fontSize = scale.sp(14f),
             )
         }
+        PlayerAudioFormat(
+            label = audioFormatLabel,
+            ffmpegActive = ffmpegActive,
+            scale = scale,
+            modifier = Modifier.testTag("player_audio_format"),
+        )
         Row(horizontalArrangement = Arrangement.spacedBy(scale.dp(12f))) {
             FvpPrimaryButton(
                 text = "Audio",
@@ -505,20 +563,25 @@ fun PlayerResumePrompt(
     }
 }
 
-/** Prossimo episodio con conto alla rovescia; focus su "Guarda ora". */
+/**
+ * Prossimo episodio: proposta 3 minuti prima della fine e, dopo "Posticipa",
+ * conto alla rovescia negli ultimi 15 secondi. Il focus è su "Guarda ora".
+ */
 @Composable
 fun PlayerNextEpisodePrompt(
     prompt: NextEpisodePrompt,
     scale: UiScale,
     onWatchNow: () -> Unit,
+    onPostpone: () -> Unit,
     onCancel: () -> Unit,
 ) {
     val watchFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) { watchFocus.requestFocus() }
+    val countdown = prompt.countdownSeconds
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.58f))
+            .background(Color.Black.copy(alpha = 0.35f))
             .testTag("player_next_dialog"),
         contentAlignment = Alignment.BottomCenter,
     ) {
@@ -533,10 +596,15 @@ fun PlayerNextEpisodePrompt(
             verticalArrangement = Arrangement.spacedBy(scale.dp(10f)),
         ) {
             Text(
-                text = "Prossimo episodio tra ${prompt.secondsRemaining} s",
+                text = if (countdown != null) {
+                    "Prossimo episodio tra $countdown s"
+                } else {
+                    "Prossimo episodio"
+                },
                 color = FvpColors.TextPrimary,
                 fontSize = scale.sp(18f),
                 fontWeight = FontWeight.Bold,
+                modifier = Modifier.testTag("player_next_title"),
             )
             Text(
                 text = prompt.title,
@@ -554,6 +622,14 @@ fun PlayerNextEpisodePrompt(
                         .focusRequester(watchFocus)
                         .testTag("player_next_watch"),
                 )
+                if (prompt.canPostpone) {
+                    FvpSecondaryButton(
+                        text = "Posticipa",
+                        onClick = onPostpone,
+                        scale = scale,
+                        modifier = Modifier.testTag("player_next_postpone"),
+                    )
+                }
                 FvpSecondaryButton(
                     text = "Annulla",
                     onClick = onCancel,
@@ -563,4 +639,27 @@ fun PlayerNextEpisodePrompt(
             }
         }
     }
+}
+
+/**
+ * Etichetta "+10 s" / "−10 s" dei salti, sul lato del tasto premuto; le
+ * pressioni ravvicinate si sommano.
+ */
+@Composable
+fun PlayerSeekFeedback(
+    feedback: SeekFeedback,
+    scale: UiScale,
+    modifier: Modifier = Modifier,
+) {
+    Text(
+        text = feedback.label,
+        color = FvpColors.TextPrimary,
+        fontSize = scale.sp(18f),
+        fontWeight = FontWeight.Bold,
+        modifier = modifier
+            .clip(RoundedCornerShape(scale.dp(10f)))
+            .background(FvpColors.Surface.copy(alpha = 0.92f))
+            .padding(horizontal = scale.dp(14f), vertical = scale.dp(10f))
+            .testTag("player_seek_feedback"),
+    )
 }

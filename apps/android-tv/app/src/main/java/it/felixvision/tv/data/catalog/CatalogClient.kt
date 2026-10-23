@@ -39,38 +39,70 @@ class CatalogClient(
         server: String,
         username: String,
         password: String,
+        /** Avanzamento per categoria: l'ordine e la sequenzialità non cambiano. */
+        onStage: suspend (CatalogStage) -> Unit = {},
     ): CatalogResult {
         val base = server.toHttpUrlOrNull() ?: return CatalogResult.Error("Indirizzo del server non valido.")
 
+        onStage(CatalogStage(CatalogSection.LIVE, CatalogSectionStatus.DOWNLOADING))
         val liveCategories = when (val r = fetchList<Category>(base, username, password, "get_live_categories")) {
             is FetchResult.Success -> r.value
-            is FetchResult.Failure -> return CatalogResult.Error(r.message)
+            is FetchResult.Failure -> {
+                onStage(CatalogStage(CatalogSection.LIVE, CatalogSectionStatus.ERROR))
+                return CatalogResult.Error(r.message)
+            }
         }
 
         val liveStreams = when (val r = fetchList<LiveStream>(base, username, password, "get_live_streams")) {
             is FetchResult.Success -> r.value
-            is FetchResult.Failure -> return CatalogResult.Error(r.message)
+            is FetchResult.Failure -> {
+                onStage(CatalogStage(CatalogSection.LIVE, CatalogSectionStatus.ERROR))
+                return CatalogResult.Error(r.message)
+            }
         }
+        onStage(
+            CatalogStage(CatalogSection.LIVE, CatalogSectionStatus.COMPLETED, liveStreams.size),
+        )
 
+        onStage(CatalogStage(CatalogSection.FILM, CatalogSectionStatus.DOWNLOADING))
         val vodCategories = when (val r = fetchList<Category>(base, username, password, "get_vod_categories")) {
             is FetchResult.Success -> r.value
-            is FetchResult.Failure -> return CatalogResult.Error(r.message)
+            is FetchResult.Failure -> {
+                onStage(CatalogStage(CatalogSection.FILM, CatalogSectionStatus.ERROR))
+                return CatalogResult.Error(r.message)
+            }
         }
 
         val vodStreams = when (val r = fetchList<VodStream>(base, username, password, "get_vod_streams")) {
             is FetchResult.Success -> r.value
-            is FetchResult.Failure -> return CatalogResult.Error(r.message)
+            is FetchResult.Failure -> {
+                onStage(CatalogStage(CatalogSection.FILM, CatalogSectionStatus.ERROR))
+                return CatalogResult.Error(r.message)
+            }
         }
+        onStage(
+            CatalogStage(CatalogSection.FILM, CatalogSectionStatus.COMPLETED, vodStreams.size),
+        )
 
+        onStage(CatalogStage(CatalogSection.SERIES, CatalogSectionStatus.DOWNLOADING))
         val seriesCategories = when (val r = fetchList<Category>(base, username, password, "get_series_categories")) {
             is FetchResult.Success -> r.value
-            is FetchResult.Failure -> return CatalogResult.Error(r.message)
+            is FetchResult.Failure -> {
+                onStage(CatalogStage(CatalogSection.SERIES, CatalogSectionStatus.ERROR))
+                return CatalogResult.Error(r.message)
+            }
         }
 
         val series = when (val r = fetchList<SeriesItem>(base, username, password, "get_series")) {
             is FetchResult.Success -> r.value
-            is FetchResult.Failure -> return CatalogResult.Error(r.message)
+            is FetchResult.Failure -> {
+                onStage(CatalogStage(CatalogSection.SERIES, CatalogSectionStatus.ERROR))
+                return CatalogResult.Error(r.message)
+            }
         }
+        onStage(
+            CatalogStage(CatalogSection.SERIES, CatalogSectionStatus.COMPLETED, series.size),
+        )
 
         val catalog = Catalog(
             liveCategories = liveCategories,

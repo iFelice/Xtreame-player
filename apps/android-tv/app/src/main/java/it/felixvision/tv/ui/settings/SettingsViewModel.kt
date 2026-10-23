@@ -221,22 +221,6 @@ class SettingsViewModel(
 
     private data class ResolvedServer(val server: String, val serverCode: String?)
 
-    fun onRefreshCatalog() {
-        viewModelScope.launch {
-            _ui.update { it.copy(isRefreshing = true, error = null) }
-            val result = container.catalogClient.loadCatalog(server, username, password)
-            when (result) {
-                is it.felixvision.tv.data.catalog.CatalogResult.Success -> {
-                    container.catalogCache.save(server, username, result.catalog)
-                    _ui.update { it.copy(isRefreshing = false, lastUpdateMillis = System.currentTimeMillis(), message = "Catalogo aggiornato") }
-                }
-                is it.felixvision.tv.data.catalog.CatalogResult.Error -> {
-                    _ui.update { it.copy(isRefreshing = false, error = result.message) }
-                }
-            }
-        }
-    }
-
     fun onExitClicked() {
         _ui.update { it.copy(showExitConfirm = true) }
     }

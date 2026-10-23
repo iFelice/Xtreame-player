@@ -37,10 +37,12 @@ import androidx.tv.material3.Text
 import androidx.tv.material3.rememberDrawerState
 import it.felixvision.tv.AppContainer
 import it.felixvision.tv.data.catalog.Catalog
+import it.felixvision.tv.data.catalog.Episode
 import it.felixvision.tv.data.catalog.LiveStream
 import it.felixvision.tv.data.catalog.VodStream
 import it.felixvision.tv.data.favorites.FavoriteItem
 import it.felixvision.tv.data.playback.SeriesPlayback
+import it.felixvision.tv.data.progress.ProgressKeys
 import it.felixvision.tv.data.progress.WatchProgress
 import it.felixvision.tv.ui.access.AccessViewModel
 import it.felixvision.tv.ui.catalog.CatalogViewModel
@@ -254,6 +256,29 @@ fun FvpMainScreen(
         playerSession = newPlayerSession(PlaybackSource.Series(playback))
     }
 
+    /** "Segna come (non) visto" dai cataloghi: l'archivio aggiorna subito le icone. */
+    fun setMovieWatched(film: VodStream, watched: Boolean, durationMillis: Long) {
+        scope.launch {
+            val key = ProgressKeys.movie(film.streamId)
+            if (watched) {
+                container.progressStore.markWatched(currentServer, currentUsername, key, durationMillis)
+            } else {
+                container.progressStore.remove(currentServer, currentUsername, key)
+            }
+        }
+    }
+
+    fun setEpisodeWatched(episode: Episode, watched: Boolean, durationMillis: Long) {
+        scope.launch {
+            val key = ProgressKeys.episode(episode.id)
+            if (watched) {
+                container.progressStore.markWatched(currentServer, currentUsername, key, durationMillis)
+            } else {
+                container.progressStore.remove(currentServer, currentUsername, key)
+            }
+        }
+    }
+
     fun toggleFavorite(item: FavoriteItem) {
         scope.launch {
             val added = container.favoritesStore.toggleFavorite(currentServer, currentUsername, item)
@@ -300,6 +325,12 @@ fun FvpMainScreen(
                                 },
                                 onPlayFilm = { film -> playMovie(film) },
                                 onPlayEpisode = { _, playback -> playEpisode(playback) },
+                                onSetEpisodeWatched = { episode, watched, duration ->
+                                    setEpisodeWatched(episode, watched, duration)
+                                },
+                                onToggleWatched = { film, watched, duration ->
+                                    setMovieWatched(film, watched, duration)
+                                },
                                 favorites = allFavorites,
                                 catalogViewModel = catalogViewModel,
                                 contentFocusRequester = contentFocusRequester,
@@ -346,6 +377,9 @@ fun FvpMainScreen(
                                 favorites = allFavorites,
                                 catalogViewModel = catalogViewModel,
                                 progress = watchProgress,
+                                onToggleWatched = { film, watched, duration ->
+                                    setMovieWatched(film, watched, duration)
+                                },
                                 refocusTick = playerReturnTick,
                                 contentFocusRequester = contentFocusRequester,
                                 modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
@@ -359,6 +393,9 @@ fun FvpMainScreen(
                                     toggleFavorite(fav)
                                 },
                                 onPlayEpisode = { _, playback -> playEpisode(playback) },
+                                onSetEpisodeWatched = { episode, watched, duration ->
+                                    setEpisodeWatched(episode, watched, duration)
+                                },
                                 favorites = allFavorites,
                                 catalogViewModel = catalogViewModel,
                                 contentFocusRequester = contentFocusRequester,
@@ -388,6 +425,12 @@ fun FvpMainScreen(
                                     onPlayLive = { stream -> playLive(stream) },
                                     onPlayVod = { film -> playMovie(film) },
                                     onPlayEpisode = { _, playback -> playEpisode(playback) },
+                                    onSetEpisodeWatched = { episode, watched, duration ->
+                                        setEpisodeWatched(episode, watched, duration)
+                                    },
+                                    onToggleWatched = { film, watched, duration ->
+                                        setMovieWatched(film, watched, duration)
+                                    },
                                     progress = watchProgress,
                                     refocusTick = playerReturnTick,
                                     focusEpisodeId = returnEpisodeId,
@@ -396,7 +439,16 @@ fun FvpMainScreen(
                                     modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
                                 )
                             }
-                            DrawerSection.Impostazioni -> SettingsScreen(viewModel = settingsViewModel, scale = scale, modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester), contentFocusRequester = contentFocusRequester)
+                            DrawerSection.Impostazioni -> SettingsScreen(
+                                viewModel = settingsViewModel,
+                                scale = scale,
+                                modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
+                                contentFocusRequester = contentFocusRequester,
+                                catalogSections = catalogState.refreshSections,
+                                catalogRefreshing = catalogState.isRefreshing,
+                                catalogLastUpdateMillis = catalogState.lastUpdateMillis,
+                                onRefreshCatalog = { catalogViewModel.refreshManual() },
+                            )
                         }
                     } else {
                         EmptyState(title = "Catalogo vuoto", description = "Il server non ha restituito contenuti. Premi Riprova.", scale = scale)

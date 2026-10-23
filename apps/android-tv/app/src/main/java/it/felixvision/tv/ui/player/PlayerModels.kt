@@ -72,9 +72,15 @@ data class ChannelBanner(
     val logoUrl: String?,
 )
 
+/**
+ * Proposta del prossimo episodio. `countdownSeconds` è `null` finché il
+ * riquadro è solo una proposta (3 minuti prima della fine); dopo "Posticipa"
+ * arriva il conto alla rovescia degli ultimi 15 secondi.
+ */
 data class NextEpisodePrompt(
     val title: String,
-    val secondsRemaining: Int,
+    val countdownSeconds: Int? = null,
+    val canPostpone: Boolean = true,
 )
 
 data class PlayerUiState(
@@ -93,6 +99,10 @@ data class PlayerUiState(
     val errorMessage: String? = null,
     val resumePositionMillis: Long? = null,
     val nextEpisode: NextEpisodePrompt? = null,
+    /** Formato della traccia audio in riproduzione, per esempio "Dolby Digital · 5.1". */
+    val audioFormatLabel: String = "",
+    /** Vero quando l'audio passa dal decoder dell'estensione FFmpeg. */
+    val ffmpegActive: Boolean = false,
     val currentTitle: String = "",
     val currentChannelIndex: Int = 0,
     val totalChannels: Int = 0,

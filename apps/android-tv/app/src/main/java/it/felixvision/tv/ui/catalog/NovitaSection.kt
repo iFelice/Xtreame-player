@@ -68,6 +68,8 @@ fun NovitaSection(
     onPlayFilm: (VodStream) -> Unit = {},
     onPlaySerie: (SeriesItem) -> Unit = {},
     onPlayEpisode: (it.felixvision.tv.data.catalog.Episode, SeriesPlayback) -> Unit = { _, _ -> },
+    onSetEpisodeWatched: (it.felixvision.tv.data.catalog.Episode, Boolean, Long) -> Unit = { _, _, _ -> },
+    onToggleWatched: (VodStream, Boolean, Long) -> Unit = { _, _, _ -> },
     favorites: List<FavoriteItem> = emptyList(),
     catalogViewModel: CatalogViewModel? = null,
     modifier: Modifier = Modifier,
@@ -323,6 +325,14 @@ fun NovitaSection(
                 onPlay = { onPlayFilm(film) },
                 onToggleFavorite = { onLongPressFilm(film) },
                 onRetry = { detailFilmRetry++ },
+                isWatched = progress[ProgressKeys.movie(film.streamId)]?.isWatched == true,
+                onToggleWatched = { durationMillis ->
+                    onToggleWatched(
+                        film,
+                        progress[ProgressKeys.movie(film.streamId)]?.isWatched != true,
+                        durationMillis,
+                    )
+                },
                 refocusTick = refocusTick,
             )
         }
@@ -346,6 +356,7 @@ fun NovitaSection(
                 onToggleFavorite = { onLongPressSeries(serie) },
                 onPlayEpisode = onPlayEpisode,
                 onRetry = { detailSerieRetry++ },
+                onSetEpisodeWatched = onSetEpisodeWatched,
                 refocusTick = refocusTick,
                 focusEpisodeId = focusEpisodeId,
                 progress = progress,

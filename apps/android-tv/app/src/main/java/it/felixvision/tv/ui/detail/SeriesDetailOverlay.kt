@@ -61,14 +61,17 @@ import it.felixvision.tv.data.playback.buildEpisodeQueue
 import it.felixvision.tv.data.playback.indexOfEpisode
 import it.felixvision.tv.data.progress.ProgressKeys
 import it.felixvision.tv.data.progress.WatchProgress
+import it.felixvision.tv.data.progress.WatchRules
 import it.felixvision.tv.ui.catalog.SeasonDisplay
 import it.felixvision.tv.ui.catalog.deriveSeasons
 import it.felixvision.tv.ui.components.CatalogPosterImage
 import it.felixvision.tv.ui.components.FvpSecondaryButton
 import it.felixvision.tv.ui.components.WatchProgressLine
 import it.felixvision.tv.ui.components.WatchSeenBadge
+import it.felixvision.tv.ui.components.fvpLongPress
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.theme.FvpColors
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
@@ -84,6 +87,8 @@ fun SeriesDetailOverlay(
     onToggleFavorite: () -> Unit,
     onPlayEpisode: (Episode, SeriesPlayback) -> Unit,
     onRetry: () -> Unit,
+    /** "Visto"/"non visto" dalla pressione lunga su un episodio. */
+    onSetEpisodeWatched: (Episode, Boolean, Long) -> Unit = { _, _, _ -> },
     refocusTick: Int = 0,
     focusEpisodeId: String? = null,
     progress: Map<String, WatchProgress> = emptyMap(),
@@ -94,6 +99,7 @@ fun SeriesDetailOverlay(
     var lastSeason by remember { mutableStateOf<String?>(null) }
     var showPlotDialog by remember { mutableStateOf(false) }
     var hasPlotOverflow by remember { mutableStateOf(false) }
+    var watchedMessage by remember { mutableStateOf<String?>(null) }
     val favoriteFocus = remember { FocusRequester() }
     val readMoreFocus = remember { FocusRequester() }
     val closeFocus = remember { FocusRequester() }
@@ -136,6 +142,12 @@ fun SeriesDetailOverlay(
 
     val firstSeasonNumber = derivedSeasons.firstOrNull()?.seasonNumber
     val firstEpisodeId = episodesForSelected.firstOrNull()?.id
+
+    LaunchedEffect(watchedMessage) {
+        if (watchedMessage == null) return@LaunchedEffect
+        delay(2_000L)
+        watchedMessage = null
+    }
 
     LaunchedEffect(derivedSeasons, isLoading, error, selectedSeason) {
         if (selectedSeason != null) return@LaunchedEffect
@@ -448,6 +460,14 @@ fun SeriesDetailOverlay(
                                         fontSize = scale.sp(15f),
                                         modifier = Modifier.padding(top = scale.dp(6f), bottom = scale.dp(4f))
                                     )
+                                    watchedMessage?.let { message ->
+                                        Text(
+                                            text = message,
+                                            color = FvpColors.Green,
+                                            fontSize = scale.sp(13f),
+                                            modifier = Modifier.testTag("serie_episode_watched_message"),
+                                        )
+                                    }
                                     if (episodesForSelected.isEmpty()) {
                                         Text(text = "Nessun episodio disponibile", color = FvpColors.TextSecondary, modifier = Modifier.weight(1f))
                                     } else {
@@ -464,6 +484,12 @@ fun SeriesDetailOverlay(
                                                 val fr = remember(ep.id, episodeFocusRequesters) { episodeFocusRequesters[ep.id] ?: FocusRequester() }
                                                 val epTitle = ep.title.ifBlank { "Episodio ${ep.episodeNum}" }
                                                 val duration = ep.info?.duration ?: ep.info?.durationSecs?.let { secs -> formatDuration(secs) }
+                                                val epProgress = progress[ProgressKeys.episode(ep.id)]
+                                                val nextWatched = epProgress?.isWatched != true
+                                                val epDurationMillis = WatchRules.durationMillis(
+                                                    durationSecs = ep.info?.durationSecs,
+                                                    durationText = ep.info?.duration,
+                                                ).takeIf { it > 0L } ?: epProgress?.durationMillis ?: 0L
                                                 EpisodeRowItem(
                                                     episode = ep,
                                                     title = epTitle,
@@ -473,7 +499,15 @@ fun SeriesDetailOverlay(
                                                     upFocus = if (isFirst) {
                                                         if (hasPlotOverflow) readMoreFocus else favoriteFocus
                                                     } else null,
-                                                    progress = progress[ProgressKeys.episode(ep.id)],
+                                                    progress = epProgress,
+                                                    onToggleWatched = {
+                                                        onSetEpisodeWatched(ep, nextWatched, epDurationMillis)
+                                                        watchedMessage = if (nextWatched) {
+                                                            "Segnato come visto"
+                                                        } else {
+                                                            "Segnato come non visto"
+                                                        }
+                                                    },
                                                     onPlay = {
                                                         val queueIndex = indexOfEpisode(playbackQueue, ep.id)
                                                         val queue = if (queueIndex >= 0) {
@@ -617,6 +651,7 @@ private fun EpisodeRowItem(
     focusRequester: FocusRequester,
     upFocus: FocusRequester?,
     progress: WatchProgress?,
+    onToggleWatched: () -> Unit,
     onPlay: () -> Unit
 ) {
     Box {
@@ -667,6 +702,7 @@ private fun EpisodeRowItem(
                     Modifier.focusProperties { up = upFocus }
                 } else Modifier
             )
+            .fvpLongPress(onToggleWatched)
             .testTag("detail_episode_${episode.id}"),
         colors = ListItemDefaults.colors(containerColor = FvpColors.SurfaceElevated),
         scale = ListItemDefaults.scale(focusedScale = 1.04f),

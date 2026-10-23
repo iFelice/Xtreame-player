@@ -74,6 +74,7 @@ fun FilmSection(
     catalogViewModel: CatalogViewModel? = null,
     contentFocusRequester: FocusRequester = remember { FocusRequester() },
     progress: Map<String, WatchProgress> = emptyMap(),
+    onToggleWatched: (VodStream, Boolean, Long) -> Unit = { _, _, _ -> },
     refocusTick: Int = 0,
     modifier: Modifier = Modifier,
 ) {
@@ -259,6 +260,14 @@ fun FilmSection(
             onPlay = { onPlayFilm(film) },
             onToggleFavorite = { onLongPressFilm(film) },
             onRetry = { retryKey++ },
+            isWatched = progress[ProgressKeys.movie(film.streamId)]?.isWatched == true,
+            onToggleWatched = { durationMillis ->
+                onToggleWatched(
+                    film,
+                    progress[ProgressKeys.movie(film.streamId)]?.isWatched != true,
+                    durationMillis,
+                )
+            },
             refocusTick = refocusTick,
         )
     }
