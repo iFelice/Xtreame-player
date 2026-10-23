@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,13 +20,17 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -39,9 +44,11 @@ import it.felixvision.tv.data.catalog.LiveStream
 import it.felixvision.tv.data.playback.PlaybackFormatting
 import it.felixvision.tv.data.playback.SeekFeedback
 import it.felixvision.tv.ui.components.ChannelLogoImage
+import it.felixvision.tv.ui.components.FocusMarqueeText
 import it.felixvision.tv.ui.components.FvpPrimaryButton
 import it.felixvision.tv.ui.components.FvpSecondaryButton
 import it.felixvision.tv.ui.components.UiScale
+import it.felixvision.tv.ui.components.focusSafePadding
 import it.felixvision.tv.ui.theme.FvpColors
 
 /** Banner canale: numero, nome, categoria e logo, visibile per 4 secondi. */
@@ -187,11 +194,14 @@ fun PlayerChannelListOverlay(
             LazyColumn(
                 state = listState,
                 verticalArrangement = Arrangement.spacedBy(scale.dp(6f)),
+                // Ingrandimento e cornice delle voci restano nella lista.
+                contentPadding = PaddingValues(scale.focusSafePadding),
                 modifier = Modifier.fillMaxWidth().weight(1f),
             ) {
                 itemsIndexed(channels, key = { _, stream -> stream.streamId }) { index, channel ->
                     val isCurrent = index == safeIndex
                     val requester = focusRequesters.getOrNull(index)
+                    var focused by remember(channel.streamId) { mutableStateOf(false) }
                     ListItem(
                         selected = false,
                         onClick = { onSelect(index) },
@@ -200,11 +210,10 @@ fun PlayerChannelListOverlay(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(scale.dp(6f)),
                             ) {
-                                Text(
+                                FocusMarqueeText(
                                     text = channel.name,
+                                    focused = focused,
                                     color = if (isCurrent) FvpColors.Green else FvpColors.TextPrimary,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier.weight(1f, fill = false),
                                 )
                                 if (isCurrent) {
@@ -228,6 +237,7 @@ fun PlayerChannelListOverlay(
                         modifier = Modifier
                             .fillMaxWidth()
                             .then(if (requester != null) Modifier.focusRequester(requester) else Modifier)
+                            .onFocusChanged { focused = it.isFocused }
                             .testTag("player_channel_${channel.streamId}"),
                         colors = ListItemDefaults.colors(
                             containerColor = FvpColors.SurfaceElevated,
@@ -390,7 +400,11 @@ fun PlayerTrackPanel(
                     color = FvpColors.TextSecondary,
                 )
             } else {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(scale.dp(6f))) {
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(scale.dp(6f)),
+                    // Ingrandimento e cornice delle voci restano nella lista.
+                    contentPadding = PaddingValues(scale.focusSafePadding),
+                ) {
                     if (panel == TrackPanelType.SUBTITLES) {
                         item(key = "off") {
                             ListItem(

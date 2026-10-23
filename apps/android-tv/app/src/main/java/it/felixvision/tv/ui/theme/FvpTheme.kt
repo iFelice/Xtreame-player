@@ -22,7 +22,9 @@ object FvpColors {
     val FilmActive = Color(0xFF10B981)
     val SerieActive = Color(0xFF2DD4BF)
     val NovitaActive = Color(0xFFA3E635)
+    val ContinuaActive = Color(0xFF38BDF8)
     val PreferitiActive = Color(0xFFFBBF24)
+    val CercaActive = Color(0xFFA78BFA)
     val ImpostazioniActive = Color(0xFFFFFFFF)
     val Inactive = Color(0xFFAEAEB2)
 }
@@ -32,7 +34,9 @@ object DrawerColors {
     val Film = FvpColors.FilmActive
     val Serie = FvpColors.SerieActive
     val Novita = FvpColors.NovitaActive
+    val Continua = FvpColors.ContinuaActive
     val Preferiti = FvpColors.PreferitiActive
+    val Cerca = FvpColors.CercaActive
     val Impostazioni = FvpColors.ImpostazioniActive
     val Inactive = FvpColors.Inactive
 }

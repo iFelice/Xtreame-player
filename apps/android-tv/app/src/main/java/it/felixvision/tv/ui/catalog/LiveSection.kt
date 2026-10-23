@@ -5,10 +5,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -34,7 +34,6 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Border
 import androidx.tv.material3.ListItem
@@ -46,7 +45,9 @@ import it.felixvision.tv.data.favorites.FavoriteItem
 import it.felixvision.tv.ui.components.ChannelLogoImage
 import it.felixvision.tv.ui.components.CollapsingCategoryColumn
 import it.felixvision.tv.ui.components.EmptyState
+import it.felixvision.tv.ui.components.FocusMarqueeText
 import it.felixvision.tv.ui.components.UiScale
+import it.felixvision.tv.ui.components.focusSafePadding
 import it.felixvision.tv.ui.components.fvpLongPress
 import it.felixvision.tv.ui.theme.FvpColors
 import kotlinx.coroutines.delay
@@ -151,7 +152,9 @@ fun LiveSection(
         onChannelFocusRestored()
     }
 
-    Row(modifier = modifier.fillMaxWidth().padding(scale.dp(12f)), horizontalArrangement = Arrangement.spacedBy(scale.dp(12f))) {
+    // Il margine sicuro del focus sta nel contentPadding della lista: la Row
+    // resta senza padding per non sommare due volte la stessa quantità.
+    Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(scale.dp(12f))) {
         if (categories.isEmpty()) {
             EmptyState(title = "Nessuna categoria", description = "Il server non ha restituito categorie live.", scale = scale, modifier = Modifier.weight(0.3f))
         } else {
@@ -179,18 +182,26 @@ fun LiveSection(
                 LazyColumn(
                     state = channelsListState,
                     verticalArrangement = Arrangement.spacedBy(scale.dp(6f)),
+                    // Ingrandimento e cornice del focus restano dentro la lista.
+                    contentPadding = PaddingValues(scale.focusSafePadding),
                     modifier = Modifier.fillMaxWidth().testTag("live_channels_list"),
                 ) {
                     itemsIndexed(filtered, key = { _, ch -> ch.streamId }) { index, channel ->
                         val isFav = favorites.any { it.id == "live_${channel.streamId}" }
                         val channelFr = channelFocusRequesters[channel.streamId]
+                        var focused by remember(channel.streamId) { mutableStateOf(false) }
                         ListItem(
                             selected = false,
                             onClick = { onSelectChannel(channel) },
                             onLongClick = { onLongPressChannel(channel) },
                             headlineContent = {
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(scale.dp(6f))) {
-                                    Text(text = channel.name, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f, fill = false))
+                                    FocusMarqueeText(
+                                        text = channel.name,
+                                        focused = focused,
+                                        fontWeight = FontWeight.Medium,
+                                        modifier = Modifier.weight(1f, fill = false),
+                                    )
                                     if (isFav) {
                                         Box(
                                             modifier = Modifier.size(scale.dp(22f)).clip(CircleShape).background(Color(0xCC1C1C1E)).testTag("live_channel_${channel.streamId}_fav_star"),
@@ -215,7 +226,10 @@ fun LiveSection(
                                 .testTag("live_channel_${channel.streamId}")
                                 .then(if (channelFr != null) Modifier.focusRequester(channelFr) else Modifier)
                                 .then(if (index == 0) Modifier.focusRequester(contentFocusRequester) else Modifier)
-                                .onFocusChanged { if (it.isFocused) categoryExpanded = false }
+                                .onFocusChanged { focusState ->
+                                    focused = focusState.isFocused
+                                    if (focusState.isFocused) categoryExpanded = false
+                                }
                                 .onPreviewKeyEvent { event ->
                                     if (event.key == Key.DirectionLeft) {
                                         val active = debouncedCategoryId ?: categories.firstOrNull()?.categoryId

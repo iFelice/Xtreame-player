@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -40,17 +41,23 @@ import it.felixvision.tv.data.catalog.Catalog
 import it.felixvision.tv.data.catalog.Episode
 import it.felixvision.tv.data.catalog.LiveStream
 import it.felixvision.tv.data.catalog.VodStream
+import it.felixvision.tv.data.continuewatching.ContinueEntry
 import it.felixvision.tv.data.favorites.FavoriteItem
 import it.felixvision.tv.data.playback.SeriesPlayback
+import it.felixvision.tv.data.playback.buildEpisodeQueue
+import it.felixvision.tv.data.playback.indexOfEpisode
 import it.felixvision.tv.data.progress.ProgressKeys
 import it.felixvision.tv.data.progress.WatchProgress
 import it.felixvision.tv.ui.access.AccessViewModel
 import it.felixvision.tv.ui.catalog.CatalogViewModel
+import it.felixvision.tv.ui.catalog.ContinueWatchingSection
 import it.felixvision.tv.ui.catalog.FavoritesSection
 import it.felixvision.tv.ui.catalog.FilmSection
 import it.felixvision.tv.ui.catalog.LiveSection
 import it.felixvision.tv.ui.catalog.NovitaSection
+import it.felixvision.tv.ui.catalog.SearchSection
 import it.felixvision.tv.ui.catalog.SerieSection
+import it.felixvision.tv.ui.catalog.deriveSeasons
 import it.felixvision.tv.ui.components.EmptyState
 import it.felixvision.tv.ui.components.ErrorState
 import it.felixvision.tv.ui.components.FvpPrimaryButton
@@ -66,6 +73,7 @@ import it.felixvision.tv.ui.player.PlayerSession
 import it.felixvision.tv.ui.settings.SettingsScreen
 import it.felixvision.tv.ui.settings.SettingsViewModel
 import it.felixvision.tv.ui.theme.FvpColors
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -99,6 +107,10 @@ fun FvpMainScreen(
     var returnEpisodeId by remember { mutableStateOf<String?>(null) }
     var favoritesTick by remember { mutableStateOf(0L) }
     var favoritesMessage by remember { mutableStateOf<String?>(null) }
+    var continueLoadingKey by remember { mutableStateOf<String?>(null) }
+    var continueErrorMessage by remember { mutableStateOf<String?>(null) }
+    // Il testo cercato resta quando si torna nella sezione durante la sessione.
+    val searchQueryState = rememberTextFieldState()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
@@ -154,6 +166,17 @@ fun FvpMainScreen(
         value = container.progressStore.getAll(currentServer, currentUsername)
     }
 
+    // "Continua a guardare": si ricarica a ogni scrittura dell'archivio.
+    val continueRevision by container.continueWatchingStore.revision.collectAsState()
+    val continueEntries by produceState<List<ContinueEntry>>(
+        initialValue = emptyList(),
+        continueRevision,
+        currentServer,
+        currentUsername,
+    ) {
+        value = container.continueWatchingStore.getAll(currentServer, currentUsername)
+    }
+
     LaunchedEffect(Unit) {
         delay(200)
         contentFocusRequester.requestFocus()
@@ -204,13 +227,17 @@ fun FvpMainScreen(
         }
     }
 
-    fun newPlayerSession(source: PlaybackSource) = PlayerSession(
+    fun newPlayerSession(
+        source: PlaybackSource,
+        autoResume: Boolean = false,
+    ) = PlayerSession(
         id = System.nanoTime(),
         server = currentServer,
         username = currentUsername,
         password = currentPassword,
         allowedOutputFormats = allowedOutputFormats,
         source = source,
+        autoResume = autoResume,
     )
 
     fun playLive(channel: LiveStream) {
@@ -236,9 +263,10 @@ fun FvpMainScreen(
         )
     }
 
-    fun playMovie(film: VodStream) {
-        // Da Preferiti/Novità la card può non avere l'estensione del contenitore:
-        // se il catalogo è disponibile si usa la voce completa.
+    fun playMovie(film: VodStream, autoResume: Boolean = false) {
+        // Da Preferiti/Novità/Continua a guardare la card può non avere
+        // l'estensione del contenitore: se il catalogo è disponibile si usa la
+        // voce completa.
         val resolved = catalogState.catalog
             ?.vodStreams
             ?.firstOrNull { it.streamId == film.streamId }
@@ -248,12 +276,102 @@ fun FvpMainScreen(
                 stream = resolved,
                 categoryId = resolved.categoryId,
                 title = resolved.name.ifBlank { film.name },
-            )
+            ),
+            autoResume = autoResume,
         )
     }
 
     fun playEpisode(playback: SeriesPlayback) {
         playerSession = newPlayerSession(PlaybackSource.Series(playback))
+    }
+
+    fun showContinueError(message: String) {
+        continueErrorMessage = message
+        scope.launch {
+            delay(5000)
+            if (continueErrorMessage == message) continueErrorMessage = null
+        }
+    }
+
+    /**
+     * Le serie hanno bisogno della coda episodi della scheda: le informazioni
+     * si caricano al momento, con indicatore di caricamento e messaggio
+     * d'errore senza URL.
+     */
+    fun openContinueSeries(entry: ContinueEntry) {
+        val seriesId = entry.seriesId ?: return
+        continueLoadingKey = entry.key
+        continueErrorMessage = null
+        scope.launch {
+            val info = try {
+                catalogViewModel.loadSeriesInfo(seriesId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                null
+            }
+            continueLoadingKey = null
+            if (info == null) {
+                showContinueError("Informazioni della serie non disponibili. Riprova.")
+                return@launch
+            }
+            val seasonOrder = deriveSeasons(info.seasons, info.episodes).map { it.seasonNumber }
+            val queue = buildEpisodeQueue(seasonOrder, info.episodes)
+            if (queue.isEmpty()) {
+                showContinueError("Nessun episodio disponibile per questa serie.")
+                return@launch
+            }
+            val savedIndex = indexOfEpisode(queue, entry.episodeId.orEmpty())
+            playerSession = newPlayerSession(
+                PlaybackSource.Series(
+                    SeriesPlayback(
+                        seriesId = seriesId,
+                        title = entry.title,
+                        categoryId = entry.categoryId,
+                        queue = queue,
+                        startIndex = if (savedIndex >= 0) savedIndex else 0,
+                        cover = entry.poster,
+                    ),
+                ),
+                autoResume = true,
+            )
+        }
+    }
+
+    /**
+     * "Continua a guardare": OK avvia subito il player dal punto salvato, senza
+     * la finestra "Riprendi".
+     */
+    fun openContinueEntry(entry: ContinueEntry) {
+        if (entry.isMovie) {
+            val streamId = entry.streamId ?: return
+            val fromCatalog = catalogState.catalog?.vodStreams?.firstOrNull { it.streamId == streamId }
+            val film = fromCatalog ?: VodStream(
+                streamId = streamId,
+                name = entry.title,
+                streamIcon = entry.poster,
+                categoryId = entry.categoryId,
+                containerExtension = entry.containerExtension,
+            )
+            playMovie(
+                film = film.copy(
+                    name = film.name.ifBlank { entry.title },
+                    streamIcon = film.streamIcon ?: entry.poster,
+                    containerExtension = film.containerExtension ?: entry.containerExtension,
+                ),
+                autoResume = true,
+            )
+            return
+        }
+        openContinueSeries(entry)
+    }
+
+    /** Pressione lunga nella sezione: la voce sparisce finché non viene ripresa. */
+    fun hideContinueEntry(entry: ContinueEntry) {
+        scope.launch {
+            container.continueWatchingStore.hide(currentServer, currentUsername, entry.key)
+            favoritesMessage = "Rimosso da Continua a guardare"
+        }
     }
 
     /** "Segna come (non) visto" dai cataloghi: l'archivio aggiorna subito le icone. */
@@ -262,6 +380,13 @@ fun FvpMainScreen(
             val key = ProgressKeys.movie(film.streamId)
             if (watched) {
                 container.progressStore.markWatched(currentServer, currentUsername, key, durationMillis)
+                // "Segna come visto" toglie la voce film da Continua a guardare;
+                // "Segna come non visto" non la ricrea.
+                container.continueWatchingStore.remove(
+                    currentServer,
+                    currentUsername,
+                    ContinueEntry.movieKey(film.streamId),
+                )
             } else {
                 container.progressStore.remove(currentServer, currentUsername, key)
             }
@@ -337,6 +462,18 @@ fun FvpMainScreen(
                                 progress = watchProgress,
                                 refocusTick = playerReturnTick,
                                 focusEpisodeId = returnEpisodeId,
+                                modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
+                            )
+                            DrawerSection.ContinuaAGuardare -> ContinueWatchingSection(
+                                entries = continueEntries,
+                                scale = scale,
+                                progress = watchProgress,
+                                loadingKey = continueLoadingKey,
+                                errorMessage = continueErrorMessage,
+                                onPlayEntry = { entry -> openContinueEntry(entry) },
+                                onRemoveEntry = { entry -> hideContinueEntry(entry) },
+                                refocusTick = playerReturnTick,
+                                contentFocusRequester = contentFocusRequester,
                                 modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
                             )
                             DrawerSection.Live -> LiveSection(
@@ -439,6 +576,27 @@ fun FvpMainScreen(
                                     modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
                                 )
                             }
+                            DrawerSection.Cerca -> SearchSection(
+                                queryState = searchQueryState,
+                                catalog = catalog,
+                                scale = scale,
+                                favorites = allFavorites,
+                                progress = watchProgress,
+                                catalogViewModel = catalogViewModel,
+                                onPlayLive = { stream -> playLive(stream) },
+                                onPlayFilm = { film -> playMovie(film) },
+                                onPlayEpisode = { _, playback -> playEpisode(playback) },
+                                onToggleFavorite = { favorite -> toggleFavorite(favorite) },
+                                onSetEpisodeWatched = { episode, watched, duration ->
+                                    setEpisodeWatched(episode, watched, duration)
+                                },
+                                onToggleWatched = { film, watched, duration ->
+                                    setMovieWatched(film, watched, duration)
+                                },
+                                refocusTick = playerReturnTick,
+                                contentFocusRequester = contentFocusRequester,
+                                modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
+                            )
                             DrawerSection.Impostazioni -> SettingsScreen(
                                 viewModel = settingsViewModel,
                                 scale = scale,

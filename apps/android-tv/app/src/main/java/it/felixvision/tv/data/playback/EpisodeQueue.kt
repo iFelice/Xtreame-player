@@ -25,6 +25,8 @@ data class SeriesPlayback(
     val categoryId: String?,
     val queue: List<EpisodeOrder>,
     val startIndex: Int,
+    /** Copertina della serie, per l'archivio "Continua a guardare". */
+    val cover: String? = null,
 ) {
     val current: EpisodeOrder? get() = queue.getOrNull(startIndex)
 }

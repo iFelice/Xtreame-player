@@ -22,7 +22,10 @@ import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import it.felixvision.tv.AppContainer
 import it.felixvision.tv.core.AppLog
 import it.felixvision.tv.data.catalog.LiveStream
+import it.felixvision.tv.data.continuewatching.ContinueEntry
+import it.felixvision.tv.data.continuewatching.ContinueEpisode
 import it.felixvision.tv.data.playback.AudioFormatLabels
+import it.felixvision.tv.data.playback.EpisodeOrder
 import it.felixvision.tv.data.playback.LiveZapping
 import it.felixvision.tv.data.playback.NextEpisodeRules
 import it.felixvision.tv.data.playback.PostponeMode
@@ -152,11 +155,17 @@ class PlayerEngine(
                 null
             }
             if (WatchRules.canResume(saved) && saved != null) {
-                state = state.copy(
-                    resumePositionMillis = saved.positionMillis,
-                    positionMillis = saved.positionMillis,
-                )
-                buildPlayer(startPositionMillis = saved.positionMillis, autoPlay = false)
+                if (session.autoResume) {
+                    // Da "Continua a guardare" riparte subito dal punto salvato,
+                    // senza la finestra "Riprendi".
+                    buildPlayer(startPositionMillis = saved.positionMillis, autoPlay = true)
+                } else {
+                    state = state.copy(
+                        resumePositionMillis = saved.positionMillis,
+                        positionMillis = saved.positionMillis,
+                    )
+                    buildPlayer(startPositionMillis = saved.positionMillis, autoPlay = false)
+                }
             } else {
                 buildPlayer(startPositionMillis = 0L, autoPlay = true)
             }
@@ -193,15 +202,7 @@ class PlayerEngine(
             val duration = playerDuration().takeIf { it > 0L } ?: state.durationMillis
             if (contentKey != null) {
                 container.applicationScope.launch {
-                    runCatching {
-                        container.progressStore.save(
-                            session.server,
-                            session.username,
-                            contentKey,
-                            position.coerceAtLeast(0L),
-                            duration,
-                        )
-                    }
+                    persistWatchState(position.coerceAtLeast(0L), duration)
                 }
             }
         }
@@ -224,15 +225,7 @@ class PlayerEngine(
         val duration = playerDuration().takeIf { it > 0L } ?: state.durationMillis
         scope.launch {
             if (contentKey != null) {
-                runCatching {
-                    container.progressStore.save(
-                        session.server,
-                        session.username,
-                        contentKey,
-                        position.coerceAtLeast(0L),
-                        duration,
-                    )
-                }
+                persistWatchState(position.coerceAtLeast(0L), duration)
             }
             destroyPlayer()
             container.playbackActivity.setActive(false)
@@ -365,8 +358,9 @@ class PlayerEngine(
     }
 
     fun saveProgress(completed: Boolean = false) {
+        // Il Live non ha né avanzamento né voce in "Continua a guardare".
         if (isLiveSource) return
-        val contentKey = progressKey() ?: return
+        if (progressKey() == null) return
         val player = exoPlayer ?: return
         val duration = playerDuration().takeIf { it > 0L } ?: state.durationMillis
         val position = if (completed && duration > 0L) {
@@ -376,17 +370,82 @@ class PlayerEngine(
         }
         if (position <= 0L && duration <= 0L) return
         container.applicationScope.launch {
-            runCatching {
-                container.progressStore.save(
-                    session.server,
-                    session.username,
-                    contentKey,
-                    position,
-                    duration,
+            persistWatchState(position.coerceAtLeast(0L), duration)
+        }
+    }
+
+    /**
+     * Salva l'avanzamento e aggiorna l'archivio "Continua a guardare" con gli
+     * stessi valori: un solo punto di scrittura per posizione e archivio.
+     */
+    private suspend fun persistWatchState(positionMillis: Long, durationMillis: Long) {
+        val contentKey = progressKey() ?: return
+        runCatching {
+            container.progressStore.save(
+                session.server,
+                session.username,
+                contentKey,
+                positionMillis,
+                durationMillis,
+            )
+        }
+        runCatching { recordContinueWatching(positionMillis, durationMillis) }
+    }
+
+    /**
+     * Aggiorna l'archivio "Continua a guardare": per i film la voce sparisce
+     * oltre il 90%, per le serie punta all'episodio successivo della coda (o
+     * sparisce se era l'ultimo). Il Live non entra nell'archivio.
+     */
+    private suspend fun recordContinueWatching(positionMillis: Long, durationMillis: Long) {
+        val store = container.continueWatchingStore
+        when (val currentSource = source) {
+            is PlaybackSource.Live -> return
+            is PlaybackSource.Movie -> {
+                val movie = ContinueEntry.movie(
+                    streamId = currentSource.stream.streamId,
+                    title = currentSource.title.ifBlank { currentSource.stream.name },
+                    poster = currentSource.stream.streamIcon,
+                    categoryId = currentSource.categoryId ?: currentSource.stream.categoryId,
+                    containerExtension = currentSource.stream.containerExtension,
+                )
+                store.recordMovie(
+                    server = session.server,
+                    username = session.username,
+                    movie = movie,
+                    positionMillis = positionMillis,
+                    durationMillis = durationMillis,
+                )
+            }
+            is PlaybackSource.Series -> {
+                val current = currentEpisode() ?: return
+                val playback = currentSource.playback
+                val series = ContinueEntry.series(
+                    seriesId = playback.seriesId,
+                    title = playback.title,
+                    poster = playback.cover,
+                    categoryId = playback.categoryId,
+                    episode = current.toContinueEpisode(),
+                )
+                store.recordEpisode(
+                    server = session.server,
+                    username = session.username,
+                    series = series,
+                    nextEpisode = playback.queue.getOrNull(episodeIndex + 1)?.toContinueEpisode(),
+                    positionMillis = positionMillis,
+                    durationMillis = durationMillis,
                 )
             }
         }
     }
+
+    private fun EpisodeOrder.toContinueEpisode(): ContinueEpisode = ContinueEpisode(
+        episodeId = episode.id,
+        seasonNumber = seasonNumber,
+        episodeNum = episode.episodeNum,
+        title = displayTitle,
+        containerExtension = episode.containerExtension,
+    )
 
     // --- Comandi Live ---
 

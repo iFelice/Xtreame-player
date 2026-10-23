@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -34,6 +35,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -65,11 +67,13 @@ import it.felixvision.tv.data.progress.WatchRules
 import it.felixvision.tv.ui.catalog.SeasonDisplay
 import it.felixvision.tv.ui.catalog.deriveSeasons
 import it.felixvision.tv.ui.components.CatalogPosterImage
+import it.felixvision.tv.ui.components.FocusMarqueeText
 import it.felixvision.tv.ui.components.FvpSecondaryButton
+import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.components.WatchProgressLine
 import it.felixvision.tv.ui.components.WatchSeenBadge
+import it.felixvision.tv.ui.components.focusSafePadding
 import it.felixvision.tv.ui.components.fvpLongPress
-import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.theme.FvpColors
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -402,6 +406,8 @@ fun SeriesDetailOverlay(
                                         LazyColumn(
                                             state = seasonsListState,
                                             verticalArrangement = Arrangement.spacedBy(scale.dp(6f)),
+                                            // Ingrandimento e cornice delle voci restano nella lista.
+                                            contentPadding = PaddingValues(scale.focusSafePadding),
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .weight(1f)
@@ -474,6 +480,8 @@ fun SeriesDetailOverlay(
                                         LazyColumn(
                                             state = episodesListState,
                                             verticalArrangement = Arrangement.spacedBy(scale.dp(6f)),
+                                            // Ingrandimento e cornice delle voci restano nella lista.
+                                            contentPadding = PaddingValues(scale.focusSafePadding),
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .weight(1f)
@@ -525,6 +533,9 @@ fun SeriesDetailOverlay(
                                                                 categoryId = serie.categoryId,
                                                                 queue = queue,
                                                                 startIndex = if (queueIndex >= 0) queueIndex else 0,
+                                                                cover = info?.info?.cover
+                                                                    ?.takeIf { it.isNotBlank() }
+                                                                    ?: serie.cover,
                                                             ),
                                                         )
                                                     }
@@ -654,15 +665,15 @@ private fun EpisodeRowItem(
     onToggleWatched: () -> Unit,
     onPlay: () -> Unit
 ) {
+    var focused by remember(episode.id) { mutableStateOf(false) }
     Box {
     ListItem(
         selected = false,
         onClick = { onPlay() },
         headlineContent = {
-            Text(
+            FocusMarqueeText(
                 text = "${episode.episodeNum} · $title",
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                focused = focused,
                 fontWeight = FontWeight.Medium
             )
         },
@@ -702,6 +713,7 @@ private fun EpisodeRowItem(
                     Modifier.focusProperties { up = upFocus }
                 } else Modifier
             )
+            .onFocusChanged { focused = it.isFocused }
             .fvpLongPress(onToggleWatched)
             .testTag("detail_episode_${episode.id}"),
         colors = ListItemDefaults.colors(containerColor = FvpColors.SurfaceElevated),

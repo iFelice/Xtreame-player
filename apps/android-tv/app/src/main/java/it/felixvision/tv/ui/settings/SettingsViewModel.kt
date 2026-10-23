@@ -235,6 +235,7 @@ class SettingsViewModel(
             runCatching { container.catalogCache.clear(server, username) }
             runCatching { container.favoritesStore.clearForAccount(server, username) }
             runCatching { container.progressStore.clearForAccount(server, username) }
+            runCatching { container.continueWatchingStore.clearForAccount(server, username) }
             _ui.update { it.copy(showExitConfirm = false) }
             onSignOut()
         }
