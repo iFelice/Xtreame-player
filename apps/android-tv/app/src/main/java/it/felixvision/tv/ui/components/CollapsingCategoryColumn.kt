@@ -21,6 +21,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,7 +31,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.tv.material3.Border
 import androidx.tv.material3.ListItem
 import androidx.tv.material3.ListItemDefaults
@@ -88,6 +89,9 @@ fun CollapsingCategoryColumn(
                 val selected = cat.categoryId == debouncedCategoryId
                 val fr = remember(cat.categoryId, focusRequesters) { focusRequesters[cat.categoryId] ?: FocusRequester() }
                 val isFavorite = cat.categoryId in favoriteCategoryIds
+                // Il focus arriva dalla voce della lista: il nome scorre solo
+                // quando la voce è focalizzata, come i titoli delle card.
+                var focused by remember(cat.categoryId) { mutableStateOf(false) }
                 val longPressModifier = if (onLongPressCategory != null) {
                     Modifier.fvpLongPress { onLongPressCategory(cat) }
                 } else Modifier
@@ -99,17 +103,19 @@ fun CollapsingCategoryColumn(
                         onClick = { onFocusedCategoryId(cat.categoryId) },
                         headlineContent = {
                             if (onLongPressCategory == null) {
-                                Text(
+                                FocusMarqueeText(
                                     text = cat.categoryName ?: "Senza nome",
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
+                                    focused = focused,
+                                    color = if (selected) FvpColors.TextPrimary else FvpColors.TextSecondary,
                                 )
                             } else if (expanded) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
+                                    // Il nome occupa lo spazio che resta a sinistra
+                                    // della stella, che resta sempre visibile.
+                                    FocusMarqueeText(
                                         text = cat.categoryName ?: "Senza nome",
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
+                                        focused = focused,
+                                        color = if (selected) FvpColors.TextPrimary else FvpColors.TextSecondary,
                                         modifier = Modifier.weight(1f, fill = false),
                                     )
                                     if (isFavorite) CategoryFavoriteStar(scale, "${testTagPrefix}_category_${cat.categoryId}_fav_star")
@@ -136,6 +142,7 @@ fun CollapsingCategoryColumn(
                             .then(longPressModifier)
                             .focusRequester(fr)
                             .onFocusChanged {
+                                focused = it.isFocused
                                 if (it.isFocused) {
                                     onExpandedChange(true)
                                     onFocusedCategoryId(cat.categoryId)
