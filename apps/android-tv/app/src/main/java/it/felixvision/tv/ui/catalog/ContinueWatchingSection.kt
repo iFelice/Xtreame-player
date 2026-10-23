@@ -29,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -42,6 +43,7 @@ import it.felixvision.tv.data.progress.ProgressKeys
 import it.felixvision.tv.data.progress.WatchProgress
 import it.felixvision.tv.ui.components.CatalogPosterImage
 import it.felixvision.tv.ui.components.EmptyState
+import it.felixvision.tv.ui.components.FocusMarqueeText
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.components.WatchProgressLine
 import it.felixvision.tv.ui.components.focusSafePadding
@@ -134,6 +136,7 @@ fun ContinueWatchingSection(
                         val itemFr = remember(entry.key, itemFocusRequesters) {
                             itemFocusRequesters[entry.key] ?: FocusRequester()
                         }
+                        var focused by remember(entry.key) { mutableStateOf(false) }
                         val movieProgress = progress[ProgressKeys.movie(entry.streamId.orEmpty())]
                         val episodeProgress = progress[ProgressKeys.episode(entry.episodeId.orEmpty())]
                         val shownProgress = if (entry.isSeries) episodeProgress else movieProgress
@@ -153,6 +156,7 @@ fun ContinueWatchingSection(
                                         Modifier
                                     },
                                 )
+                                .onFocusChanged { focusState -> focused = focusState.isFocused }
                                 .fvpLongPress { onRemoveEntry(entry) },
                             scale = CardDefaults.scale(focusedScale = 1.04f),
                             border = CardDefaults.border(
@@ -197,11 +201,9 @@ fun ContinueWatchingSection(
                                         }
                                     }
                                 }
-                                Text(
+                                FocusMarqueeText(
                                     text = entry.title,
-                                    color = FvpColors.TextPrimary,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
+                                    focused = focused,
                                     modifier = Modifier
                                         .padding(top = scale.dp(6f))
                                         .testTag("continua_title_${entry.key}"),

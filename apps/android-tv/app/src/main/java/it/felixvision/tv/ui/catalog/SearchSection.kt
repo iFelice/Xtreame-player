@@ -37,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -46,7 +47,6 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Border
 import androidx.tv.material3.Card
@@ -66,12 +66,14 @@ import it.felixvision.tv.data.progress.WatchProgress
 import it.felixvision.tv.data.search.CatalogSearch
 import it.felixvision.tv.ui.components.CatalogPosterImage
 import it.felixvision.tv.ui.components.ChannelLogoImage
+import it.felixvision.tv.ui.components.FocusMarqueeText
 import it.felixvision.tv.ui.components.FvpTextField
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.components.WatchProgressLine
 import it.felixvision.tv.ui.components.WatchSeenBadge
 import it.felixvision.tv.ui.components.focusSafePadding
 import it.felixvision.tv.ui.components.fvpLongPress
+import it.felixvision.tv.ui.components.rememberRowsBringIntoViewer
 import it.felixvision.tv.ui.detail.FilmDetailOverlay
 import it.felixvision.tv.ui.detail.SeriesDetailOverlay
 import it.felixvision.tv.ui.theme.FvpColors
@@ -126,6 +128,8 @@ fun SearchSection(
 
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
+    // Tre righe: quella che riceve il focus viene portata interamente in vista.
+    val rowsBringIntoView = rememberRowsBringIntoViewer()
 
     // 300 ms dopo l'ultima digitazione; sotto i 2 caratteri non si cerca.
     LaunchedEffect(queryText) {
@@ -294,6 +298,7 @@ fun SearchSection(
                         count = results.live.size,
                         scale = scale,
                         rowTestTag = "search_live_row",
+                        modifier = rowsBringIntoView.rowModifier(ROW_LIVE),
                     ) {
                         itemsIndexed(results.live, key = { _, channel -> "live_${channel.streamId}" }) { index, channel ->
                             LiveResultCard(
@@ -302,6 +307,7 @@ fun SearchSection(
                                 isFavorite = favorites.any { it.id == "live_${channel.streamId}" },
                                 focusRequester = itemFocusRequesters["live_${channel.streamId}"],
                                 onUpToField = { if (index == 0) runCatching { contentFocusRequester.requestFocus() } },
+                                onRowFocused = { rowsBringIntoView.onRowFocused(ROW_LIVE) },
                                 onClick = { onPlayLive(channel) },
                                 onLongPress = {
                                     onToggleFavorite(
@@ -326,6 +332,7 @@ fun SearchSection(
                         count = results.vod.size,
                         scale = scale,
                         rowTestTag = "search_vod_row",
+                        modifier = rowsBringIntoView.rowModifier(ROW_VOD),
                     ) {
                         itemsIndexed(results.vod, key = { _, film -> "vod_${film.streamId}" }) { index, film ->
                             val filmProgress = progress[ProgressKeys.movie(film.streamId)]
@@ -338,6 +345,7 @@ fun SearchSection(
                                 progressKeyPrefix = "search_vod_${film.streamId}",
                                 focusRequester = itemFocusRequesters["vod_${film.streamId}"],
                                 onUpToField = { if (index == 0) runCatching { contentFocusRequester.requestFocus() } },
+                                onRowFocused = { rowsBringIntoView.onRowFocused(ROW_VOD) },
                                 onClick = {
                                     pendingResultKey = "vod_${film.streamId}"
                                     detailFilm = film
@@ -366,6 +374,7 @@ fun SearchSection(
                         count = results.series.size,
                         scale = scale,
                         rowTestTag = "search_series_row",
+                        modifier = rowsBringIntoView.rowModifier(ROW_SERIES),
                     ) {
                         itemsIndexed(results.series, key = { _, serie -> "series_${serie.seriesId}" }) { index, serie ->
                             PosterResultCard(
@@ -377,6 +386,7 @@ fun SearchSection(
                                 progressKeyPrefix = "search_series_${serie.seriesId}",
                                 focusRequester = itemFocusRequesters["series_${serie.seriesId}"],
                                 onUpToField = { if (index == 0) runCatching { contentFocusRequester.requestFocus() } },
+                                onRowFocused = { rowsBringIntoView.onRowFocused(ROW_SERIES) },
                                 onClick = {
                                     pendingResultKey = "series_${serie.seriesId}"
                                     detailSerie = serie
@@ -482,11 +492,12 @@ private fun SearchRow(
     count: Int,
     scale: UiScale,
     rowTestTag: String,
+    modifier: Modifier = Modifier,
     content: LazyListScope.() -> Unit,
 ) {
     // Il titolo della riga si allinea alla prima card, che sta dentro il
     // contentPadding della LazyRow.
-    Column(modifier = Modifier.fillMaxWidth().padding(start = scale.focusSafePadding)) {
+    Column(modifier = modifier.fillMaxWidth().padding(start = scale.focusSafePadding)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = title,
@@ -517,15 +528,21 @@ private fun LiveResultCard(
     isFavorite: Boolean,
     focusRequester: FocusRequester?,
     onUpToField: () -> Unit,
+    onRowFocused: () -> Unit,
     onClick: () -> Unit,
     onLongPress: () -> Unit,
 ) {
+    var focused by remember(channel.streamId) { mutableStateOf(false) }
     Card(
         onClick = onClick,
         modifier = Modifier
             .width(scale.dp(170f))
             .testTag("search_live_${channel.streamId}")
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+            .onFocusChanged { focusState ->
+                focused = focusState.isFocused
+                if (focusState.isFocused) onRowFocused()
+            }
             .onPreviewKeyEvent { event ->
                 if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionUp) {
                     onUpToField()
@@ -550,11 +567,9 @@ private fun LiveResultCard(
                 scale = scale,
                 modifier = Modifier.size(scale.dp(40f)),
             )
-            Text(
+            FocusMarqueeText(
                 text = channel.name,
-                color = FvpColors.TextPrimary,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
+                focused = focused,
                 modifier = Modifier.weight(1f).padding(start = scale.dp(8f)),
             )
             if (isFavorite) {
@@ -583,16 +598,22 @@ private fun PosterResultCard(
     progressKeyPrefix: String,
     focusRequester: FocusRequester?,
     onUpToField: () -> Unit,
+    onRowFocused: () -> Unit,
     onClick: () -> Unit,
     onLongPress: () -> Unit,
     testTag: String,
 ) {
+    var focused by remember(testTag) { mutableStateOf(false) }
     Card(
         onClick = onClick,
         modifier = Modifier
             .width(scale.dp(120f))
             .testTag(testTag)
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+            .onFocusChanged { focusState ->
+                focused = focusState.isFocused
+                if (focusState.isFocused) onRowFocused()
+            }
             .onPreviewKeyEvent { event ->
                 if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionUp) {
                     onUpToField()
@@ -650,13 +671,16 @@ private fun PosterResultCard(
                     }
                 }
             }
-            Text(
+            FocusMarqueeText(
                 text = title,
-                color = FvpColors.TextPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                focused = focused,
                 modifier = Modifier.padding(top = scale.dp(6f)),
             )
         }
     }
 }
+
+/** Indici delle righe dei risultati, per il ritorno in vista della riga con il focus. */
+private const val ROW_LIVE = 0
+private const val ROW_VOD = 1
+private const val ROW_SERIES = 2

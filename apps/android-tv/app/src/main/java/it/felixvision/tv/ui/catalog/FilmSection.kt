@@ -37,7 +37,6 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Border
 import androidx.tv.material3.Card
@@ -53,6 +52,7 @@ import it.felixvision.tv.ui.components.CatalogPosterImage
 import it.felixvision.tv.ui.components.CollapsingCategoryColumn
 import it.felixvision.tv.ui.components.DetailFocusRestoreHelper
 import it.felixvision.tv.ui.components.EmptyState
+import it.felixvision.tv.ui.components.FocusMarqueeText
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.components.WatchProgressLine
 import it.felixvision.tv.ui.components.WatchSeenBadge
@@ -187,6 +187,7 @@ fun FilmSection(
                     val isFav = favorites.any { it.id == "vod_${film.streamId}" }
                     val filmProgress = progress[ProgressKeys.movie(film.streamId)]
                     val itemFr = remember(film.streamId, itemFocusRequesters) { itemFocusRequesters[film.streamId] ?: FocusRequester() }
+                    var focused by remember(film.streamId) { mutableStateOf(false) }
                     Card(
                         onClick = {
                             restoreHelper.onOpen(film.streamId, index)
@@ -197,7 +198,10 @@ fun FilmSection(
                             .testTag("film_${film.streamId}")
                             .focusRequester(itemFr)
                             .then(if (index == 0) Modifier.focusRequester(gridFirstFocus).focusRequester(contentFocusRequester) else Modifier)
-                            .onFocusChanged { if (it.isFocused) categoryExpanded = false }
+                            .onFocusChanged { focusState ->
+                                focused = focusState.isFocused
+                                if (focusState.isFocused) categoryExpanded = false
+                            }
                             .onPreviewKeyEvent { event ->
                                 if (event.key == Key.DirectionLeft && isLeftEdge) {
                                     val active = debouncedCategoryId ?: categories.firstOrNull()?.categoryId
@@ -240,7 +244,11 @@ fun FilmSection(
                                     }
                                 }
                             }
-                            Text(text = film.name, color = FvpColors.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = scale.dp(6f)))
+                            FocusMarqueeText(
+                                text = film.name,
+                                focused = focused,
+                                modifier = Modifier.padding(top = scale.dp(6f)),
+                            )
                             film.year?.let { Text(text = it, color = FvpColors.TextSecondary) }
                         }
                     }

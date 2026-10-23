@@ -359,6 +359,7 @@ simulato e implementazioni finte per cifrario e preferenze:
 | `ContinueWatchingRulesTest` | inserimento, ordine per ultimo aggiornamento, soglia 30 s, rimozione del film al 90%, passaggio all'episodio successivo, rimozione all'ultimo episodio, nascondi/ricompari, limite 30, archivio vuoto e voci incomplete |
 | `ContinueWatchingStoreTest` | archivio DataStore vuoto, film salvato e riletto, nessuna scrittura sotto 30 s, rimozione al 90%, avanzamento al prossimo episodio, rimozione all'ultimo episodio, nascosta e di nuovo visibile, separazione per account, "Segna come visto" |
 | `DrawerSectionsOrderTest` | ordine delle otto voci del menu, etichette delle nuove voci, icone distinte (senza simulazione D-pad) |
+| `FocusMarqueeTextTest` | titoli con ellissi e fermi senza focus, marquee su una sola riga, nessuno scorrimento su più righe (Robolectric, senza D-pad) |
 
 ---
 

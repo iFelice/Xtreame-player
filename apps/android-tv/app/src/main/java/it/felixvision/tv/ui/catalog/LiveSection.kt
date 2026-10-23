@@ -34,7 +34,6 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Border
 import androidx.tv.material3.ListItem
@@ -46,6 +45,7 @@ import it.felixvision.tv.data.favorites.FavoriteItem
 import it.felixvision.tv.ui.components.ChannelLogoImage
 import it.felixvision.tv.ui.components.CollapsingCategoryColumn
 import it.felixvision.tv.ui.components.EmptyState
+import it.felixvision.tv.ui.components.FocusMarqueeText
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.components.focusSafePadding
 import it.felixvision.tv.ui.components.fvpLongPress
@@ -189,13 +189,19 @@ fun LiveSection(
                     itemsIndexed(filtered, key = { _, ch -> ch.streamId }) { index, channel ->
                         val isFav = favorites.any { it.id == "live_${channel.streamId}" }
                         val channelFr = channelFocusRequesters[channel.streamId]
+                        var focused by remember(channel.streamId) { mutableStateOf(false) }
                         ListItem(
                             selected = false,
                             onClick = { onSelectChannel(channel) },
                             onLongClick = { onLongPressChannel(channel) },
                             headlineContent = {
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(scale.dp(6f))) {
-                                    Text(text = channel.name, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f, fill = false))
+                                    FocusMarqueeText(
+                                        text = channel.name,
+                                        focused = focused,
+                                        fontWeight = FontWeight.Medium,
+                                        modifier = Modifier.weight(1f, fill = false),
+                                    )
                                     if (isFav) {
                                         Box(
                                             modifier = Modifier.size(scale.dp(22f)).clip(CircleShape).background(Color(0xCC1C1C1E)).testTag("live_channel_${channel.streamId}_fav_star"),
@@ -220,7 +226,10 @@ fun LiveSection(
                                 .testTag("live_channel_${channel.streamId}")
                                 .then(if (channelFr != null) Modifier.focusRequester(channelFr) else Modifier)
                                 .then(if (index == 0) Modifier.focusRequester(contentFocusRequester) else Modifier)
-                                .onFocusChanged { if (it.isFocused) categoryExpanded = false }
+                                .onFocusChanged { focusState ->
+                                    focused = focusState.isFocused
+                                    if (focusState.isFocused) categoryExpanded = false
+                                }
                                 .onPreviewKeyEvent { event ->
                                     if (event.key == Key.DirectionLeft) {
                                         val active = debouncedCategoryId ?: categories.firstOrNull()?.categoryId

@@ -1,6 +1,8 @@
 package it.felixvision.tv.ui.catalog
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
@@ -28,10 +30,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Border
 import androidx.tv.material3.Card
@@ -46,12 +48,14 @@ import it.felixvision.tv.data.playback.SeriesPlayback
 import it.felixvision.tv.data.progress.ProgressKeys
 import it.felixvision.tv.data.progress.WatchProgress
 import it.felixvision.tv.ui.components.CatalogPosterImage
+import it.felixvision.tv.ui.components.FocusMarqueeText
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.components.WatchProgressLine
 import it.felixvision.tv.ui.components.WatchSeenBadge
 import it.felixvision.tv.ui.components.focusSafePadding
 import it.felixvision.tv.ui.components.fvpLongPress
 import it.felixvision.tv.ui.components.rememberListDetailFocusRestore
+import it.felixvision.tv.ui.components.rememberRowsBringIntoViewer
 import it.felixvision.tv.ui.detail.FilmDetailOverlay
 import it.felixvision.tv.ui.detail.SeriesDetailOverlay
 import it.felixvision.tv.ui.theme.FvpColors
@@ -162,13 +166,21 @@ fun NovitaSection(
         fallback = contentFocusRequester
     )
 
+    // Con i margini del focus le due righe non stanno sempre in altezza: la
+    // sezione scorre e la riga che riceve il focus viene portata interamente in
+    // vista, titolo compreso.
+    val rowsScrollState = rememberScrollState()
+    val rowsBringIntoView = rememberRowsBringIntoViewer()
+
     Column(
         // 4 + FocusSafePadding delle righe = i 16 di prima: il margine del focus
         // sta nel contentPadding, non nel contenitore.
-        modifier = modifier.padding(horizontal = scale.dp(4f)),
+        modifier = modifier
+            .verticalScroll(rowsScrollState)
+            .padding(horizontal = scale.dp(4f)),
         verticalArrangement = Arrangement.spacedBy(scale.dp(18f))
     ) {
-        Column {
+        Column(modifier = rowsBringIntoView.rowModifier(ROW_FILMS)) {
             Text(
                 text = "Ultimi film",
                 color = FvpColors.TextPrimary,
@@ -189,6 +201,7 @@ fun NovitaSection(
                         val isFav = favorites.any { it.id == "vod_${film.streamId}" }
                         val filmProgress = progress[ProgressKeys.movie(film.streamId)]
                         val itemFr = remember(film.streamId, filmItemFocusRequesters) { filmItemFocusRequesters[film.streamId] ?: FocusRequester() }
+                        var focused by remember(film.streamId) { mutableStateOf(false) }
                         Card(
                             onClick = {
                                 filmRestoreHelper.onOpen(film.streamId, index)
@@ -199,6 +212,10 @@ fun NovitaSection(
                                 .testTag("novita_film_${film.streamId}")
                                 .focusRequester(itemFr)
                                 .then(if (index == 0) Modifier.focusRequester(filmsFirstFocus).focusRequester(contentFocusRequester) else Modifier)
+                                .onFocusChanged { focusState ->
+                                    focused = focusState.isFocused
+                                    if (focusState.isFocused) rowsBringIntoView.onRowFocused(ROW_FILMS)
+                                }
                                 .fvpLongPress { onLongPressFilm(film) },
                             scale = CardDefaults.scale(focusedScale = 1.04f),
                             border = CardDefaults.border(focusedBorder = Border(BorderStroke(2.dp, FvpColors.GreenFocus))),
@@ -232,12 +249,10 @@ fun NovitaSection(
                                         ) { Text(text = "★", color = Color(0xFFFBBF24), fontSize = scale.sp(12f)) }
                                     }
                                 }
-                                Text(
+                                FocusMarqueeText(
                                     text = film.name,
-                                    color = FvpColors.TextPrimary,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.padding(top = scale.dp(6f)).width(scale.dp(140f))
+                                    focused = focused,
+                                    modifier = Modifier.padding(top = scale.dp(6f)).width(scale.dp(140f)),
                                 )
                                 film.year?.let { year -> Text(text = year, color = FvpColors.TextSecondary) }
                             }
@@ -246,7 +261,7 @@ fun NovitaSection(
                 }
             }
         }
-        Column {
+        Column(modifier = rowsBringIntoView.rowModifier(ROW_SERIES)) {
             Text(
                 text = "Ultime serie",
                 color = FvpColors.TextPrimary,
@@ -266,6 +281,7 @@ fun NovitaSection(
                     itemsIndexed(recentSeries, key = { _, s -> s.seriesId }) { index, serie ->
                         val isFav = favorites.any { it.id == "series_${serie.seriesId}" }
                         val itemFr = remember(serie.seriesId, serieItemFocusRequesters) { serieItemFocusRequesters[serie.seriesId] ?: FocusRequester() }
+                        var focused by remember(serie.seriesId) { mutableStateOf(false) }
                         Card(
                             onClick = {
                                 serieRestoreHelper.onOpen(serie.seriesId, index)
@@ -273,6 +289,10 @@ fun NovitaSection(
                             },
                             modifier = Modifier.width(scale.dp(140f)).testTag("novita_serie_${serie.seriesId}")
                                 .focusRequester(itemFr)
+                                .onFocusChanged { focusState ->
+                                    focused = focusState.isFocused
+                                    if (focusState.isFocused) rowsBringIntoView.onRowFocused(ROW_SERIES)
+                                }
                                 .fvpLongPress { onLongPressSeries(serie) },
                             scale = CardDefaults.scale(focusedScale = 1.04f),
                             border = CardDefaults.border(focusedBorder = Border(BorderStroke(2.dp, FvpColors.GreenFocus))),
@@ -294,12 +314,10 @@ fun NovitaSection(
                                         ) { Text(text = "★", color = Color(0xFFFBBF24), fontSize = scale.sp(12f)) }
                                     }
                                 }
-                                Text(
+                                FocusMarqueeText(
                                     text = serie.name,
-                                    color = FvpColors.TextPrimary,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.padding(top = scale.dp(6f)).width(scale.dp(140f))
+                                    focused = focused,
+                                    modifier = Modifier.padding(top = scale.dp(6f)).width(scale.dp(140f)),
                                 )
                                 serie.releaseDate?.take(4)?.takeIf { it.all(Char::isDigit) }?.let { y ->
                                     Text(text = y, color = FvpColors.TextSecondary)
@@ -369,3 +387,7 @@ fun NovitaSection(
         }
     }
 }
+
+/** Indici delle righe di Novità, usati per il margine del focus e il ritorno in vista. */
+private const val ROW_FILMS = 0
+private const val ROW_SERIES = 1

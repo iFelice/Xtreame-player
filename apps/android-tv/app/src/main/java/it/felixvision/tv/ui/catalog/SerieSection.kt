@@ -37,7 +37,6 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Border
 import androidx.tv.material3.Card
@@ -53,6 +52,7 @@ import it.felixvision.tv.data.progress.WatchProgress
 import it.felixvision.tv.ui.components.CatalogPosterImage
 import it.felixvision.tv.ui.components.CollapsingCategoryColumn
 import it.felixvision.tv.ui.components.EmptyState
+import it.felixvision.tv.ui.components.FocusMarqueeText
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.components.focusSafePadding
 import it.felixvision.tv.ui.components.fvpLongPress
@@ -185,6 +185,7 @@ fun SerieSection(
                     val isLeftEdge = index % columns == 0
                     val isFav = favorites.any { it.id == "series_${serie.seriesId}" }
                     val itemFr = remember(serie.seriesId, itemFocusRequesters) { itemFocusRequesters[serie.seriesId] ?: FocusRequester() }
+                    var focused by remember(serie.seriesId) { mutableStateOf(false) }
                     Card(
                         onClick = {
                             restoreHelper.onOpen(serie.seriesId, index)
@@ -193,7 +194,10 @@ fun SerieSection(
                         modifier = Modifier.fillMaxWidth().testTag("serie_${serie.seriesId}")
                             .focusRequester(itemFr)
                             .then(if (index == 0) Modifier.focusRequester(gridFirstFocus).focusRequester(contentFocusRequester) else Modifier)
-                            .onFocusChanged { if (it.isFocused) categoryExpanded = false }
+                            .onFocusChanged { focusState ->
+                                focused = focusState.isFocused
+                                if (focusState.isFocused) categoryExpanded = false
+                            }
                             .onPreviewKeyEvent { event ->
                                 if (event.key == Key.DirectionLeft && isLeftEdge) {
                                     val active = debouncedCategoryId ?: categories.firstOrNull()?.categoryId
@@ -220,7 +224,11 @@ fun SerieSection(
                                     }
                                 }
                             }
-                            Text(text = serie.name, color = FvpColors.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = scale.dp(6f)))
+                            FocusMarqueeText(
+                                text = serie.name,
+                                focused = focused,
+                                modifier = Modifier.padding(top = scale.dp(6f)),
+                            )
                             serie.releaseDate?.let { d ->
                                 val y = d.take(4).takeIf { it.all(Char::isDigit) }
                                 y?.let { Text(text = it, color = FvpColors.TextSecondary) }

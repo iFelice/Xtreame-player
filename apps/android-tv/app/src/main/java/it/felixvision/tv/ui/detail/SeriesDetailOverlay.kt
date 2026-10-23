@@ -35,6 +35,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -66,6 +67,7 @@ import it.felixvision.tv.data.progress.WatchRules
 import it.felixvision.tv.ui.catalog.SeasonDisplay
 import it.felixvision.tv.ui.catalog.deriveSeasons
 import it.felixvision.tv.ui.components.CatalogPosterImage
+import it.felixvision.tv.ui.components.FocusMarqueeText
 import it.felixvision.tv.ui.components.FvpSecondaryButton
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.components.WatchProgressLine
@@ -663,15 +665,15 @@ private fun EpisodeRowItem(
     onToggleWatched: () -> Unit,
     onPlay: () -> Unit
 ) {
+    var focused by remember(episode.id) { mutableStateOf(false) }
     Box {
     ListItem(
         selected = false,
         onClick = { onPlay() },
         headlineContent = {
-            Text(
+            FocusMarqueeText(
                 text = "${episode.episodeNum} · $title",
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                focused = focused,
                 fontWeight = FontWeight.Medium
             )
         },
@@ -711,6 +713,7 @@ private fun EpisodeRowItem(
                     Modifier.focusProperties { up = upFocus }
                 } else Modifier
             )
+            .onFocusChanged { focused = it.isFocused }
             .fvpLongPress(onToggleWatched)
             .testTag("detail_episode_${episode.id}"),
         colors = ListItemDefaults.colors(containerColor = FvpColors.SurfaceElevated),
