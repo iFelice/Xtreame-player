@@ -268,10 +268,13 @@ server Xtream raggiunti con indirizzo privato non risponderebbero.
   occhio, barra e "Riprendi" spariscono subito.
 - **Prossimo episodio**: riquadro tre minuti prima della fine (per gli episodi sotto i
   10 minuti nell'ultimo 10%) con titolo, "Guarda ora" (focus), "Posticipa" e "Annulla".
-  "Posticipa" lo nasconde e lo fa tornare negli ultimi 15 s con il conto alla rovescia,
-  allo scadere parte il successivo; "Annulla" lo nasconde per questo episodio e a fine
-  video si torna alla scheda; se il video finisce con il riquadro aperto parte il
-  successivo. La riproduzione continua mentre il riquadro è visibile. Tempi in
+  "Posticipa" lo nasconde e lo fa tornare dopo 60 s di riproduzione effettiva (conta la
+  posizione nel video: la pausa non avanza e un salto sposta il riferimento), con gli
+  stessi pulsanti e la possibilità di posticipare più volte; se al rinvio mancano meno di
+  75 s ricompare negli ultimi 15 s con il conto alla rovescia e allo scadere parte il
+  successivo; "Annulla" lo nasconde per questo episodio e a fine video si torna alla
+  scheda; se il video finisce mentre il riquadro è nascosto per "Posticipa" parte il
+  successivo. La riproduzione continua mentre il riquadro è visibile. Tempi e rinvio in
   `NextEpisodeRules`, funzione pura coperta da test.
 - **Riscontro strutturale APK**: del riferimento sono state considerate solo le
   responsabilità ad alto livello (schermata di riproduzione separata dal catalogo,
@@ -311,7 +314,7 @@ simulato e implementazioni finte per cifrario e preferenze:
 | `AudioFormatLabelsTest` | mappatura dei mime audio, varianti DTS, canali `2.0`/`5.1`/`7.1`, riconoscimento del decoder FFmpeg |
 | `SeekFeedbackTest` | etichette `+10 s`/`−10 s`, somma entro 1,5 s, ripartenza al cambio di verso, passo accelerato |
 | `WatchToggleRulesTest`, `ProgressStoreWatchedTest` | visto/non visto sull'archivio in memoria e su DataStore, durata nota e ignota, altre voci intatte |
-| `NextEpisodeRulesTest` | tre minuti, episodio corto, durata ignota, conto alla rovescia dopo "Posticipa" |
+| `NextEpisodeRulesTest` | tre minuti, episodio corto, durata ignota, rinvio di 60 s e rinvio ripetuto, rinvio sotto i 75 s con conto alla rovescia, salto indietro dopo il rinvio |
 | `CatalogRefreshTest` | righe Live/Film/Serie, ordine, "In attesa"/"Scaricamento…"/"Completato (N elementi)"/"Errore", fine aggiornamento |
 
 ---

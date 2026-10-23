@@ -564,8 +564,10 @@ fun PlayerResumePrompt(
 }
 
 /**
- * Prossimo episodio: proposta 3 minuti prima della fine e, dopo "Posticipa",
- * conto alla rovescia negli ultimi 15 secondi. Il focus è su "Guarda ora".
+ * Prossimo episodio: proposta 3 minuti prima della fine. Dopo "Posticipa" torna
+ * con gli stessi pulsanti, oppure con il conto alla rovescia negli ultimi 15
+ * secondi se al rinvio mancava meno di un minuto e un quarto. Il focus è su
+ * "Guarda ora".
  */
 @Composable
 fun PlayerNextEpisodePrompt(

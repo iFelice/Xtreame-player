@@ -25,6 +25,8 @@ import it.felixvision.tv.data.catalog.LiveStream
 import it.felixvision.tv.data.playback.AudioFormatLabels
 import it.felixvision.tv.data.playback.LiveZapping
 import it.felixvision.tv.data.playback.NextEpisodeRules
+import it.felixvision.tv.data.playback.PostponeMode
+import it.felixvision.tv.data.playback.PostponePlan
 import it.felixvision.tv.data.playback.StreamTarget
 import it.felixvision.tv.data.playback.StreamUrls
 import it.felixvision.tv.data.progress.ProgressKeys
@@ -87,6 +89,9 @@ class PlayerEngine(
     private enum class NextPromptState { NONE, SHOWN, POSTPONED, DISMISSED }
 
     private var nextPromptState = NextPromptState.NONE
+
+    /** Rinvio in corso: posizione nel video in cui il riquadro deve tornare. */
+    private var postponePlan: PostponePlan? = null
 
     private val playerListener = object : Player.Listener {
 
@@ -578,6 +583,7 @@ class PlayerEngine(
             return
         }
         nextPromptState = NextPromptState.NONE
+        postponePlan = null
         episodeIndex = nextIndex
         state = state.copy(
             nextEpisode = null,
@@ -596,11 +602,15 @@ class PlayerEngine(
     }
 
     /**
-     * "Posticipa": il riquadro sparisce e ricompare negli ultimi 15 secondi con
-     * il conto alla rovescia; allo scadere parte il prossimo episodio.
+     * "Posticipa": il riquadro sparisce e torna dopo 60 secondi di riproduzione
+     * effettiva, oppure negli ultimi 15 secondi con il conto alla rovescia se
+     * mancano meno di 75 secondi alla fine. Si può posticipare più volte.
      */
     fun postponeNextEpisode() {
         if (state.nextEpisode == null) return
+        val position = exoPlayer?.currentPosition?.coerceAtLeast(0L) ?: state.positionMillis
+        val duration = playerDuration().takeIf { it > 0L } ?: state.durationMillis
+        postponePlan = NextEpisodeRules.postponePlan(position, duration)
         nextPromptState = NextPromptState.POSTPONED
         state = state.copy(nextEpisode = null)
     }
@@ -611,6 +621,7 @@ class PlayerEngine(
      */
     fun cancelNextEpisode() {
         nextPromptState = NextPromptState.DISMISSED
+        postponePlan = null
         state = state.copy(nextEpisode = null)
     }
 
@@ -618,6 +629,7 @@ class PlayerEngine(
         if (exited) return
         val startPosition = state.positionMillis
         nextPromptState = NextPromptState.NONE
+        postponePlan = null
         state = state.copy(errorMessage = null, nextEpisode = null)
         destroyPlayer()
         buildPlayer(startPositionMillis = startPosition, autoPlay = true)
@@ -653,8 +665,9 @@ class PlayerEngine(
 
     /**
      * Riquadro "Prossimo episodio" guidato dalla posizione: compare 3 minuti
-     * prima della fine (10% finale se l'episodio è corto), dopo "Posticipa"
-     * ricompare negli ultimi 15 secondi con il conto alla rovescia.
+     * prima della fine (10% finale se l'episodio è corto) e, dopo "Posticipa",
+     * torna 60 secondi di riproduzione più avanti oppure — se al rinvio
+     * mancavano meno di 75 secondi — negli ultimi 15 con il conto alla rovescia.
      */
     private fun updateNextEpisodePrompt(positionMillis: Long, durationMillis: Long) {
         val seriesSource = source as? PlaybackSource.Series ?: return
@@ -668,9 +681,21 @@ class PlayerEngine(
         when (nextPromptState) {
             NextPromptState.DISMISSED -> return
             NextPromptState.POSTPONED -> {
-                if (!NextEpisodeRules.shouldStartCountdown(positionMillis, durationMillis)) {
-                    // Un salto indietro oltre gli ultimi 15 s nasconde il conto alla rovescia.
+                val plan = postponePlan ?: return
+                // Il confronto è sulla posizione del video: la pausa non conta e
+                // un salto indietro nasconde di nuovo il riquadro.
+                if (!NextEpisodeRules.shouldShowPostponed(plan, positionMillis)) {
                     if (state.nextEpisode != null) state = state.copy(nextEpisode = null)
+                    return
+                }
+                if (plan.mode == PostponeMode.DELAYED) {
+                    // Rinvio in modalità normale: riquadro con i tre pulsanti.
+                    val current = state.nextEpisode
+                    if (current == null || current.countdownSeconds != null || !current.canPostpone) {
+                        state = state.copy(
+                            nextEpisode = NextEpisodePrompt(title = next.displayTitle),
+                        )
+                    }
                     return
                 }
                 if (NextEpisodeRules.countdownFinished(positionMillis, durationMillis)) {
@@ -708,6 +733,7 @@ class PlayerEngine(
         )
         saveProgress()
         nextPromptState = NextPromptState.NONE
+        postponePlan = null
         state = state.copy(
             errorMessage = PlaybackErrors.messageFor(error),
             isBuffering = false,
