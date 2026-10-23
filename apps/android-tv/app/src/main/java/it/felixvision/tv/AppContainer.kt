@@ -10,6 +10,7 @@ import it.felixvision.tv.core.HttpClientFactory
 import it.felixvision.tv.core.SystemClock
 import it.felixvision.tv.data.catalog.CatalogCache
 import it.felixvision.tv.data.catalog.CatalogClient
+import it.felixvision.tv.data.continuewatching.ContinueWatchingStore
 import it.felixvision.tv.data.favorites.FavoritesStore
 import it.felixvision.tv.data.images.FvpImageLoader
 import it.felixvision.tv.data.pairing.PairingClient
@@ -69,6 +70,11 @@ class AppContainer(private val context: Context) {
 
     val progressStore: ProgressStore by lazy {
         ProgressStore(context = context, json = json, clock = clock)
+    }
+
+    /** Archivio "Continua a guardare": una voce per film e una per serie. */
+    val continueWatchingStore: ContinueWatchingStore by lazy {
+        ContinueWatchingStore(context = context, json = json, clock = clock)
     }
 
     val pairingClient: PairingClient by lazy {

@@ -525,6 +525,9 @@ fun SeriesDetailOverlay(
                                                                 categoryId = serie.categoryId,
                                                                 queue = queue,
                                                                 startIndex = if (queueIndex >= 0) queueIndex else 0,
+                                                                cover = info?.info?.cover
+                                                                    ?.takeIf { it.isNotBlank() }
+                                                                    ?: serie.cover,
                                                             ),
                                                         )
                                                     }

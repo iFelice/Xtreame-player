@@ -51,10 +51,12 @@ enum class DrawerSection(
     val activeColor: Color,
 ) {
     Novita("Novità", R.drawable.ic_nav_sparkles, FvpColors.NovitaActive),
+    ContinuaAGuardare("Continua a guardare", R.drawable.ic_nav_history, FvpColors.ContinuaActive),
     Live("Live", R.drawable.ic_nav_tv, FvpColors.LiveActive),
     Film("Film", R.drawable.ic_nav_film, FvpColors.FilmActive),
     Serie("Serie", R.drawable.ic_nav_library, FvpColors.SerieActive),
     Preferiti("Preferiti", R.drawable.ic_nav_star, FvpColors.PreferitiActive),
+    Cerca("Cerca", R.drawable.ic_nav_search, FvpColors.CercaActive),
     Impostazioni("Impostazioni", R.drawable.ic_nav_settings, FvpColors.ImpostazioniActive),
 }
 

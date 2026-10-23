@@ -255,6 +255,14 @@ class DpadNavigationTest {
                             modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester).testTag("preferiti_section")
                         )
                     }
+                    DrawerSection.ContinuaAGuardare -> {
+                        // Le sezioni nuove non hanno test D-pad dedicati in questo file:
+                        // qui servono solo a rendere esaustivo il quando.
+                        Box(modifier = Modifier.fillMaxSize().testTag("continua_section").focusRequester(contentFocusRequester))
+                    }
+                    DrawerSection.Cerca -> {
+                        Box(modifier = Modifier.fillMaxSize().testTag("cerca_section").focusRequester(contentFocusRequester))
+                    }
                     DrawerSection.Impostazioni -> {
                         Box(modifier = Modifier.fillMaxSize().testTag("impostazioni_section").focusRequester(contentFocusRequester)) {
                             Text("Impostazioni - Account", modifier = Modifier.testTag("impostazioni_first"))
@@ -350,7 +358,17 @@ class DpadNavigationTest {
         val drawerFocusHandle = DrawerFocusHandle()
         rule.setContent { TestFvpScreen(contentFocusRequester = contentFocusRequester, drawerFocusHandle = drawerFocusHandle) }
         try {
-            DrawerSection.entries.forEach { section ->
+            // Solo le sezioni con contenuti reali: le nuove voci di menu hanno
+            // verifiche dedicate (ordine del menu, ricerca, archivio).
+            val sections = listOf(
+                DrawerSection.Novita,
+                DrawerSection.Live,
+                DrawerSection.Film,
+                DrawerSection.Serie,
+                DrawerSection.Preferiti,
+                DrawerSection.Impostazioni,
+            )
+            sections.forEach { section ->
                 navigateTo(section, drawerFocusHandle)
                 when (section) {
                     DrawerSection.Novita -> rule.onNodeWithTag("novita_film_201").assertIsFocused()
@@ -365,6 +383,7 @@ class DpadNavigationTest {
                         return@forEach
                     }
                     DrawerSection.Impostazioni -> rule.onNodeWithTag("impostazioni_first").assertIsDisplayed()
+                    DrawerSection.ContinuaAGuardare, DrawerSection.Cerca -> Unit
                 }
                 val tag = when (section) {
                     DrawerSection.Novita -> "novita_film_201"
@@ -373,6 +392,8 @@ class DpadNavigationTest {
                     DrawerSection.Serie -> "serie_301"
                     DrawerSection.Preferiti -> "drawer_Preferiti"
                     DrawerSection.Impostazioni -> "impostazioni_first"
+                    DrawerSection.ContinuaAGuardare -> "continua_section"
+                    DrawerSection.Cerca -> "cerca_section"
                 }
                 rule.onNodeWithTag(tag).performKeyInput { pressKey(Key.Back) }
                 rule.waitForIdle()

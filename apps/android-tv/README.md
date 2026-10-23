@@ -2,7 +2,8 @@
 
 Applicazione Android TV nativa di FelixVisionPlayer, in Kotlin e Jetpack Compose for TV.
 Copre **progetto, client Xtream, archiviazione sicura, accesso e abbinamento remoto
-(PR1), cataloghi, preferiti e impostazioni (PR2), player live/VOD con avanzamento (PR3)**.
+(PR1), cataloghi, preferiti e impostazioni (PR2), player live/VOD con avanzamento (PR3),
+"Continua a guardare" e ricerca locale (PR4)**.
 Dopo l'accesso si apre il catalogo; ogni contenuto avviabile apre il player a tutto
 schermo.
 
@@ -218,9 +219,9 @@ server Xtream raggiunti con indirizzo privato non risponderebbero.
 - **Caricamento sequenziale**: `get_live_categories → get_live_streams → get_vod_categories → get_vod_streams → get_series_categories → get_series`. Ogni richiesta parte solo dopo la precedente; parsing JSON su dispatcher di background con modelli tolleranti; nessun retry automatico, errore con "Riprova".
 - **Cache su disco** legata a `server+utente` con timestamp: all'avvio si mostra subito la cache; nessun auto-refresh più di una volta ogni 24h; manuale da Impostazioni; durante l'aggiornamento resta disponibile la versione precedente.
 - **Immagini con Coil 3** su client dedicato: max 4 download simultanei, nessun retry, cache 200 MB, solo visibili + immediate vicine; placeholder con iniziali se fallisce.
-- **Navigazione a cassetto**: a riposo colonna di icone, si espande al focus; voci nell'ordine Novità, Live, Film, Serie, Preferiti, Impostazioni; colori attivi Live #FF9F0A, Film #10B981, Serie #2DD4BF, Novità #A3E635, Preferiti #FBBF24, Impostazioni bianco; inattive #AEAEB2; focus con bordo #34D399 e leggero ingrandimento; sfondi #1C1C1E/#2C2C2E/#3A3A3C.
+- **Navigazione a cassetto**: a riposo colonna di icone, si espande al focus; voci nell'ordine Novità, Continua a guardare, Live, Film, Serie, Preferiti, Cerca, Impostazioni; colori attivi Live #FF9F0A, Film #10B981, Serie #2DD4BF, Novità #A3E635, Continua a guardare #38BDF8, Preferiti #FBBF24, Cerca #A78BFA, Impostazioni bianco; inattive #AEAEB2; focus con bordo #34D399 e leggero ingrandimento; sfondi #1C1C1E/#2C2C2E/#3A3A3C. La larghezza aperta è misurata sulla voce più lunga, "Continua a guardare". Indietro: sezione → voce attiva del menu → Novità → finestra di uscita.
 - **Sezioni**: Novità (ultimi film per `added`, ultime serie per `last_modified`, 40 ciascuna); Live con categorie a sinistra e debounce 300 ms; Film/Serie con griglia 5 colonne e dettaglio on-demand (`get_vod_info`/`get_series_info`); Preferiti con pressione lunga OK e DataStore per account; liste con `LazyColumn`/`LazyVerticalGrid` e chiavi stabili fino a 20k elementi.
-- **Impostazioni**: dati account riletti dal server a ogni apertura con orario "Dati account aggiornati alle hh:mm" e "Aggiornamento dati account…" durante la lettura (utente, stato, scadenza con giorni rimanenti, "Connessioni in uso (tutti i dispositivi)"), avviso "L'account è in uso su un altro dispositivo" quando le connessioni attive raggiungono il massimo e questa TV non sta riproducendo, "Aggiorna catalogo" che apre una finestra con le righe Live, Film, Serie e gli stati "In attesa", "Scaricamento…", "Completato (N elementi)", "Errore" (nessuna percentuale, ordine e sequenzialità delle richieste invariati), "Chiudi" attivo a fine aggiornamento con focus; durante lo scaricamento Indietro chiude la finestra senza interrompere il lavoro, "Configura da remoto" con QR (verifica login, sostituisce credenziali e cancella cache se riesce, altrimenti mantiene le vecchie), "Esci" con conferma che cancella credenziali, cache, preferiti e avanzamento.
+- **Impostazioni**: dati account riletti dal server a ogni apertura con orario "Dati account aggiornati alle hh:mm" e "Aggiornamento dati account…" durante la lettura (utente, stato, scadenza con giorni rimanenti, "Connessioni in uso (tutti i dispositivi)"), avviso "L'account è in uso su un altro dispositivo" quando le connessioni attive raggiungono il massimo e questa TV non sta riproducendo, "Aggiorna catalogo" che apre una finestra con le righe Live, Film, Serie e gli stati "In attesa", "Scaricamento…", "Completato (N elementi)", "Errore" (nessuna percentuale, ordine e sequenzialità delle richieste invariati), "Chiudi" attivo a fine aggiornamento con focus; durante lo scaricamento Indietro chiude la finestra senza interrompere il lavoro, "Configura da remoto" con QR (verifica login, sostituisce credenziali e cancella cache se riesce, altrimenti mantiene le vecchie), "Esci" con conferma che cancella credenziali, cache, preferiti, avanzamento e archivio "Continua a guardare".
 - **Correzioni abbinamento**: nessuna sessione durante verifica credenziali salvate; dopo 3 scadenze consecutive (30 min) si ferma con "Codice scaduto" e pulsante "Mostra un nuovo codice"; pannello Impostazioni attivo solo quando visibile.
 
 ### Player (PR3)
@@ -281,6 +282,44 @@ server Xtream raggiunti con indirizzo privato non risponderebbero.
   gestione del ciclo di vita e del focus da telecomando, banner canale, barra comandi e
   selezione tracce), senza riuso di codice, stringhe, layout o risorse.
 
+### "Continua a guardare" e Cerca (PR4)
+
+- **Archivio "Continua a guardare"** in DataStore per server+utente
+  (`fvp_continue_watching.preferences_pb`), separato da preferiti e avanzamento e
+  compatibile con archivi assenti o parziali: una voce per film (`vod_<id>` con titolo,
+  copertina, `categoryId`, `container_extension`, ultimo aggiornamento) e una sola per
+  serie (`series_<seriesId>` con copertina della serie e l'episodio da riprendere:
+  id, stagione, numero, titolo, estensione). Al massimo 30 voci, dalla più recente.
+  Il player aggiorna l'archivio quando salva l'avanzamento (posizione ≥ 30 s): oltre il
+  90% la voce film sparisce, la voce serie passa all'episodio successivo della coda
+  (`EpisodeQueue`) o sparisce se era l'ultimo. "Segna come visto" su un film toglie la
+  voce; "Segna come non visto" non la ricrea. Regole pure in `ContinueWatchingRules`.
+- **Sezione Continua a guardare**: griglia a 5 colonne con copertine 2:3 e titolo sotto;
+  per i film la barra verde dell'avanzamento, per le serie la riga "S2 E5" e la barra
+  dell'episodio. OK avvia subito il player dal punto salvato, senza finestra "Riprendi":
+  per le serie le informazioni si caricano al momento (indicatore "Caricamento…" sulla
+  copertina, errore senza URL) e la coda parte dall'episodio salvato. Pressione lunga:
+  "Rimosso da Continua a guardare" e voce nascosta finché il contenuto non viene
+  riprodotto — in questa sezione la pressione lunga non tocca i preferiti. Al ritorno dal
+  player la griglia si aggiorna e il focus torna sulla voce (o sulla prima se la voce è
+  uscita). Stato vuoto: "Qui trovi film ed episodi che hai iniziato".
+- **Sezione Cerca**: campo in alto con la tastiera di sistema del TV (dettatura vocale
+  se il TV la offre) e focus sul campo all'ingresso; freccia giù porta ai risultati. La
+  ricerca è locale sul catalogo in memoria, senza richieste al server: da 2 caratteri,
+  300 ms dopo l'ultima digitazione, confronto senza maiuscole e senza accenti
+  (Normalizer NFD) su canali, film e serie. Risultati in tre righe Live, Film, Serie
+  (nascoste se vuote), massimo 50 per riga, prima i nomi che iniziano con il testo poi
+  quelli che lo contengono poi ordine alfabetico, con il contatore "N risultati". OK su
+  un canale riproduce con lo zapping della sua categoria; su un film o una serie apre la
+  scheda e al ritorno il focus è sul risultato; pressione lunga aggiunge/toglie dai
+  preferiti; stelle, occhio e barra come nelle altre sezioni. Nessun risultato: "Nessun
+  risultato per «testo»"; il testo cercato resta tornando nella sezione nella stessa
+  sessione. Regole pure in `CatalogSearch`.
+- **Riscontro strutturale APK**: delle schermate nuove sono state considerate solo le
+  responsabilità ad alto livello (archivio dei contenuti iniziati con ripresa immediata,
+  campo di ricerca con tastiera di sistema e risultati per tipo), senza riuso di codice,
+  stringhe, layout o risorse.
+
 ---
 
 ## 6. Test
@@ -316,6 +355,10 @@ simulato e implementazioni finte per cifrario e preferenze:
 | `WatchToggleRulesTest`, `ProgressStoreWatchedTest` | visto/non visto sull'archivio in memoria e su DataStore, durata nota e ignota, altre voci intatte |
 | `NextEpisodeRulesTest` | tre minuti, episodio corto, durata ignota, rinvio di 60 s e rinvio ripetuto, rinvio sotto i 75 s con conto alla rovescia, salto indietro dopo il rinvio |
 | `CatalogRefreshTest` | righe Live/Film/Serie, ordine, "In attesa"/"Scaricamento…"/"Completato (N elementi)"/"Errore", fine aggiornamento |
+| `CatalogSearchTest` | normalizzazione (maiuscole, accenti, spazi), prefisso prima di contiene poi alfabetico, limite 50 per riga, soglia 2 caratteri, catalogo assente |
+| `ContinueWatchingRulesTest` | inserimento, ordine per ultimo aggiornamento, soglia 30 s, rimozione del film al 90%, passaggio all'episodio successivo, rimozione all'ultimo episodio, nascondi/ricompari, limite 30, archivio vuoto e voci incomplete |
+| `ContinueWatchingStoreTest` | archivio DataStore vuoto, film salvato e riletto, nessuna scrittura sotto 30 s, rimozione al 90%, avanzamento al prossimo episodio, rimozione all'ultimo episodio, nascosta e di nuovo visibile, separazione per account, "Segna come visto" |
+| `DrawerSectionsOrderTest` | ordine delle otto voci del menu, etichette delle nuove voci, icone distinte (senza simulazione D-pad) |
 
 ---
 

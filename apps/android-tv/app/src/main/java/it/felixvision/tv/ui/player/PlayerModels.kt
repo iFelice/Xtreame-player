@@ -40,6 +40,11 @@ data class PlayerSession(
     val password: String,
     val allowedOutputFormats: List<String>,
     val source: PlaybackSource,
+    /**
+     * Vero quando il contenuto arriva da "Continua a guardare": la posizione
+     * salvata riparte subito, senza la finestra "Riprendi".
+     */
+    val autoResume: Boolean = false,
 ) {
     override fun toString(): String = "PlayerSession(id=$id, source=$source)"
 }
