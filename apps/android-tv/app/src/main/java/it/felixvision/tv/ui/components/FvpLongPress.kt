@@ -5,6 +5,7 @@ import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
@@ -117,7 +118,10 @@ class FvpLongPressHandler(private val onLongPress: () -> Unit) {
 }
 
 fun Modifier.fvpLongPress(onLongPress: () -> Unit): Modifier = composed {
-    val handler = remember { FvpLongPressHandler(onLongPress) }
+    // L'handler resta in memoria per tutta la vita del modifier: la callback va
+    // letta sempre dall'ultima composizione, altrimenti usa stato obsoleto.
+    val currentOnLongPress by rememberUpdatedState(onLongPress)
+    val handler = remember { FvpLongPressHandler { currentOnLongPress() } }
     onPreviewKeyEvent { event ->
         val native = event.nativeKeyEvent as? AndroidKeyEvent
         if (native != null && BuildConfig.DEBUG) {

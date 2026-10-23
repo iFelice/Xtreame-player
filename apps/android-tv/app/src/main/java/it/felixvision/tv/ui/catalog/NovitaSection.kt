@@ -42,8 +42,13 @@ import it.felixvision.tv.data.catalog.SeriesItem
 import it.felixvision.tv.data.catalog.VodInfoResponse
 import it.felixvision.tv.data.catalog.VodStream
 import it.felixvision.tv.data.favorites.FavoriteItem
+import it.felixvision.tv.data.playback.SeriesPlayback
+import it.felixvision.tv.data.progress.ProgressKeys
+import it.felixvision.tv.data.progress.WatchProgress
 import it.felixvision.tv.ui.components.CatalogPosterImage
 import it.felixvision.tv.ui.components.UiScale
+import it.felixvision.tv.ui.components.WatchProgressLine
+import it.felixvision.tv.ui.components.WatchSeenBadge
 import it.felixvision.tv.ui.components.fvpLongPress
 import it.felixvision.tv.ui.components.rememberListDetailFocusRestore
 import it.felixvision.tv.ui.detail.FilmDetailOverlay
@@ -62,11 +67,16 @@ fun NovitaSection(
     onLongPressSeries: (SeriesItem) -> Unit = {},
     onPlayFilm: (VodStream) -> Unit = {},
     onPlaySerie: (SeriesItem) -> Unit = {},
-    onPlayEpisode: (it.felixvision.tv.data.catalog.Episode) -> Unit = {},
+    onPlayEpisode: (it.felixvision.tv.data.catalog.Episode, SeriesPlayback) -> Unit = { _, _ -> },
+    onSetEpisodeWatched: (it.felixvision.tv.data.catalog.Episode, Boolean, Long) -> Unit = { _, _, _ -> },
+    onToggleWatched: (VodStream, Boolean, Long) -> Unit = { _, _, _ -> },
     favorites: List<FavoriteItem> = emptyList(),
     catalogViewModel: CatalogViewModel? = null,
     modifier: Modifier = Modifier,
     contentFocusRequester: FocusRequester = remember { FocusRequester() },
+    progress: Map<String, WatchProgress> = emptyMap(),
+    refocusTick: Int = 0,
+    focusEpisodeId: String? = null,
 ) {
     val filmsFirstFocus = remember { FocusRequester() }
     var detailFilm by remember { mutableStateOf<VodStream?>(null) }
@@ -173,6 +183,7 @@ fun NovitaSection(
                 ) {
                     itemsIndexed(recentFilms, key = { _, f -> f.streamId }) { index, film ->
                         val isFav = favorites.any { it.id == "vod_${film.streamId}" }
+                        val filmProgress = progress[ProgressKeys.movie(film.streamId)]
                         val itemFr = remember(film.streamId, filmItemFocusRequesters) { filmItemFocusRequesters[film.streamId] ?: FocusRequester() }
                         Card(
                             onClick = {
@@ -198,6 +209,18 @@ fun NovitaSection(
                                         .clip(RoundedCornerShape(scale.dp(10f)))
                                 ) {
                                     CatalogPosterImage(imageUrl = film.streamIcon, title = film.name, scale = scale, modifier = Modifier.fillMaxSize())
+                                    WatchProgressLine(
+                                        progress = filmProgress,
+                                        scale = scale,
+                                        modifier = Modifier.align(Alignment.BottomCenter),
+                                    )
+                                    if (filmProgress?.isWatched == true) {
+                                        WatchSeenBadge(
+                                            scale = scale,
+                                            modifier = Modifier.align(Alignment.TopStart).padding(scale.dp(6f))
+                                                .testTag("novita_film_${film.streamId}_seen"),
+                                        )
+                                    }
                                     if (isFav) {
                                         Box(
                                             modifier = Modifier.align(Alignment.TopEnd).padding(scale.dp(6f)).size(scale.dp(22f)).clip(CircleShape).background(Color(0xCC1C1C1E)).testTag("novita_film_${film.streamId}_fav_star"),
@@ -301,7 +324,16 @@ fun NovitaSection(
                 },
                 onPlay = { onPlayFilm(film) },
                 onToggleFavorite = { onLongPressFilm(film) },
-                onRetry = { detailFilmRetry++ }
+                onRetry = { detailFilmRetry++ },
+                isWatched = progress[ProgressKeys.movie(film.streamId)]?.isWatched == true,
+                onToggleWatched = { durationMillis ->
+                    onToggleWatched(
+                        film,
+                        progress[ProgressKeys.movie(film.streamId)]?.isWatched != true,
+                        durationMillis,
+                    )
+                },
+                refocusTick = refocusTick,
             )
         }
     }
@@ -323,7 +355,11 @@ fun NovitaSection(
                 },
                 onToggleFavorite = { onLongPressSeries(serie) },
                 onPlayEpisode = onPlayEpisode,
-                onRetry = { detailSerieRetry++ }
+                onRetry = { detailSerieRetry++ },
+                onSetEpisodeWatched = onSetEpisodeWatched,
+                refocusTick = refocusTick,
+                focusEpisodeId = focusEpisodeId,
+                progress = progress,
             )
         }
     }

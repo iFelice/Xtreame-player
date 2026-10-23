@@ -19,6 +19,7 @@ import it.felixvision.tv.AppContainer
 import it.felixvision.tv.ui.access.AccessViewModel
 import it.felixvision.tv.ui.access.LoginScreen
 import it.felixvision.tv.ui.access.Screen
+import it.felixvision.tv.ui.access.statusLabel
 import it.felixvision.tv.ui.components.FvpScreen
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.main.FvpMainScreen
@@ -60,10 +61,11 @@ fun FvpApp(container: AppContainer) {
                         username = creds.username,
                         password = creds.password,
                         serverCode = creds.serverCode,
-                        accountStatus = screen.summary.status.name,
+                        accountStatus = statusLabel(screen.summary.status),
                         expiresAtEpochSeconds = screen.summary.expiresAtEpochSeconds,
                         maxConnections = screen.summary.maxConnections,
                         activeConnections = screen.summary.activeConnections,
+                        allowedOutputFormats = screen.summary.allowedOutputFormats,
                         scale = scale,
                         accessViewModel = viewModel,
                         onSignOut = viewModel::signOut,

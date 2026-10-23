@@ -46,6 +46,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.tv.material3.Text
 import it.felixvision.tv.data.catalog.VodInfoResponse
 import it.felixvision.tv.data.catalog.VodStream
+import it.felixvision.tv.data.progress.WatchRules
 import it.felixvision.tv.ui.components.CatalogPosterImage
 import it.felixvision.tv.ui.components.FvpPrimaryButton
 import it.felixvision.tv.ui.components.FvpSecondaryButton
@@ -66,6 +67,10 @@ fun FilmDetailOverlay(
     onPlay: () -> Unit,
     onToggleFavorite: () -> Unit,
     onRetry: () -> Unit,
+    isWatched: Boolean = false,
+    /** Durata nota (millisecondi) per "Segna come visto"; 0 se sconosciuta. */
+    onToggleWatched: (Long) -> Unit = {},
+    refocusTick: Int = 0,
     modifier: Modifier = Modifier,
     rootTestTag: String = "film_detail_root"
 ) {
@@ -78,9 +83,21 @@ fun FilmDetailOverlay(
     val yearText = info?.info?.releasedate?.takeIf { it.isNotBlank() } ?: film.year
     val durationText = info?.info?.duration?.takeIf { it.isNotBlank() }
     val ratingText = info?.info?.rating?.takeIf { it.isNotBlank() }
+    val knownDurationMillis = WatchRules.durationMillis(
+        durationSecs = info?.info?.durationSecs,
+        durationText = info?.info?.duration,
+    )
 
     LaunchedEffect(Unit) {
         playFocus.requestFocus()
+    }
+
+    // Al ritorno dal player il focus torna su "Riproduci".
+    LaunchedEffect(refocusTick) {
+        if (refocusTick > 0) {
+            withFrameNanos { }
+            playFocus.requestFocus()
+        }
     }
 
     LaunchedEffect(showPlotDialog) {
@@ -142,6 +159,12 @@ fun FilmDetailOverlay(
                         onClick = onToggleFavorite,
                         scale = scale,
                         modifier = Modifier.testTag("detail_favorite")
+                    )
+                    FvpSecondaryButton(
+                        text = if (isWatched) "Segna come non visto" else "Segna come visto",
+                        onClick = { onToggleWatched(knownDurationMillis) },
+                        scale = scale,
+                        modifier = Modifier.testTag("detail_watched")
                     )
                     FvpSecondaryButton(
                         text = "Chiudi",

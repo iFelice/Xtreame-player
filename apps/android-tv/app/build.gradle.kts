@@ -89,7 +89,13 @@ dependencies {
     implementation(libs.coil3.compose)
     implementation(libs.coil3.network.okhttp)
 
-    // Media3 non è ancora una dipendenza (PR 3): la versione resta nel catalogo.
+    // Player: Media3 1.9.0 allineato al decoder FFmpeg di Jellyfin 1.9.0+1.
+    // Il decoder entra in gioco solo come ripiego (EXTENSION_RENDERER_MODE_ON):
+    // la decodifica di sistema resta preferita.
+    implementation(libs.media3.exoplayer)
+    implementation(libs.media3.exoplayer.hls)
+    implementation(libs.media3.ui)
+    implementation(libs.media3.ffmpeg.decoder)
 
     testImplementation(libs.junit)
     testImplementation(libs.okhttp.mockwebserver)

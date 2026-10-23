@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -36,7 +37,13 @@ import androidx.tv.material3.Text
 import androidx.tv.material3.rememberDrawerState
 import it.felixvision.tv.AppContainer
 import it.felixvision.tv.data.catalog.Catalog
+import it.felixvision.tv.data.catalog.Episode
+import it.felixvision.tv.data.catalog.LiveStream
+import it.felixvision.tv.data.catalog.VodStream
 import it.felixvision.tv.data.favorites.FavoriteItem
+import it.felixvision.tv.data.playback.SeriesPlayback
+import it.felixvision.tv.data.progress.ProgressKeys
+import it.felixvision.tv.data.progress.WatchProgress
 import it.felixvision.tv.ui.access.AccessViewModel
 import it.felixvision.tv.ui.catalog.CatalogViewModel
 import it.felixvision.tv.ui.catalog.FavoritesSection
@@ -53,6 +60,9 @@ import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.navigation.DrawerFocusHandle
 import it.felixvision.tv.ui.navigation.DrawerSection
 import it.felixvision.tv.ui.navigation.FvpNavigationDrawer
+import it.felixvision.tv.ui.player.PlaybackSource
+import it.felixvision.tv.ui.player.PlayerScreen
+import it.felixvision.tv.ui.player.PlayerSession
 import it.felixvision.tv.ui.settings.SettingsScreen
 import it.felixvision.tv.ui.settings.SettingsViewModel
 import it.felixvision.tv.ui.theme.FvpColors
@@ -70,6 +80,7 @@ fun FvpMainScreen(
     expiresAtEpochSeconds: Long?,
     maxConnections: Int?,
     activeConnections: Int?,
+    allowedOutputFormats: List<String> = emptyList(),
     scale: UiScale,
     accessViewModel: AccessViewModel,
     onSignOut: () -> Unit,
@@ -82,7 +93,10 @@ fun FvpMainScreen(
     var liveCategoryEntry by remember(currentServer, currentUsername) { mutableStateOf<FavoriteItem?>(null) }
     var restoreCategoryFavoriteId by remember(currentServer, currentUsername) { mutableStateOf<String?>(null) }
     var showExitConfirm by remember { mutableStateOf(false) }
-    var showPlaybackMessage by remember { mutableStateOf<String?>(null) }
+    var playerSession by remember(currentServer, currentUsername) { mutableStateOf<PlayerSession?>(null) }
+    var playerReturnTick by remember { mutableIntStateOf(0) }
+    var returnLiveChannelId by remember { mutableStateOf<String?>(null) }
+    var returnEpisodeId by remember { mutableStateOf<String?>(null) }
     var favoritesTick by remember { mutableStateOf(0L) }
     var favoritesMessage by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -129,6 +143,17 @@ fun FvpMainScreen(
         value = container.favoritesStore.getFavorites(currentServer, currentUsername)
     }
 
+    // Avanzamento di film ed episodi: si ricarica a ogni salvataggio del player.
+    val progressRevision by container.progressStore.revision.collectAsState()
+    val watchProgress by produceState<Map<String, WatchProgress>>(
+        initialValue = emptyMap(),
+        progressRevision,
+        currentServer,
+        currentUsername,
+    ) {
+        value = container.progressStore.getAll(currentServer, currentUsername)
+    }
+
     LaunchedEffect(Unit) {
         delay(200)
         contentFocusRequester.requestFocus()
@@ -142,10 +167,6 @@ fun FvpMainScreen(
     }
 
     BackHandler(enabled = true) {
-        if (showPlaybackMessage != null) {
-            showPlaybackMessage = null
-            return@BackHandler
-        }
         if (showExitConfirm) {
             showExitConfirm = false
             // return focus to Novità drawer
@@ -180,6 +201,81 @@ fun FvpMainScreen(
         // In content -> focus menu
         scope.launch {
             drawerState.setValue(DrawerValue.Open)
+        }
+    }
+
+    fun newPlayerSession(source: PlaybackSource) = PlayerSession(
+        id = System.nanoTime(),
+        server = currentServer,
+        username = currentUsername,
+        password = currentPassword,
+        allowedOutputFormats = allowedOutputFormats,
+        source = source,
+    )
+
+    fun playLive(channel: LiveStream) {
+        val catalog = catalogState.catalog
+        val categoryId = channel.categoryId
+        // Zapping nella categoria di partenza; se il catalogo non è ancora
+        // disponibile si riproduce almeno il canale scelto.
+        val channels = catalog?.liveStreams
+            ?.filter { it.categoryId == categoryId }
+            ?.ifEmpty { listOf(channel) }
+            ?: listOf(channel)
+        val startIndex = channels.indexOfFirst { it.streamId == channel.streamId }.coerceAtLeast(0)
+        val categoryName = catalog?.liveCategories
+            ?.firstOrNull { it.categoryId == categoryId }
+            ?.categoryName
+        playerSession = newPlayerSession(
+            PlaybackSource.Live(
+                channels = channels,
+                startIndex = startIndex,
+                categoryId = categoryId,
+                categoryName = categoryName,
+            )
+        )
+    }
+
+    fun playMovie(film: VodStream) {
+        // Da Preferiti/Novità la card può non avere l'estensione del contenitore:
+        // se il catalogo è disponibile si usa la voce completa.
+        val resolved = catalogState.catalog
+            ?.vodStreams
+            ?.firstOrNull { it.streamId == film.streamId }
+            ?: film
+        playerSession = newPlayerSession(
+            PlaybackSource.Movie(
+                stream = resolved,
+                categoryId = resolved.categoryId,
+                title = resolved.name.ifBlank { film.name },
+            )
+        )
+    }
+
+    fun playEpisode(playback: SeriesPlayback) {
+        playerSession = newPlayerSession(PlaybackSource.Series(playback))
+    }
+
+    /** "Segna come (non) visto" dai cataloghi: l'archivio aggiorna subito le icone. */
+    fun setMovieWatched(film: VodStream, watched: Boolean, durationMillis: Long) {
+        scope.launch {
+            val key = ProgressKeys.movie(film.streamId)
+            if (watched) {
+                container.progressStore.markWatched(currentServer, currentUsername, key, durationMillis)
+            } else {
+                container.progressStore.remove(currentServer, currentUsername, key)
+            }
+        }
+    }
+
+    fun setEpisodeWatched(episode: Episode, watched: Boolean, durationMillis: Long) {
+        scope.launch {
+            val key = ProgressKeys.episode(episode.id)
+            if (watched) {
+                container.progressStore.markWatched(currentServer, currentUsername, key, durationMillis)
+            } else {
+                container.progressStore.remove(currentServer, currentUsername, key)
+            }
         }
     }
 
@@ -227,12 +323,20 @@ fun FvpMainScreen(
                                     val fav = FavoriteItem(id = "series_${serie.seriesId}", type = "series", title = serie.name, poster = serie.cover, categoryId = serie.categoryId)
                                     toggleFavorite(fav)
                                 },
-                                onPlayFilm = { showPlaybackMessage = "Riproduzione disponibile nel prossimo aggiornamento" },
-                                onPlaySerie = { showPlaybackMessage = "Riproduzione disponibile nel prossimo aggiornamento" },
-                                onPlayEpisode = { showPlaybackMessage = "Riproduzione disponibile nel prossimo aggiornamento" },
+                                onPlayFilm = { film -> playMovie(film) },
+                                onPlayEpisode = { _, playback -> playEpisode(playback) },
+                                onSetEpisodeWatched = { episode, watched, duration ->
+                                    setEpisodeWatched(episode, watched, duration)
+                                },
+                                onToggleWatched = { film, watched, duration ->
+                                    setMovieWatched(film, watched, duration)
+                                },
                                 favorites = allFavorites,
                                 catalogViewModel = catalogViewModel,
                                 contentFocusRequester = contentFocusRequester,
+                                progress = watchProgress,
+                                refocusTick = playerReturnTick,
+                                focusEpisodeId = returnEpisodeId,
                                 modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
                             )
                             DrawerSection.Live -> LiveSection(
@@ -243,7 +347,7 @@ fun FvpMainScreen(
                                 categories = catalog.liveCategories,
                                 streams = catalog.liveStreams,
                                 scale = scale,
-                                onSelectChannel = { showPlaybackMessage = "Riproduzione disponibile nel prossimo aggiornamento" },
+                                onSelectChannel = { stream -> playLive(stream) },
                                 onLongPressChannel = { stream ->
                                     val fav = FavoriteItem(
                                         id = "live_${stream.streamId}",
@@ -256,6 +360,9 @@ fun FvpMainScreen(
                                 },
                                 favorites = allFavorites,
                                 contentFocusRequester = contentFocusRequester,
+                                focusChannelId = returnLiveChannelId,
+                                focusChannelTick = playerReturnTick,
+                                onChannelFocusRestored = { returnLiveChannelId = null },
                                 modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
                             )
                             DrawerSection.Film -> FilmSection(
@@ -266,9 +373,14 @@ fun FvpMainScreen(
                                     val fav = FavoriteItem(id = "vod_${vod.streamId}", type = "vod", title = vod.name, poster = vod.streamIcon, categoryId = vod.categoryId)
                                     toggleFavorite(fav)
                                 },
-                                onPlayFilm = { showPlaybackMessage = "Riproduzione disponibile nel prossimo aggiornamento" },
+                                onPlayFilm = { film -> playMovie(film) },
                                 favorites = allFavorites,
                                 catalogViewModel = catalogViewModel,
+                                progress = watchProgress,
+                                onToggleWatched = { film, watched, duration ->
+                                    setMovieWatched(film, watched, duration)
+                                },
+                                refocusTick = playerReturnTick,
                                 contentFocusRequester = contentFocusRequester,
                                 modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
                             )
@@ -280,11 +392,16 @@ fun FvpMainScreen(
                                     val fav = FavoriteItem(id = "series_${serie.seriesId}", type = "series", title = serie.name, poster = serie.cover, categoryId = serie.categoryId)
                                     toggleFavorite(fav)
                                 },
-                                onPlayEpisode = { showPlaybackMessage = "Riproduzione disponibile nel prossimo aggiornamento" },
-                                onPlaySerie = { showPlaybackMessage = "Riproduzione disponibile nel prossimo aggiornamento" },
+                                onPlayEpisode = { _, playback -> playEpisode(playback) },
+                                onSetEpisodeWatched = { episode, watched, duration ->
+                                    setEpisodeWatched(episode, watched, duration)
+                                },
                                 favorites = allFavorites,
                                 catalogViewModel = catalogViewModel,
                                 contentFocusRequester = contentFocusRequester,
+                                progress = watchProgress,
+                                refocusTick = playerReturnTick,
+                                focusEpisodeId = returnEpisodeId,
                                 modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
                             )
                             DrawerSection.Preferiti -> {
@@ -302,17 +419,36 @@ fun FvpMainScreen(
                                                 restoreCategoryFavoriteId = null
                                                 selectedTab = DrawerSection.Live
                                             }
-                                        } else {
-                                            showPlaybackMessage = "Riproduzione disponibile nel prossimo aggiornamento"
                                         }
                                     },
                                     onToggleFavorite = { toggleFavorite(it) },
+                                    onPlayLive = { stream -> playLive(stream) },
+                                    onPlayVod = { film -> playMovie(film) },
+                                    onPlayEpisode = { _, playback -> playEpisode(playback) },
+                                    onSetEpisodeWatched = { episode, watched, duration ->
+                                        setEpisodeWatched(episode, watched, duration)
+                                    },
+                                    onToggleWatched = { film, watched, duration ->
+                                        setMovieWatched(film, watched, duration)
+                                    },
+                                    progress = watchProgress,
+                                    refocusTick = playerReturnTick,
+                                    focusEpisodeId = returnEpisodeId,
                                     catalogViewModel = catalogViewModel,
                                     contentFocusRequester = contentFocusRequester,
                                     modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
                                 )
                             }
-                            DrawerSection.Impostazioni -> SettingsScreen(viewModel = settingsViewModel, scale = scale, modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester), contentFocusRequester = contentFocusRequester)
+                            DrawerSection.Impostazioni -> SettingsScreen(
+                                viewModel = settingsViewModel,
+                                scale = scale,
+                                modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
+                                contentFocusRequester = contentFocusRequester,
+                                catalogSections = catalogState.refreshSections,
+                                catalogRefreshing = catalogState.isRefreshing,
+                                catalogLastUpdateMillis = catalogState.lastUpdateMillis,
+                                onRefreshCatalog = { catalogViewModel.refreshManual() },
+                            )
                         }
                     } else {
                         EmptyState(title = "Catalogo vuoto", description = "Il server non ha restituito contenuti. Premi Riprova.", scale = scale)
@@ -323,17 +459,6 @@ fun FvpMainScreen(
             favoritesMessage?.let { msg ->
                 Box(modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = scale.dp(24f)).background(FvpColors.SurfaceElevated, shape = RoundedCornerShape(scale.dp(8f))).padding(horizontal = scale.dp(16f), vertical = scale.dp(8f))) {
                     Text(text = msg, color = FvpColors.TextPrimary)
-                }
-            }
-
-            showPlaybackMessage?.let { msg ->
-                Box(modifier = Modifier.fillMaxSize().background(FvpColors.Background.copy(alpha = 0.7f)).padding(scale.dp(24f)).testTag("playback_message"), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(scale.dp(12f))) {
-                        Text(text = msg, color = FvpColors.TextPrimary, fontWeight = FontWeight.SemiBold)
-                        androidx.tv.material3.Button(onClick = { showPlaybackMessage = null }) {
-                            Text(text = "Chiudi")
-                        }
-                    }
                 }
             }
 
@@ -393,5 +518,26 @@ fun FvpMainScreen(
                 }
             }
         }
+    }
+
+    playerSession?.let { session ->
+        val isLive = session.source is PlaybackSource.Live
+        PlayerScreen(
+            container = container,
+            session = session,
+            scale = scale,
+            onExit = { info ->
+                playerSession = null
+                playerReturnTick += 1
+                if (isLive) {
+                    returnLiveChannelId = info.lastLiveChannelId
+                    liveCategoryEntry = null
+                    restoreCategoryFavoriteId = null
+                    selectedTab = DrawerSection.Live
+                } else {
+                    returnEpisodeId = info.lastEpisodeId
+                }
+            },
+        )
     }
 }

@@ -7,7 +7,9 @@ import it.felixvision.tv.data.catalog.Catalog
 import it.felixvision.tv.data.catalog.CatalogCache
 import it.felixvision.tv.data.catalog.CatalogClient
 import it.felixvision.tv.data.catalog.CatalogOrdering
+import it.felixvision.tv.data.catalog.CatalogRefresh
 import it.felixvision.tv.data.catalog.CatalogResult
+import it.felixvision.tv.data.catalog.CatalogSectionProgress
 import it.felixvision.tv.data.catalog.SeriesInfoResponse
 import it.felixvision.tv.data.catalog.SeriesItem
 import it.felixvision.tv.data.catalog.VodInfoResponse
@@ -27,6 +29,8 @@ data class CatalogUiState(
     val recentFilms: List<VodStream> = emptyList(),
     val recentSeries: List<SeriesItem> = emptyList(),
     val isRefreshing: Boolean = false,
+    /** Una riga per Live, Film, Serie: stato dell'ultimo aggiornamento. */
+    val refreshSections: List<CatalogSectionProgress> = CatalogRefresh.idle(),
 )
 
 class CatalogViewModel(
@@ -67,6 +71,7 @@ class CatalogViewModel(
         // Un solo caricamento alla volta: tryLock, se in corso ignora nuova richiesta
         if (!loadMutex.tryLock()) return
         try {
+            _ui.update { it.copy(refreshSections = CatalogRefresh.idle()) }
             if (showLoading && _ui.value.catalog == null) {
                 _ui.update { it.copy(isLoading = true, errorMessage = null) }
             } else if (showLoading) {
@@ -75,7 +80,13 @@ class CatalogViewModel(
                 _ui.update { it.copy(isRefreshing = true) }
             }
 
-            val result = client.loadCatalog(server, username, password)
+            val result = client.loadCatalog(server, username, password) { stage ->
+                _ui.update { state ->
+                    state.copy(
+                        refreshSections = CatalogRefresh.apply(state.refreshSections, stage),
+                    )
+                }
+            }
             when (result) {
                 is CatalogResult.Success -> {
                     cache.save(server, username, result.catalog)
