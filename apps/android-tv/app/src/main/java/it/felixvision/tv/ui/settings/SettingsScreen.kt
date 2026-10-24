@@ -35,6 +35,7 @@ import it.felixvision.tv.data.catalog.CatalogSectionProgress
 import it.felixvision.tv.data.catalog.CatalogSectionStatus
 import it.felixvision.tv.ui.access.AccessViewModel
 import it.felixvision.tv.ui.access.PairingPanel
+import it.felixvision.tv.ui.components.ContentPanel
 import it.felixvision.tv.ui.components.FvpPrimaryButton
 import it.felixvision.tv.ui.components.FvpSecondaryButton
 import it.felixvision.tv.ui.components.FvpStatusText
@@ -67,81 +68,88 @@ fun SettingsScreen(
         onDispose { viewModel.onSettingsHidden() }
     }
 
-    Column(modifier = modifier.fillMaxSize().padding(horizontal = scale.dp(24f), vertical = scale.dp(16f)), verticalArrangement = Arrangement.spacedBy(scale.dp(14f))) {
-        Text(text = "Impostazioni", color = FvpColors.TextPrimary, fontSize = scale.sp(22f), fontWeight = FontWeight.Bold)
+    ContentPanel(scale = scale, modifier = modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = scale.dp(24f), vertical = scale.dp(16f)),
+            verticalArrangement = Arrangement.spacedBy(scale.dp(14f)),
+        ) {
+            Text(text = "Impostazioni", color = FvpColors.TextPrimary, fontSize = scale.sp(22f), fontWeight = FontWeight.Bold)
 
-        Column(modifier = Modifier.clip(RoundedCornerShape(scale.dp(14f))).background(FvpColors.Surface).padding(scale.dp(16f)), verticalArrangement = Arrangement.spacedBy(scale.dp(8f))) {
-            Text(text = "Account", color = FvpColors.TextPrimary, fontSize = scale.sp(16f), fontWeight = FontWeight.SemiBold)
-            SettingsRow(label = "Utente", value = state.username, scale = scale)
-            SettingsRow(label = "Stato", value = state.status, scale = scale)
-            SettingsRow(label = "Scadenza", value = formatExpiry(state.expiresAtEpochSeconds), scale = scale)
-            SettingsRow(
-                label = "Connessioni in uso (tutti i dispositivi)",
-                value = formatConnections(state.activeConnections, state.maxConnections),
-                scale = scale,
-                rowTestTag = "settings_connections_row",
-            )
-            SettingsRow(label = "Server", value = state.serverLabel, scale = scale, rowTestTag = "settings_server_row")
-        }
-
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(scale.dp(12f))) {
-            FvpPrimaryButton(
-                text = if (catalogRefreshing) "Aggiornamento…" else "Aggiorna catalogo",
-                onClick = {
-                    showCatalogDialog = true
-                    onRefreshCatalog()
-                },
-                scale = scale,
-                enabled = !catalogRefreshing,
-                modifier = Modifier
-                    .then(if (contentFocusRequester != null) Modifier.focusRequester(contentFocusRequester) else Modifier)
-                    .testTag("settings_refresh")
-            )
-            (catalogLastUpdateMillis ?: state.lastUpdateMillis)?.let { ts ->
-                Text(text = "Ultimo aggiornamento: ${formatTimestamp(ts)}", color = FvpColors.TextSecondary, fontSize = scale.sp(13f))
-            } ?: Text(text = "Mai aggiornato", color = FvpColors.TextSecondary, fontSize = scale.sp(13f))
-        }
-
-        val accountReadAt = state.lastAccountReadMillis
-        if (accountReadAt != null) {
-            Text(
-                text = if (state.isReadingAccount) {
-                    "Aggiornamento dati account…"
-                } else {
-                    "Dati account aggiornati alle ${formatClock(accountReadAt)}"
-                },
-                color = FvpColors.TextSecondary,
-                fontSize = scale.sp(13f),
-                modifier = Modifier.testTag("settings_account_read"),
-            )
-        } else if (state.isReadingAccount) {
-            Text(text = "Aggiornamento dati account…", color = FvpColors.TextSecondary, fontSize = scale.sp(13f))
-        }
-
-        if (state.connectionsWarning) {
-            Text(
-                text = ConnectionsAdvisory.MESSAGE,
-                color = FvpColors.Error,
-                fontSize = scale.sp(14f),
-                modifier = Modifier.testTag("settings_connections_warning"),
-            )
-        }
-
-        state.message?.let { FvpStatusText(message = it, scale = scale) }
-        state.error?.let { Text(text = it, color = FvpColors.Error, fontSize = scale.sp(14f)) }
-
-        Column(modifier = Modifier.clip(RoundedCornerShape(scale.dp(14f))).background(FvpColors.Surface).padding(scale.dp(16f))) {
-            Text(text = "Configura da remoto", color = FvpColors.TextPrimary, fontSize = scale.sp(16f), fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(scale.dp(12f)))
-            PairingPanel(state = state.pairing, scale = scale, modifier = Modifier.fillMaxWidth())
-            if (state.pairing.isExpired) {
-                Spacer(Modifier.height(scale.dp(8f)))
-                FvpSecondaryButton(text = "Mostra un nuovo codice", onClick = { viewModel.onRenewCode() }, scale = scale)
+            Column(modifier = Modifier.clip(RoundedCornerShape(scale.dp(14f))).background(FvpColors.Surface).padding(scale.dp(16f)), verticalArrangement = Arrangement.spacedBy(scale.dp(8f))) {
+                Text(text = "Account", color = FvpColors.TextPrimary, fontSize = scale.sp(16f), fontWeight = FontWeight.SemiBold)
+                SettingsRow(label = "Utente", value = state.username, scale = scale)
+                SettingsRow(label = "Stato", value = state.status, scale = scale)
+                SettingsRow(label = "Scadenza", value = formatExpiry(state.expiresAtEpochSeconds), scale = scale)
+                SettingsRow(
+                    label = "Connessioni in uso (tutti i dispositivi)",
+                    value = formatConnections(state.activeConnections, state.maxConnections),
+                    scale = scale,
+                    rowTestTag = "settings_connections_row",
+                )
+                SettingsRow(label = "Server", value = state.serverLabel, scale = scale, rowTestTag = "settings_server_row")
             }
-        }
 
-        Row {
-            FvpSecondaryButton(text = "Esci", onClick = { viewModel.onExitClicked() }, scale = scale, modifier = Modifier.testTag("settings_exit"))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(scale.dp(12f))) {
+                FvpPrimaryButton(
+                    text = if (catalogRefreshing) "Aggiornamento…" else "Aggiorna catalogo",
+                    onClick = {
+                        showCatalogDialog = true
+                        onRefreshCatalog()
+                    },
+                    scale = scale,
+                    enabled = !catalogRefreshing,
+                    modifier = Modifier
+                        .then(if (contentFocusRequester != null) Modifier.focusRequester(contentFocusRequester) else Modifier)
+                        .testTag("settings_refresh")
+                )
+                (catalogLastUpdateMillis ?: state.lastUpdateMillis)?.let { ts ->
+                    Text(text = "Ultimo aggiornamento: ${formatTimestamp(ts)}", color = FvpColors.TextSecondary, fontSize = scale.sp(13f))
+                } ?: Text(text = "Mai aggiornato", color = FvpColors.TextSecondary, fontSize = scale.sp(13f))
+            }
+
+            val accountReadAt = state.lastAccountReadMillis
+            if (accountReadAt != null) {
+                Text(
+                    text = if (state.isReadingAccount) {
+                        "Aggiornamento dati account…"
+                    } else {
+                        "Dati account aggiornati alle ${formatClock(accountReadAt)}"
+                    },
+                    color = FvpColors.TextSecondary,
+                    fontSize = scale.sp(13f),
+                    modifier = Modifier.testTag("settings_account_read"),
+                )
+            } else if (state.isReadingAccount) {
+                Text(text = "Aggiornamento dati account…", color = FvpColors.TextSecondary, fontSize = scale.sp(13f))
+            }
+
+            if (state.connectionsWarning) {
+                Text(
+                    text = ConnectionsAdvisory.MESSAGE,
+                    color = FvpColors.Error,
+                    fontSize = scale.sp(14f),
+                    modifier = Modifier.testTag("settings_connections_warning"),
+                )
+            }
+
+            state.message?.let { FvpStatusText(message = it, scale = scale) }
+            state.error?.let { Text(text = it, color = FvpColors.Error, fontSize = scale.sp(14f)) }
+
+            Column(modifier = Modifier.clip(RoundedCornerShape(scale.dp(14f))).background(FvpColors.Surface).padding(scale.dp(16f))) {
+                Text(text = "Configura da remoto", color = FvpColors.TextPrimary, fontSize = scale.sp(16f), fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(scale.dp(12f)))
+                PairingPanel(state = state.pairing, scale = scale, modifier = Modifier.fillMaxWidth())
+                if (state.pairing.isExpired) {
+                    Spacer(Modifier.height(scale.dp(8f)))
+                    FvpSecondaryButton(text = "Mostra un nuovo codice", onClick = { viewModel.onRenewCode() }, scale = scale)
+                }
+            }
+
+            Row {
+                FvpSecondaryButton(text = "Esci", onClick = { viewModel.onExitClicked() }, scale = scale, modifier = Modifier.testTag("settings_exit"))
+            }
         }
     }
 

@@ -53,6 +53,7 @@ import it.felixvision.tv.data.playback.SeriesPlayback
 import it.felixvision.tv.data.progress.ProgressKeys
 import it.felixvision.tv.data.progress.WatchProgress
 import it.felixvision.tv.ui.components.CatalogPosterImage
+import it.felixvision.tv.ui.components.ContentPanel
 import it.felixvision.tv.ui.components.FocusMarqueeText
 import it.felixvision.tv.ui.components.FvpSecondaryButton
 import it.felixvision.tv.ui.components.UiScale
@@ -128,13 +129,15 @@ fun FavoritesSection(
         LaunchedEffect(restoreCategoryFavoriteId) {
             if (restoreCategoryFavoriteId != null) onCategoryFocusRestored()
         }
-        Column(modifier = modifier.padding(scale.dp(24f))) {
-            Text(text = "Nessun preferito", color = FvpColors.TextPrimary, fontWeight = FontWeight.Bold)
-            Text(
-                text = "Tieni premuto il tasto OK su una categoria Live, un canale, un film o una serie per aggiungerlo ai preferiti. Puoi farlo anche dal dettaglio con il pulsante dedicato.",
-                color = FvpColors.TextSecondary,
-                modifier = Modifier.padding(top = scale.dp(8f)),
-            )
+        ContentPanel(scale = scale, modifier = modifier.fillMaxSize()) {
+            Column(modifier = Modifier.fillMaxSize().padding(scale.dp(24f))) {
+                Text(text = "Nessun preferito", color = FvpColors.TextPrimary, fontWeight = FontWeight.Bold)
+                Text(
+                    text = "Tieni premuto il tasto OK su una categoria Live, un canale, un film o una serie per aggiungerlo ai preferiti. Puoi farlo anche dal dettaglio con il pulsante dedicato.",
+                    color = FvpColors.TextSecondary,
+                    modifier = Modifier.padding(top = scale.dp(8f)),
+                )
+            }
         }
         return
     }
@@ -182,103 +185,107 @@ fun FavoritesSection(
     // interamente in vista, titolo compreso.
     val rowsBringIntoView = rememberRowsBringIntoViewer()
 
-    Column(
-        // 4 + FocusSafePadding delle righe = i 16 di prima: il margine del focus
-        // sta nel contentPadding, non nel contenitore.
-        modifier = modifier.verticalScroll(verticalScrollState)
-            .padding(horizontal = scale.dp(4f)),
-        verticalArrangement = Arrangement.spacedBy(scale.dp(18f))
-    ) {
-        if (categoryFavorites.isNotEmpty()) {
-            Box(modifier = rowsBringIntoView.rowModifier(ROW_CATEGORIES)) {
-                LiveCategoryFavoriteRow(
-                    items = categoryFavorites,
-                    scale = scale,
-                    onSelect = onSelectFavorite,
-                    onToggle = onToggleFavorite,
-                    firstFocus = firstFocus,
-                    contentFocusRequester = contentFocusRequester,
-                    listState = categoryListState,
-                    focusMap = categoryFocusMap,
-                    onRowFocused = { rowsBringIntoView.onRowFocused(ROW_CATEGORIES) },
-                )
+    ContentPanel(scale = scale, modifier = modifier.fillMaxSize()) {
+        Column(
+            // 4 + FocusSafePadding delle righe = i 16 di prima: il margine del focus
+            // sta nel contentPadding, non nel contenitore.
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(verticalScrollState)
+                .padding(horizontal = scale.dp(4f)),
+            verticalArrangement = Arrangement.spacedBy(scale.dp(18f)),
+        ) {
+            if (categoryFavorites.isNotEmpty()) {
+                Box(modifier = rowsBringIntoView.rowModifier(ROW_CATEGORIES)) {
+                    LiveCategoryFavoriteRow(
+                        items = categoryFavorites,
+                        scale = scale,
+                        onSelect = onSelectFavorite,
+                        onToggle = onToggleFavorite,
+                        firstFocus = firstFocus,
+                        contentFocusRequester = contentFocusRequester,
+                        listState = categoryListState,
+                        focusMap = categoryFocusMap,
+                        onRowFocused = { rowsBringIntoView.onRowFocused(ROW_CATEGORIES) },
+                    )
+                }
             }
-        }
-        if (live.isNotEmpty()) {
-            Box(modifier = rowsBringIntoView.rowModifier(ROW_LIVE)) {
-                FavoriteRow(
-                    title = "Canali",
-                    items = live,
-                    scale = scale,
-                    onSelect = onSelectFavorite,
-                    onToggle = onToggleFavorite,
-                    firstFocus = if (categoryFavorites.isEmpty()) firstFocus else remember { FocusRequester() },
-                    contentFocusRequester = contentFocusRequester,
-                    isFirstRow = categoryFavorites.isEmpty(),
-                    onDetail = { fav ->
-                        val idx = live.indexOfFirst { it.id == fav.id }
-                        liveRestore.onOpen(fav.id, idx)
-                        detailFavorite = fav
-                    },
-                    listState = liveListState,
-                    focusMap = liveFocusMap,
-                    progress = progress,
-                    onRowFocused = { rowsBringIntoView.onRowFocused(ROW_LIVE) },
-                )
+            if (live.isNotEmpty()) {
+                Box(modifier = rowsBringIntoView.rowModifier(ROW_LIVE)) {
+                    FavoriteRow(
+                        title = "Canali",
+                        items = live,
+                        scale = scale,
+                        onSelect = onSelectFavorite,
+                        onToggle = onToggleFavorite,
+                        firstFocus = if (categoryFavorites.isEmpty()) firstFocus else remember { FocusRequester() },
+                        contentFocusRequester = contentFocusRequester,
+                        isFirstRow = categoryFavorites.isEmpty(),
+                        onDetail = { fav ->
+                            val idx = live.indexOfFirst { it.id == fav.id }
+                            liveRestore.onOpen(fav.id, idx)
+                            detailFavorite = fav
+                        },
+                        listState = liveListState,
+                        focusMap = liveFocusMap,
+                        progress = progress,
+                        onRowFocused = { rowsBringIntoView.onRowFocused(ROW_LIVE) },
+                    )
+                }
             }
-        }
-        if (vod.isNotEmpty()) {
-            Box(modifier = rowsBringIntoView.rowModifier(ROW_VOD)) {
-                FavoriteRow(
-                    title = "Film",
-                    items = vod,
-                    scale = scale,
-                    onSelect = { fav ->
-                        val idx = vod.indexOfFirst { it.id == fav.id }
-                        vodRestore.onOpen(fav.id, idx)
-                        detailFavorite = fav
-                    },
-                    onToggle = onToggleFavorite,
-                    firstFocus = if (categoryFavorites.isEmpty() && live.isEmpty()) firstFocus else remember { FocusRequester() },
-                    contentFocusRequester = contentFocusRequester,
-                    isFirstRow = categoryFavorites.isEmpty() && live.isEmpty(),
-                    onDetail = { fav ->
-                        val idx = vod.indexOfFirst { it.id == fav.id }
-                        vodRestore.onOpen(fav.id, idx)
-                        detailFavorite = fav
-                    },
-                    listState = vodListState,
-                    focusMap = vodFocusMap,
-                    progress = progress,
-                    onRowFocused = { rowsBringIntoView.onRowFocused(ROW_VOD) },
-                )
+            if (vod.isNotEmpty()) {
+                Box(modifier = rowsBringIntoView.rowModifier(ROW_VOD)) {
+                    FavoriteRow(
+                        title = "Film",
+                        items = vod,
+                        scale = scale,
+                        onSelect = { fav ->
+                            val idx = vod.indexOfFirst { it.id == fav.id }
+                            vodRestore.onOpen(fav.id, idx)
+                            detailFavorite = fav
+                        },
+                        onToggle = onToggleFavorite,
+                        firstFocus = if (categoryFavorites.isEmpty() && live.isEmpty()) firstFocus else remember { FocusRequester() },
+                        contentFocusRequester = contentFocusRequester,
+                        isFirstRow = categoryFavorites.isEmpty() && live.isEmpty(),
+                        onDetail = { fav ->
+                            val idx = vod.indexOfFirst { it.id == fav.id }
+                            vodRestore.onOpen(fav.id, idx)
+                            detailFavorite = fav
+                        },
+                        listState = vodListState,
+                        focusMap = vodFocusMap,
+                        progress = progress,
+                        onRowFocused = { rowsBringIntoView.onRowFocused(ROW_VOD) },
+                    )
+                }
             }
-        }
-        if (series.isNotEmpty()) {
-            Box(modifier = rowsBringIntoView.rowModifier(ROW_SERIES)) {
-                FavoriteRow(
-                    title = "Serie",
-                    items = series,
-                    scale = scale,
-                    onSelect = { fav ->
-                        val idx = series.indexOfFirst { it.id == fav.id }
-                        seriesRestore.onOpen(fav.id, idx)
-                        detailFavorite = fav
-                    },
-                    onToggle = onToggleFavorite,
-                    firstFocus = if (categoryFavorites.isEmpty() && live.isEmpty() && vod.isEmpty()) firstFocus else remember { FocusRequester() },
-                    contentFocusRequester = contentFocusRequester,
-                    isFirstRow = categoryFavorites.isEmpty() && live.isEmpty() && vod.isEmpty(),
-                    onDetail = { fav ->
-                        val idx = series.indexOfFirst { it.id == fav.id }
-                        seriesRestore.onOpen(fav.id, idx)
-                        detailFavorite = fav
-                    },
-                    listState = seriesListState,
-                    focusMap = seriesFocusMap,
-                    progress = progress,
-                    onRowFocused = { rowsBringIntoView.onRowFocused(ROW_SERIES) },
-                )
+            if (series.isNotEmpty()) {
+                Box(modifier = rowsBringIntoView.rowModifier(ROW_SERIES)) {
+                    FavoriteRow(
+                        title = "Serie",
+                        items = series,
+                        scale = scale,
+                        onSelect = { fav ->
+                            val idx = series.indexOfFirst { it.id == fav.id }
+                            seriesRestore.onOpen(fav.id, idx)
+                            detailFavorite = fav
+                        },
+                        onToggle = onToggleFavorite,
+                        firstFocus = if (categoryFavorites.isEmpty() && live.isEmpty() && vod.isEmpty()) firstFocus else remember { FocusRequester() },
+                        contentFocusRequester = contentFocusRequester,
+                        isFirstRow = categoryFavorites.isEmpty() && live.isEmpty() && vod.isEmpty(),
+                        onDetail = { fav ->
+                            val idx = series.indexOfFirst { it.id == fav.id }
+                            seriesRestore.onOpen(fav.id, idx)
+                            detailFavorite = fav
+                        },
+                        listState = seriesListState,
+                        focusMap = seriesFocusMap,
+                        progress = progress,
+                        onRowFocused = { rowsBringIntoView.onRowFocused(ROW_SERIES) },
+                    )
+                }
             }
         }
     }

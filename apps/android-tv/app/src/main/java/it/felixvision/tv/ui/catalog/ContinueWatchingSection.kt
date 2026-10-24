@@ -42,6 +42,7 @@ import it.felixvision.tv.data.continuewatching.ContinueEntry
 import it.felixvision.tv.data.progress.ProgressKeys
 import it.felixvision.tv.data.progress.WatchProgress
 import it.felixvision.tv.ui.components.CatalogPosterImage
+import it.felixvision.tv.ui.components.ContentPanel
 import it.felixvision.tv.ui.components.EmptyState
 import it.felixvision.tv.ui.components.FocusMarqueeText
 import it.felixvision.tv.ui.components.UiScale
@@ -99,9 +100,9 @@ fun ContinueWatchingSection(
         runCatching { itemFocusRequesters[target]?.requestFocus() }
     }
 
-    // Il margine sicuro del focus sta nel contentPadding della griglia: il Box
-    // resta senza padding per non sommare due volte la stessa quantità.
-    Box(modifier = modifier.fillMaxSize()) {
+    // Il margine sicuro del focus sta nel contentPadding della griglia: il
+    // pannello resta senza padding per non sommare due volte la stessa quantità.
+    ContentPanel(scale = scale, modifier = modifier.fillMaxSize()) {
         if (entries.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester)) {
                 EmptyState(

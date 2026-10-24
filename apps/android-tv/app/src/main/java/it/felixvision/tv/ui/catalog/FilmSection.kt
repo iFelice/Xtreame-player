@@ -50,6 +50,7 @@ import it.felixvision.tv.data.progress.ProgressKeys
 import it.felixvision.tv.data.progress.WatchProgress
 import it.felixvision.tv.ui.components.CatalogPosterImage
 import it.felixvision.tv.ui.components.CollapsingCategoryColumn
+import it.felixvision.tv.ui.components.ContentPanel
 import it.felixvision.tv.ui.components.DetailFocusRestoreHelper
 import it.felixvision.tv.ui.components.EmptyState
 import it.felixvision.tv.ui.components.FocusMarqueeText
@@ -170,86 +171,88 @@ fun FilmSection(
             )
         }
 
-        if (filtered.isEmpty()) {
-            EmptyState(title = "Nessun film", description = "Seleziona una categoria per vedere i film.", scale = scale, modifier = Modifier.weight(1f))
-        } else {
-            LazyVerticalGrid(
-                state = gridState,
-                columns = GridCells.Fixed(columns),
-                verticalArrangement = Arrangement.spacedBy(scale.dp(12f)),
-                horizontalArrangement = Arrangement.spacedBy(scale.dp(12f)),
-                // Ingrandimento e cornice del focus restano dentro la griglia.
-                contentPadding = PaddingValues(scale.focusSafePadding),
-                modifier = Modifier.weight(1f).fillMaxHeight().testTag("film_grid_5"),
-            ) {
-                itemsIndexed(filtered, key = { _, f -> f.streamId }) { index, film ->
-                    val isLeftEdge = index % columns == 0
-                    val isFav = favorites.any { it.id == "vod_${film.streamId}" }
-                    val filmProgress = progress[ProgressKeys.movie(film.streamId)]
-                    val itemFr = remember(film.streamId, itemFocusRequesters) { itemFocusRequesters[film.streamId] ?: FocusRequester() }
-                    var focused by remember(film.streamId) { mutableStateOf(false) }
-                    Card(
-                        onClick = {
-                            restoreHelper.onOpen(film.streamId, index)
-                            detailFilm = film
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("film_${film.streamId}")
-                            .focusRequester(itemFr)
-                            .then(if (index == 0) Modifier.focusRequester(gridFirstFocus).focusRequester(contentFocusRequester) else Modifier)
-                            .onFocusChanged { focusState ->
-                                focused = focusState.isFocused
-                                if (focusState.isFocused) categoryExpanded = false
-                            }
-                            .onPreviewKeyEvent { event ->
-                                if (event.key == Key.DirectionLeft && isLeftEdge) {
-                                    val active = debouncedCategoryId ?: categories.firstOrNull()?.categoryId
-                                    active?.let { categoryFocusRequesters[it]?.requestFocus() }
-                                    categoryExpanded = true
-                                    true
-                                } else false
-                            }
-                            .fvpLongPress { onLongPressFilm(film) },
-                        scale = CardDefaults.scale(focusedScale = 1.04f),
-                        border = CardDefaults.border(focusedBorder = Border(BorderStroke(2.dp, FvpColors.GreenFocus))),
-                        colors = CardDefaults.colors(containerColor = FvpColors.Surface),
-                        shape = CardDefaults.shape(shape = RoundedCornerShape(scale.dp(10f))),
-                    ) {
-                        Column(modifier = Modifier.padding(scale.dp(4f))) {
-                            Box(
-                                modifier = Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(scale.dp(10f))).background(FvpColors.SurfaceElevated)
-                            ) {
-                                CatalogPosterImage(imageUrl = film.streamIcon, title = film.name, scale = scale, modifier = Modifier.fillMaxSize())
-                                WatchProgressLine(
-                                    progress = filmProgress,
-                                    scale = scale,
-                                    modifier = Modifier.align(Alignment.BottomCenter),
-                                )
-                                if (filmProgress?.isWatched == true) {
-                                    WatchSeenBadge(
-                                        scale = scale,
-                                        modifier = Modifier
-                                            .align(Alignment.TopStart)
-                                            .padding(scale.dp(6f))
-                                            .testTag("film_${film.streamId}_seen"),
-                                    )
+        ContentPanel(scale = scale, modifier = Modifier.weight(1f).fillMaxHeight()) {
+            if (filtered.isEmpty()) {
+                EmptyState(title = "Nessun film", description = "Seleziona una categoria per vedere i film.", scale = scale, modifier = Modifier.fillMaxSize())
+            } else {
+                LazyVerticalGrid(
+                    state = gridState,
+                    columns = GridCells.Fixed(columns),
+                    verticalArrangement = Arrangement.spacedBy(scale.dp(12f)),
+                    horizontalArrangement = Arrangement.spacedBy(scale.dp(12f)),
+                    // Ingrandimento e cornice del focus restano dentro la griglia.
+                    contentPadding = PaddingValues(scale.focusSafePadding),
+                    modifier = Modifier.fillMaxSize().testTag("film_grid_5"),
+                ) {
+                    itemsIndexed(filtered, key = { _, f -> f.streamId }) { index, film ->
+                        val isLeftEdge = index % columns == 0
+                        val isFav = favorites.any { it.id == "vod_${film.streamId}" }
+                        val filmProgress = progress[ProgressKeys.movie(film.streamId)]
+                        val itemFr = remember(film.streamId, itemFocusRequesters) { itemFocusRequesters[film.streamId] ?: FocusRequester() }
+                        var focused by remember(film.streamId) { mutableStateOf(false) }
+                        Card(
+                            onClick = {
+                                restoreHelper.onOpen(film.streamId, index)
+                                detailFilm = film
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("film_${film.streamId}")
+                                .focusRequester(itemFr)
+                                .then(if (index == 0) Modifier.focusRequester(gridFirstFocus).focusRequester(contentFocusRequester) else Modifier)
+                                .onFocusChanged { focusState ->
+                                    focused = focusState.isFocused
+                                    if (focusState.isFocused) categoryExpanded = false
                                 }
-                                if (isFav) {
-                                    Box(
-                                        modifier = Modifier.align(Alignment.TopEnd).padding(scale.dp(6f)).size(scale.dp(22f)).clip(CircleShape).background(Color(0xCC1C1C1E)).testTag("film_${film.streamId}_fav_star"),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(text = "★", color = Color(0xFFFBBF24), fontSize = scale.sp(12f))
+                                .onPreviewKeyEvent { event ->
+                                    if (event.key == Key.DirectionLeft && isLeftEdge) {
+                                        val active = debouncedCategoryId ?: categories.firstOrNull()?.categoryId
+                                        active?.let { categoryFocusRequesters[it]?.requestFocus() }
+                                        categoryExpanded = true
+                                        true
+                                    } else false
+                                }
+                                .fvpLongPress { onLongPressFilm(film) },
+                            scale = CardDefaults.scale(focusedScale = 1.04f),
+                            border = CardDefaults.border(focusedBorder = Border(BorderStroke(2.dp, FvpColors.GreenFocus))),
+                            colors = CardDefaults.colors(containerColor = FvpColors.Surface),
+                            shape = CardDefaults.shape(shape = RoundedCornerShape(scale.dp(10f))),
+                        ) {
+                            Column(modifier = Modifier.padding(scale.dp(4f))) {
+                                Box(
+                                    modifier = Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(scale.dp(10f))).background(FvpColors.SurfaceElevated)
+                                ) {
+                                    CatalogPosterImage(imageUrl = film.streamIcon, title = film.name, scale = scale, modifier = Modifier.fillMaxSize())
+                                    WatchProgressLine(
+                                        progress = filmProgress,
+                                        scale = scale,
+                                        modifier = Modifier.align(Alignment.BottomCenter),
+                                    )
+                                    if (filmProgress?.isWatched == true) {
+                                        WatchSeenBadge(
+                                            scale = scale,
+                                            modifier = Modifier
+                                                .align(Alignment.TopStart)
+                                                .padding(scale.dp(6f))
+                                                .testTag("film_${film.streamId}_seen"),
+                                        )
+                                    }
+                                    if (isFav) {
+                                        Box(
+                                            modifier = Modifier.align(Alignment.TopEnd).padding(scale.dp(6f)).size(scale.dp(22f)).clip(CircleShape).background(Color(0xCC1C1C1E)).testTag("film_${film.streamId}_fav_star"),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(text = "★", color = Color(0xFFFBBF24), fontSize = scale.sp(12f))
+                                        }
                                     }
                                 }
+                                FocusMarqueeText(
+                                    text = film.name,
+                                    focused = focused,
+                                    modifier = Modifier.padding(top = scale.dp(6f)),
+                                )
+                                film.year?.let { Text(text = it, color = FvpColors.TextSecondary) }
                             }
-                            FocusMarqueeText(
-                                text = film.name,
-                                focused = focused,
-                                modifier = Modifier.padding(top = scale.dp(6f)),
-                            )
-                            film.year?.let { Text(text = it, color = FvpColors.TextSecondary) }
                         }
                     }
                 }

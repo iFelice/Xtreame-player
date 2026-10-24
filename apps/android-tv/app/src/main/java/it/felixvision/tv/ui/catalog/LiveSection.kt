@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -44,6 +45,7 @@ import it.felixvision.tv.data.catalog.LiveStream
 import it.felixvision.tv.data.favorites.FavoriteItem
 import it.felixvision.tv.ui.components.ChannelLogoImage
 import it.felixvision.tv.ui.components.CollapsingCategoryColumn
+import it.felixvision.tv.ui.components.ContentPanel
 import it.felixvision.tv.ui.components.EmptyState
 import it.felixvision.tv.ui.components.FocusMarqueeText
 import it.felixvision.tv.ui.components.UiScale
@@ -175,79 +177,81 @@ fun LiveSection(
             )
         }
 
-        Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
-            if (filtered.isEmpty()) {
-                EmptyState(title = "Nessun canale", description = "Seleziona una categoria per vedere i canali.", scale = scale)
-            } else {
-                LazyColumn(
-                    state = channelsListState,
-                    verticalArrangement = Arrangement.spacedBy(scale.dp(6f)),
-                    // Ingrandimento e cornice del focus restano dentro la lista.
-                    contentPadding = PaddingValues(scale.focusSafePadding),
-                    modifier = Modifier.fillMaxWidth().testTag("live_channels_list"),
-                ) {
-                    itemsIndexed(filtered, key = { _, ch -> ch.streamId }) { index, channel ->
-                        val isFav = favorites.any { it.id == "live_${channel.streamId}" }
-                        val channelFr = channelFocusRequesters[channel.streamId]
-                        var focused by remember(channel.streamId) { mutableStateOf(false) }
-                        ListItem(
-                            selected = false,
-                            onClick = { onSelectChannel(channel) },
-                            onLongClick = { onLongPressChannel(channel) },
-                            headlineContent = {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(scale.dp(6f))) {
-                                    FocusMarqueeText(
-                                        text = channel.name,
-                                        focused = focused,
-                                        fontWeight = FontWeight.Medium,
-                                        modifier = Modifier.weight(1f, fill = false),
-                                    )
-                                    if (isFav) {
-                                        Box(
-                                            modifier = Modifier.size(scale.dp(22f)).clip(CircleShape).background(Color(0xCC1C1C1E)).testTag("live_channel_${channel.streamId}_fav_star"),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Text(text = "★", color = Color(0xFFFBBF24), fontSize = scale.sp(12f))
+        ContentPanel(scale = scale, modifier = Modifier.weight(1f).fillMaxHeight()) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                if (filtered.isEmpty()) {
+                    EmptyState(title = "Nessun canale", description = "Seleziona una categoria per vedere i canali.", scale = scale)
+                } else {
+                    LazyColumn(
+                        state = channelsListState,
+                        verticalArrangement = Arrangement.spacedBy(scale.dp(6f)),
+                        // Ingrandimento e cornice del focus restano dentro la lista.
+                        contentPadding = PaddingValues(scale.focusSafePadding),
+                        modifier = Modifier.fillMaxWidth().testTag("live_channels_list"),
+                    ) {
+                        itemsIndexed(filtered, key = { _, ch -> ch.streamId }) { index, channel ->
+                            val isFav = favorites.any { it.id == "live_${channel.streamId}" }
+                            val channelFr = channelFocusRequesters[channel.streamId]
+                            var focused by remember(channel.streamId) { mutableStateOf(false) }
+                            ListItem(
+                                selected = false,
+                                onClick = { onSelectChannel(channel) },
+                                onLongClick = { onLongPressChannel(channel) },
+                                headlineContent = {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(scale.dp(6f))) {
+                                        FocusMarqueeText(
+                                            text = channel.name,
+                                            focused = focused,
+                                            fontWeight = FontWeight.Medium,
+                                            modifier = Modifier.weight(1f, fill = false),
+                                        )
+                                        if (isFav) {
+                                            Box(
+                                                modifier = Modifier.size(scale.dp(22f)).clip(CircleShape).background(Color(0xCC1C1C1E)).testTag("live_channel_${channel.streamId}_fav_star"),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text(text = "★", color = Color(0xFFFBBF24), fontSize = scale.sp(12f))
+                                            }
                                         }
                                     }
-                                }
-                            },
-                            supportingContent = {
-                                channel.epgChannelId?.let { Text(text = it, maxLines = 1) }
-                            },
-                            leadingContent = {
-                                ChannelLogoImage(imageUrl = channel.streamIcon, name = channel.name, scale = scale, modifier = Modifier.size(scale.dp(48f)))
-                            },
-                            trailingContent = {
-                                channel.num?.let { Text(text = "#$it") }
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("live_channel_${channel.streamId}")
-                                .then(if (channelFr != null) Modifier.focusRequester(channelFr) else Modifier)
-                                .then(if (index == 0) Modifier.focusRequester(contentFocusRequester) else Modifier)
-                                .onFocusChanged { focusState ->
-                                    focused = focusState.isFocused
-                                    if (focusState.isFocused) categoryExpanded = false
-                                }
-                                .onPreviewKeyEvent { event ->
-                                    if (event.key == Key.DirectionLeft) {
-                                        val active = debouncedCategoryId ?: categories.firstOrNull()?.categoryId
-                                        active?.let { categoryFocusRequesters[it]?.requestFocus() }
-                                        categoryExpanded = true
-                                        true
-                                    } else false
-                                }
-                                .fvpLongPress { onLongPressChannel(channel) },
-                            colors = ListItemDefaults.colors(
-                                containerColor = FvpColors.Surface,
-                                contentColor = FvpColors.TextPrimary,
-                                focusedContainerColor = FvpColors.SurfaceElevated,
-                            ),
-                            scale = ListItemDefaults.scale(focusedScale = 1.04f),
-                            border = ListItemDefaults.border(focusedBorder = Border(BorderStroke(2.dp, FvpColors.GreenFocus))),
-                            shape = ListItemDefaults.shape(shape = RoundedCornerShape(scale.dp(10f))),
-                        )
+                                },
+                                supportingContent = {
+                                    channel.epgChannelId?.let { Text(text = it, maxLines = 1) }
+                                },
+                                leadingContent = {
+                                    ChannelLogoImage(imageUrl = channel.streamIcon, name = channel.name, scale = scale, modifier = Modifier.size(scale.dp(48f)))
+                                },
+                                trailingContent = {
+                                    channel.num?.let { Text(text = "#$it") }
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("live_channel_${channel.streamId}")
+                                    .then(if (channelFr != null) Modifier.focusRequester(channelFr) else Modifier)
+                                    .then(if (index == 0) Modifier.focusRequester(contentFocusRequester) else Modifier)
+                                    .onFocusChanged { focusState ->
+                                        focused = focusState.isFocused
+                                        if (focusState.isFocused) categoryExpanded = false
+                                    }
+                                    .onPreviewKeyEvent { event ->
+                                        if (event.key == Key.DirectionLeft) {
+                                            val active = debouncedCategoryId ?: categories.firstOrNull()?.categoryId
+                                            active?.let { categoryFocusRequesters[it]?.requestFocus() }
+                                            categoryExpanded = true
+                                            true
+                                        } else false
+                                    }
+                                    .fvpLongPress { onLongPressChannel(channel) },
+                                colors = ListItemDefaults.colors(
+                                    containerColor = FvpColors.Surface,
+                                    contentColor = FvpColors.TextPrimary,
+                                    focusedContainerColor = FvpColors.SurfaceElevated,
+                                ),
+                                scale = ListItemDefaults.scale(focusedScale = 1.04f),
+                                border = ListItemDefaults.border(focusedBorder = Border(BorderStroke(2.dp, FvpColors.GreenFocus))),
+                                shape = ListItemDefaults.shape(shape = RoundedCornerShape(scale.dp(10f))),
+                            )
+                        }
                     }
                 }
             }

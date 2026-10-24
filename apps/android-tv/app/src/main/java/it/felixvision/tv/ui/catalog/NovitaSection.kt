@@ -48,6 +48,7 @@ import it.felixvision.tv.data.playback.SeriesPlayback
 import it.felixvision.tv.data.progress.ProgressKeys
 import it.felixvision.tv.data.progress.WatchProgress
 import it.felixvision.tv.ui.components.CatalogPosterImage
+import it.felixvision.tv.ui.components.ContentPanel
 import it.felixvision.tv.ui.components.FocusMarqueeText
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.components.WatchProgressLine
@@ -172,155 +173,158 @@ fun NovitaSection(
     val rowsScrollState = rememberScrollState()
     val rowsBringIntoView = rememberRowsBringIntoViewer()
 
-    Column(
-        // 4 + FocusSafePadding delle righe = i 16 di prima: il margine del focus
-        // sta nel contentPadding, non nel contenitore.
-        modifier = modifier
-            .verticalScroll(rowsScrollState)
-            .padding(horizontal = scale.dp(4f)),
-        verticalArrangement = Arrangement.spacedBy(scale.dp(18f))
-    ) {
-        Column(modifier = rowsBringIntoView.rowModifier(ROW_FILMS)) {
-            Text(
-                text = "Ultimi film",
-                color = FvpColors.TextPrimary,
-                fontWeight = FontWeight.Bold,
-                // Il titolo si allinea alla prima card, dentro il contentPadding della riga.
-                modifier = Modifier.padding(start = scale.focusSafePadding, bottom = scale.dp(8f))
-            )
-            if (recentFilms.isEmpty()) {
-                Text(text = "Nessun film disponibile", color = FvpColors.TextSecondary)
-            } else {
-                LazyRow(
-                    state = filmsListState,
-                    horizontalArrangement = Arrangement.spacedBy(scale.dp(12f)),
-                    contentPadding = PaddingValues(scale.focusSafePadding),
-                    modifier = Modifier.fillMaxWidth().testTag("novita_films_row"),
-                ) {
-                    itemsIndexed(recentFilms, key = { _, f -> f.streamId }) { index, film ->
-                        val isFav = favorites.any { it.id == "vod_${film.streamId}" }
-                        val filmProgress = progress[ProgressKeys.movie(film.streamId)]
-                        val itemFr = remember(film.streamId, filmItemFocusRequesters) { filmItemFocusRequesters[film.streamId] ?: FocusRequester() }
-                        var focused by remember(film.streamId) { mutableStateOf(false) }
-                        Card(
-                            onClick = {
-                                filmRestoreHelper.onOpen(film.streamId, index)
-                                detailFilm = film
-                            },
-                            modifier = Modifier
-                                .width(scale.dp(140f))
-                                .testTag("novita_film_${film.streamId}")
-                                .focusRequester(itemFr)
-                                .then(if (index == 0) Modifier.focusRequester(filmsFirstFocus).focusRequester(contentFocusRequester) else Modifier)
-                                .onFocusChanged { focusState ->
-                                    focused = focusState.isFocused
-                                    if (focusState.isFocused) rowsBringIntoView.onRowFocused(ROW_FILMS)
-                                }
-                                .fvpLongPress { onLongPressFilm(film) },
-                            scale = CardDefaults.scale(focusedScale = 1.04f),
-                            border = CardDefaults.border(focusedBorder = Border(BorderStroke(2.dp, FvpColors.GreenFocus))),
-                            colors = CardDefaults.colors(containerColor = FvpColors.Surface),
-                            shape = CardDefaults.shape(shape = RoundedCornerShape(scale.dp(10f))),
-                        ) {
-                            Column(modifier = Modifier.padding(scale.dp(4f))) {
-                                Box(
-                                    modifier = Modifier
-                                        .width(scale.dp(140f))
-                                        .height(scale.dp(200f))
-                                        .clip(RoundedCornerShape(scale.dp(10f)))
-                                ) {
-                                    CatalogPosterImage(imageUrl = film.streamIcon, title = film.name, scale = scale, modifier = Modifier.fillMaxSize())
-                                    WatchProgressLine(
-                                        progress = filmProgress,
-                                        scale = scale,
-                                        modifier = Modifier.align(Alignment.BottomCenter),
-                                    )
-                                    if (filmProgress?.isWatched == true) {
-                                        WatchSeenBadge(
+    ContentPanel(scale = scale, modifier = modifier.fillMaxSize()) {
+        Column(
+            // 4 + FocusSafePadding delle righe = i 16 di prima: il margine del focus
+            // sta nel contentPadding, non nel contenitore.
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rowsScrollState)
+                .padding(horizontal = scale.dp(4f)),
+            verticalArrangement = Arrangement.spacedBy(scale.dp(18f)),
+        ) {
+            Column(modifier = rowsBringIntoView.rowModifier(ROW_FILMS)) {
+                Text(
+                    text = "Ultimi film",
+                    color = FvpColors.TextPrimary,
+                    fontWeight = FontWeight.Bold,
+                    // Il titolo si allinea alla prima card, dentro il contentPadding della riga.
+                    modifier = Modifier.padding(start = scale.focusSafePadding, bottom = scale.dp(8f))
+                )
+                if (recentFilms.isEmpty()) {
+                    Text(text = "Nessun film disponibile", color = FvpColors.TextSecondary)
+                } else {
+                    LazyRow(
+                        state = filmsListState,
+                        horizontalArrangement = Arrangement.spacedBy(scale.dp(12f)),
+                        contentPadding = PaddingValues(scale.focusSafePadding),
+                        modifier = Modifier.fillMaxWidth().testTag("novita_films_row"),
+                    ) {
+                        itemsIndexed(recentFilms, key = { _, f -> f.streamId }) { index, film ->
+                            val isFav = favorites.any { it.id == "vod_${film.streamId}" }
+                            val filmProgress = progress[ProgressKeys.movie(film.streamId)]
+                            val itemFr = remember(film.streamId, filmItemFocusRequesters) { filmItemFocusRequesters[film.streamId] ?: FocusRequester() }
+                            var focused by remember(film.streamId) { mutableStateOf(false) }
+                            Card(
+                                onClick = {
+                                    filmRestoreHelper.onOpen(film.streamId, index)
+                                    detailFilm = film
+                                },
+                                modifier = Modifier
+                                    .width(scale.dp(140f))
+                                    .testTag("novita_film_${film.streamId}")
+                                    .focusRequester(itemFr)
+                                    .then(if (index == 0) Modifier.focusRequester(filmsFirstFocus).focusRequester(contentFocusRequester) else Modifier)
+                                    .onFocusChanged { focusState ->
+                                        focused = focusState.isFocused
+                                        if (focusState.isFocused) rowsBringIntoView.onRowFocused(ROW_FILMS)
+                                    }
+                                    .fvpLongPress { onLongPressFilm(film) },
+                                scale = CardDefaults.scale(focusedScale = 1.04f),
+                                border = CardDefaults.border(focusedBorder = Border(BorderStroke(2.dp, FvpColors.GreenFocus))),
+                                colors = CardDefaults.colors(containerColor = FvpColors.Surface),
+                                shape = CardDefaults.shape(shape = RoundedCornerShape(scale.dp(10f))),
+                            ) {
+                                Column(modifier = Modifier.padding(scale.dp(4f))) {
+                                    Box(
+                                        modifier = Modifier
+                                            .width(scale.dp(140f))
+                                            .height(scale.dp(200f))
+                                            .clip(RoundedCornerShape(scale.dp(10f)))
+                                    ) {
+                                        CatalogPosterImage(imageUrl = film.streamIcon, title = film.name, scale = scale, modifier = Modifier.fillMaxSize())
+                                        WatchProgressLine(
+                                            progress = filmProgress,
                                             scale = scale,
-                                            modifier = Modifier.align(Alignment.TopStart).padding(scale.dp(6f))
-                                                .testTag("novita_film_${film.streamId}_seen"),
+                                            modifier = Modifier.align(Alignment.BottomCenter),
                                         )
+                                        if (filmProgress?.isWatched == true) {
+                                            WatchSeenBadge(
+                                                scale = scale,
+                                                modifier = Modifier.align(Alignment.TopStart).padding(scale.dp(6f))
+                                                    .testTag("novita_film_${film.streamId}_seen"),
+                                            )
+                                        }
+                                        if (isFav) {
+                                            Box(
+                                                modifier = Modifier.align(Alignment.TopEnd).padding(scale.dp(6f)).size(scale.dp(22f)).clip(CircleShape).background(Color(0xCC1C1C1E)).testTag("novita_film_${film.streamId}_fav_star"),
+                                                contentAlignment = Alignment.Center
+                                            ) { Text(text = "★", color = Color(0xFFFBBF24), fontSize = scale.sp(12f)) }
+                                        }
                                     }
-                                    if (isFav) {
-                                        Box(
-                                            modifier = Modifier.align(Alignment.TopEnd).padding(scale.dp(6f)).size(scale.dp(22f)).clip(CircleShape).background(Color(0xCC1C1C1E)).testTag("novita_film_${film.streamId}_fav_star"),
-                                            contentAlignment = Alignment.Center
-                                        ) { Text(text = "★", color = Color(0xFFFBBF24), fontSize = scale.sp(12f)) }
-                                    }
+                                    FocusMarqueeText(
+                                        text = film.name,
+                                        focused = focused,
+                                        modifier = Modifier.padding(top = scale.dp(6f)).width(scale.dp(140f)),
+                                    )
+                                    film.year?.let { year -> Text(text = year, color = FvpColors.TextSecondary) }
                                 }
-                                FocusMarqueeText(
-                                    text = film.name,
-                                    focused = focused,
-                                    modifier = Modifier.padding(top = scale.dp(6f)).width(scale.dp(140f)),
-                                )
-                                film.year?.let { year -> Text(text = year, color = FvpColors.TextSecondary) }
                             }
                         }
                     }
                 }
             }
-        }
-        Column(modifier = rowsBringIntoView.rowModifier(ROW_SERIES)) {
-            Text(
-                text = "Ultime serie",
-                color = FvpColors.TextPrimary,
-                fontWeight = FontWeight.Bold,
-                // Il titolo si allinea alla prima card, dentro il contentPadding della riga.
-                modifier = Modifier.padding(start = scale.focusSafePadding, bottom = scale.dp(8f))
-            )
-            if (recentSeries.isEmpty()) {
-                Text(text = "Nessuna serie disponibile", color = FvpColors.TextSecondary)
-            } else {
-                LazyRow(
-                    state = seriesListState,
-                    horizontalArrangement = Arrangement.spacedBy(scale.dp(12f)),
-                    contentPadding = PaddingValues(scale.focusSafePadding),
-                    modifier = Modifier.fillMaxWidth().testTag("novita_series_row"),
-                ) {
-                    itemsIndexed(recentSeries, key = { _, s -> s.seriesId }) { index, serie ->
-                        val isFav = favorites.any { it.id == "series_${serie.seriesId}" }
-                        val itemFr = remember(serie.seriesId, serieItemFocusRequesters) { serieItemFocusRequesters[serie.seriesId] ?: FocusRequester() }
-                        var focused by remember(serie.seriesId) { mutableStateOf(false) }
-                        Card(
-                            onClick = {
-                                serieRestoreHelper.onOpen(serie.seriesId, index)
-                                detailSerie = serie
-                            },
-                            modifier = Modifier.width(scale.dp(140f)).testTag("novita_serie_${serie.seriesId}")
-                                .focusRequester(itemFr)
-                                .onFocusChanged { focusState ->
-                                    focused = focusState.isFocused
-                                    if (focusState.isFocused) rowsBringIntoView.onRowFocused(ROW_SERIES)
-                                }
-                                .fvpLongPress { onLongPressSeries(serie) },
-                            scale = CardDefaults.scale(focusedScale = 1.04f),
-                            border = CardDefaults.border(focusedBorder = Border(BorderStroke(2.dp, FvpColors.GreenFocus))),
-                            colors = CardDefaults.colors(containerColor = FvpColors.Surface),
-                            shape = CardDefaults.shape(shape = RoundedCornerShape(scale.dp(10f))),
-                        ) {
-                            Column(modifier = Modifier.padding(scale.dp(4f))) {
-                                Box(
-                                    modifier = Modifier
-                                        .width(scale.dp(140f))
-                                        .height(scale.dp(200f))
-                                        .clip(RoundedCornerShape(scale.dp(10f)))
-                                ) {
-                                    CatalogPosterImage(imageUrl = serie.cover, title = serie.name, scale = scale, modifier = Modifier.fillMaxSize())
-                                    if (isFav) {
-                                        Box(
-                                            modifier = Modifier.align(Alignment.TopEnd).padding(scale.dp(6f)).size(scale.dp(22f)).clip(CircleShape).background(Color(0xCC1C1C1E)).testTag("novita_serie_${serie.seriesId}_fav_star"),
-                                            contentAlignment = Alignment.Center
-                                        ) { Text(text = "★", color = Color(0xFFFBBF24), fontSize = scale.sp(12f)) }
+            Column(modifier = rowsBringIntoView.rowModifier(ROW_SERIES)) {
+                Text(
+                    text = "Ultime serie",
+                    color = FvpColors.TextPrimary,
+                    fontWeight = FontWeight.Bold,
+                    // Il titolo si allinea alla prima card, dentro il contentPadding della riga.
+                    modifier = Modifier.padding(start = scale.focusSafePadding, bottom = scale.dp(8f))
+                )
+                if (recentSeries.isEmpty()) {
+                    Text(text = "Nessuna serie disponibile", color = FvpColors.TextSecondary)
+                } else {
+                    LazyRow(
+                        state = seriesListState,
+                        horizontalArrangement = Arrangement.spacedBy(scale.dp(12f)),
+                        contentPadding = PaddingValues(scale.focusSafePadding),
+                        modifier = Modifier.fillMaxWidth().testTag("novita_series_row"),
+                    ) {
+                        itemsIndexed(recentSeries, key = { _, s -> s.seriesId }) { index, serie ->
+                            val isFav = favorites.any { it.id == "series_${serie.seriesId}" }
+                            val itemFr = remember(serie.seriesId, serieItemFocusRequesters) { serieItemFocusRequesters[serie.seriesId] ?: FocusRequester() }
+                            var focused by remember(serie.seriesId) { mutableStateOf(false) }
+                            Card(
+                                onClick = {
+                                    serieRestoreHelper.onOpen(serie.seriesId, index)
+                                    detailSerie = serie
+                                },
+                                modifier = Modifier.width(scale.dp(140f)).testTag("novita_serie_${serie.seriesId}")
+                                    .focusRequester(itemFr)
+                                    .onFocusChanged { focusState ->
+                                        focused = focusState.isFocused
+                                        if (focusState.isFocused) rowsBringIntoView.onRowFocused(ROW_SERIES)
                                     }
-                                }
-                                FocusMarqueeText(
-                                    text = serie.name,
-                                    focused = focused,
-                                    modifier = Modifier.padding(top = scale.dp(6f)).width(scale.dp(140f)),
-                                )
-                                serie.releaseDate?.take(4)?.takeIf { it.all(Char::isDigit) }?.let { y ->
-                                    Text(text = y, color = FvpColors.TextSecondary)
+                                    .fvpLongPress { onLongPressSeries(serie) },
+                                scale = CardDefaults.scale(focusedScale = 1.04f),
+                                border = CardDefaults.border(focusedBorder = Border(BorderStroke(2.dp, FvpColors.GreenFocus))),
+                                colors = CardDefaults.colors(containerColor = FvpColors.Surface),
+                                shape = CardDefaults.shape(shape = RoundedCornerShape(scale.dp(10f))),
+                            ) {
+                                Column(modifier = Modifier.padding(scale.dp(4f))) {
+                                    Box(
+                                        modifier = Modifier
+                                            .width(scale.dp(140f))
+                                            .height(scale.dp(200f))
+                                            .clip(RoundedCornerShape(scale.dp(10f)))
+                                    ) {
+                                        CatalogPosterImage(imageUrl = serie.cover, title = serie.name, scale = scale, modifier = Modifier.fillMaxSize())
+                                        if (isFav) {
+                                            Box(
+                                                modifier = Modifier.align(Alignment.TopEnd).padding(scale.dp(6f)).size(scale.dp(22f)).clip(CircleShape).background(Color(0xCC1C1C1E)).testTag("novita_serie_${serie.seriesId}_fav_star"),
+                                                contentAlignment = Alignment.Center
+                                            ) { Text(text = "★", color = Color(0xFFFBBF24), fontSize = scale.sp(12f)) }
+                                        }
+                                    }
+                                    FocusMarqueeText(
+                                        text = serie.name,
+                                        focused = focused,
+                                        modifier = Modifier.padding(top = scale.dp(6f)).width(scale.dp(140f)),
+                                    )
+                                    serie.releaseDate?.take(4)?.takeIf { it.all(Char::isDigit) }?.let { y ->
+                                        Text(text = y, color = FvpColors.TextSecondary)
+                                    }
                                 }
                             }
                         }

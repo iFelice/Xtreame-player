@@ -58,6 +58,7 @@ import it.felixvision.tv.ui.catalog.NovitaSection
 import it.felixvision.tv.ui.catalog.SearchSection
 import it.felixvision.tv.ui.catalog.SerieSection
 import it.felixvision.tv.ui.catalog.deriveSeasons
+import it.felixvision.tv.ui.components.BrandBackdrop
 import it.felixvision.tv.ui.components.EmptyState
 import it.felixvision.tv.ui.components.ErrorState
 import it.felixvision.tv.ui.components.FvpPrimaryButton
@@ -426,9 +427,9 @@ fun FvpMainScreen(
     ) {
         Box(modifier = Modifier.fillMaxSize().background(FvpColors.Background).padding(scale.dp(8f))) {
             when {
-                catalogState.isLoading && catalogState.catalog == null -> {
-                    LoadingState(message = "Caricamento catalogo in corso…", scale = scale, modifier = Modifier.align(Alignment.Center))
-                }
+                // L'attesa del primo catalogo è a schermo intero: il BrandBackdrop
+                // è composto in fondo a questa schermata, sopra il menu laterale.
+                catalogState.isLoading && catalogState.catalog == null -> Unit
                 catalogState.errorMessage != null && catalogState.catalog == null -> {
                     ErrorState(message = catalogState.errorMessage!!, scale = scale, onRetry = { catalogViewModel.retry() }, modifier = Modifier.align(Alignment.Center))
                 }
@@ -697,5 +698,13 @@ fun FvpMainScreen(
                 }
             },
         )
+    }
+
+    // Primo caricamento del catalogo: attesa a schermo intero con lo stesso
+    // sfondo dell'avvio, sopra il menu laterale.
+    if (catalogState.isLoading && catalogState.catalog == null) {
+        BrandBackdrop(scale = scale) {
+            LoadingState(message = "Caricamento catalogo in corso…", scale = scale)
+        }
     }
 }
