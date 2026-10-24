@@ -16,6 +16,12 @@ data/allowed-hosts.json
 # storia git (vedi reference/README.md).
 Progetto-APK/
 
+# App LG webOS Probe (apps/webos-probe): config locali mai committati e artefatti build
+apps/webos-probe/config.local.json
+apps/webos-probe/config.local.js
+apps/webos-probe/dist/
+apps/webos-probe/node_modules/
+
 # App Android TV (apps/android-tv): artefatti di build locali
 apps/android-tv/.gradle/
 apps/android-tv/build/

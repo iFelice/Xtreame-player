@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FVP Probe 0.0.1</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>FVP Probe <span style="color:#10B981">0.0.1</span> — LG webOS 25</h1>
+    <div class="meta">
+      <div><strong>UserAgent:</strong> <span id="ua">—</span></div>
+      <div><strong>Finestra:</strong> <span id="winSize">—</span> · <strong>location.origin:</strong> <span id="origin">—</span> · <strong>Versione app:</strong> 0.0.1</div>
+      <div><strong>Config:</strong> <span id="cfgInfo" class="muted">caricamento…</span></div>
+    </div>
+  </header>
+
+  <main>
+    <!-- 1. Server Xtream -->
+    <section class="card" id="card-server">
+      <h2>1) Server Xtream — login player_api.php</h2>
+      <p class="desc">Verifica login al server Xtream impostato in config.local.json. Non mostra mai credenziali: user/password sempre <code>***</code>.</p>
+      <div class="row">
+        <button id="btn-server">Esegui</button>
+        <span id="status-server" class="status idle">IDLE</span>
+      </div>
+      <div id="detail-server" class="detail muted">Premi "Esegui" per testare il server. URL usato: <span id="server-url-preview">—</span></div>
+      <div class="hint">Mostra: stato HTTP, user_info.status, max_connections, allowed_output_formats, tempo di risposta. Errori inclusi TypeError di CORS.</div>
+    </section>
+
+    <!-- 2. Relay -->
+    <section class="card" id="card-relay">
+      <h2>2) Relay — health check</h2>
+      <p class="desc">Fetch di <code>{relayUrl}/healthz</code>. Mostra stato HTTP o errore e location.origin.</p>
+      <div class="row">
+        <button id="btn-relay">Esegui</button>
+        <span id="status-relay" class="status idle">IDLE</span>
+      </div>
+      <div id="detail-relay" class="detail muted">Premi "Esegui". location.origin = <span id="origin2">—</span></div>
+    </section>
+
+    <!-- 3. Script -->
+    <section class="card" id="card-script">
+      <h2>3) Script — ES module vs classic</h2>
+      <p class="desc">(a) caricamento dinamico di <code>module-test.js</code> come <code>&lt;script type="module"&gt;</code> che imposta una globale; (b) stesso test con <code>classic-test.js</code> come script classico.</p>
+      <div class="row">
+        <button id="btn-script">Esegui</button>
+        <span id="status-module" class="status idle">MODULE: IDLE</span>
+        <span id="status-classic" class="status idle">CLASSIC: IDLE</span>
+      </div>
+      <div id="detail-script" class="detail muted">Premi "Esegui".</div>
+      <div class="hint">Su webOS più vecchi i moduli ES possono fallire; il test lo rileva.</div>
+    </section>
+
+    <!-- 4. Video -->
+    <section class="card" id="card-video">
+      <h2>4) Video — HLS / MPEG-TS / VOD</h2>
+      <p class="desc">Riproduce in un &lt;video&gt; a schermo intero (tasto Indietro torna alla schermata). Se liveStreamId/vodStreamId sono vuoti, li recupera da get_live_streams / get_vod_streams.</p>
+      <div class="row">
+        <button id="btn-video-hls">Live HLS (.m3u8)</button>
+        <button id="btn-video-ts">Live MPEG-TS (.ts)</button>
+        <button id="btn-video-vod">Film (VOD)</button>
+      </div>
+      <div class="grid-3" style="margin-top:12px">
+        <div>
+          <span id="status-hls" class="status idle">HLS: IDLE</span>
+          <div id="detail-hls" class="detail muted" style="min-height:80px">In attesa.</div>
+        </div>
+        <div>
+          <span id="status-ts" class="status idle">TS: IDLE</span>
+          <div id="detail-ts" class="detail muted" style="min-height:80px">In attesa.</div>
+        </div>
+        <div>
+          <span id="status-vod" class="status idle">VOD: IDLE</span>
+          <div id="detail-vod" class="detail muted" style="min-height:80px">In attesa.</div>
+        </div>
+      </div>
+      <div class="hint">Per ognuno: esito (playing entro 20 s), tempo fino al primo fotogramma, videoWidth×videoHeight, audioTracks, codice MediaError se fallisce. URL mascherati.</div>
+    </section>
+
+    <!-- 5. Telecomando -->
+    <section class="card" id="card-remote">
+      <h2>5) Telecomando — tasti, wheel, cursore</h2>
+      <p class="desc">Mostra keyCode, key e code degli ultimi 10 tasti, eventi wheel (deltaY) e stato cursore (cursorStateChange di webOS). Indietro (461) qui NON chiude l'app.</p>
+      <div class="row">
+        <button id="btn-clear-remote">Pulisci</button>
+        <button id="btn-exit" class="danger">Esci</button>
+        <span id="cursor-status" class="status idle">CURSORE: —</span>
+      </div>
+      <table class="kbd-table" id="remote-table">
+        <thead><tr><th>#</th><th>keyCode</th><th>key</th><th>code</th><th>time</th></tr></thead>
+        <tbody id="remote-body"><tr><td colspan="5" class="muted">Nessun tasto ancora.</td></tr></tbody>
+      </table>
+      <div id="detail-remote" class="detail muted">In attesa di tasti / wheel / cursorStateChange…</div>
+      <div class="hint">Usa frecce e OK per navigare; premi Indietro per verificare keyCode 461; prova anche il puntatore del Magic Remote.</div>
+    </section>
+
+    <section class="card">
+      <h2>Note</h2>
+      <p class="desc">Questa app non invia dati esterni oltre ai fetch espliciti di prova. Nessun log contiene credenziali. Dati di esempio consentiti: http://server.esempio:8080, demo/demo, 192.168.1.x.</p>
+      <p class="desc">Verificato solo su browser desktop con server di prova locale; risultati su TV da confermare in Developer Mode su LG OLED C2 webOS 25.</p>
+    </section>
+  </main>
+
+  <!-- Video overlay fullscreen -->
+  <div id="video-overlay" aria-hidden="true">
+    <header>
+      <h1 style="margin:0">Riproduzione in corso — premi Indietro per tornare</h1>
+      <div style="margin-top:8px"><button id="btn-video-close" class="secondary">Chiudi video (Indietro)</button></div>
+    </header>
+    <video id="probe-video" controls autoplay playsinline></video>
+    <div id="video-info" class="muted">In attesa di playing…</div>
+  </div>
+
+  <!-- Config fallback: se fetch locale fallisce, usa window.FVP_CONFIG -->
+  <script src="config.local.js"></script>
+  <script src="probe.js"></script>
+</body>
+</html>

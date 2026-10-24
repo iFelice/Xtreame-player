@@ -1,0 +1,14 @@
+{
+  "name": "fvp-probe",
+  "private": true,
+  "version": "0.0.1",
+  "description": "App di prova per LG webOS - misura capacità del TV prima di adattare l'app web React",
+  "scripts": {
+    "package": "ares-package --no-minify . -o dist",
+    "install-tv": "ares-install --device lgtv dist/*.ipk",
+    "launch": "ares-launch --device lgtv it.felixvision.probe"
+  },
+  "devDependencies": {
+    "@webos-tools/cli": "^3.2.6"
+  }
+}
