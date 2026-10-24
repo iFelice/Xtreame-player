@@ -20,13 +20,13 @@
     <!-- 1. Server Xtream -->
     <section class="card" id="card-server">
       <h2>1) Server Xtream — login player_api.php</h2>
-      <p class="desc">Verifica login al server Xtream impostato in config.local.json. Non mostra mai credenziali: user/password sempre <code>***</code>.</p>
+      <p class="desc">Verifica login al server Xtream impostato in config.local.json. Non mostra mai credenziali: user/password sempre <code>***</code>, nessun corpo grezzo.</p>
       <div class="row">
         <button id="btn-server">Esegui</button>
         <span id="status-server" class="status idle">IDLE</span>
       </div>
-      <div id="detail-server" class="detail muted">Premi "Esegui" per testare il server. URL usato: <span id="server-url-preview">—</span></div>
-      <div class="hint">Mostra: stato HTTP, user_info.status, max_connections, allowed_output_formats, tempo di risposta. Errori inclusi TypeError di CORS.</div>
+      <div id="detail-server" class="detail muted">Premi "Esegui" per testare il server. URL: <span id="server-url-preview">—</span></div>
+      <div class="hint">Mostra solo: stato HTTP, tempo, user_info.status, max_connections, active_cons, allowed_output_formats, exp_date formattata. Errori inclusi TypeError di CORS.</div>
     </section>
 
     <!-- 2. Relay -->
@@ -38,6 +38,18 @@
         <span id="status-relay" class="status idle">IDLE</span>
       </div>
       <div id="detail-relay" class="detail muted">Premi "Esegui". location.origin = <span id="origin2">—</span></div>
+    </section>
+
+    <!-- 2b. Relay – abbinamento (POST) -->
+    <section class="card" id="card-pair">
+      <h2>2b) Relay – abbinamento (POST)</h2>
+      <p class="desc">Ripete la POST <code>{relayUrl}/api/pair/create</code> con <code>Content-Type: application/json</code> come fa l'app web (src/services/pairingRequests). Mostra stato HTTP, leggibilità del corpo e PIN (mai il token).</p>
+      <div class="row">
+        <button id="btn-pair">Esegui</button>
+        <span id="status-pair" class="status idle">IDLE</span>
+      </div>
+      <div id="detail-pair" class="detail muted">Premi "Esegui" per creare una sessione di abbinamento. Nessun altro endpoint viene chiamato.</div>
+      <div class="hint">Content-Type application/json, body {} — identico al client web. Il PIN è visibile, il token/pollToken non è mai mostrato.</div>
     </section>
 
     <!-- 3. Script -->
@@ -76,13 +88,13 @@
           <div id="detail-vod" class="detail muted" style="min-height:80px">In attesa.</div>
         </div>
       </div>
-      <div class="hint">Per ognuno: esito (playing entro 20 s), tempo fino al primo fotogramma, videoWidth×videoHeight, audioTracks, codice MediaError se fallisce. URL mascherati.</div>
+      <div class="hint">Per ognuno: esito (playing entro 20 s), tempo al primo fotogramma, videoWidth×videoHeight, audioTracks, codice MediaError se fallisce. URL mascherati, nessun corpo grezzo.</div>
     </section>
 
     <!-- 5. Telecomando -->
     <section class="card" id="card-remote">
       <h2>5) Telecomando — tasti, wheel, cursore</h2>
-      <p class="desc">Mostra keyCode, key e code degli ultimi 10 tasti, eventi wheel (deltaY) e stato cursore (cursorStateChange di webOS). Indietro (461) qui NON chiude l'app.</p>
+      <p class="desc">Mostra keyCode, key e code degli ultimi 10 tasti, eventi wheel (deltaY) e stato cursore (cursorStateChange di webOS). Indietro (461) qui NON chiude l'app. Navigazione a frecce attiva.</p>
       <div class="row">
         <button id="btn-clear-remote">Pulisci</button>
         <button id="btn-exit" class="danger">Esci</button>
@@ -93,12 +105,12 @@
         <tbody id="remote-body"><tr><td colspan="5" class="muted">Nessun tasto ancora.</td></tr></tbody>
       </table>
       <div id="detail-remote" class="detail muted">In attesa di tasti / wheel / cursorStateChange…</div>
-      <div class="hint">Usa frecce e OK per navigare; premi Indietro per verificare keyCode 461; prova anche il puntatore del Magic Remote.</div>
+      <div class="hint">Su/Giù tra le card, Sinistra/Destra tra i pulsanti della stessa riga; OK attiva il pulsante con il focus. Ogni focus scorre al centro. Prova anche il puntatore del Magic Remote.</div>
     </section>
 
     <section class="card">
       <h2>Note</h2>
-      <p class="desc">Questa app non invia dati esterni oltre ai fetch espliciti di prova. Nessun log contiene credenziali. Dati di esempio consentiti: http://server.esempio:8080, demo/demo, 192.168.1.x.</p>
+      <p class="desc">Questa app non invia dati esterni oltre ai fetch espliciti di prova. Nessun log contiene credenziali o URL del server. Dati di esempio consentiti: http://server.esempio:8080, demo/demo, 192.168.1.x.</p>
       <p class="desc">Verificato solo su browser desktop con server di prova locale; risultati su TV da confermare in Developer Mode su LG OLED C2 webOS 25.</p>
     </section>
   </main>
