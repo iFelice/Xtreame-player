@@ -1,0 +1,45 @@
+name: LG webOS – rinnovo Developer Mode
+
+on:
+  schedule:
+    - cron: "17 3 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  renew-devmode:
+    name: Rinnova sessione Developer Mode
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Chiama l'endpoint di rinnovo LG
+        env:
+          LG_DEVMODE_TOKEN: ${{ secrets.LG_DEVMODE_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${LG_DEVMODE_TOKEN:-}" ]]; then
+            echo "Segreto LG_DEVMODE_TOKEN mancante" >&2
+            exit 1
+          fi
+
+          response=$(curl -sS --fail --max-time 30 --retry 3 --retry-delay 20 \
+            --get \
+            --data-urlencode "sessionToken=${LG_DEVMODE_TOKEN}" \
+            "https://developer.lge.com/secure/ResetDevModeSession.dev") || {
+            echo "Richiesta all'endpoint LG fallita (errore di rete o risposta HTTP non riuscita)" >&2
+            exit 1
+          }
+
+          result=$(jq -r '.result // empty' <<<"$response" 2>/dev/null || true)
+          errorCode=$(jq -r '.errorCode // empty' <<<"$response" 2>/dev/null || true)
+          errorMsg=$(jq -r '.errorMsg // empty' <<<"$response" 2>/dev/null || true)
+
+          if [[ "$result" == "success" ]]; then
+            echo "Rinnovo riuscito: errorCode=${errorCode:-N/A}"
+          else
+            echo "Rinnovo non riuscito: result=${result:-N/A} errorCode=${errorCode:-N/A} errorMsg=${errorMsg:-N/A}" >&2
+            exit 1
+          fi
