@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Search,
   Layers,
@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { XtreamCategory } from '../types/xtream';
 import { isTvEnvironment } from '../utils/downloadHelper';
+import { registerTvOverlay } from '../platform/tvOverlays';
 
 export type CategoryAccent = 'live' | 'accent' | 'series';
 
@@ -87,6 +88,13 @@ export const CollapsibleCategoryPanel: React.FC<CollapsibleCategoryPanelProps> =
   const isTv = isTvEnvironment();
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [categorySearch, setCategorySearch] = useState<string>('');
+  // Il pannello categorie aperto è il livello più basso da chiudere col
+  // tasto Indietro del telecomando: si registra mentre è visibile.
+  useEffect(() => {
+    if (!isOpen) return;
+    return registerTvOverlay('category-panel', () => setIsOpen(false));
+  }, [isOpen]);
+
   const desktopListRef = useRef<HTMLDivElement | null>(null);
   const mobileListRef = useRef<HTMLDivElement | null>(null);
 

@@ -1,4 +1,4 @@
-import { Capacitor } from '@capacitor/core';
+import { isDirectMode } from '../platform/runtime';
 import { XtreamParsedUrl } from '../types/xtream';
 
 /**
@@ -162,8 +162,9 @@ export function buildStreamUrl(
   }
 
   if (useProxy) {
-    // Su app nativa iOS / Android NON usiamo MAI il proxy: il flusso viene riprodotto direttamente dal server
-    if (Capacitor.isNativePlatform()) {
+    // Su app nativa iOS / Android e su webOS NON usiamo MAI il proxy: il
+    // flusso viene riprodotto direttamente dal server.
+    if (isDirectMode()) {
       return streamPath;
     }
     return `/api/proxy/stream?url=${encodeURIComponent(streamPath)}`;

@@ -7,6 +7,9 @@ coverage/
 *.log
 .env*
 !.env.example
+# La configurazione della build webOS non contiene segreti: deve essere
+# versionata perché la build del TV sia riproducibile.
+!.env.webos
 
 # Elenco locale dei provider abilitati al proxy (generato a runtime)
 data/allowed-hosts.json
@@ -24,3 +27,11 @@ apps/android-tv/local.properties
 apps/android-tv/.idea/
 apps/android-tv/**/*.apk
 apps/android-tv/.kotlin/
+
+# App LG webOS (apps/webos-tv): build, pacchetto e dipendenze generate localmente
+apps/webos-tv/build/
+apps/webos-tv/dist/
+apps/webos-tv/node_modules/
+apps/webos-tv/.local/
+apps/webos-tv/**/*.local.*
+*.ipk

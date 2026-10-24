@@ -28,7 +28,7 @@ import { sortSeriesList } from '../utils/recentSorting';
 import { getSecureImageUrl } from '../utils/imageUrl';
 import { VirtualizedMediaGrid } from './VirtualizedMediaGrid';
 import { ListPositionIndicator } from './ListPositionIndicator';
-import { triggerMediaDownload, isTvEnvironment } from '../utils/downloadHelper';
+import { canOfferDownloads, triggerMediaDownload, isTvEnvironment } from '../utils/downloadHelper';
 import { CollapsibleCategoryPanel } from './CollapsibleCategoryPanel';
 
 interface SeriesCatalogProps {
@@ -493,7 +493,7 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                           </div>
 
                           <div className="flex items-center gap-2 shrink-0">
-                            {!isTv && (
+                            {canOfferDownloads() && !isTv && (
                               <button
                                 type="button"
                                 onClick={(e) => {

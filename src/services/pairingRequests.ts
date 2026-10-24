@@ -1,4 +1,5 @@
 import { isRubricaCode, normalizeRubricaCode } from '../../shared/pairing';
+import { isWebOsBuild } from '../platform/runtime';
 
 export interface PairingRequestOptions {
   native: boolean;
@@ -39,6 +40,9 @@ function pairingUrl(path: string, native: boolean, nativeServer: string): string
 
 export function buildPairingCreateRequest(options: PairingRequestOptions): PairingRequest {
   const relayUrl = getPairingRelayUrl(options.relayUrl);
+  // Nel pacchetto webOS non c'è Express: non esporre mai /api/session/*,
+  // anche se un futuro chiamante passasse erroneamente native:false.
+  if (isWebOsBuild()) return relayUrl ? { method: 'POST', url: `${relayUrl}/api/pair/create` } : { url: '' };
   if (relayUrl) {
     return {
       method: 'POST',
@@ -55,6 +59,7 @@ export function buildPairingStatusRequest(
   options: PairingRequestOptions,
 ): PairingRequest {
   const relayUrl = getPairingRelayUrl(options.relayUrl);
+  if (isWebOsBuild() && !relayUrl) return { url: '' };
   if (relayUrl) {
     const request: PairingRequest = {
       url: `${relayUrl}/api/pair/status/${encodeURIComponent(code)}`,
@@ -80,6 +85,7 @@ export function buildPairingStatusRequest(
 
 export function buildPairingSubmitRequest(options: PairingRequestOptions): PairingRequest {
   const relayUrl = getPairingRelayUrl(options.relayUrl);
+  if (isWebOsBuild()) return relayUrl ? { method: 'POST', url: `${relayUrl}/api/pair/submit` } : { url: '' };
   if (relayUrl) {
     return {
       method: 'POST',
@@ -102,9 +108,14 @@ export function buildPairingWebUrl(
   },
 ): string {
   const relayUrl = getPairingRelayUrl(options?.relayUrl);
-  const base = relayUrl
+  if (isWebOsBuild() && !relayUrl) return '';
+  // Un link `file://` non è raggiungibile dal telefono: in modalità webOS si
+  // usa solo il relay e non si ricade mai sull'origine corrente o su /session.
+  const base = isWebOsBuild()
     ? relayUrl
-    : options?.native
+    : relayUrl
+      ? relayUrl
+      : options?.native
       ? (options.nativeServer || '').replace(/\/+$/, '')
       : (
           options?.origin ??

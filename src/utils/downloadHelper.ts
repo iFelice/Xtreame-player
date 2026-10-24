@@ -1,5 +1,6 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { Directory, Filesystem } from '@capacitor/filesystem';
+import { isWebOsBuild } from '../platform/runtime';
 
 interface DocumentExporterPlugin {
   exportFile(options: { path: string }): Promise<{ path: string }>;
@@ -12,6 +13,9 @@ const DocumentExporter = registerPlugin<DocumentExporterPlugin>('DocumentExporte
  * where direct file downloading should be disabled.
  */
 export function isTvEnvironment(): boolean {
+  // Il target webOS è una modalità TV esplicita di build: non dipendere
+  // dall'user-agent (che può cambiare tra versioni del firmware).
+  if (isWebOsBuild()) return true;
   if (typeof window === 'undefined') return false;
   const ua = (navigator.userAgent || '').toLowerCase();
 
@@ -84,6 +88,19 @@ export async function cleanupLegacyNativeDownloads(): Promise<void> {
   );
 }
 
+/**
+ * Whether the current client can offer media downloads at all.
+ *
+ * The webOS package has no local Express server (the web download route
+ * `/api/proxy/stream?...&download=1` does not exist there) and no writable
+ * app folder the user could reach, so every download affordance must stay
+ * hidden — independently of `isTvEnvironment()`, which is a best-effort
+ * user-agent guess.
+ */
+export function canOfferDownloads(tvEnvironment: boolean = isTvEnvironment()): boolean {
+  return !tvEnvironment && !isWebOsBuild();
+}
+
 export function safeFilename(title: string, extension: string): string {
   // Also remove control characters: they are invalid or problematic in native paths.
   const cleanTitle = (title || 'video')
@@ -108,6 +125,10 @@ export async function triggerMediaDownload(
   containerExtension: string = 'mp4',
   accountKey?: string
 ): Promise<boolean> {
+  // Doppia protezione: le schermate webOS non mostrano alcun pulsante di
+  // download, e anche una chiamata diretta da codice futuro non deve tentare
+  // un `/api/proxy/stream?...&download=1` che nel pacchetto TV non esiste.
+  if (!canOfferDownloads()) return false;
   if (typeof window === 'undefined') return false;
 
   const rawUrl = unwrapProxyUrl(streamUrl);

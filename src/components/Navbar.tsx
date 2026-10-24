@@ -81,7 +81,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex md:hidden w-full max-w-[2400px] mx-auto px-3 h-16 items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <img
-              src="/brand/favicon.svg"
+              src={`${import.meta.env.BASE_URL}brand/favicon.svg`}
               alt="FelixVisionPlayer"
               className="w-10 h-10 shrink-0"
             />
@@ -210,7 +210,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* Brand Icon and Text */}
         <div className="flex items-center gap-3 sm:gap-4 shrink-0">
           <img
-            src="/brand/favicon.svg"
+            src={`${import.meta.env.BASE_URL}brand/favicon.svg`}
             alt="FelixVisionPlayer"
             className="w-11 h-11 sm:w-14 sm:h-14 shrink-0"
           />

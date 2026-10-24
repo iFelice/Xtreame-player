@@ -18,7 +18,8 @@ import {
 } from 'lucide-react';
 import { storage } from '../services/storage';
 import { parseXtreamUrl } from '../utils/parseXtreamUrl';
-import { Capacitor } from '@capacitor/core';
+import { isDirectMode } from '../platform/runtime';
+import { registerTvOverlay } from '../platform/tvOverlays';
 import { isTvEnvironment } from '../utils/downloadHelper';
 import {
   buildPairingCreateRequest,
@@ -40,9 +41,11 @@ function nativePairingServer(): string {
 function pairingWebUrl(code?: string): string {
   const relayUrl = getPairingRelayUrl();
   return buildPairingWebUrl(code, {
-    native: Capacitor.isNativePlatform(),
+    native: isDirectMode(),
     nativeServer: nativePairingServer(),
-    origin: typeof window !== 'undefined' ? window.location.origin : '',
+    // In modalità diretta l'origine della pagina (file:// sul TV) non è un
+    // indirizzo raggiungibile dal telefono: conta solo il relay.
+    origin: isDirectMode() ? '' : typeof window !== 'undefined' ? window.location.origin : '',
     relayUrl,
   });
 }
@@ -85,12 +88,32 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
   const [sendErrorMessage, setSendErrorMessage] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
 
+  // Su webOS (e in ogni build in modalità diretta) l'unica origine di
+  // abbinamento è il relay VITE_PAIRING_RELAY_URL: /api/session/* non esiste
+  // dentro il pacchetto .ipk, quindi senza relay la funzione è spenta.
+  const pairingUnavailableReason = (): 'disabled' | 'missing-relay' | null => {
+    if (getPairingRelayUrl()) return null;
+    if (!isDirectMode()) return pairingEnabled ? null : 'disabled';
+    // Diretta (webOS, Capacitor): senza relay non c'è alcun /api/session/* da
+    // raggiungere, quindi l'abbinamento resta spento e lo diciamo in UI.
+    return 'missing-relay';
+  };
+
+  const pairingAvailable = () => pairingUnavailableReason() === null;
+
   const pollIntervalRef = useRef<any>(null);
   const timerIntervalRef = useRef<any>(null);
   const expiresAtRef = useRef<number>(0);
   const creationStartedRef = useRef<boolean>(false);
   const savedAccounts = storage.getAccounts();
   const isTv = isTvEnvironment();
+
+  // Il tasto Indietro del telecomando deve poter chiudere questo modale: si
+  // registra nel registro degli overlay TV finché è aperto.
+  useEffect(() => {
+    if (!isOpen) return;
+    return registerTvOverlay('tv-pairing', onClose);
+  }, [isOpen, onClose]);
 
   // If initialCode changes, set remotePin and switch mode
   useEffect(() => {
@@ -104,7 +127,14 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
   const generateNewSession = async () => {
     const relayUrl = getPairingRelayUrl();
     const useRelay = Boolean(relayUrl);
-    const native = Capacitor.isNativePlatform();
+    const native = isDirectMode();
+    if (!pairingAvailable()) {
+      if (pairingUnavailableReason() === 'missing-relay') {
+        setPollError('Relay di abbinamento non configurato in questa build (VITE_PAIRING_RELAY_URL).');
+        setIsWaitingForPhone(false);
+      }
+      return;
+    }
     if (!useRelay && !native && !pairingEnabled) return;
 
     try {
@@ -191,7 +221,7 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
       try {
         const relayUrl = getPairingRelayUrl();
         const useRelay = Boolean(relayUrl);
-        const native = Capacitor.isNativePlatform();
+        const native = isDirectMode();
         const request = buildPairingStatusRequest(pinCode, {
           native,
           nativeServer: nativePairingServer(),
@@ -250,8 +280,12 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
       return;
     }
     const relayUrl = getPairingRelayUrl();
-    const native = Capacitor.isNativePlatform();
+    const native = isDirectMode();
     if (mode !== 'tv' || pinCode || creationStartedRef.current) return;
+    // 'disabled' (web senza relay e senza pairing) resta silenzioso; il caso
+    // 'missing-relay' deve invece passare da generateNewSession, che mostra il
+    // motivo in interfaccia senza emettere alcuna richiesta.
+    if (pairingUnavailableReason() === 'disabled') return;
     if (!relayUrl && !native && !pairingEnabled) return;
     creationStartedRef.current = true;
     void generateNewSession();
@@ -292,7 +326,7 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
     try {
       setIsSending(true);
       const submitReq = buildPairingSubmitRequest({
-        native: Capacitor.isNativePlatform(),
+        native: isDirectMode(),
         nativeServer: nativePairingServer(),
         relayUrl: getPairingRelayUrl(),
       });

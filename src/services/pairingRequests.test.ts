@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   buildPairingCreateRequest,
   buildPairingStatusRequest,
+  buildPairingSubmitRequest,
   buildPairingWebUrl,
   formatShortServiceUrl,
   pingPairingRelayHealth,
@@ -109,5 +110,30 @@ describe('pairing request construction', () => {
 
     pingPairingRelayHealth('https://pairing.esempio.workers.dev', mockFetch);
     expect(mockFetch).toHaveBeenCalledWith('https://pairing.esempio.workers.dev/healthz');
+  });
+});
+
+describe('pairing request construction in the webOS build', () => {
+  it('uses the configured relay and never falls back to /api/session/*', () => {
+    vi.stubEnv('VITE_TARGET', 'webos');
+    const relayUrl = 'https://pairing.esempio.workers.dev';
+    vi.stubEnv('VITE_PAIRING_RELAY_URL', relayUrl);
+    const options = { native: false, nativeServer, relayUrl: null };
+
+    expect(buildPairingCreateRequest(options).url).toBe(`${relayUrl}/api/pair/create`);
+    expect(buildPairingStatusRequest('001', options).url).toBe(`${relayUrl}/api/pair/status/001`);
+    expect(buildPairingSubmitRequest(options).url).toBe(`${relayUrl}/api/pair/submit`);
+    expect(buildPairingWebUrl('001', { origin: 'file://', relayUrl: null })).toBe(`${relayUrl}/?code=001`);
+  });
+
+  it('returns no request instead of an Express endpoint if the relay is missing', () => {
+    vi.stubEnv('VITE_TARGET', 'webos');
+    vi.stubEnv('VITE_PAIRING_RELAY_URL', '');
+    const options = { native: false, nativeServer, relayUrl: null };
+
+    expect(buildPairingCreateRequest(options)).toEqual({ url: '' });
+    expect(buildPairingStatusRequest('001', options)).toEqual({ url: '' });
+    expect(buildPairingSubmitRequest(options)).toEqual({ url: '' });
+    expect(buildPairingWebUrl('001', { origin: 'file://', relayUrl: null })).toBe('');
   });
 });

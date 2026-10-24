@@ -102,7 +102,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
         {/* Brand Header */}
         <div className="tv-login-brand flex flex-col items-center text-center mb-6 sm:mb-8">
           <img
-            src="/brand/icon-192.png"
+            src={`${import.meta.env.BASE_URL}brand/icon-192.png`}
             alt="FelixVisionPlayer"
             className="w-18 h-18 mb-3"
           />

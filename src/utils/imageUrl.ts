@@ -1,4 +1,4 @@
-import { Capacitor } from '@capacitor/core';
+import { isDirectMode } from '../platform/runtime';
 
 /**
  * Utility to make image URLs secure (HTTPS) and avoid Mixed Content blocks in Chrome/Safari,
@@ -15,8 +15,10 @@ export function getSecureImageUrl(rawUrl?: string | null): string {
     return trimmed;
   }
 
-  // Su app mobile nativa (iOS / Android), carichiamo direttamente senza proxy wsrv.nl
-  if (Capacitor.isNativePlatform()) {
+  // Su app nativa (iOS / Android) e su webOS carichiamo direttamente, senza
+  // proxy wsrv.nl: il TV non ha alcuna pagina HTTPS che blocchi un'immagine
+  // HTTP (mixed content), quindi il bypass non serve.
+  if (isDirectMode()) {
     return trimmed;
   }
 

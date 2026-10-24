@@ -30,7 +30,13 @@ npm run build      # build di produzione in dist/
 npm start          # serve la build di produzione (dist/)
 npm run preview    # anteprima statica con vite
 npm run dev:safe   # sviluppo in modalità sicura (vedi sotto)
+
+npm run build:webos   # build dedicata per LG webOS (modalità TV, app .ipk)
+npm run package:webos # .ipk pronto per Developer Mode in apps/webos-tv/dist
 ```
+
+L'app LG webOS è una build della web app in modalità TV: guida completa in
+[`docs/WEBOS.md`](docs/WEBOS.md).
 
 In `npm run dev:safe` (`XTREAM_SAFE_MODE=1`) il proxy inoltra solo verso `localhost`/`127.0.0.1`/`::1` — quindi anche verso il mock Xtream locale — e il browser riceve una Content-Security-Policy che limita le connessioni allo stesso origine e a localhost.
 

@@ -32,6 +32,15 @@ import { pingPairingRelayHealth } from './services/pairingRequests';
 import { storage, SavedAccount } from './services/storage';
 import { buildStreamUrl } from './utils/parseXtreamUrl';
 import { cleanupLegacyNativeDownloads, isTvEnvironment } from './utils/downloadHelper';
+import { exitTvApp, isDirectMode, isWebOsBuild } from './platform/runtime';
+import {
+  isBackKeyCode,
+  resolveTvBackAction,
+  resolveTvExitConfirmAction,
+  type TvBackAction,
+  type TvBackState,
+} from './platform/tvBack';
+import { closeTvOverlay, isTvOverlayOpen } from './platform/tvOverlays';
 import { useTvNavigation } from './utils/tvNavigation';
 import { chooseInitialTab, shouldShowMobileBar } from './utils/navigation';
 import type { SectionTab } from './utils/navigation';
@@ -43,7 +52,9 @@ const SeriesCatalog = lazy(() => import('./components/SeriesCatalog').then((modu
 const FavoritesView = lazy(() => import('./components/FavoritesView').then((module) => ({ default: module.FavoritesView })));
 
 export default function App() {
-  const isTv = isTvEnvironment();
+  // Il target webOS è sempre una TV anche se in futuro il suo user-agent
+  // smettesse di corrispondere all'euristica di isTvEnvironment().
+  const isTv = isTvEnvironment() || isWebOsBuild();
   useTvNavigation(isTv);
   const [serverUrl, setServerUrl] = useState<string>('');
   const [username, setUsername] = useState<string>('');
@@ -65,8 +76,14 @@ export default function App() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showServerInfo, setShowServerInfo] = useState<boolean>(false);
   const [showSettingsSyncModal, setShowSettingsSyncModal] = useState<boolean>(false);
+  // Only webOS needs an explicit "esci dall'app?" step: the Back key has no
+  // system-level meaning there, so the app owns its own exit.
+  const [showTvExitConfirm, setShowTvExitConfirm] = useState<boolean>(false);
   const [isRemoteLoginPage, setIsRemoteLoginPage] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
+    // La schermata RemoteLogin usa /api/session/submit (endpoint Express): su
+    // webOS l'abbinamento passa solo dal relay esterno configurato e quella
+    // route non esiste nel pacchetto .ipk.
+    if (isWebOsBuild() || typeof window === 'undefined') return false;
     const path = window.location.pathname.toLowerCase();
     const search = new URLSearchParams(window.location.search);
     return path.includes('remote-login') || search.get('page') === 'remote-login' || search.has('code');
@@ -108,24 +125,6 @@ export default function App() {
     };
   }, []);
 
-  useEffect(() => {
-    if (!isTv) return;
-    const handleTvBack = () => {
-      if (activeMedia) {
-        setActiveMedia(null);
-      } else if (showServerInfo) {
-        setShowServerInfo(false);
-      } else if (showSettingsSyncModal) {
-        setShowSettingsSyncModal(false);
-      } else if (selectedSeriesForModal) {
-        setSelectedSeriesForModal(null);
-      } else if (!showTvHome) {
-        setShowTvHome(true);
-      }
-    };
-    window.addEventListener('android-tv-back', handleTvBack);
-    return () => window.removeEventListener('android-tv-back', handleTvBack);
-  }, [isTv, activeMedia, showServerInfo, showSettingsSyncModal, selectedSeriesForModal, showTvHome]);
 
   // Catalog data
   const [vodCategories, setVodCategories] = useState<XtreamCategory[]>([]);
@@ -266,34 +265,47 @@ export default function App() {
     let cancelled = false;
 
     const restoreSession = async () => {
+      // Modalità diretta (Capacitor, pacchetto webOS da file://): non esiste
+      // alcun Express da interrogare, quindi la safe mode è semplicemente
+      // spenta e si passa subito al ripristino dell'ultimo account.
+      let runtimeSafeMode = false;
+      if (!isDirectMode()) {
+        try {
+          const response = await fetch('/api/runtime-config');
+          const runtime = (await response.json()) as { safeMode?: boolean };
+          runtimeSafeMode = Boolean(runtime.safeMode);
+        } catch (e) {
+          // Il runtime config è un dettaglio del deploy web: se non risponde
+          // (servizio statico, proxy spento, rete instabile) l'app deve
+          // comunque riaprire l'ultimo account salvato.
+          console.warn('Runtime config non disponibile, ripristino account regolare:', e);
+        }
+      }
+      if (cancelled) return;
+      setSafeMode(runtimeSafeMode);
       try {
-        const response = await fetch('/api/runtime-config');
-        const runtime = (await response.json()) as { safeMode?: boolean };
-        if (cancelled) return;
-        setSafeMode(Boolean(runtime.safeMode));
-        if (isRemoteLoginPage) return;
-        if (!runtime.safeMode) sessionStorage.removeItem('xtream_safe_mode');
-        if (runtime.safeMode) {
-          sessionStorage.setItem('xtream_safe_mode', '1');
-          connectToServer('http://localhost:3333', 'demo', 'demo');
-          return;
-        }
-
-        const searchParams = new URLSearchParams(window.location.search);
-        const paramServer = searchParams.get('server') || searchParams.get('url');
-        const paramUser = searchParams.get('user') || searchParams.get('username');
-        const paramPass = searchParams.get('pass') || searchParams.get('password');
-        const paramSettings = searchParams.get('settings') || searchParams.get('setup');
-
-        if (paramServer && paramUser && paramPass) {
-          connectToServer(paramServer, paramUser, paramPass);
-          return;
-        }
-        if (paramSettings) setShowSettingsSyncModal(true);
-      } catch (e) {
-        console.error('Error restoring app session:', e);
+        if (runtimeSafeMode) sessionStorage.setItem('xtream_safe_mode', '1');
+        else sessionStorage.removeItem('xtream_safe_mode');
+      } catch {
+        // Storage non disponibile (TV in modalità privata): nessun blocco.
+      }
+      if (isRemoteLoginPage) return;
+      if (runtimeSafeMode) {
+        connectToServer('http://localhost:3333', 'demo', 'demo');
         return;
       }
+
+      const searchParams = new URLSearchParams(window.location.search);
+      const paramServer = searchParams.get('server') || searchParams.get('url');
+      const paramUser = searchParams.get('user') || searchParams.get('username');
+      const paramPass = searchParams.get('pass') || searchParams.get('password');
+      const paramSettings = searchParams.get('settings') || searchParams.get('setup');
+
+      if (paramServer && paramUser && paramPass) {
+        connectToServer(paramServer, paramUser, paramPass);
+        return;
+      }
+      if (paramSettings) setShowSettingsSyncModal(true);
 
       const last = storage.getLastAccount();
       if (last?.serverUrl && last.username && last.password) {
@@ -398,6 +410,106 @@ export default function App() {
     isLoadingCatalog,
     isPlayerFullscreen,
   });
+
+  // ── Tasto Indietro del telecomando ────────────────────────────────────────
+  // La scelta di cosa chiudere sta in `resolveTvBackAction` (funzione pura,
+  // coperta dai test); qui si legge lo stato reale e si esegue il comando.
+  const buildTvBackState = useCallback((): TvBackState => {
+    return {
+      playerOpen: Boolean(activeMedia),
+      serverInfoOpen: showServerInfo,
+      settingsSyncOpen: showSettingsSyncModal,
+      tvPairingOpen: isTvOverlayOpen('tv-pairing'),
+      seriesModalOpen: selectedSeriesForModal !== null,
+      categoryPanelOpen: isTvOverlayOpen('category-panel'),
+      showTvHome: Boolean(isTv && isConnected && !isLoadingCatalog && showTvHome && !activeMedia),
+      exitConfirmOpen: showTvExitConfirm,
+      // Su webOS il lettore gestisce da solo il 461 (come fa Escape con il
+      // proprio schermo intero): l'App non deve chiuderlo una seconda volta.
+      playerHandlesBack: isWebOsBuild() && Boolean(activeMedia),
+      canExitApp: isWebOsBuild(),
+    };
+  }, [
+    activeMedia,
+    showServerInfo,
+    showSettingsSyncModal,
+    selectedSeriesForModal,
+    showTvHome,
+    showTvExitConfirm,
+    isTv,
+    isConnected,
+    isLoadingCatalog,
+  ]);
+
+  const applyTvBackAction = useCallback((action: TvBackAction) => {
+    switch (action.type) {
+      case 'close-layer':
+        switch (action.layer) {
+          case 'player':
+            setActiveMedia(null);
+            break;
+          case 'server-info':
+            setShowServerInfo(false);
+            break;
+          case 'settings-sync':
+            setShowSettingsSyncModal(false);
+            break;
+          case 'tv-pairing':
+            closeTvOverlay('tv-pairing');
+            break;
+          case 'series-modal':
+            setSelectedSeriesForModal(null);
+            break;
+          case 'category-panel':
+            closeTvOverlay('category-panel');
+            break;
+        }
+        return;
+      case 'show-tv-home':
+        setShowTvHome(true);
+        return;
+      case 'open-exit-confirm':
+        setShowTvExitConfirm(true);
+        return;
+      case 'close-exit-confirm':
+        setShowTvExitConfirm(false);
+        return;
+      case 'exit-app':
+        setShowTvExitConfirm(false);
+        exitTvApp();
+        return;
+      case 'none':
+      default:
+        return;
+    }
+  }, []);
+
+  const handleTvBackPress = useCallback(() => {
+    applyTvBackAction(resolveTvBackAction(buildTvBackState()));
+  }, [applyTvBackAction, buildTvBackState]);
+
+  useEffect(() => {
+    if (!isTv && !isWebOsBuild()) return;
+    // 1) Bridge Capacitor (Android TV): evento dedicato.
+    window.addEventListener('android-tv-back', handleTvBackPress);
+    // 2) webOS: il tasto Indietro arriva come keyCode 461 (key "GoBack",
+    //    `code` vuoto) perché l'app è pacchettizzata con
+    //    "disableBackHistoryAPI": true. Si riconosce solo per keyCode.
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!isWebOsBuild() || !isBackKeyCode(event.keyCode)) return;
+      event.preventDefault();
+      handleTvBackPress();
+    };
+    if (isWebOsBuild()) window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('android-tv-back', handleTvBackPress);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isTv, handleTvBackPress]);
+
+  const handleTvExitChoice = (confirmed: boolean) => {
+    applyTvBackAction(resolveTvExitConfirmAction(confirmed));
+  };
 
   if (isRemoteLoginPage) {
     return (
@@ -778,6 +890,45 @@ export default function App() {
           setSavedAccounts(storage.getAccounts());
         }}
       />
+
+      {/* webOS: the Back key on the TV home screen asks before closing the app. */}
+      {isWebOsBuild() && showTvExitConfirm && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="tv-exit-title"
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/85 p-6"
+        >
+          <div className="w-full max-w-2xl rounded-3xl border-2 border-separator-strong bg-surface-0 p-8 text-center shadow-2xl">
+            <h2 id="tv-exit-title" className="text-3xl font-black text-label">
+              Uscire da FelixVP?
+            </h2>
+            <p className="mt-3 text-lg text-label-secondary">
+              L'app viene chiusa. Gli account salvati restano sul televisore.
+            </p>
+            <div className="mt-8 flex items-center justify-center gap-4">
+              {/* Annulla riceve il focus: un secondo Indietro chiude la conferma. */}
+              <button
+                type="button"
+                autoFocus
+                data-tv-exit-choice="cancel"
+                onClick={() => handleTvExitChoice(false)}
+                className="min-w-40 rounded-2xl border-2 border-separator-strong bg-surface-1 px-6 py-3 text-xl font-bold text-label transition hover:bg-surface-2"
+              >
+                Annulla
+              </button>
+              <button
+                type="button"
+                data-tv-exit-choice="exit"
+                onClick={() => handleTvExitChoice(true)}
+                className="min-w-40 rounded-2xl border-2 border-danger/70 bg-danger px-6 py-3 text-xl font-bold text-on-accent transition hover:brightness-110"
+              >
+                Esci
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Footer */}
       <footer className={`w-full border-t border-separator bg-surface-0 py-4 text-center text-xs sm:text-sm text-label-tertiary ${showMobileBar ? 'mb-[calc(56px+env(safe-area-inset-bottom))] md:mb-0' : ''}`}>

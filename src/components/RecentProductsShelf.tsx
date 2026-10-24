@@ -20,7 +20,7 @@ import {
 import { sortVodStreams, sortSeriesList, formatRecentDate } from '../utils/recentSorting';
 import { buildStreamUrl } from '../utils/parseXtreamUrl';
 import { storage } from '../services/storage';
-import { isTvEnvironment, triggerMediaDownload } from '../utils/downloadHelper';
+import { canOfferDownloads, isTvEnvironment, triggerMediaDownload } from '../utils/downloadHelper';
 import { getSecureImageUrl } from '../utils/imageUrl';
 
 interface RecentProductsShelfProps {
@@ -227,7 +227,7 @@ export const RecentProductsShelf: React.FC<RecentProductsShelfProps> = ({
                       <Play className="w-5 h-5 ml-0.5 fill-white" />
                     </div>
 
-                    {!isTv && (
+                    {canOfferDownloads() && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();

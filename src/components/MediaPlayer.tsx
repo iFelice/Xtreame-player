@@ -24,15 +24,22 @@ import {
 } from 'lucide-react';
 import Hls from 'hls.js';
 import mpegts from 'mpegts.js';
-import { Capacitor } from '@capacitor/core';
 import { PlayableMediaItem } from '../types/xtream';
 import { storage } from '../services/storage';
-import { triggerMediaDownload, isDirectFileDownload, isTvEnvironment } from '../utils/downloadHelper';
+import { triggerMediaDownload, isDirectFileDownload, canOfferDownloads, isTvEnvironment } from '../utils/downloadHelper';
 import { getSecureImageUrl } from '../utils/imageUrl';
 import { initialPlaybackState, isPlaybackLoading, playbackReducer } from '../player/playbackState';
 import { destroyMediaEngines, releaseVideoElement, selectMediaEngine } from '../player/mediaEngine';
 import { HLS_CONFIG, MPEGTS_CONFIG } from '../player/engineConfig';
-import { canFallbackToMpegTs, isPublicMockStream, normalizeLiveStreamUrl } from '../player/streamFormat';
+import {
+  defaultLiveStreamFormat,
+  isPublicMockStream,
+  nextLiveFormatAfterFailure,
+  normalizeLiveStreamUrl,
+  type PlaybackTarget,
+} from '../player/streamFormat';
+import { isDirectMode, isWebOsBuild } from '../platform/runtime';
+import { resolvePlayerRemoteAction } from '../platform/tvBack';
 import { useIsMobileViewport } from '../utils/mobileLayout';
 import { MobilePlayerErrorPanel } from './MobilePlayerErrorPanel';
 
@@ -87,16 +94,24 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
   const isTv = isTvEnvironment();
   const isMobile = useIsMobileViewport();
-  const isNative = typeof window !== 'undefined' && (Capacitor.isNativePlatform() || window.location.protocol === 'capacitor:');
-  const isSafeMode = typeof window !== 'undefined' && !isNative && sessionStorage.getItem('xtream_safe_mode') === '1';
+  // Modalità diretta: app Capacitor (WebView senza server locale) e pacchetto
+  // webOS (pagina aperta da file://, nessun Express da raggiungere).
+  const isDirect =
+    isDirectMode() || (typeof window !== 'undefined' && window.location.protocol === 'capacitor:');
+  // Su webOS il motore è sempre il <video> nativo: niente hls.js né mpegts.js.
+  const playbackTarget: PlaybackTarget = isWebOsBuild() ? 'webos' : 'web';
+  const preferNativeOnly = playbackTarget === 'webos';
+  const isSafeMode =
+    typeof window !== 'undefined' && !isDirect && sessionStorage.getItem('xtream_safe_mode') === '1';
   const canSwitchLiveFormat = Boolean(media?.type === 'live' && !isPublicMockStream(media.streamUrl));
   const [aspectRatio, setAspectRatio] = useState<'contain' | '16_9' | '4_3' | 'cover' | 'fill'>('contain');
   const [showSettings, setShowSettings] = useState<boolean>(false);
   const [controlsVisible, setControlsVisible] = useState<boolean>(true);
   const [useProxy, setUseProxy] = useState<boolean>(() => {
-    // A Capacitor WebView has no Express server behind capacitor://localhost.
-    // Never restore a web proxy preference when running the native app.
-    if (isNative) return false;
+    // A Capacitor WebView has no Express server behind capacitor://localhost,
+    // and neither does the webOS package: never restore a web proxy
+    // preference in direct mode.
+    if (isDirect) return false;
     try {
       // Safe development must never inherit a previous "direct stream" choice.
       if (sessionStorage.getItem('xtream_safe_mode') === '1') return true;
@@ -107,7 +122,11 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       return true;
     }
   });
-  const [liveFormat, setLiveFormat] = useState<'m3u8' | 'ts'>('m3u8');
+  // webOS parte dal contenitore .ts (decodificatore nativo del TV), il web
+  // resta su .m3u8 con hls.js.
+  const [liveFormat, setLiveFormat] = useState<'m3u8' | 'ts'>(() => defaultLiveStreamFormat(playbackTarget));
+  // Un solo tentativo automatico con l'altro formato per ogni contenuto.
+  const liveFormatFallbackRef = useRef<boolean>(false);
   const hideControlsTimerRef = useRef<any>(null);
   const startupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bufferingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -124,6 +143,38 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     startupTimeoutRef.current = null;
     bufferingTimeoutRef.current = null;
   }, []);
+
+  // Un contenuto nuovo (zapping, episodio successivo, "Riprova") merita di
+  // nuovo un tentativo automatico con l'altro formato live.
+  useEffect(() => {
+    liveFormatFallbackRef.current = false;
+  }, [media?.id, playbackAttempt]);
+
+  /**
+   * Un flusso live che non parte o che errore riceve un solo tentativo
+   * automatico con l'altro contenitore, poi il messaggio d'errore. La scelta
+   * dell'ordine (webOS: .ts -> .m3u8, web: .m3u8 -> .ts) vive in
+   * `nextLiveFormatAfterFailure`, coperta dai test.
+   */
+  const handleLiveStartFailure = useCallback(
+    (message: string) => {
+      const decision = nextLiveFormatAfterFailure({
+        target: playbackTarget,
+        currentFormat: liveFormat,
+        fallbackAlreadyTried: liveFormatFallbackRef.current,
+        canSwitchFormat: canSwitchLiveFormat,
+      });
+      if (decision.kind === 'retry') {
+        liveFormatFallbackRef.current = true;
+        console.warn(`Formato live ${liveFormat} non riproducibile: nuovo tentativo in ${decision.format}`);
+        setLiveFormat(decision.format);
+        return;
+      }
+      setIsLoading(false);
+      setErrorMessage(message);
+    },
+    [playbackTarget, liveFormat, canSwitchLiveFormat, setIsLoading, setErrorMessage]
+  );
 
   useEffect(() => () => {
     if (hideControlsTimerRef.current) clearTimeout(hideControlsTimerRef.current);
@@ -187,13 +238,14 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       target = normalizeLiveStreamUrl(target, liveFormat);
     }
 
-    // Native Capacitor builds cannot use relative Express routes. Unwrap any
-    // previously generated proxy URL and always connect to the IPTV host.
-    if (isNative && target.startsWith('/api/proxy/stream?url=')) {
+    // Direct builds (Capacitor, webOS) cannot use relative Express routes.
+    // Unwrap any previously generated proxy URL and always reach the IPTV
+    // host itself: on the TV the verified working request is the direct one.
+    if (isDirect && target.startsWith('/api/proxy/stream?url=')) {
       const query = target.split('?')[1] || '';
       return new URLSearchParams(query).get('url') || target;
     }
-    if (isNative) return target;
+    if (isDirect) return target;
 
     if (useProxy) {
       if (target.startsWith('/api/proxy/stream')) {
@@ -207,7 +259,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       return new URLSearchParams(query).get('url') || target;
     }
     return target;
-  }, [media, useProxy, liveFormat, isNative]);
+  }, [media, useProxy, liveFormat, isDirect]);
 
   // Activity timer to hide controls during playback
   const showControlsTemporarily = useCallback(() => {
@@ -227,6 +279,9 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
 
     const video = videoRef.current;
     const url = getEffectiveUrl();
+    // Il server Xtream accetta una sola connessione per account: ogni nuovo
+    // flusso rilascia sempre il precedente prima di chiederne un altro.
+    releaseVideoElement(video);
     if (bufferingUiDelayRef.current) clearTimeout(bufferingUiDelayRef.current);
     bufferingUiDelayRef.current = null;
     setShowBufferingIndicator(false);
@@ -244,29 +299,32 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       video.pause();
       destroyEngines();
       setIsPlaying(false);
+      const timeoutMessage = 'Il contenuto non ha risposto entro 20 secondi. Riprova oppure torna al catalogo.';
+      // Sul TV il primo fotogramma che non arriva vale come errore di formato:
+      // prima di arrendersi si prova l'altro contenitore (una sola volta).
+      if (playbackTarget === 'webos' && media.type === 'live') {
+        handleLiveStartFailure(timeoutMessage);
+        return;
+      }
       setIsLoading(false);
-      setErrorMessage('Il contenuto non ha risposto entro 20 secondi. Riprova oppure torna al catalogo.');
+      setErrorMessage(timeoutMessage);
     }, 20_000);
 
     // Engine cleanup is centralized and idempotent.
     destroyEngines();
 
     const isLive = media.type === 'live';
-    const allowsMpegTsFallback = canFallbackToMpegTs(media.type, media.streamUrl);
-    const failOrFallback = (message: string) => {
-      if (allowsMpegTsFallback) {
-        setLiveFormat('ts');
-      } else {
-        setIsLoading(false);
-        setErrorMessage(message);
-      }
-    };
+    const failOrFallback = (message: string) => handleLiveStartFailure(message);
     const engine = selectMediaEngine({
       isLive,
       liveFormat,
       mediaExtension: media.containerExtension,
-      supportsMpegTs: mpegts.isSupported(),
-      supportsHlsJs: Hls.isSupported(),
+      // Su webOS il decodificatore del TV gestisce da solo .ts e .m3u8: le
+      // librerie MSE restano fuori gioco, e con loro la connessione extra che
+      // ciascun motore aprirebbe su un server che ne accetta una sola.
+      preferNativeOnly,
+      supportsMpegTs: !preferNativeOnly && mpegts.isSupported(),
+      supportsHlsJs: !preferNativeOnly && Hls.isSupported(),
       supportsNativeHls: Boolean(video.canPlayType('application/vnd.apple.mpegurl')),
     });
 
@@ -410,7 +468,17 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       // after the player is closed or another title is selected.
       releaseVideoElement(video);
     };
-  }, [media, getEffectiveUrl, liveFormat, playbackAttempt, clearPlaybackWatchdogs, destroyEngines]);
+  }, [
+    media,
+    getEffectiveUrl,
+    liveFormat,
+    playbackAttempt,
+    clearPlaybackWatchdogs,
+    destroyEngines,
+    handleLiveStartFailure,
+    preferNativeOnly,
+    playbackTarget,
+  ]);
 
   // Video event handlers
   const handlePlaybackReady = () => {
@@ -629,6 +697,49 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return;
 
+      // Telecomando LG webOS: i tasti media del TV arrivano solo come keyCode
+      // (il `code` Chrome è vuoto), quindi vanno riconosciuti per keyCode prima
+      // della tastiera fisica.
+      if (playbackTarget === 'webos') {
+        const action = resolvePlayerRemoteAction(e.keyCode, { isLive: media?.type === 'live' });
+        if (!action) return;
+        e.preventDefault();
+        switch (action) {
+          case 'toggle-play':
+            togglePlay();
+            return;
+          case 'pause':
+            if (desiredPlayingRef.current) togglePlay();
+            return;
+          case 'close-player':
+            onClose();
+            return;
+          case 'back':
+            // Indietro = Escape: prima esce dalla finestra a schermo intero,
+            // poi chiude il lettore.
+            if (isWindowFullscreen) {
+              setIsWindowFullscreen(false);
+              setIsFullscreen(false);
+            } else {
+              onClose();
+            }
+            return;
+          case 'seek-back':
+            handleSkip(-10);
+            return;
+          case 'seek-forward':
+            handleSkip(10);
+            return;
+          case 'next-channel':
+            onNext?.();
+            return;
+          case 'previous-channel':
+            onPrevious?.();
+            return;
+        }
+        return;
+      }
+
       if (e.code === 'Space') {
         e.preventDefault();
         togglePlay();
@@ -678,7 +789,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isPlaying, duration, isMuted, onClose, isWindowFullscreen]);
+  }, [isPlaying, duration, isMuted, onClose, isWindowFullscreen, media?.type, onNext, onPrevious, playbackTarget]);
 
   const formatTime = (secs: number) => {
     if (isNaN(secs) || secs <= 0) return '00:00';
@@ -724,17 +835,24 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
             console.warn('HTML5 video onError ignored because video is actively playing');
             return;
           }
-          // The fallback exists only on web: native Capacitor builds have no
-          // Express proxy available at capacitor://localhost.
-          if (!isNative && !useProxy) {
+          // The fallback exists only on web: in direct mode (Capacitor,
+          // webOS) there is no Express proxy to fall back to.
+          if (!isDirect && !useProxy) {
             console.log('Video error on direct stream, auto-switching to proxy...');
             setUseProxy(true);
             return;
           }
+          const streamErrorMessage =
+            'Errore di caricamento del flusso video. Verifica se il canale o server IPTV è attivo, oppure prova a cambiare formato (.ts / .m3u8).';
+          // Su webOS l'errore del <video> nativo è il segnale normale di un
+          // .ts non servito dal canale: prima dell'errore vale il tentativo
+          // automatico con l'altro formato.
+          if (playbackTarget === 'webos' && media?.type === 'live') {
+            handleLiveStartFailure(streamErrorMessage);
+            return;
+          }
           setIsLoading(false);
-          setErrorMessage(
-            'Errore di caricamento del flusso video. Verifica se il canale o server IPTV è attivo, oppure prova a cambiare formato (.ts / .m3u8).'
-          );
+          setErrorMessage(streamErrorMessage);
         }}
         onClick={togglePlay}
         style={{
@@ -807,7 +925,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
             message={errorMessage}
             canSwitchFormat={canSwitchLiveFormat}
             formatLabel={`Passa a formato ${liveFormat === 'm3u8' ? 'MPEG-TS (.ts)' : 'HLS (.m3u8)'}`}
-            showProxyOption={!isNative && !isSafeMode}
+            showProxyOption={!isDirect && !isSafeMode}
             proxyLabel={useProxy ? '⚡ Passa a Stream Diretto' : '🛡️ Attiva Proxy HTTPS'}
             proxyFilled={!useProxy}
             onRetry={() => dispatchPlayback({ type: 'RETRY' })}
@@ -857,7 +975,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
                 </button>
               )}
 
-              {!isNative && !isSafeMode && (
+              {!isDirect && !isSafeMode && (
                 <button
                   onClick={() => {
                     const nextVal = !useProxy;
@@ -975,7 +1093,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          {!isTv && media.type !== 'live' && isDirectFileDownload(media.containerExtension) && (
+          {canOfferDownloads() && !isTv && media.type !== 'live' && isDirectFileDownload(media.containerExtension) && (
             <button
               type="button"
               onClick={(e) => {

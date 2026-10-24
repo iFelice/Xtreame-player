@@ -301,3 +301,58 @@ describe('LoginForm rubrica code resolution', () => {
     });
   });
 });
+
+describe('TvPairingModal in the webOS build (direct mode)', () => {
+  it('always uses the relay from VITE_PAIRING_RELAY_URL, never /api/session/*', async () => {
+    vi.stubEnv('VITE_TARGET', 'webos');
+    const relayUrl = 'https://pairing-relay.esempio.workers.dev';
+    vi.stubEnv('VITE_PAIRING_RELAY_URL', relayUrl);
+    vi.spyOn(downloadHelper, 'isTvEnvironment').mockReturnValue(true);
+    vi.spyOn(QRCode, 'toDataURL').mockResolvedValue('data:image/png;base64,webosqr' as never);
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === `${relayUrl}/api/pair/create`) {
+        return new Response(JSON.stringify({ code: '001', pollToken: 'tk', expiresInSeconds: 600 }), {
+          status: 200,
+        });
+      }
+      return new Response(JSON.stringify({ status: 'waiting' }), { status: 200 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    let renderer: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(<TvPairingModal isOpen pairingEnabled={false} onClose={() => {}} onConnectAccount={() => {}} />);
+    });
+
+    const requested = fetchMock.mock.calls.map((call) => String(call[0]));
+    expect(requested).toContain(`${relayUrl}/api/pair/create`);
+    expect(requested.some((url) => url.includes('/api/session/'))).toBe(false);
+
+    await act(async () => {
+      renderer!.unmount();
+    });
+  });
+
+  it('refuses to pair without a relay: no request is sent at all', async () => {
+    vi.stubEnv('VITE_TARGET', 'webos');
+    vi.stubEnv('VITE_PAIRING_RELAY_URL', '');
+    vi.spyOn(downloadHelper, 'isTvEnvironment').mockReturnValue(true);
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    let renderer: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(<TvPairingModal isOpen pairingEnabled onClose={() => {}} onConnectAccount={() => {}} />);
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    const rendered = JSON.stringify(renderer!.toJSON() ?? '');
+    expect(rendered).toContain('Relay di abbinamento non configurato');
+
+    await act(async () => {
+      renderer!.unmount();
+    });
+  });
+});
