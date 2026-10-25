@@ -18,6 +18,21 @@ import it.felixvision.tv.ui.components.LoadingState
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.main.FvpMainScreen
 
+/**
+ * Contatore monotono delle sessioni di accesso in [FvpApp]: incrementato ogni
+ * volta che si entra nella schermata principale dopo login manuale, abbinamento
+ * remoto o accesso automatico.
+ */
+class SessionCounter(initial: Long = 0L) {
+    var current: Long = initial
+        private set
+
+    fun next(): Long {
+        current += 1L
+        return current
+    }
+}
+
 @Composable
 fun FvpApp(container: AppContainer) {
     val factory = remember(container) {
@@ -27,6 +42,7 @@ fun FvpApp(container: AppContainer) {
     }
     val viewModel: AccessViewModel = viewModel(factory = factory)
     val state by viewModel.ui.collectAsStateWithLifecycle()
+    val sessionCounter = remember { SessionCounter() }
 
     FvpScreen { scale ->
         when (val screen = state.screen) {
@@ -48,6 +64,9 @@ fun FvpApp(container: AppContainer) {
             is Screen.Account -> {
                 val creds = viewModel.getCurrentCredentials()
                 if (creds != null) {
+                    val sessionId = remember(screen.sessionId) {
+                        sessionCounter.next()
+                    }
                     FvpMainScreen(
                         container = container,
                         server = creds.server,
@@ -62,6 +81,7 @@ fun FvpApp(container: AppContainer) {
                         scale = scale,
                         accessViewModel = viewModel,
                         onSignOut = viewModel::signOut,
+                        sessionId = sessionId,
                     )
                 } else {
                     LoginScreen(

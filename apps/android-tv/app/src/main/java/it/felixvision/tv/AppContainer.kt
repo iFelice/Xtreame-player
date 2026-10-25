@@ -34,7 +34,10 @@ import okhttp3.OkHttpClient
  * Costruzione manuale delle dipendenze: niente framework di dependency
  * injection. Un'unica istanza per processo, creata da [FvpApplication].
  */
-class AppContainer(private val context: Context) {
+class AppContainer(
+    private val context: Context,
+    credentialStoreOverride: CredentialStore? = null,
+) {
 
     val json = FvpJson
     val clock: Clock = SystemClock
@@ -93,7 +96,7 @@ class AppContainer(private val context: Context) {
     }
 
     val credentialStore: CredentialStore by lazy {
-        EncryptedCredentialStore(
+        credentialStoreOverride ?: EncryptedCredentialStore(
             preferences = DataStoreSecurePreferences(credentialPreferences),
             cipher = KeystoreCredentialCipher(),
             json = json,

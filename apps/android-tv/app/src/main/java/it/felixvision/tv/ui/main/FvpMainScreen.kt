@@ -79,6 +79,42 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+/**
+ * Costruisce la chiave di un ViewModel legata alla sessione di accesso in
+ * [FvpMainScreen]. Anche con gli stessi [server] e [username], un nuovo
+ * [sessionId] genera una chiave diversa: dopo l'uscita dall'account e un nuovo
+ * accesso lo store dell'Activity crea una nuova istanza e le istanze della
+ * sessione precedente non vengono più restituite.
+ */
+fun sessionViewModelKey(
+    prefix: String,
+    sessionId: Long,
+    server: String,
+    username: String,
+): String = "${prefix}_${sessionId}_$server|$username"
+
+fun settingsSessionKey(
+    sessionId: Long,
+    server: String,
+    username: String,
+): String = sessionViewModelKey(
+    prefix = "settings",
+    sessionId = sessionId,
+    server = server,
+    username = username,
+)
+
+fun catalogSessionKey(
+    sessionId: Long,
+    server: String,
+    username: String,
+): String = sessionViewModelKey(
+    prefix = "catalog",
+    sessionId = sessionId,
+    server = server,
+    username = username,
+)
+
 @Composable
 fun FvpMainScreen(
     container: AppContainer,
@@ -94,23 +130,24 @@ fun FvpMainScreen(
     scale: UiScale,
     accessViewModel: AccessViewModel,
     onSignOut: () -> Unit,
+    sessionId: Long = 0L,
 ) {
-    var currentServer by remember { mutableStateOf(server) }
-    var currentUsername by remember { mutableStateOf(username) }
-    var currentPassword by remember { mutableStateOf(password) }
-    var selectedTab by remember { mutableStateOf(DrawerSection.Novita) }
+    var currentServer by remember(sessionId) { mutableStateOf(server) }
+    var currentUsername by remember(sessionId) { mutableStateOf(username) }
+    var currentPassword by remember(sessionId) { mutableStateOf(password) }
+    var selectedTab by remember(sessionId) { mutableStateOf(DrawerSection.Novita) }
     // One-shot return route, scoped to the current account and cleared by menu navigation.
-    var liveCategoryEntry by remember(currentServer, currentUsername) { mutableStateOf<FavoriteItem?>(null) }
-    var restoreCategoryFavoriteId by remember(currentServer, currentUsername) { mutableStateOf<String?>(null) }
-    var showExitConfirm by remember { mutableStateOf(false) }
-    var playerSession by remember(currentServer, currentUsername) { mutableStateOf<PlayerSession?>(null) }
-    var playerReturnTick by remember { mutableIntStateOf(0) }
-    var returnLiveChannelId by remember { mutableStateOf<String?>(null) }
-    var returnEpisodeId by remember { mutableStateOf<String?>(null) }
-    var favoritesTick by remember { mutableStateOf(0L) }
-    var favoritesMessage by remember { mutableStateOf<String?>(null) }
-    var continueLoadingKey by remember { mutableStateOf<String?>(null) }
-    var continueErrorMessage by remember { mutableStateOf<String?>(null) }
+    var liveCategoryEntry by remember(sessionId, currentServer, currentUsername) { mutableStateOf<FavoriteItem?>(null) }
+    var restoreCategoryFavoriteId by remember(sessionId, currentServer, currentUsername) { mutableStateOf<String?>(null) }
+    var showExitConfirm by remember(sessionId) { mutableStateOf(false) }
+    var playerSession by remember(sessionId, currentServer, currentUsername) { mutableStateOf<PlayerSession?>(null) }
+    var playerReturnTick by remember(sessionId) { mutableIntStateOf(0) }
+    var returnLiveChannelId by remember(sessionId) { mutableStateOf<String?>(null) }
+    var returnEpisodeId by remember(sessionId) { mutableStateOf<String?>(null) }
+    var favoritesTick by remember(sessionId) { mutableStateOf(0L) }
+    var favoritesMessage by remember(sessionId) { mutableStateOf<String?>(null) }
+    var continueLoadingKey by remember(sessionId) { mutableStateOf<String?>(null) }
+    var continueErrorMessage by remember(sessionId) { mutableStateOf<String?>(null) }
     // Il testo cercato resta quando si torna nella sezione durante la sessione.
     val searchQueryState = rememberTextFieldState()
     val scope = rememberCoroutineScope()
@@ -124,7 +161,7 @@ fun FvpMainScreen(
         factory = viewModelFactory {
             initializer { CatalogViewModel(container, currentServer, currentUsername, currentPassword) }
         },
-        key = "$currentServer|$currentUsername",
+        key = catalogSessionKey(sessionId, currentServer, currentUsername),
     )
     val catalogState by catalogViewModel.ui.collectAsState()
 
@@ -149,7 +186,7 @@ fun FvpMainScreen(
                 )
             }
         },
-        key = "settings_$currentServer|$currentUsername",
+        key = settingsSessionKey(sessionId, currentServer, currentUsername),
     )
 
     // Favorites for all sections

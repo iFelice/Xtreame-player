@@ -36,7 +36,11 @@ sealed interface Screen {
 
     data object Access : Screen
 
-    data class Account(val summary: AccountSummary, val banner: String?) : Screen
+    data class Account(
+        val summary: AccountSummary,
+        val banner: String?,
+        val sessionId: Long = 0L,
+    ) : Screen
 }
 
 /** Dati mostrati dalla schermata provvisoria dopo l'accesso. */
@@ -96,6 +100,7 @@ class AccessViewModel(private val container: AppContainer) : ViewModel() {
     private var savedCredentialsExist: Boolean = false
     private var verificationFinished = false
     private var prefillCounter = 0L
+    private var sessionCounter = 0L
     private var currentCredentials: StoredCredentials? = null
 
     fun getCurrentCredentials(): StoredCredentials? = currentCredentials
@@ -157,6 +162,7 @@ class AccessViewModel(private val container: AppContainer) : ViewModel() {
 
     fun signOut() {
         onPairingHidden()
+        currentCredentials = null
         viewModelScope.launch {
             runCatching { container.credentialStore.clear() }
             coordinator.reset()
@@ -327,8 +333,16 @@ class AccessViewModel(private val container: AppContainer) : ViewModel() {
             // Se server è un codice già risolto altrove, tentiamo di preservarlo se corrisponde
             currentCredentials = StoredCredentials(server = server, username = username, password = password, serverCode = null)
             runCatching { container.credentialStore.save(currentCredentials!!) }
+            sessionCounter += 1L
+            val sessionId = sessionCounter
             _ui.update {
-                it.copy(screen = Screen.Account(summary = account.toSummary(), banner = REMOTE_CONFIGURED_MESSAGE))
+                it.copy(
+                    screen = Screen.Account(
+                        summary = account.toSummary(),
+                        banner = REMOTE_CONFIGURED_MESSAGE,
+                        sessionId = sessionId,
+                    ),
+                )
             }
         }
     }
@@ -358,13 +372,19 @@ class AccessViewModel(private val container: AppContainer) : ViewModel() {
                 AppLog.warn("Salvataggio cifrato delle credenziali non riuscito")
             }
         }
+        sessionCounter += 1L
+        val sessionId = sessionCounter
         onPairingHidden()
         _ui.update {
             it.copy(
                 busy = false,
                 errorMessage = null,
                 statusMessage = null,
-                screen = Screen.Account(summary = account.toSummary(), banner = banner),
+                screen = Screen.Account(
+                    summary = account.toSummary(),
+                    banner = banner,
+                    sessionId = sessionId,
+                ),
             )
         }
     }
