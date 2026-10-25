@@ -71,6 +71,12 @@ object FvpDimens {
     /** Padding interno della riga Live in Preferiti: 16 → 10. */
     const val FAVORITE_ROW_PADDING_BASE = 10f
 
+    /** Raggio degli angoli dei contenitori a vetro e degli elementi del player. */
+    const val SURFACE_CORNER_BASE = 14f
+
+    /** Spessore del bordo dei contenitori a vetro e degli elementi del player. */
+    const val GLASS_BORDER_BASE = 1f
+
     // --- Indicatori ---------------------------------------------------------
 
     /** Larghezza della barra di scorrimento verticale. */
@@ -111,6 +117,12 @@ val UiScale.rowLogo: Dp get() = dp(FvpDimens.ROW_LOGO_BASE)
 
 /** Logo del canale nella lista del player. */
 val UiScale.rowLogoPlayer: Dp get() = dp(FvpDimens.ROW_LOGO_PLAYER_BASE)
+
+/** Raggio degli angoli dei contenitori a vetro e degli elementi del player. */
+val UiScale.surfaceCorner: Dp get() = dp(FvpDimens.SURFACE_CORNER_BASE)
+
+/** Spessore del bordo dei contenitori a vetro e degli elementi del player. */
+val UiScale.glassBorder: Dp get() = dp(FvpDimens.GLASS_BORDER_BASE)
 
 /** Spazio tra le righe. */
 val UiScale.rowSpacing: Dp get() = dp(FvpDimens.ROW_SPACING_BASE)

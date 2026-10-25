@@ -2,6 +2,7 @@ package it.felixvision.tv.ui.player
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -33,7 +34,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -57,14 +57,32 @@ import it.felixvision.tv.ui.components.FvpSecondaryButton
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.components.focusSafePadding
 import it.felixvision.tv.ui.theme.FvpColors
+import it.felixvision.tv.ui.theme.glassBorder
 import it.felixvision.tv.ui.theme.rowLogoPlayer
 import it.felixvision.tv.ui.theme.rowSpacing
 import it.felixvision.tv.ui.theme.rowText
+import it.felixvision.tv.ui.theme.surfaceCorner
 import it.felixvision.tv.ui.theme.volumeBarHeight
 import it.felixvision.tv.ui.theme.volumeBarWidth
 import it.felixvision.tv.ui.theme.volumeIcon
 import it.felixvision.tv.ui.theme.volumeLevelText
 import it.felixvision.tv.ui.theme.volumeTickHeight
+
+/**
+ * Unico aspetto degli elementi del player che stanno sopra il video: fondo
+ * [FvpColors.PlayerOverlay], angoli [it.felixvision.tv.ui.theme.FvpDimens.SURFACE_CORNER_BASE]
+ * e bordo sottile [FvpColors.GlassBorder], gli stessi della lista canali Live.
+ * Pannello del volume, banner, lista canali, barra comandi, pannello tracce,
+ * prossimo episodio, Riprendi, etichetta dei salti ed errori passano tutti da qui.
+ */
+internal fun Modifier.playerOverlay(scale: UiScale): Modifier = this
+    .clip(RoundedCornerShape(scale.surfaceCorner))
+    .background(FvpColors.PlayerOverlay)
+    .border(
+        width = scale.glassBorder,
+        color = FvpColors.GlassBorder,
+        shape = RoundedCornerShape(scale.surfaceCorner),
+    )
 
 /** Banner canale: numero, nome, categoria e logo, visibile per 4 secondi. */
 @Composable
@@ -77,8 +95,7 @@ fun PlayerChannelBanner(
 ) {
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(scale.dp(14f)))
-            .background(FvpColors.Surface.copy(alpha = 0.96f))
+            .playerOverlay(scale)
             .padding(horizontal = scale.dp(18f), vertical = scale.dp(14f))
             .testTag("player_channel_banner"),
         verticalAlignment = Alignment.CenterVertically,
@@ -181,19 +198,16 @@ fun PlayerChannelListOverlay(
         }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.55f)),
-    ) {
+    // Nessun velo nero a tutto schermo: resta solo il pannello, con lo stesso
+    // fondo semitrasparente degli altri elementi sopra il video.
+    Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .align(Alignment.CenterStart)
                 .fillMaxHeight()
                 .fillMaxWidth(0.44f)
                 .padding(scale.dp(24f))
-                .clip(RoundedCornerShape(scale.dp(16f)))
-                .background(FvpColors.Surface)
+                .playerOverlay(scale)
                 .padding(scale.dp(16f))
                 .testTag("player_channel_list"),
             verticalArrangement = Arrangement.spacedBy(scale.dp(10f)),
@@ -290,7 +304,7 @@ fun PlayerControlsBar(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(FvpColors.Surface.copy(alpha = 0.96f))
+            .playerOverlay(scale)
             .padding(horizontal = scale.dp(28f), vertical = scale.dp(16f))
             .testTag("player_controls_bar"),
         verticalArrangement = Arrangement.spacedBy(scale.dp(8f)),
@@ -381,8 +395,7 @@ fun PlayerVolumePanel(
     val muted = PlayerVolume.isMuted(level)
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(scale.dp(14f)))
-            .background(FvpColors.Surface.copy(alpha = 0.96f))
+            .playerOverlay(scale)
             .padding(horizontal = scale.dp(14f), vertical = scale.dp(12f))
             .testTag("player_volume_panel"),
         verticalAlignment = Alignment.CenterVertically,
@@ -465,7 +478,6 @@ fun PlayerTrackPanel(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.72f))
             .testTag("player_track_panel"),
         contentAlignment = Alignment.Center,
     ) {
@@ -473,8 +485,7 @@ fun PlayerTrackPanel(
             modifier = Modifier
                 .fillMaxWidth(0.56f)
                 .heightIn(max = scale.dp(480f))
-                .clip(RoundedCornerShape(scale.dp(16f)))
-                .background(FvpColors.Surface)
+                .playerOverlay(scale)
                 .padding(scale.dp(18f)),
             verticalArrangement = Arrangement.spacedBy(scale.dp(8f)),
         ) {
@@ -576,15 +587,13 @@ fun PlayerErrorOverlay(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.84f))
             .testTag("player_error"),
         contentAlignment = Alignment.Center,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth(0.68f)
-                .clip(RoundedCornerShape(scale.dp(16f)))
-                .background(FvpColors.Surface)
+                .playerOverlay(scale)
                 .padding(scale.dp(24f)),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(scale.dp(16f)),
@@ -628,15 +637,13 @@ fun PlayerResumePrompt(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.78f))
             .testTag("player_resume_dialog"),
         contentAlignment = Alignment.Center,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth(0.62f)
-                .clip(RoundedCornerShape(scale.dp(16f)))
-                .background(FvpColors.Surface)
+                .playerOverlay(scale)
                 .padding(scale.dp(24f)),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(scale.dp(14f)),
@@ -687,7 +694,6 @@ fun PlayerNextEpisodePrompt(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.35f))
             .testTag("player_next_dialog"),
         contentAlignment = Alignment.BottomCenter,
     ) {
@@ -695,8 +701,7 @@ fun PlayerNextEpisodePrompt(
             modifier = Modifier
                 .padding(scale.dp(28f))
                 .fillMaxWidth(0.66f)
-                .clip(RoundedCornerShape(scale.dp(16f)))
-                .background(FvpColors.Surface)
+                .playerOverlay(scale)
                 .padding(scale.dp(20f)),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(scale.dp(10f)),
@@ -763,8 +768,7 @@ fun PlayerSeekFeedback(
         fontSize = scale.sp(18f),
         fontWeight = FontWeight.Bold,
         modifier = modifier
-            .clip(RoundedCornerShape(scale.dp(10f)))
-            .background(FvpColors.Surface.copy(alpha = 0.92f))
+            .playerOverlay(scale)
             .padding(horizontal = scale.dp(14f), vertical = scale.dp(10f))
             .testTag("player_seek_feedback"),
     )

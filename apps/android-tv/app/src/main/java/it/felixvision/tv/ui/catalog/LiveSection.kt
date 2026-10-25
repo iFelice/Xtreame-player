@@ -2,6 +2,7 @@ package it.felixvision.tv.ui.catalog
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -53,10 +54,18 @@ import it.felixvision.tv.ui.components.focusSafePadding
 import it.felixvision.tv.ui.components.fvpLongPress
 import it.felixvision.tv.ui.components.listPosition
 import it.felixvision.tv.ui.theme.FvpColors
+import it.felixvision.tv.ui.theme.glassBorder
 import it.felixvision.tv.ui.theme.rowLogo
 import it.felixvision.tv.ui.theme.rowSpacing
 import it.felixvision.tv.ui.theme.rowText
+import it.felixvision.tv.ui.theme.surfaceCorner
 import kotlinx.coroutines.delay
+
+/** Larghezza della lista canali rispetto all'area a destra delle categorie. */
+const val LIVE_LIST_WIDTH_FRACTION = 0.8f
+
+/** Opacità delle righe dei canali: la superficie attuale all'80%. */
+const val CHANNEL_ROW_ALPHA = 0.8f
 
 @Composable
 fun LiveSection(
@@ -164,119 +173,137 @@ fun LiveSection(
     // resta senza padding per non sommare due volte la stessa quantità.
     // L'indicatore di posizione (contatore e barra) sta sopra, sul bordo destro.
     Box(modifier = modifier.fillMaxSize()) {
-    Row(modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(scale.dp(12f))) {
-        if (categories.isEmpty()) {
-            EmptyState(title = "Nessuna categoria", description = "Il server non ha restituito categorie live.", scale = scale, modifier = Modifier.weight(0.3f))
-        } else {
-            CollapsingCategoryColumn(
-                categories = categories,
-                debouncedCategoryId = debouncedCategoryId,
-                scale = scale,
-                expanded = categoryExpanded,
-                onExpandedChange = { categoryExpanded = it },
-                focusedCategoryId = focusedCategoryId,
-                onFocusedCategoryId = { focusedCategoryId = it },
-                listState = categoryListState,
-                focusRequesters = categoryFocusRequesters,
-                testTagPrefix = "live",
-                favoriteCategoryIds = favoriteCategoryIds,
-                onLongPressCategory = onLongPressCategory,
-                modifier = Modifier
-            )
-        }
+        Row(modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(scale.dp(12f))) {
+            if (categories.isEmpty()) {
+                EmptyState(title = "Nessuna categoria", description = "Il server non ha restituito categorie live.", scale = scale, modifier = Modifier.weight(0.3f))
+            } else {
+                CollapsingCategoryColumn(
+                    categories = categories,
+                    debouncedCategoryId = debouncedCategoryId,
+                    scale = scale,
+                    expanded = categoryExpanded,
+                    onExpandedChange = { categoryExpanded = it },
+                    focusedCategoryId = focusedCategoryId,
+                    onFocusedCategoryId = { focusedCategoryId = it },
+                    listState = categoryListState,
+                    focusRequesters = categoryFocusRequesters,
+                    testTagPrefix = "live",
+                    favoriteCategoryIds = favoriteCategoryIds,
+                    onLongPressCategory = onLongPressCategory,
+                    modifier = Modifier
+                )
+            }
 
-        Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                if (filtered.isEmpty()) {
-                    EmptyState(title = "Nessun canale", description = "Seleziona una categoria per vedere i canali.", scale = scale)
-                } else {
-                    LazyColumn(
-                        state = channelsListState,
-                        verticalArrangement = Arrangement.spacedBy(scale.rowSpacing),
-                        // Ingrandimento e cornice del focus restano dentro la lista.
-                        contentPadding = PaddingValues(scale.focusSafePadding),
-                        modifier = Modifier.fillMaxWidth().testTag("live_channels_list"),
-                    ) {
-                        itemsIndexed(filtered, key = { _, ch -> ch.streamId }) { index, channel ->
-                            val isFav = favorites.any { it.id == "live_${channel.streamId}" }
-                            val channelFr = channelFocusRequesters[channel.streamId]
-                            var focused by remember(channel.streamId) { mutableStateOf(false) }
-                            // Riga compatta: altezza e logo ridotti, testo invariato.
-                            // L'identificativo EPG resta visibile, in linea con il nome,
-                            // così la voce rimane su una sola riga.
-                            DenseListItem(
-                                selected = false,
-                                onClick = { onSelectChannel(channel) },
-                                onLongClick = { onLongPressChannel(channel) },
-                                headlineContent = {
-                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(scale.dp(6f))) {
-                                        FocusMarqueeText(
-                                            text = channel.name,
-                                            focused = focused,
-                                            fontSize = scale.rowText,
-                                            fontWeight = FontWeight.Medium,
-                                            modifier = Modifier.weight(1f, fill = false),
-                                        )
-                                        channel.epgChannelId?.let { epg ->
-                                            Text(
-                                                text = epg,
-                                                color = FvpColors.TextSecondary,
-                                                fontSize = scale.sp(12f),
-                                                maxLines = 1,
-                                            )
-                                        }
-                                        if (isFav) {
-                                            Box(
-                                                modifier = Modifier.size(scale.dp(22f)).clip(CircleShape).background(Color(0xCC1C1C1E)).testTag("live_channel_${channel.streamId}_fav_star"),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Text(text = "★", color = Color(0xFFFBBF24), fontSize = scale.sp(12f))
-                                            }
-                                        }
-                                    }
-                                },
-                                leadingContent = {
-                                    ChannelLogoImage(imageUrl = channel.streamIcon, name = channel.name, scale = scale, modifier = Modifier.size(scale.rowLogo))
-                                },
-                                trailingContent = {
-                                    channel.num?.let { Text(text = "#$it") }
-                                },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("live_channel_${channel.streamId}")
-                                    .then(if (channelFr != null) Modifier.focusRequester(channelFr) else Modifier)
-                                    .then(if (index == 0) Modifier.focusRequester(contentFocusRequester) else Modifier)
-                                    .onFocusChanged { focusState ->
-                                        focused = focusState.isFocused
-                                        if (focusState.isFocused) {
-                                            categoryExpanded = false
-                                            focusedChannelIndex = index
-                                        }
-                                    }
-                                    .onPreviewKeyEvent { event ->
-                                        if (event.key == Key.DirectionLeft) {
-                                            val active = debouncedCategoryId ?: categories.firstOrNull()?.categoryId
-                                            active?.let { categoryFocusRequesters[it]?.requestFocus() }
-                                            categoryExpanded = true
-                                            true
-                                        } else false
-                                    }
-                                    .fvpLongPress { onLongPressChannel(channel) },
-                                colors = ListItemDefaults.colors(
-                                    containerColor = FvpColors.Surface,
-                                    contentColor = FvpColors.TextPrimary,
-                                    focusedContainerColor = FvpColors.SurfaceElevated,
+            Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    if (filtered.isEmpty()) {
+                        EmptyState(title = "Nessun canale", description = "Seleziona una categoria per vedere i canali.", scale = scale)
+                    } else {
+                        // Lista un po' più stretta dell'area a destra delle categorie,
+                        // allineata a sinistra: il resto resta sfondo. Il contenitore è
+                        // un vetro senza sfocatura (bianco al 4%, bordo bianco al 10%).
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(LIVE_LIST_WIDTH_FRACTION)
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(scale.surfaceCorner))
+                                .background(FvpColors.GlassFill)
+                                .border(
+                                    width = scale.glassBorder,
+                                    color = FvpColors.GlassBorder,
+                                    shape = RoundedCornerShape(scale.surfaceCorner),
                                 ),
-                                scale = ListItemDefaults.scale(focusedScale = 1.04f),
-                                border = ListItemDefaults.border(focusedBorder = Border(BorderStroke(2.dp, FvpColors.GreenFocus))),
-                                shape = ListItemDefaults.shape(shape = RoundedCornerShape(scale.dp(10f))),
-                            )
+                        ) {
+                            LazyColumn(
+                                state = channelsListState,
+                                verticalArrangement = Arrangement.spacedBy(scale.rowSpacing),
+                                // Ingrandimento e cornice del focus restano dentro la lista.
+                                contentPadding = PaddingValues(scale.focusSafePadding),
+                                modifier = Modifier.fillMaxSize().testTag("live_channels_list"),
+                            ) {
+                                itemsIndexed(filtered, key = { _, ch -> ch.streamId }) { index, channel ->
+                                    val isFav = favorites.any { it.id == "live_${channel.streamId}" }
+                                    val channelFr = channelFocusRequesters[channel.streamId]
+                                    var focused by remember(channel.streamId) { mutableStateOf(false) }
+                                    // Riga compatta: altezza e logo ridotti, testo invariato.
+                                    // L'identificativo EPG resta visibile, in linea con il nome,
+                                    // così la voce rimane su una sola riga.
+                                    DenseListItem(
+                                        selected = false,
+                                        onClick = { onSelectChannel(channel) },
+                                        onLongClick = { onLongPressChannel(channel) },
+                                        headlineContent = {
+                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(scale.dp(6f))) {
+                                                FocusMarqueeText(
+                                                    text = channel.name,
+                                                    focused = focused,
+                                                    fontSize = scale.rowText,
+                                                    fontWeight = FontWeight.Medium,
+                                                    modifier = Modifier.weight(1f, fill = false),
+                                                )
+                                                channel.epgChannelId?.let { epg ->
+                                                    Text(
+                                                        text = epg,
+                                                        color = FvpColors.TextSecondary,
+                                                        fontSize = scale.sp(12f),
+                                                        maxLines = 1,
+                                                    )
+                                                }
+                                                if (isFav) {
+                                                    Box(
+                                                        modifier = Modifier.size(scale.dp(22f)).clip(CircleShape).background(Color(0xCC1C1C1E)).testTag("live_channel_${channel.streamId}_fav_star"),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Text(text = "★", color = Color(0xFFFBBF24), fontSize = scale.sp(12f))
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        leadingContent = {
+                                            ChannelLogoImage(imageUrl = channel.streamIcon, name = channel.name, scale = scale, modifier = Modifier.size(scale.rowLogo))
+                                        },
+                                        trailingContent = {
+                                            channel.num?.let { Text(text = "#$it") }
+                                        },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .testTag("live_channel_${channel.streamId}")
+                                            .then(if (channelFr != null) Modifier.focusRequester(channelFr) else Modifier)
+                                            .then(if (index == 0) Modifier.focusRequester(contentFocusRequester) else Modifier)
+                                            .onFocusChanged { focusState ->
+                                                focused = focusState.isFocused
+                                                if (focusState.isFocused) {
+                                                    categoryExpanded = false
+                                                    focusedChannelIndex = index
+                                                }
+                                            }
+                                            .onPreviewKeyEvent { event ->
+                                                if (event.key == Key.DirectionLeft) {
+                                                    val active = debouncedCategoryId ?: categories.firstOrNull()?.categoryId
+                                                    active?.let { categoryFocusRequesters[it]?.requestFocus() }
+                                                    categoryExpanded = true
+                                                    true
+                                                } else false
+                                            }
+                                            .fvpLongPress { onLongPressChannel(channel) },
+                                        colors = ListItemDefaults.colors(
+                                            // Riga leggermente trasparente; con il focus il
+                                            // verde resta pieno come prima.
+                                            containerColor = FvpColors.Surface.copy(alpha = CHANNEL_ROW_ALPHA),
+                                            contentColor = FvpColors.TextPrimary,
+                                            focusedContainerColor = FvpColors.SurfaceElevated,
+                                        ),
+                                        scale = ListItemDefaults.scale(focusedScale = 1.04f),
+                                        border = ListItemDefaults.border(focusedBorder = Border(BorderStroke(2.dp, FvpColors.GreenFocus))),
+                                        shape = ListItemDefaults.shape(shape = RoundedCornerShape(scale.dp(10f))),
+                                    )
+                                }
+                            }
                         }
                     }
                 }
             }
         }
-    }
 
         // Contatore "N / Totale" e barra di scorrimento dell'elenco canali.
         PositionIndicator(
