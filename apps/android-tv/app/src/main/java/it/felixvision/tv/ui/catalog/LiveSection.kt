@@ -18,11 +18,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,7 +37,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Border
-import androidx.tv.material3.ListItem
+import androidx.tv.material3.DenseListItem
 import androidx.tv.material3.ListItemDefaults
 import androidx.tv.material3.Text
 import it.felixvision.tv.data.catalog.Category
@@ -45,13 +45,17 @@ import it.felixvision.tv.data.catalog.LiveStream
 import it.felixvision.tv.data.favorites.FavoriteItem
 import it.felixvision.tv.ui.components.ChannelLogoImage
 import it.felixvision.tv.ui.components.CollapsingCategoryColumn
-import it.felixvision.tv.ui.components.ContentPanel
 import it.felixvision.tv.ui.components.EmptyState
 import it.felixvision.tv.ui.components.FocusMarqueeText
+import it.felixvision.tv.ui.components.PositionIndicator
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.components.focusSafePadding
 import it.felixvision.tv.ui.components.fvpLongPress
+import it.felixvision.tv.ui.components.listPosition
 import it.felixvision.tv.ui.theme.FvpColors
+import it.felixvision.tv.ui.theme.rowLogo
+import it.felixvision.tv.ui.theme.rowSpacing
+import it.felixvision.tv.ui.theme.rowText
 import kotlinx.coroutines.delay
 
 @Composable
@@ -90,6 +94,8 @@ fun LiveSection(
 
     val categoryListState = rememberLazyListState()
     val channelsListState = rememberLazyListState()
+    // Indice del canale con il focus, per il contatore "N / Totale".
+    var focusedChannelIndex by remember(filtered) { mutableStateOf<Int?>(null) }
     val channelFocusRequesters = remember(filtered) {
         filtered.associate { it.streamId to FocusRequester() }
     }
@@ -156,7 +162,9 @@ fun LiveSection(
 
     // Il margine sicuro del focus sta nel contentPadding della lista: la Row
     // resta senza padding per non sommare due volte la stessa quantità.
-    Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(scale.dp(12f))) {
+    // L'indicatore di posizione (contatore e barra) sta sopra, sul bordo destro.
+    Box(modifier = modifier.fillMaxSize()) {
+    Row(modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(scale.dp(12f))) {
         if (categories.isEmpty()) {
             EmptyState(title = "Nessuna categoria", description = "Il server non ha restituito categorie live.", scale = scale, modifier = Modifier.weight(0.3f))
         } else {
@@ -177,14 +185,14 @@ fun LiveSection(
             )
         }
 
-        ContentPanel(scale = scale, modifier = Modifier.weight(1f).fillMaxHeight()) {
+        Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
             Column(modifier = Modifier.fillMaxSize()) {
                 if (filtered.isEmpty()) {
                     EmptyState(title = "Nessun canale", description = "Seleziona una categoria per vedere i canali.", scale = scale)
                 } else {
                     LazyColumn(
                         state = channelsListState,
-                        verticalArrangement = Arrangement.spacedBy(scale.dp(6f)),
+                        verticalArrangement = Arrangement.spacedBy(scale.rowSpacing),
                         // Ingrandimento e cornice del focus restano dentro la lista.
                         contentPadding = PaddingValues(scale.focusSafePadding),
                         modifier = Modifier.fillMaxWidth().testTag("live_channels_list"),
@@ -193,7 +201,10 @@ fun LiveSection(
                             val isFav = favorites.any { it.id == "live_${channel.streamId}" }
                             val channelFr = channelFocusRequesters[channel.streamId]
                             var focused by remember(channel.streamId) { mutableStateOf(false) }
-                            ListItem(
+                            // Riga compatta: altezza e logo ridotti, testo invariato.
+                            // L'identificativo EPG resta visibile, in linea con il nome,
+                            // così la voce rimane su una sola riga.
+                            DenseListItem(
                                 selected = false,
                                 onClick = { onSelectChannel(channel) },
                                 onLongClick = { onLongPressChannel(channel) },
@@ -202,9 +213,18 @@ fun LiveSection(
                                         FocusMarqueeText(
                                             text = channel.name,
                                             focused = focused,
+                                            fontSize = scale.rowText,
                                             fontWeight = FontWeight.Medium,
                                             modifier = Modifier.weight(1f, fill = false),
                                         )
+                                        channel.epgChannelId?.let { epg ->
+                                            Text(
+                                                text = epg,
+                                                color = FvpColors.TextSecondary,
+                                                fontSize = scale.sp(12f),
+                                                maxLines = 1,
+                                            )
+                                        }
                                         if (isFav) {
                                             Box(
                                                 modifier = Modifier.size(scale.dp(22f)).clip(CircleShape).background(Color(0xCC1C1C1E)).testTag("live_channel_${channel.streamId}_fav_star"),
@@ -215,11 +235,8 @@ fun LiveSection(
                                         }
                                     }
                                 },
-                                supportingContent = {
-                                    channel.epgChannelId?.let { Text(text = it, maxLines = 1) }
-                                },
                                 leadingContent = {
-                                    ChannelLogoImage(imageUrl = channel.streamIcon, name = channel.name, scale = scale, modifier = Modifier.size(scale.dp(48f)))
+                                    ChannelLogoImage(imageUrl = channel.streamIcon, name = channel.name, scale = scale, modifier = Modifier.size(scale.rowLogo))
                                 },
                                 trailingContent = {
                                     channel.num?.let { Text(text = "#$it") }
@@ -231,7 +248,10 @@ fun LiveSection(
                                     .then(if (index == 0) Modifier.focusRequester(contentFocusRequester) else Modifier)
                                     .onFocusChanged { focusState ->
                                         focused = focusState.isFocused
-                                        if (focusState.isFocused) categoryExpanded = false
+                                        if (focusState.isFocused) {
+                                            categoryExpanded = false
+                                            focusedChannelIndex = index
+                                        }
                                     }
                                     .onPreviewKeyEvent { event ->
                                         if (event.key == Key.DirectionLeft) {
@@ -256,5 +276,16 @@ fun LiveSection(
                 }
             }
         }
+    }
+
+        // Contatore "N / Totale" e barra di scorrimento dell'elenco canali.
+        PositionIndicator(
+            position = listPosition(
+                listState = channelsListState,
+                focusedIndex = focusedChannelIndex,
+                totalItems = filtered.size,
+            ),
+            scale = scale,
+        )
     }
 }

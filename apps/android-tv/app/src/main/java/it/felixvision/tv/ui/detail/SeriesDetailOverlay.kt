@@ -23,12 +23,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -50,7 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.tv.material3.Border
-import androidx.tv.material3.ListItem
+import androidx.tv.material3.DenseListItem
 import androidx.tv.material3.ListItemDefaults
 import androidx.tv.material3.Text
 import androidx.compose.foundation.BorderStroke
@@ -75,6 +75,8 @@ import it.felixvision.tv.ui.components.WatchSeenBadge
 import it.felixvision.tv.ui.components.focusSafePadding
 import it.felixvision.tv.ui.components.fvpLongPress
 import it.felixvision.tv.ui.theme.FvpColors
+import it.felixvision.tv.ui.theme.rowSpacing
+import it.felixvision.tv.ui.theme.rowText
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -405,7 +407,7 @@ fun SeriesDetailOverlay(
                                         )
                                         LazyColumn(
                                             state = seasonsListState,
-                                            verticalArrangement = Arrangement.spacedBy(scale.dp(6f)),
+                                            verticalArrangement = Arrangement.spacedBy(scale.rowSpacing),
                                             // Ingrandimento e cornice delle voci restano nella lista.
                                             contentPadding = PaddingValues(scale.focusSafePadding),
                                             modifier = Modifier
@@ -418,7 +420,8 @@ fun SeriesDetailOverlay(
                                                 val fr = remember(season.seasonNumber, seasonFocusRequesters) { seasonFocusRequesters[season.seasonNumber] ?: FocusRequester() }
                                                 val count = season.episodeCount
                                                 val countText = if (count != null) " · $count episodi" else ""
-                                                ListItem(
+                                                // Riga compatta della stagione.
+                                                DenseListItem(
                                                     selected = false,
                                                     onClick = {
                                                         lastSeason = season.seasonNumber
@@ -479,7 +482,7 @@ fun SeriesDetailOverlay(
                                     } else {
                                         LazyColumn(
                                             state = episodesListState,
-                                            verticalArrangement = Arrangement.spacedBy(scale.dp(6f)),
+                                            verticalArrangement = Arrangement.spacedBy(scale.rowSpacing),
                                             // Ingrandimento e cornice delle voci restano nella lista.
                                             contentPadding = PaddingValues(scale.focusSafePadding),
                                             modifier = Modifier
@@ -667,13 +670,15 @@ private fun EpisodeRowItem(
 ) {
     var focused by remember(episode.id) { mutableStateOf(false) }
     Box {
-    ListItem(
+    // Riga compatta dell'episodio: altezza e spaziature ridotte, testo invariato.
+    DenseListItem(
         selected = false,
         onClick = { onPlay() },
         headlineContent = {
             FocusMarqueeText(
                 text = "${episode.episodeNum} · $title",
                 focused = focused,
+                fontSize = scale.rowText,
                 fontWeight = FontWeight.Medium
             )
         },

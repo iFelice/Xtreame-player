@@ -20,8 +20,8 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,13 +32,16 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.testTag
 import androidx.tv.material3.Border
-import androidx.tv.material3.ListItem
+import androidx.tv.material3.DenseListItem
 import androidx.tv.material3.ListItemDefaults
 import androidx.tv.material3.Text
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.BorderStroke
 import it.felixvision.tv.data.catalog.Category
 import it.felixvision.tv.ui.theme.FvpColors
+import it.felixvision.tv.ui.theme.categoryCollapsedVertical
+import it.felixvision.tv.ui.theme.categorySpacing
+import it.felixvision.tv.ui.theme.rowText
 
 @Composable
 fun CollapsingCategoryColumn(
@@ -80,7 +83,7 @@ fun CollapsingCategoryColumn(
     ) {
         LazyColumn(
             state = listState,
-            verticalArrangement = Arrangement.spacedBy(scale.dp(6f)),
+            verticalArrangement = Arrangement.spacedBy(scale.categorySpacing),
             contentPadding = PaddingValues(safePadding),
             modifier = Modifier.fillMaxHeight()
                 .then(if (!expanded) Modifier.testTag("${testTagPrefix}_category_collapsed") else Modifier)
@@ -98,7 +101,8 @@ fun CollapsingCategoryColumn(
                 // Live keeps the same focusable item in both states, including during expansion.
                 // Film/Serie retain their original collapsed presentation and behavior.
                 if (expanded || onLongPressCategory != null) {
-                    ListItem(
+                    // Voce compatta: altezza ridotta dal ListItem denso.
+                    DenseListItem(
                         selected = selected,
                         onClick = { onFocusedCategoryId(cat.categoryId) },
                         headlineContent = {
@@ -106,6 +110,7 @@ fun CollapsingCategoryColumn(
                                 FocusMarqueeText(
                                     text = cat.categoryName ?: "Senza nome",
                                     focused = focused,
+                                    fontSize = scale.rowText,
                                     color = if (selected) FvpColors.TextPrimary else FvpColors.TextSecondary,
                                 )
                             } else if (expanded) {
@@ -115,6 +120,7 @@ fun CollapsingCategoryColumn(
                                     FocusMarqueeText(
                                         text = cat.categoryName ?: "Senza nome",
                                         focused = focused,
+                                        fontSize = scale.rowText,
                                         color = if (selected) FvpColors.TextPrimary else FvpColors.TextSecondary,
                                         modifier = Modifier.weight(1f, fill = false),
                                     )
@@ -173,7 +179,7 @@ fun CollapsingCategoryColumn(
                                 }
                             }
                             .background(if (selected) FvpColors.SurfaceElevated else FvpColors.Surface, shape = RoundedCornerShape(scale.dp(8f)))
-                            .padding(vertical = scale.dp(8f)),
+                            .padding(vertical = scale.categoryCollapsedVertical),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(

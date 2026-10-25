@@ -21,6 +21,7 @@ import it.felixvision.tv.data.store.CredentialStore
 import it.felixvision.tv.data.store.DataStoreSecurePreferences
 import it.felixvision.tv.data.store.EncryptedCredentialStore
 import it.felixvision.tv.data.store.KeystoreCredentialCipher
+import it.felixvision.tv.data.volume.VolumeStore
 import it.felixvision.tv.data.xtream.XtreamClient
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
@@ -70,6 +71,11 @@ class AppContainer(private val context: Context) {
 
     val progressStore: ProgressStore by lazy {
         ProgressStore(context = context, json = json, clock = clock)
+    }
+
+    /** Livello del volume del player (0-15), ripristinato a ogni avvio. */
+    val volumeStore: VolumeStore by lazy {
+        VolumeStore(context = context)
     }
 
     /** Archivio "Continua a guardare": una voce per film e una per serie. */

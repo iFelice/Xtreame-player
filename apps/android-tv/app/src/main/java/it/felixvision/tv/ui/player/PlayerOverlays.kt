@@ -1,6 +1,7 @@
 package it.felixvision.tv.ui.player
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,17 +15,18 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -32,17 +34,22 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Border
+import androidx.tv.material3.DenseListItem
 import androidx.tv.material3.ListItem
 import androidx.tv.material3.ListItemDefaults
 import androidx.tv.material3.Text
+import it.felixvision.tv.R
 import it.felixvision.tv.data.catalog.LiveStream
 import it.felixvision.tv.data.playback.PlaybackFormatting
 import it.felixvision.tv.data.playback.SeekFeedback
+import it.felixvision.tv.data.volume.PlayerVolume
 import it.felixvision.tv.ui.components.ChannelLogoImage
 import it.felixvision.tv.ui.components.FocusMarqueeText
 import it.felixvision.tv.ui.components.FvpPrimaryButton
@@ -50,6 +57,14 @@ import it.felixvision.tv.ui.components.FvpSecondaryButton
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.components.focusSafePadding
 import it.felixvision.tv.ui.theme.FvpColors
+import it.felixvision.tv.ui.theme.rowLogoPlayer
+import it.felixvision.tv.ui.theme.rowSpacing
+import it.felixvision.tv.ui.theme.rowText
+import it.felixvision.tv.ui.theme.volumeBarHeight
+import it.felixvision.tv.ui.theme.volumeBarWidth
+import it.felixvision.tv.ui.theme.volumeIcon
+import it.felixvision.tv.ui.theme.volumeLevelText
+import it.felixvision.tv.ui.theme.volumeTickHeight
 
 /** Banner canale: numero, nome, categoria e logo, visibile per 4 secondi. */
 @Composable
@@ -193,7 +208,7 @@ fun PlayerChannelListOverlay(
             )
             LazyColumn(
                 state = listState,
-                verticalArrangement = Arrangement.spacedBy(scale.dp(6f)),
+                verticalArrangement = Arrangement.spacedBy(scale.rowSpacing),
                 // Ingrandimento e cornice delle voci restano nella lista.
                 contentPadding = PaddingValues(scale.focusSafePadding),
                 modifier = Modifier.fillMaxWidth().weight(1f),
@@ -202,7 +217,8 @@ fun PlayerChannelListOverlay(
                     val isCurrent = index == safeIndex
                     val requester = focusRequesters.getOrNull(index)
                     var focused by remember(channel.streamId) { mutableStateOf(false) }
-                    ListItem(
+                    // Riga compatta: altezza ridotta, logo proporzionato.
+                    DenseListItem(
                         selected = false,
                         onClick = { onSelect(index) },
                         headlineContent = {
@@ -214,6 +230,7 @@ fun PlayerChannelListOverlay(
                                     text = channel.name,
                                     focused = focused,
                                     color = if (isCurrent) FvpColors.Green else FvpColors.TextPrimary,
+                                    fontSize = scale.rowText,
                                     modifier = Modifier.weight(1f, fill = false),
                                 )
                                 if (isCurrent) {
@@ -226,7 +243,7 @@ fun PlayerChannelListOverlay(
                                 imageUrl = channel.streamIcon,
                                 name = channel.name,
                                 scale = scale,
-                                modifier = Modifier.size(scale.dp(40f)),
+                                modifier = Modifier.size(scale.rowLogoPlayer),
                             )
                         },
                         trailingContent = {
@@ -265,6 +282,7 @@ fun PlayerControlsBar(
     audioFocusRequester: FocusRequester,
     onAudio: () -> Unit,
     onSubtitles: () -> Unit,
+    onVolume: () -> Unit,
     modifier: Modifier = Modifier,
     audioFormatLabel: String = "",
     ffmpegActive: Boolean = false,
@@ -336,6 +354,78 @@ fun PlayerControlsBar(
                 scale = scale,
                 modifier = Modifier.testTag("player_subtitles_button"),
             )
+            // Volume del nostro player: si apre anche con la freccia Giù a
+            // barra chiusa.
+            FvpPrimaryButton(
+                text = "Volume ${state.volumeLevel}",
+                onClick = onVolume,
+                scale = scale,
+                modifier = Modifier.testTag("player_volume_button"),
+            )
+        }
+    }
+}
+
+/**
+ * Pannello del volume sul lato destro: barra verticale sottile con 15 tacche,
+ * numero del livello e icona Lucide "volume-2" ("volume-x" a zero). Riguarda
+ * solo il volume del nostro player, non quello del televisore.
+ */
+@Composable
+fun PlayerVolumePanel(
+    level: Int,
+    scale: UiScale,
+    modifier: Modifier = Modifier,
+) {
+    val litTicks = PlayerVolume.litTicks(level)
+    val muted = PlayerVolume.isMuted(level)
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(scale.dp(14f)))
+            .background(FvpColors.Surface.copy(alpha = 0.96f))
+            .padding(horizontal = scale.dp(14f), vertical = scale.dp(12f))
+            .testTag("player_volume_panel"),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(scale.dp(12f)),
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(scale.dp(6f)),
+        ) {
+            Image(
+                painter = painterResource(
+                    id = if (muted) R.drawable.ic_volume_x else R.drawable.ic_volume_2,
+                ),
+                contentDescription = if (muted) "Volume muto" else "Volume",
+                colorFilter = ColorFilter.tint(FvpColors.TextPrimary),
+                modifier = Modifier
+                    .size(scale.volumeIcon)
+                    .testTag(if (muted) "player_volume_icon_muted" else "player_volume_icon"),
+            )
+            Text(
+                text = level.toString(),
+                color = FvpColors.TextPrimary,
+                fontSize = scale.volumeLevelText,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.testTag("player_volume_level"),
+            )
+        }
+        // 15 tacche, dall'alto (livello 15) verso il basso (livello 1).
+        Column(
+            modifier = Modifier.height(scale.volumeBarHeight),
+            verticalArrangement = Arrangement.SpaceBetween,
+        ) {
+            repeat(PlayerVolume.TICKS) { index ->
+                val tickLevel = PlayerVolume.TICKS - index
+                Box(
+                    modifier = Modifier
+                        .width(scale.volumeBarWidth)
+                        .height(scale.volumeTickHeight)
+                        .background(
+                            if (tickLevel <= litTicks) FvpColors.Green else FvpColors.SurfaceElevated,
+                        ),
+                )
+            }
         }
     }
 }

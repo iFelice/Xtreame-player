@@ -25,8 +25,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -53,7 +53,6 @@ import it.felixvision.tv.data.playback.SeriesPlayback
 import it.felixvision.tv.data.progress.ProgressKeys
 import it.felixvision.tv.data.progress.WatchProgress
 import it.felixvision.tv.ui.components.CatalogPosterImage
-import it.felixvision.tv.ui.components.ContentPanel
 import it.felixvision.tv.ui.components.FocusMarqueeText
 import it.felixvision.tv.ui.components.FvpSecondaryButton
 import it.felixvision.tv.ui.components.UiScale
@@ -66,6 +65,8 @@ import it.felixvision.tv.ui.components.rememberRowsBringIntoViewer
 import it.felixvision.tv.ui.detail.FilmDetailOverlay
 import it.felixvision.tv.ui.detail.SeriesDetailOverlay
 import it.felixvision.tv.ui.theme.FvpColors
+import it.felixvision.tv.ui.theme.favoriteRowPadding
+import it.felixvision.tv.ui.theme.rowText
 import kotlinx.coroutines.CancellationException
 
 @Composable
@@ -129,7 +130,7 @@ fun FavoritesSection(
         LaunchedEffect(restoreCategoryFavoriteId) {
             if (restoreCategoryFavoriteId != null) onCategoryFocusRestored()
         }
-        ContentPanel(scale = scale, modifier = modifier.fillMaxSize()) {
+        Box(modifier = modifier.fillMaxSize()) {
             Column(modifier = Modifier.fillMaxSize().padding(scale.dp(24f))) {
                 Text(text = "Nessun preferito", color = FvpColors.TextPrimary, fontWeight = FontWeight.Bold)
                 Text(
@@ -185,7 +186,7 @@ fun FavoritesSection(
     // interamente in vista, titolo compreso.
     val rowsBringIntoView = rememberRowsBringIntoViewer()
 
-    ContentPanel(scale = scale, modifier = modifier.fillMaxSize()) {
+    Box(modifier = modifier.fillMaxSize()) {
         Column(
             // 4 + FocusSafePadding delle righe = i 16 di prima: il margine del focus
             // sta nel contentPadding, non nel contenitore.
@@ -546,16 +547,19 @@ private fun LiveCategoryFavoriteRow(
                     colors = CardDefaults.colors(containerColor = FvpColors.Surface),
                     shape = CardDefaults.shape(shape = RoundedCornerShape(scale.dp(10f))),
                 ) {
-                    Column(modifier = Modifier.padding(scale.dp(16f))) {
+                    // Riga compatta del canale in Preferiti.
+                    Column(modifier = Modifier.padding(scale.favoriteRowPadding)) {
                         FocusMarqueeText(
                             text = favorite.title,
                             focused = focused,
+                            fontSize = scale.rowText,
                             color = if (item.available) FvpColors.TextPrimary else FvpColors.TextSecondary,
                             fontWeight = FontWeight.Medium,
                         )
                         Text(
                             text = item.supportingText, color = FvpColors.TextSecondary,
-                            modifier = Modifier.padding(top = scale.dp(8f)),
+                            fontSize = scale.rowText,
+                            modifier = Modifier.padding(top = scale.dp(4f)),
                         )
                     }
                 }

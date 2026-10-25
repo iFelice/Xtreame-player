@@ -14,13 +14,13 @@ import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -58,6 +58,7 @@ import it.felixvision.tv.ui.catalog.NovitaSection
 import it.felixvision.tv.ui.catalog.SearchSection
 import it.felixvision.tv.ui.catalog.SerieSection
 import it.felixvision.tv.ui.catalog.deriveSeasons
+import it.felixvision.tv.ui.components.AppBackground
 import it.felixvision.tv.ui.components.BrandBackdrop
 import it.felixvision.tv.ui.components.EmptyState
 import it.felixvision.tv.ui.components.ErrorState
@@ -425,143 +426,34 @@ fun FvpMainScreen(
         contentFocusRequester = contentFocusRequester,
         drawerFocusHandle = drawerFocusHandle,
     ) {
-        Box(modifier = Modifier.fillMaxSize().background(FvpColors.Background).padding(scale.dp(8f))) {
-            when {
-                // L'attesa del primo catalogo è a schermo intero: il BrandBackdrop
-                // è composto in fondo a questa schermata, sopra il menu laterale.
-                catalogState.isLoading && catalogState.catalog == null -> Unit
-                catalogState.errorMessage != null && catalogState.catalog == null -> {
-                    ErrorState(message = catalogState.errorMessage!!, scale = scale, onRetry = { catalogViewModel.retry() }, modifier = Modifier.align(Alignment.Center))
-                }
-                else -> {
-                    val catalog: Catalog? = catalogState.catalog
-                    if (catalog != null) {
-                        when (selectedTab) {
-                            DrawerSection.Novita -> NovitaSection(
-                                recentFilms = catalogState.recentFilms,
-                                recentSeries = catalogState.recentSeries,
-                                scale = scale,
-                                onLongPressFilm = { vod ->
-                                    val fav = FavoriteItem(id = "vod_${vod.streamId}", type = "vod", title = vod.name, poster = vod.streamIcon, categoryId = vod.categoryId)
-                                    toggleFavorite(fav)
-                                },
-                                onLongPressSeries = { serie ->
-                                    val fav = FavoriteItem(id = "series_${serie.seriesId}", type = "series", title = serie.name, poster = serie.cover, categoryId = serie.categoryId)
-                                    toggleFavorite(fav)
-                                },
-                                onPlayFilm = { film -> playMovie(film) },
-                                onPlayEpisode = { _, playback -> playEpisode(playback) },
-                                onSetEpisodeWatched = { episode, watched, duration ->
-                                    setEpisodeWatched(episode, watched, duration)
-                                },
-                                onToggleWatched = { film, watched, duration ->
-                                    setMovieWatched(film, watched, duration)
-                                },
-                                favorites = allFavorites,
-                                catalogViewModel = catalogViewModel,
-                                contentFocusRequester = contentFocusRequester,
-                                progress = watchProgress,
-                                refocusTick = playerReturnTick,
-                                focusEpisodeId = returnEpisodeId,
-                                modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
-                            )
-                            DrawerSection.ContinuaAGuardare -> ContinueWatchingSection(
-                                entries = continueEntries,
-                                scale = scale,
-                                progress = watchProgress,
-                                loadingKey = continueLoadingKey,
-                                errorMessage = continueErrorMessage,
-                                onPlayEntry = { entry -> openContinueEntry(entry) },
-                                onRemoveEntry = { entry -> hideContinueEntry(entry) },
-                                refocusTick = playerReturnTick,
-                                contentFocusRequester = contentFocusRequester,
-                                modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
-                            )
-                            DrawerSection.Live -> LiveSection(
-                                initialCategoryId = liveCategoryEntry?.categoryId,
-                                onLongPressCategory = { category ->
-                                    toggleFavorite(FavoriteItem.liveCategory(category.categoryId, category.categoryName ?: "Senza nome"))
-                                },
-                                categories = catalog.liveCategories,
-                                streams = catalog.liveStreams,
-                                scale = scale,
-                                onSelectChannel = { stream -> playLive(stream) },
-                                onLongPressChannel = { stream ->
-                                    val fav = FavoriteItem(
-                                        id = "live_${stream.streamId}",
-                                        type = "live",
-                                        title = stream.name,
-                                        poster = stream.streamIcon,
-                                        categoryId = stream.categoryId
-                                    )
-                                    toggleFavorite(fav)
-                                },
-                                favorites = allFavorites,
-                                contentFocusRequester = contentFocusRequester,
-                                focusChannelId = returnLiveChannelId,
-                                focusChannelTick = playerReturnTick,
-                                onChannelFocusRestored = { returnLiveChannelId = null },
-                                modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
-                            )
-                            DrawerSection.Film -> FilmSection(
-                                categories = catalog.vodCategories,
-                                streams = catalog.vodStreams,
-                                scale = scale,
-                                onLongPressFilm = { vod ->
-                                    val fav = FavoriteItem(id = "vod_${vod.streamId}", type = "vod", title = vod.name, poster = vod.streamIcon, categoryId = vod.categoryId)
-                                    toggleFavorite(fav)
-                                },
-                                onPlayFilm = { film -> playMovie(film) },
-                                favorites = allFavorites,
-                                catalogViewModel = catalogViewModel,
-                                progress = watchProgress,
-                                onToggleWatched = { film, watched, duration ->
-                                    setMovieWatched(film, watched, duration)
-                                },
-                                refocusTick = playerReturnTick,
-                                contentFocusRequester = contentFocusRequester,
-                                modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
-                            )
-                            DrawerSection.Serie -> SerieSection(
-                                categories = catalog.seriesCategories,
-                                series = catalog.series,
-                                scale = scale,
-                                onLongPressSerie = { serie ->
-                                    val fav = FavoriteItem(id = "series_${serie.seriesId}", type = "series", title = serie.name, poster = serie.cover, categoryId = serie.categoryId)
-                                    toggleFavorite(fav)
-                                },
-                                onPlayEpisode = { _, playback -> playEpisode(playback) },
-                                onSetEpisodeWatched = { episode, watched, duration ->
-                                    setEpisodeWatched(episode, watched, duration)
-                                },
-                                favorites = allFavorites,
-                                catalogViewModel = catalogViewModel,
-                                contentFocusRequester = contentFocusRequester,
-                                progress = watchProgress,
-                                refocusTick = playerReturnTick,
-                                focusEpisodeId = returnEpisodeId,
-                                modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
-                            )
-                            DrawerSection.Preferiti -> {
-                                FavoritesSection(
-                                    favorites = allFavorites,
-                                    liveCategories = catalog.liveCategories,
-                                    liveStreams = catalog.liveStreams,
-                                    restoreCategoryFavoriteId = restoreCategoryFavoriteId,
-                                    onCategoryFocusRestored = { restoreCategoryFavoriteId = null },
+        // Sfondo unico dell'area a destra del menu (colonna categorie e contenuti
+        // compresi): base #1C1C1E e due aloni verdi molto tenui.
+        AppBackground(modifier = Modifier.fillMaxSize()) {
+            Box(modifier = Modifier.fillMaxSize().padding(scale.dp(8f))) {
+                when {
+                    // L'attesa del primo catalogo è a schermo intero: il BrandBackdrop
+                    // è composto in fondo a questa schermata, sopra il menu laterale.
+                    catalogState.isLoading && catalogState.catalog == null -> Unit
+                    catalogState.errorMessage != null && catalogState.catalog == null -> {
+                        ErrorState(message = catalogState.errorMessage!!, scale = scale, onRetry = { catalogViewModel.retry() }, modifier = Modifier.align(Alignment.Center))
+                    }
+                    else -> {
+                        val catalog: Catalog? = catalogState.catalog
+                        if (catalog != null) {
+                            when (selectedTab) {
+                                DrawerSection.Novita -> NovitaSection(
+                                    recentFilms = catalogState.recentFilms,
+                                    recentSeries = catalogState.recentSeries,
                                     scale = scale,
-                                    onSelectFavorite = { favorite ->
-                                        if (favorite.type == FavoriteItem.LIVE_CATEGORY) {
-                                            if (catalog.liveCategories.any { it.categoryId == favorite.categoryId }) {
-                                                liveCategoryEntry = favorite
-                                                restoreCategoryFavoriteId = null
-                                                selectedTab = DrawerSection.Live
-                                            }
-                                        }
+                                    onLongPressFilm = { vod ->
+                                        val fav = FavoriteItem(id = "vod_${vod.streamId}", type = "vod", title = vod.name, poster = vod.streamIcon, categoryId = vod.categoryId)
+                                        toggleFavorite(fav)
                                     },
-                                    onToggleFavorite = { toggleFavorite(it) },
-                                    onPlayLive = { stream -> playLive(stream) },
-                                    onPlayVod = { film -> playMovie(film) },
+                                    onLongPressSeries = { serie ->
+                                        val fav = FavoriteItem(id = "series_${serie.seriesId}", type = "series", title = serie.name, poster = serie.cover, categoryId = serie.categoryId)
+                                        toggleFavorite(fav)
+                                    },
+                                    onPlayFilm = { film -> playMovie(film) },
                                     onPlayEpisode = { _, playback -> playEpisode(playback) },
                                     onSetEpisodeWatched = { episode, watched, duration ->
                                         setEpisodeWatched(episode, watched, duration)
@@ -569,108 +461,221 @@ fun FvpMainScreen(
                                     onToggleWatched = { film, watched, duration ->
                                         setMovieWatched(film, watched, duration)
                                     },
+                                    favorites = allFavorites,
+                                    catalogViewModel = catalogViewModel,
+                                    contentFocusRequester = contentFocusRequester,
                                     progress = watchProgress,
                                     refocusTick = playerReturnTick,
                                     focusEpisodeId = returnEpisodeId,
-                                    catalogViewModel = catalogViewModel,
+                                    modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
+                                )
+                                DrawerSection.ContinuaAGuardare -> ContinueWatchingSection(
+                                    entries = continueEntries,
+                                    scale = scale,
+                                    progress = watchProgress,
+                                    loadingKey = continueLoadingKey,
+                                    errorMessage = continueErrorMessage,
+                                    onPlayEntry = { entry -> openContinueEntry(entry) },
+                                    onRemoveEntry = { entry -> hideContinueEntry(entry) },
+                                    refocusTick = playerReturnTick,
                                     contentFocusRequester = contentFocusRequester,
                                     modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
                                 )
+                                DrawerSection.Live -> LiveSection(
+                                    initialCategoryId = liveCategoryEntry?.categoryId,
+                                    onLongPressCategory = { category ->
+                                        toggleFavorite(FavoriteItem.liveCategory(category.categoryId, category.categoryName ?: "Senza nome"))
+                                    },
+                                    categories = catalog.liveCategories,
+                                    streams = catalog.liveStreams,
+                                    scale = scale,
+                                    onSelectChannel = { stream -> playLive(stream) },
+                                    onLongPressChannel = { stream ->
+                                        val fav = FavoriteItem(
+                                            id = "live_${stream.streamId}",
+                                            type = "live",
+                                            title = stream.name,
+                                            poster = stream.streamIcon,
+                                            categoryId = stream.categoryId
+                                        )
+                                        toggleFavorite(fav)
+                                    },
+                                    favorites = allFavorites,
+                                    contentFocusRequester = contentFocusRequester,
+                                    focusChannelId = returnLiveChannelId,
+                                    focusChannelTick = playerReturnTick,
+                                    onChannelFocusRestored = { returnLiveChannelId = null },
+                                    modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
+                                )
+                                DrawerSection.Film -> FilmSection(
+                                    categories = catalog.vodCategories,
+                                    streams = catalog.vodStreams,
+                                    scale = scale,
+                                    onLongPressFilm = { vod ->
+                                        val fav = FavoriteItem(id = "vod_${vod.streamId}", type = "vod", title = vod.name, poster = vod.streamIcon, categoryId = vod.categoryId)
+                                        toggleFavorite(fav)
+                                    },
+                                    onPlayFilm = { film -> playMovie(film) },
+                                    favorites = allFavorites,
+                                    catalogViewModel = catalogViewModel,
+                                    progress = watchProgress,
+                                    onToggleWatched = { film, watched, duration ->
+                                        setMovieWatched(film, watched, duration)
+                                    },
+                                    refocusTick = playerReturnTick,
+                                    contentFocusRequester = contentFocusRequester,
+                                    modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
+                                )
+                                DrawerSection.Serie -> SerieSection(
+                                    categories = catalog.seriesCategories,
+                                    series = catalog.series,
+                                    scale = scale,
+                                    onLongPressSerie = { serie ->
+                                        val fav = FavoriteItem(id = "series_${serie.seriesId}", type = "series", title = serie.name, poster = serie.cover, categoryId = serie.categoryId)
+                                        toggleFavorite(fav)
+                                    },
+                                    onPlayEpisode = { _, playback -> playEpisode(playback) },
+                                    onSetEpisodeWatched = { episode, watched, duration ->
+                                        setEpisodeWatched(episode, watched, duration)
+                                    },
+                                    favorites = allFavorites,
+                                    catalogViewModel = catalogViewModel,
+                                    contentFocusRequester = contentFocusRequester,
+                                    progress = watchProgress,
+                                    refocusTick = playerReturnTick,
+                                    focusEpisodeId = returnEpisodeId,
+                                    modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
+                                )
+                                DrawerSection.Preferiti -> {
+                                    FavoritesSection(
+                                        favorites = allFavorites,
+                                        liveCategories = catalog.liveCategories,
+                                        liveStreams = catalog.liveStreams,
+                                        restoreCategoryFavoriteId = restoreCategoryFavoriteId,
+                                        onCategoryFocusRestored = { restoreCategoryFavoriteId = null },
+                                        scale = scale,
+                                        onSelectFavorite = { favorite ->
+                                            if (favorite.type == FavoriteItem.LIVE_CATEGORY) {
+                                                if (catalog.liveCategories.any { it.categoryId == favorite.categoryId }) {
+                                                    liveCategoryEntry = favorite
+                                                    restoreCategoryFavoriteId = null
+                                                    selectedTab = DrawerSection.Live
+                                                }
+                                            }
+                                        },
+                                        onToggleFavorite = { toggleFavorite(it) },
+                                        onPlayLive = { stream -> playLive(stream) },
+                                        onPlayVod = { film -> playMovie(film) },
+                                        onPlayEpisode = { _, playback -> playEpisode(playback) },
+                                        onSetEpisodeWatched = { episode, watched, duration ->
+                                            setEpisodeWatched(episode, watched, duration)
+                                        },
+                                        onToggleWatched = { film, watched, duration ->
+                                            setMovieWatched(film, watched, duration)
+                                        },
+                                        progress = watchProgress,
+                                        refocusTick = playerReturnTick,
+                                        focusEpisodeId = returnEpisodeId,
+                                        catalogViewModel = catalogViewModel,
+                                        contentFocusRequester = contentFocusRequester,
+                                        modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
+                                    )
+                                }
+                                DrawerSection.Cerca -> SearchSection(
+                                    queryState = searchQueryState,
+                                    catalog = catalog,
+                                    scale = scale,
+                                    favorites = allFavorites,
+                                    progress = watchProgress,
+                                    catalogViewModel = catalogViewModel,
+                                    onPlayLive = { stream -> playLive(stream) },
+                                    onPlayFilm = { film -> playMovie(film) },
+                                    onPlayEpisode = { _, playback -> playEpisode(playback) },
+                                    onToggleFavorite = { favorite -> toggleFavorite(favorite) },
+                                    onSetEpisodeWatched = { episode, watched, duration ->
+                                        setEpisodeWatched(episode, watched, duration)
+                                    },
+                                    onToggleWatched = { film, watched, duration ->
+                                        setMovieWatched(film, watched, duration)
+                                    },
+                                    refocusTick = playerReturnTick,
+                                    contentFocusRequester = contentFocusRequester,
+                                    modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
+                                )
+                                DrawerSection.Impostazioni -> SettingsScreen(
+                                    viewModel = settingsViewModel,
+                                    scale = scale,
+                                    modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
+                                    contentFocusRequester = contentFocusRequester,
+                                    catalogSections = catalogState.refreshSections,
+                                    catalogRefreshing = catalogState.isRefreshing,
+                                    catalogLastUpdateMillis = catalogState.lastUpdateMillis,
+                                    onRefreshCatalog = { catalogViewModel.refreshManual() },
+                                )
                             }
-                            DrawerSection.Cerca -> SearchSection(
-                                queryState = searchQueryState,
-                                catalog = catalog,
-                                scale = scale,
-                                favorites = allFavorites,
-                                progress = watchProgress,
-                                catalogViewModel = catalogViewModel,
-                                onPlayLive = { stream -> playLive(stream) },
-                                onPlayFilm = { film -> playMovie(film) },
-                                onPlayEpisode = { _, playback -> playEpisode(playback) },
-                                onToggleFavorite = { favorite -> toggleFavorite(favorite) },
-                                onSetEpisodeWatched = { episode, watched, duration ->
-                                    setEpisodeWatched(episode, watched, duration)
-                                },
-                                onToggleWatched = { film, watched, duration ->
-                                    setMovieWatched(film, watched, duration)
-                                },
-                                refocusTick = playerReturnTick,
-                                contentFocusRequester = contentFocusRequester,
-                                modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
-                            )
-                            DrawerSection.Impostazioni -> SettingsScreen(
-                                viewModel = settingsViewModel,
-                                scale = scale,
-                                modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
-                                contentFocusRequester = contentFocusRequester,
-                                catalogSections = catalogState.refreshSections,
-                                catalogRefreshing = catalogState.isRefreshing,
-                                catalogLastUpdateMillis = catalogState.lastUpdateMillis,
-                                onRefreshCatalog = { catalogViewModel.refreshManual() },
-                            )
+                        } else {
+                            EmptyState(title = "Catalogo vuoto", description = "Il server non ha restituito contenuti. Premi Riprova.", scale = scale)
                         }
-                    } else {
-                        EmptyState(title = "Catalogo vuoto", description = "Il server non ha restituito contenuti. Premi Riprova.", scale = scale)
                     }
                 }
-            }
 
-            favoritesMessage?.let { msg ->
-                Box(modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = scale.dp(24f)).background(FvpColors.SurfaceElevated, shape = RoundedCornerShape(scale.dp(8f))).padding(horizontal = scale.dp(16f), vertical = scale.dp(8f))) {
-                    Text(text = msg, color = FvpColors.TextPrimary)
+                favoritesMessage?.let { msg ->
+                    Box(modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = scale.dp(24f)).background(FvpColors.SurfaceElevated, shape = RoundedCornerShape(scale.dp(8f))).padding(horizontal = scale.dp(16f), vertical = scale.dp(8f))) {
+                        Text(text = msg, color = FvpColors.TextPrimary)
+                    }
                 }
-            }
 
-            if (showExitConfirm) {
-                val annullaFocus = remember { FocusRequester() }
-                LaunchedEffect(Unit) { annullaFocus.requestFocus() }
-                Dialog(
-                    onDismissRequest = {
-                        showExitConfirm = false
-                        scope.launch {
-                            drawerState.setValue(DrawerValue.Open)
-                            drawerFocusHandle.requestFocus()
-                        }
-                    },
-                    properties = DialogProperties(usePlatformDefaultWidth = false)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(FvpColors.Background.copy(alpha = 0.8f))
-                            .padding(scale.dp(32f)),
-                        contentAlignment = Alignment.Center
+                if (showExitConfirm) {
+                    val annullaFocus = remember { FocusRequester() }
+                    LaunchedEffect(Unit) { annullaFocus.requestFocus() }
+                    Dialog(
+                        onDismissRequest = {
+                            showExitConfirm = false
+                            scope.launch {
+                                drawerState.setValue(DrawerValue.Open)
+                                drawerFocusHandle.requestFocus()
+                            }
+                        },
+                        properties = DialogProperties(usePlatformDefaultWidth = false)
                     ) {
-                        Column(
+                        Box(
                             modifier = Modifier
-                                .background(FvpColors.Surface, shape = RoundedCornerShape(scale.dp(12f)))
-                                .padding(scale.dp(20f))
-                                .testTag("exit_dialog"),
-                            horizontalAlignment = Alignment.CenterHorizontally
+                                .fillMaxSize()
+                                .background(FvpColors.Background.copy(alpha = 0.8f))
+                                .padding(scale.dp(32f)),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Text(text = "Vuoi uscire da FelixVP?", color = FvpColors.TextPrimary, fontWeight = FontWeight.Bold)
-                            Row(horizontalArrangement = Arrangement.spacedBy(scale.dp(12f)), modifier = Modifier.padding(top = scale.dp(16f))) {
-                                FvpSecondaryButton(
-                                    text = "Annulla",
-                                    onClick = {
-                                        showExitConfirm = false
-                                        scope.launch {
-                                            drawerState.setValue(DrawerValue.Open)
-                                            drawerFocusHandle.requestFocus()
-                                        }
-                                    },
-                                    scale = scale,
-                                    modifier = Modifier.focusRequester(annullaFocus).testTag("exit_annulla")
-                                )
-                                FvpPrimaryButton(
-                                    text = "Esci",
-                                    onClick = {
-                                        showExitConfirm = false
-                                        (context as? Activity)?.finish()
-                                    },
-                                    scale = scale,
-                                    modifier = Modifier.testTag("exit_esci")
-                                )
+                            Column(
+                                modifier = Modifier
+                                    .background(FvpColors.Surface, shape = RoundedCornerShape(scale.dp(12f)))
+                                    .padding(scale.dp(20f))
+                                    .testTag("exit_dialog"),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(text = "Vuoi uscire da FelixVP?", color = FvpColors.TextPrimary, fontWeight = FontWeight.Bold)
+                                Row(horizontalArrangement = Arrangement.spacedBy(scale.dp(12f)), modifier = Modifier.padding(top = scale.dp(16f))) {
+                                    FvpSecondaryButton(
+                                        text = "Annulla",
+                                        onClick = {
+                                            showExitConfirm = false
+                                            scope.launch {
+                                                drawerState.setValue(DrawerValue.Open)
+                                                drawerFocusHandle.requestFocus()
+                                            }
+                                        },
+                                        scale = scale,
+                                        modifier = Modifier.focusRequester(annullaFocus).testTag("exit_annulla")
+                                    )
+                                    FvpPrimaryButton(
+                                        text = "Esci",
+                                        onClick = {
+                                            showExitConfirm = false
+                                            (context as? Activity)?.finish()
+                                        },
+                                        scale = scale,
+                                        modifier = Modifier.testTag("exit_esci")
+                                    )
+                                }
                             }
                         }
                     }

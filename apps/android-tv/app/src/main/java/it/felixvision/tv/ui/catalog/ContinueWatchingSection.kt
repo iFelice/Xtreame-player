@@ -18,12 +18,12 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -42,10 +42,11 @@ import it.felixvision.tv.data.continuewatching.ContinueEntry
 import it.felixvision.tv.data.progress.ProgressKeys
 import it.felixvision.tv.data.progress.WatchProgress
 import it.felixvision.tv.ui.components.CatalogPosterImage
-import it.felixvision.tv.ui.components.ContentPanel
 import it.felixvision.tv.ui.components.EmptyState
 import it.felixvision.tv.ui.components.FocusMarqueeText
+import it.felixvision.tv.ui.components.PositionIndicator
 import it.felixvision.tv.ui.components.UiScale
+import it.felixvision.tv.ui.components.gridPosition
 import it.felixvision.tv.ui.components.WatchProgressLine
 import it.felixvision.tv.ui.components.focusSafePadding
 import it.felixvision.tv.ui.components.fvpLongPress
@@ -76,6 +77,8 @@ fun ContinueWatchingSection(
 ) {
     val columns = 5
     val gridState = rememberLazyGridState()
+    // Indice dell'elemento con il focus, per il contatore "N / Totale".
+    var focusedItemIndex by remember(entries) { mutableStateOf<Int?>(null) }
     val itemFocusRequesters = remember(entries) {
         entries.associate { it.key to FocusRequester() }
     }
@@ -101,8 +104,8 @@ fun ContinueWatchingSection(
     }
 
     // Il margine sicuro del focus sta nel contentPadding della griglia: il
-    // pannello resta senza padding per non sommare due volte la stessa quantità.
-    ContentPanel(scale = scale, modifier = modifier.fillMaxSize()) {
+    // contenitore resta senza padding per non sommare due volte la stessa quantità.
+    Box(modifier = modifier.fillMaxSize()) {
         if (entries.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester)) {
                 EmptyState(
@@ -157,7 +160,10 @@ fun ContinueWatchingSection(
                                         Modifier
                                     },
                                 )
-                                .onFocusChanged { focusState -> focused = focusState.isFocused }
+                                .onFocusChanged { focusState ->
+                                    focused = focusState.isFocused
+                                    if (focusState.isFocused) focusedItemIndex = index
+                                }
                                 .fvpLongPress { onRemoveEntry(entry) },
                             scale = CardDefaults.scale(focusedScale = 1.04f),
                             border = CardDefaults.border(
@@ -225,5 +231,15 @@ fun ContinueWatchingSection(
                 }
             }
         }
+
+        // Contatore "N / Totale" e barra di scorrimento della griglia.
+        PositionIndicator(
+            position = gridPosition(
+                gridState = gridState,
+                focusedIndex = focusedItemIndex,
+                totalItems = entries.size,
+            ),
+            scale = scale,
+        )
     }
 }

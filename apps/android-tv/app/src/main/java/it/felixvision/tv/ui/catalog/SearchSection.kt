@@ -26,12 +26,13 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -66,8 +67,9 @@ import it.felixvision.tv.data.progress.WatchProgress
 import it.felixvision.tv.data.search.CatalogSearch
 import it.felixvision.tv.ui.components.CatalogPosterImage
 import it.felixvision.tv.ui.components.ChannelLogoImage
-import it.felixvision.tv.ui.components.ContentPanel
 import it.felixvision.tv.ui.components.FocusMarqueeText
+import it.felixvision.tv.ui.components.ListPosition
+import it.felixvision.tv.ui.components.PositionIndicator
 import it.felixvision.tv.ui.components.FvpTextField
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.components.WatchProgressLine
@@ -78,6 +80,8 @@ import it.felixvision.tv.ui.components.rememberRowsBringIntoViewer
 import it.felixvision.tv.ui.detail.FilmDetailOverlay
 import it.felixvision.tv.ui.detail.SeriesDetailOverlay
 import it.felixvision.tv.ui.theme.FvpColors
+import it.felixvision.tv.ui.theme.searchCardPadding
+import it.felixvision.tv.ui.theme.searchLogo
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -129,6 +133,9 @@ fun SearchSection(
 
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
+    // Posizione dell'elemento con il focus dentro la sua riga di risultati.
+    var focusedIndexInRow by remember { mutableStateOf<Int?>(null) }
+    var focusedRowTotal by remember { mutableIntStateOf(0) }
     // Tre righe: quella che riceve il focus viene portata interamente in vista.
     val rowsBringIntoView = rememberRowsBringIntoViewer()
 
@@ -237,7 +244,7 @@ fun SearchSection(
 
     // Il margine del focus sta nel contentPadding delle righe: il contenitore
     // tiene solo i 4dp che completano i 16 di prima.
-    ContentPanel(scale = scale, modifier = modifier.fillMaxSize()) {
+    Box(modifier = modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize().padding(horizontal = scale.dp(4f))) {
             Box(
                 modifier = Modifier
@@ -309,7 +316,11 @@ fun SearchSection(
                                     isFavorite = favorites.any { it.id == "live_${channel.streamId}" },
                                     focusRequester = itemFocusRequesters["live_${channel.streamId}"],
                                     onUpToField = { if (index == 0) runCatching { contentFocusRequester.requestFocus() } },
-                                    onRowFocused = { rowsBringIntoView.onRowFocused(ROW_LIVE) },
+                                    onRowFocused = {
+                                        rowsBringIntoView.onRowFocused(ROW_LIVE)
+                                        focusedIndexInRow = index
+                                        focusedRowTotal = results.live.size
+                                    },
                                     onClick = { onPlayLive(channel) },
                                     onLongPress = {
                                         onToggleFavorite(
@@ -347,7 +358,11 @@ fun SearchSection(
                                     progressKeyPrefix = "search_vod_${film.streamId}",
                                     focusRequester = itemFocusRequesters["vod_${film.streamId}"],
                                     onUpToField = { if (index == 0) runCatching { contentFocusRequester.requestFocus() } },
-                                    onRowFocused = { rowsBringIntoView.onRowFocused(ROW_VOD) },
+                                    onRowFocused = {
+                                        rowsBringIntoView.onRowFocused(ROW_VOD)
+                                        focusedIndexInRow = index
+                                        focusedRowTotal = results.vod.size
+                                    },
                                     onClick = {
                                         pendingResultKey = "vod_${film.streamId}"
                                         detailFilm = film
@@ -388,7 +403,11 @@ fun SearchSection(
                                     progressKeyPrefix = "search_series_${serie.seriesId}",
                                     focusRequester = itemFocusRequesters["series_${serie.seriesId}"],
                                     onUpToField = { if (index == 0) runCatching { contentFocusRequester.requestFocus() } },
-                                    onRowFocused = { rowsBringIntoView.onRowFocused(ROW_SERIES) },
+                                    onRowFocused = {
+                                        rowsBringIntoView.onRowFocused(ROW_SERIES)
+                                        focusedIndexInRow = index
+                                        focusedRowTotal = results.series.size
+                                    },
                                     onClick = {
                                         pendingResultKey = "series_${serie.seriesId}"
                                         detailSerie = serie
@@ -412,6 +431,18 @@ fun SearchSection(
                 }
             }
         }
+
+        // Contatore "N / Totale" dell'elemento con il focus nella sua riga e
+        // barra di scorrimento dell'elenco dei risultati.
+        PositionIndicator(
+            position = ListPosition(
+                focusedIndex = focusedIndexInRow,
+                totalItems = focusedRowTotal,
+                firstVisibleIndex = listState.firstVisibleItemIndex,
+                visibleItems = listState.layoutInfo.visibleItemsInfo.size,
+            ),
+            scale = scale,
+        )
     }
 
     detailFilm?.let { film ->
@@ -561,14 +592,14 @@ private fun LiveResultCard(
         shape = CardDefaults.shape(shape = RoundedCornerShape(scale.dp(10f))),
     ) {
         Row(
-            modifier = Modifier.padding(scale.dp(6f)),
+            modifier = Modifier.padding(scale.searchCardPadding),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             ChannelLogoImage(
                 imageUrl = channel.streamIcon,
                 name = channel.name,
                 scale = scale,
-                modifier = Modifier.size(scale.dp(40f)),
+                modifier = Modifier.size(scale.searchLogo),
             )
             FocusMarqueeText(
                 text = channel.name,

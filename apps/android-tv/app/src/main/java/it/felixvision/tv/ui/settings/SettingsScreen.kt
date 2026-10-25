@@ -15,11 +15,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -35,12 +35,15 @@ import it.felixvision.tv.data.catalog.CatalogSectionProgress
 import it.felixvision.tv.data.catalog.CatalogSectionStatus
 import it.felixvision.tv.ui.access.AccessViewModel
 import it.felixvision.tv.ui.access.PairingPanel
-import it.felixvision.tv.ui.components.ContentPanel
 import it.felixvision.tv.ui.components.FvpPrimaryButton
 import it.felixvision.tv.ui.components.FvpSecondaryButton
 import it.felixvision.tv.ui.components.FvpStatusText
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.theme.FvpColors
+import it.felixvision.tv.ui.theme.settingsBlockSpacing
+import it.felixvision.tv.ui.theme.settingsRowSpacing
+import it.felixvision.tv.ui.theme.settingsRowText
+import it.felixvision.tv.ui.theme.settingsSectionPadding
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -68,16 +71,16 @@ fun SettingsScreen(
         onDispose { viewModel.onSettingsHidden() }
     }
 
-    ContentPanel(scale = scale, modifier = modifier.fillMaxSize()) {
+    Box(modifier = modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = scale.dp(24f), vertical = scale.dp(16f)),
-            verticalArrangement = Arrangement.spacedBy(scale.dp(14f)),
+            verticalArrangement = Arrangement.spacedBy(scale.settingsBlockSpacing),
         ) {
             Text(text = "Impostazioni", color = FvpColors.TextPrimary, fontSize = scale.sp(22f), fontWeight = FontWeight.Bold)
 
-            Column(modifier = Modifier.clip(RoundedCornerShape(scale.dp(14f))).background(FvpColors.Surface).padding(scale.dp(16f)), verticalArrangement = Arrangement.spacedBy(scale.dp(8f))) {
+            Column(modifier = Modifier.clip(RoundedCornerShape(scale.dp(14f))).background(FvpColors.Surface).padding(scale.settingsSectionPadding), verticalArrangement = Arrangement.spacedBy(scale.settingsRowSpacing)) {
                 Text(text = "Account", color = FvpColors.TextPrimary, fontSize = scale.sp(16f), fontWeight = FontWeight.SemiBold)
                 SettingsRow(label = "Utente", value = state.username, scale = scale)
                 SettingsRow(label = "Stato", value = state.status, scale = scale)
@@ -137,7 +140,7 @@ fun SettingsScreen(
             state.message?.let { FvpStatusText(message = it, scale = scale) }
             state.error?.let { Text(text = it, color = FvpColors.Error, fontSize = scale.sp(14f)) }
 
-            Column(modifier = Modifier.clip(RoundedCornerShape(scale.dp(14f))).background(FvpColors.Surface).padding(scale.dp(16f))) {
+            Column(modifier = Modifier.clip(RoundedCornerShape(scale.dp(14f))).background(FvpColors.Surface).padding(scale.settingsSectionPadding)) {
                 Text(text = "Configura da remoto", color = FvpColors.TextPrimary, fontSize = scale.sp(16f), fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(scale.dp(12f)))
                 PairingPanel(state = state.pairing, scale = scale, modifier = Modifier.fillMaxWidth())
@@ -255,8 +258,8 @@ fun SettingsScreen(
 @Composable
 private fun SettingsRow(label: String, value: String, scale: UiScale, rowTestTag: String? = null) {
     Row(modifier = Modifier.fillMaxWidth().then(if (rowTestTag != null) Modifier.testTag(rowTestTag) else Modifier), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(text = label, color = FvpColors.TextSecondary, fontSize = scale.sp(14f))
-        Text(text = value, color = FvpColors.TextPrimary, fontSize = scale.sp(14f))
+        Text(text = label, color = FvpColors.TextSecondary, fontSize = scale.settingsRowText)
+        Text(text = value, color = FvpColors.TextPrimary, fontSize = scale.settingsRowText)
     }
 }
 

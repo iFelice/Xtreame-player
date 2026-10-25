@@ -22,9 +22,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,13 +51,14 @@ import it.felixvision.tv.data.playback.SeriesPlayback
 import it.felixvision.tv.data.progress.WatchProgress
 import it.felixvision.tv.ui.components.CatalogPosterImage
 import it.felixvision.tv.ui.components.CollapsingCategoryColumn
-import it.felixvision.tv.ui.components.ContentPanel
 import it.felixvision.tv.ui.components.EmptyState
 import it.felixvision.tv.ui.components.FocusMarqueeText
+import it.felixvision.tv.ui.components.PositionIndicator
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.components.focusSafePadding
 import it.felixvision.tv.ui.components.fvpLongPress
 import it.felixvision.tv.ui.components.rememberGridDetailFocusRestore
+import it.felixvision.tv.ui.components.gridPosition
 import it.felixvision.tv.ui.detail.SeriesDetailOverlay
 import it.felixvision.tv.ui.theme.FvpColors
 import kotlinx.coroutines.CancellationException
@@ -144,6 +145,8 @@ fun SerieSection(
     val itemFocusRequesters = remember(filtered) {
         filtered.associate { it.seriesId to FocusRequester() }
     }
+    // Indice dell'elemento con il focus, per il contatore "N / Totale".
+    var focusedItemIndex by remember(filtered) { mutableStateOf<Int?>(null) }
     val restoreHelper = rememberGridDetailFocusRestore(
         gridState = gridState,
         focusRequesters = { itemFocusRequesters },
@@ -152,7 +155,9 @@ fun SerieSection(
 
     // Il margine sicuro del focus sta nel contentPadding della griglia: la Row
     // resta senza padding per non sommare due volte la stessa quantità.
-    Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(scale.dp(12f))) {
+    // L'indicatore di posizione (contatore e barra) sta sopra, sul bordo destro.
+    Box(modifier = modifier.fillMaxSize()) {
+    Row(modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(scale.dp(12f))) {
         if (categories.isEmpty()) {
             EmptyState(title = "Nessuna categoria", description = "Il server non ha restituito categorie.", scale = scale, modifier = Modifier.weight(0.3f))
         } else {
@@ -170,7 +175,7 @@ fun SerieSection(
             )
         }
 
-        ContentPanel(scale = scale, modifier = Modifier.weight(1f).fillMaxHeight()) {
+        Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
             if (filtered.isEmpty()) {
                 EmptyState(title = "Nessuna serie", description = "Seleziona una categoria per vedere le serie.", scale = scale, modifier = Modifier.fillMaxSize())
             } else {
@@ -198,7 +203,10 @@ fun SerieSection(
                                 .then(if (index == 0) Modifier.focusRequester(gridFirstFocus).focusRequester(contentFocusRequester) else Modifier)
                                 .onFocusChanged { focusState ->
                                     focused = focusState.isFocused
-                                    if (focusState.isFocused) categoryExpanded = false
+                                    if (focusState.isFocused) {
+                                        categoryExpanded = false
+                                        focusedItemIndex = index
+                                    }
                                 }
                                 .onPreviewKeyEvent { event ->
                                     if (event.key == Key.DirectionLeft && isLeftEdge) {
@@ -241,6 +249,17 @@ fun SerieSection(
                 }
             }
         }
+    }
+
+        // Contatore "N / Totale" e barra di scorrimento della griglia.
+        PositionIndicator(
+            position = gridPosition(
+                gridState = gridState,
+                focusedIndex = focusedItemIndex,
+                totalItems = filtered.size,
+            ),
+            scale = scale,
+        )
     }
 
     detailSerie?.let { serie ->
