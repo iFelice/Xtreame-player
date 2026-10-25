@@ -1,0 +1,112 @@
+name: Android TV release
+
+on:
+  push:
+    tags:
+      - "tv-v*"
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: Versione da pubblicare (per esempio 1.0.0)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Imposta JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+          cache-dependency-path: apps/android-tv/**/*.gradle*
+
+      - name: Configura Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Installa Android SDK Platform 37 e Build Tools
+        run: sdkmanager --install "platforms;android-37" "build-tools;36.0.0"
+
+      - name: Determina la versione
+        id: version
+        env:
+          INPUT_VERSION_NAME: ${{ inputs.version_name }}
+          REF_NAME: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$REF_TYPE" == "tag" ]]; then
+            version="${REF_NAME#tv-v}"
+          else
+            version="$INPUT_VERSION_NAME"
+          fi
+          if [[ -z "$version" || ! "$version" =~ ^[0-9A-Za-z][0-9A-Za-z._+-]*$ ]]; then
+            echo "Versione mancante o non valida." >&2
+            exit 1
+          fi
+          printf 'version_name=%s\n' "$version" >> "$GITHUB_OUTPUT"
+
+      - name: Test, build release firmata e verifica firma
+        working-directory: apps/android-tv
+        env:
+          FVP_KEYSTORE_BASE64: ${{ secrets.FVP_KEYSTORE_BASE64 }}
+          FVP_KEYSTORE_PASSWORD: ${{ secrets.FVP_KEYSTORE_PASSWORD }}
+          FVP_KEY_ALIAS: ${{ secrets.FVP_KEY_ALIAS }}
+          FVP_KEY_PASSWORD: ${{ secrets.FVP_KEY_PASSWORD }}
+          FVP_VERSION_NAME: ${{ steps.version.outputs.version_name }}
+          FVP_VERSION_CODE: ${{ github.run_number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          KEYSTORE="$RUNNER_TEMP/fvp-release.p12"
+          trap 'rm -f "$KEYSTORE"' EXIT
+
+          if [[ -z "$FVP_KEYSTORE_BASE64" || -z "$FVP_KEYSTORE_PASSWORD" || -z "$FVP_KEY_ALIAS" || -z "$FVP_KEY_PASSWORD" ]]; then
+            echo "Configurare i segreti di firma FVP richiesti nel repository." >&2
+            exit 1
+          fi
+          printf '%s' "$FVP_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"
+          export FVP_KEYSTORE_PATH="$KEYSTORE"
+          export FVP_VERSION_CODE="$((FVP_VERSION_CODE + 100))"
+
+          ./gradlew test assembleRelease lint
+
+          APK="app/build/outputs/apk/release/app-release.apk"
+          cp "$APK" "$RUNNER_TEMP/FelixVP.apk"
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner -print | sort -V | tail -n 1)"
+          if [[ -z "$APKSIGNER" ]]; then
+            echo "Impossibile trovare apksigner nell'Android SDK." >&2
+            exit 1
+          fi
+          "$APKSIGNER" verify "$RUNNER_TEMP/FelixVP.apk"
+
+      - name: Pubblica la release nel repository pubblico
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_REPO_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$GH_TOKEN" ]]; then
+            echo "Configurare il segreto RELEASES_REPO_TOKEN nel repository." >&2
+            exit 1
+          fi
+          gh release create "$VERSION" "$RUNNER_TEMP/FelixVP.apk" \
+            --repo iFelice/felixvp-releases \
+            --title "FelixVP $VERSION" \
+            --generate-notes
+
+      - name: Elimina il keystore temporaneo
+        if: always()
+        shell: bash
+        run: rm -f "$RUNNER_TEMP/fvp-release.p12"
