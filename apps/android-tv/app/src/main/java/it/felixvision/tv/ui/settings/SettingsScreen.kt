@@ -67,10 +67,10 @@ fun SettingsScreen(
     var showCatalogDialog by remember { mutableStateOf(false) }
     val catalogCloseFocus = remember { FocusRequester() }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(viewModel) {
         viewModel.onSettingsVisible()
     }
-    androidx.compose.runtime.DisposableEffect(Unit) {
+    androidx.compose.runtime.DisposableEffect(viewModel) {
         onDispose { viewModel.onSettingsHidden() }
     }
 

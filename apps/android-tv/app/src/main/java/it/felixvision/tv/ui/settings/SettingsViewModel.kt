@@ -7,6 +7,7 @@ import it.felixvision.tv.data.pairing.PairingCoordinator
 import it.felixvision.tv.data.pairing.PairingPanelState
 import it.felixvision.tv.data.pairing.RemoteCredentials
 import it.felixvision.tv.data.pairing.PairingStep
+import it.felixvision.tv.data.store.CredentialStore
 import it.felixvision.tv.data.store.StoredCredentials
 import it.felixvision.tv.data.store.serverLabel
 import it.felixvision.tv.data.xtream.LoginResult
@@ -54,6 +55,7 @@ class SettingsViewModel(
     private val activeConnections: Int?,
     private val onCredentialsReplaced: (String, String, String) -> Unit,
     private val onSignOut: () -> Unit,
+    private val credentialStore: CredentialStore = container.credentialStore,
 ) : ViewModel() {
 
     private val coordinator: PairingCoordinator = container.newPairingCoordinator()
@@ -74,28 +76,45 @@ class SettingsViewModel(
     private var pairingJob: Job? = null
     private var pairingVisible = false
     private var accountReadJob: Job? = null
+    private var serverLabelJob: Job? = null
 
     init {
         viewModelScope.launch {
             coordinator.state.collect { panel -> _ui.update { it.copy(pairing = panel) } }
         }
-        // Carica last update e server label da credenziali salvate
+        refreshServerLabel()
+        // Carica last update da cache catalogo
         viewModelScope.launch {
             val last = container.catalogCache.lastUpdateMillis(server, username)
             _ui.update { it.copy(lastUpdateMillis = last) }
-            val stored = container.credentialStore.load()
-            if (stored != null && stored.server == server && stored.username == username) {
-                currentServerCode = stored.serverCode
-                _ui.update { it.copy(serverLabel = serverLabel(stored.serverCode)) }
-            }
         }
     }
 
     fun onSettingsVisible() {
+        refreshServerLabel()
         refreshAccountInfo()
         if (pairingVisible) return
         pairingVisible = true
         startPairingLoop()
+    }
+
+    /**
+     * Rilegge le credenziali salvate e aggiorna l'etichetta del server ("001" o
+     * "Personalizzato"). Viene chiamata all'inizializzazione e a ogni apertura
+     * delle Impostazioni.
+     */
+    fun refreshServerLabel() {
+        serverLabelJob?.cancel()
+        serverLabelJob = viewModelScope.launch {
+            val stored = runCatching { credentialStore.load() }.getOrNull()
+            val code = if (stored != null && stored.server == server && stored.username == username) {
+                stored.serverCode
+            } else {
+                null
+            }
+            currentServerCode = code
+            _ui.update { it.copy(serverLabel = serverLabel(code)) }
+        }
     }
 
     /**
@@ -189,7 +208,7 @@ class SettingsViewModel(
                     runCatching { container.catalogCache.clear(oldServer, oldUser) }
                     val effectiveServerCode = credentials.serverCode ?: resolved.serverCode
                     runCatching {
-                        container.credentialStore.save(
+                        credentialStore.save(
                             StoredCredentials(
                                 server = result.account.server,
                                 username = result.account.username,
@@ -249,7 +268,7 @@ class SettingsViewModel(
 
     fun onExitConfirm() {
         viewModelScope.launch {
-            runCatching { container.credentialStore.clear() }
+            runCatching { credentialStore.clear() }
             runCatching { container.catalogCache.clear(server, username) }
             runCatching { container.favoritesStore.clearForAccount(server, username) }
             runCatching { container.progressStore.clearForAccount(server, username) }
@@ -262,6 +281,8 @@ class SettingsViewModel(
     override fun onCleared() {
         // Le letture account e il ciclo di abbinamento non devono sopravvivere
         // alla schermata che li ha avviati.
+        serverLabelJob?.cancel()
+        serverLabelJob = null
         accountReadJob?.cancel()
         accountReadJob = null
         pairingJob?.cancel()
