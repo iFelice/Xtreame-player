@@ -5,9 +5,7 @@ import {
   REMOTE_SESSION_TTL_MS,
   SUBMIT_BLOCK_MS,
 } from '../../../shared/pairing/index.ts';
-import rubricaJson from '../rubrica.json';
 import worker, {
-  DEFAULT_RUBRICA_ENTRIES,
   PairingHub,
   type DurableObjectIdLike,
   type DurableObjectStateLike,
@@ -16,8 +14,6 @@ import worker, {
   type SqlCursorLike,
   type SqlStorageLike,
 } from '../src/index.ts';
-
-const expectedServerFor001 = (rubricaJson as Array<{ server: string }>)[0]?.server ?? '';
 
 function createSqliteStorageAdapter(db = new DatabaseSync(':memory:')) {
   let scheduledAlarm: number | null = null;
@@ -173,9 +169,9 @@ describe('services/pairing-relay', () => {
         },
         body: JSON.stringify({
           code: '123456',
-          server: 'https://iptv.esempio.it:8080/',
-          username: 'utente1',
-          password: 'password1',
+          server: 'http://server.esempio:8080/',
+          username: 'demo',
+          password: 'demo',
         }),
       }),
     );
@@ -192,9 +188,9 @@ describe('services/pairing-relay', () => {
         },
         body: JSON.stringify({
           code: '123456',
-          server: 'https://iptv.esempio.it:8080',
-          username: 'utente1',
-          password: 'password1',
+          server: 'http://server.esempio:8080',
+          username: 'demo',
+          password: 'demo',
         }),
       }),
     );
@@ -211,9 +207,9 @@ describe('services/pairing-relay', () => {
       status: 'ready',
       credentials: {
         v: 1,
-        server: 'https://iptv.esempio.it:8080',
-        username: 'utente1',
-        password: 'password1',
+        server: 'http://server.esempio:8080',
+        username: 'demo',
+        password: 'demo',
       },
     });
 
@@ -392,7 +388,10 @@ describe('services/pairing-relay', () => {
   });
 
   it('resolves rubrica code "001" in submit and returns 400 UNKNOWN_SERVER_CODE for unknown codes without counting as PIN failure', async () => {
-    const { fetch } = createTestHarness({ createPin: () => '777888' });
+    const { fetch } = createTestHarness({
+      createPin: () => '777888',
+      rubricaIndex: new Map([['001', 'http://server.esempio:8080']]),
+    });
     const createRes = await fetch(
       new Request('https://relay.example.workers.dev/api/pair/create', {
         method: 'POST',
@@ -409,8 +408,8 @@ describe('services/pairing-relay', () => {
           body: JSON.stringify({
             code: '777888',
             server: '999',
-            username: 'mario',
-            password: 'pwd',
+            username: 'demo',
+            password: 'demo',
           }),
         }),
       );
@@ -426,8 +425,8 @@ describe('services/pairing-relay', () => {
         body: JSON.stringify({
           code: '777888',
           server: ' 001 ',
-          username: 'mario',
-          password: 'pwd',
+          username: 'demo',
+          password: 'demo',
         }),
       }),
     );
@@ -444,9 +443,10 @@ describe('services/pairing-relay', () => {
       status: 'ready',
       credentials: {
         v: 1,
-        server: expectedServerFor001,
-        username: 'mario',
-        password: 'pwd',
+        server: 'http://server.esempio:8080',
+        username: 'demo',
+        password: 'demo',
+        serverCode: '001',
       },
     });
   });
@@ -488,7 +488,10 @@ describe('services/pairing-relay', () => {
 
   it('resolves codes on GET /api/rubrica/:code and limits to 20 requests per minute per IP', async () => {
     const now = 100_000;
-    const { fetch } = createTestHarness({ now: () => now });
+    const { fetch } = createTestHarness({
+      now: () => now,
+      rubricaIndex: new Map([['001', 'http://server.esempio:8080']]),
+    });
     const ip = '198.51.100.77';
 
     const foundRes = await fetch(
@@ -497,7 +500,7 @@ describe('services/pairing-relay', () => {
       }),
     );
     expect(foundRes.status).toBe(200);
-    expect(await foundRes.json()).toEqual({ server: expectedServerFor001 });
+    expect(await foundRes.json()).toEqual({ server: 'http://server.esempio:8080' });
 
     const missingRes = await fetch(
       new Request('https://relay.example.workers.dev/api/rubrica/999', {

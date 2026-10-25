@@ -7,6 +7,7 @@ import {
   hashToken,
   isRubricaCode,
   isValidPin,
+  normalizeRubricaCode,
   MAX_FAILED_SUBMITS,
   MAX_PIN_VALIDATION_FAILURES,
   MAX_RUBRICA_REQUESTS_PER_MINUTE,
@@ -344,9 +345,11 @@ export class PairingHub {
     }
 
     let resolvedServer = body.server;
+    let serverCode: string | undefined;
     if (typeof body.server === 'string') {
       const trimmedServer = body.server.trim();
       if (trimmedServer && isRubricaCode(trimmedServer)) {
+        serverCode = normalizeRubricaCode(trimmedServer);
         const fromRubrica = resolveRubricaCode(trimmedServer, this.rubricaIndex);
         if (!fromRubrica) {
           return jsonResponse({ error: 'UNKNOWN_SERVER_CODE' }, 400);
@@ -395,7 +398,7 @@ export class PairingHub {
       return jsonResponse({ error: 'INVALID_CREDENTIALS' }, 400);
     }
 
-    const payload = JSON.stringify(createVersionedPayload(credentials));
+    const payload = JSON.stringify(createVersionedPayload({ ...credentials, serverCode }));
     this.sql.exec('UPDATE sessions SET payload = ? WHERE pin = ?', payload, code);
     this.sql.exec('DELETE FROM ip_submit_limits WHERE ip = ?', ip);
     return jsonResponse({ ok: true });

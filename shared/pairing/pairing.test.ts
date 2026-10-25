@@ -217,18 +217,33 @@ describe('shared/pairing', () => {
       ).toThrow(/duplicato/i);
     });
 
-    it('creates a versioned credentials payload (v: 1)', () => {
+    it('creates a versioned credentials payload with optional normalized serverCode', () => {
       expect(
         createVersionedPayload({
           server: 'http://server.esempio:8080',
-          username: 'utente',
-          password: 'segreta',
+          username: 'demo',
+          password: 'demo',
         }),
       ).toEqual({
         v: 1,
         server: 'http://server.esempio:8080',
-        username: 'utente',
-        password: 'segreta',
+        username: 'demo',
+        password: 'demo',
+      });
+
+      expect(
+        createVersionedPayload({
+          server: 'http://server.esempio:8080',
+          username: 'demo',
+          password: 'demo',
+          serverCode: normalizeRubricaCode(' 001 '),
+        }),
+      ).toEqual({
+        v: 1,
+        server: 'http://server.esempio:8080',
+        username: 'demo',
+        password: 'demo',
+        serverCode: '001',
       });
     });
   });

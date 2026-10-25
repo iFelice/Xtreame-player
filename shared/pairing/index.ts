@@ -29,6 +29,7 @@ export interface VersionedCredentialsPayload {
   server: string;
   username: string;
   password: string;
+  serverCode?: string;
 }
 
 export interface RubricaEntry {
@@ -257,13 +258,14 @@ export function readCredentials(body: unknown): Credentials | null {
 }
 
 export function createVersionedPayload(
-  credentials: Pick<Credentials, 'server' | 'username' | 'password'>,
+  credentials: Pick<Credentials, 'server' | 'username' | 'password'> & { serverCode?: string },
 ): VersionedCredentialsPayload {
   return {
     v: CREDENTIALS_PAYLOAD_VERSION,
     server: credentials.server,
     username: credentials.username,
     password: credentials.password,
+    ...(credentials.serverCode === undefined ? {} : { serverCode: credentials.serverCode }),
   };
 }
 
