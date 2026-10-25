@@ -8,7 +8,7 @@
  * pura in `tvBack.ts`: qui c'è solo l'esecuzione del comando scelto.
  */
 
-export type TvOverlayId = 'tv-pairing' | 'category-panel';
+export type TvOverlayId = 'tv-pairing' | 'category-panel' | 'series-modal';
 
 const closeHandlers = new Map<TvOverlayId, () => void>();
 

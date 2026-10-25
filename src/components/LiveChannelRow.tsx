@@ -72,6 +72,13 @@ export const LiveChannelListRow: React.FC<LiveChannelListRowProps> = ({
       id={`live-channel-${stream.stream_id}`}
       data-media-index={index + 1}
       tabIndex={0}
+      onKeyDown={(event) => {
+        if ((event.target as HTMLElement).closest('button')) return;
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onPlay(stream);
+        }
+      }}
       onClick={() => onPlay(stream)}
       className={`group flex items-center justify-between ${isTv ? 'p-3.5 sm:p-4 gap-3 sm:gap-5' : 'p-2.5 md:p-4 gap-2 md:gap-5'} rounded-2xl transition-all cursor-pointer shadow-sm scroll-mt-2 ${
         isPlaying

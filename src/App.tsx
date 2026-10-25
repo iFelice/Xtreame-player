@@ -42,6 +42,7 @@ import {
 } from './platform/tvBack';
 import { closeTvOverlay, isTvOverlayOpen } from './platform/tvOverlays';
 import { useTvNavigation } from './utils/tvNavigation';
+import { chooseLiveZapChannels, wrapLiveChannelIndex } from './player/liveZapping';
 import { chooseInitialTab, shouldShowMobileBar } from './utils/navigation';
 import type { SectionTab } from './utils/navigation';
 
@@ -56,6 +57,28 @@ export default function App() {
   // smettesse di corrispondere all'euristica di isTvEnvironment().
   const isTv = isTvEnvironment() || isWebOsBuild();
   useTvNavigation(isTv);
+  useEffect(() => {
+    const applyExitFocusStyle = (event: FocusEvent) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement) || !target.matches('[data-tv-exit-choice="exit"]')) return;
+      target.style.setProperty('border-color', '#10B981', 'important');
+      target.style.setProperty('background-color', '#10B981', 'important');
+      target.style.setProperty('color', '#FFFFFF', 'important');
+    };
+    const clearExitFocusStyle = (event: FocusEvent) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement) || !target.matches('[data-tv-exit-choice="exit"]')) return;
+      target.style.removeProperty('border-color');
+      target.style.removeProperty('background-color');
+      target.style.removeProperty('color');
+    };
+    document.addEventListener('focusin', applyExitFocusStyle, true);
+    document.addEventListener('focusout', clearExitFocusStyle, true);
+    return () => {
+      document.removeEventListener('focusin', applyExitFocusStyle, true);
+      document.removeEventListener('focusout', clearExitFocusStyle, true);
+    };
+  }, []);
   const [serverUrl, setServerUrl] = useState<string>('');
   const [username, setUsername] = useState<string>('');
   const [password, setPassword] = useState<string>('');
@@ -66,6 +89,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<SectionTab>('recent');
   const [showTvHome, setShowTvHome] = useState<boolean>(false);
   const [activeMedia, setActiveMedia] = useState<PlayableMediaItem | null>(null);
+  const [liveZapChannels, setLiveZapChannels] = useState<XtreamLiveStream[] | undefined>(undefined);
   const [isPlayerFullscreen, setIsPlayerFullscreen] = useState<boolean>(false);
   const [selectedSeriesForModal, setSelectedSeriesForModal] = useState<string | number | null>(null);
 
@@ -320,9 +344,44 @@ export default function App() {
     return () => { cancelled = true; };
   }, [connectToServer, isRemoteLoginPage]);
 
-  const handlePlayDirect = (media: PlayableMediaItem) => {
+  const makeLiveMedia = (stream: XtreamLiveStream, categoryName?: string): PlayableMediaItem => ({
+    id: `live_${stream.stream_id}`,
+    title: stream.name,
+    type: 'live',
+    streamUrl: stream.direct_source || buildStreamUrl(
+      serverUrl, username, password, 'live', stream.stream_id, 'm3u8', false
+    ),
+    poster: stream.stream_icon,
+    categoryName: categoryName || liveCategories.find((category) => String(category.category_id) === String(stream.category_id))?.category_name || 'Canale Live TV',
+    containerExtension: 'm3u8',
+  });
+
+  const handlePlayDirect = (
+    media: PlayableMediaItem,
+    origin?: { channels: XtreamLiveStream[]; categoryName: string }
+  ) => {
+    if (media.type === 'live') {
+      setLiveZapChannels(chooseLiveZapChannels(origin?.channels, liveStreams));
+      if (origin?.categoryName) media = { ...media, categoryName: origin.categoryName };
+    } else {
+      setLiveZapChannels(undefined);
+    }
     setActiveMedia(media);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleFavoritePlay = (media: PlayableMediaItem) => {
+    if (media.type !== 'live') {
+      handlePlayDirect(media);
+      return;
+    }
+    const favoriteIds = storage.getFavorites(currentAccountKey)
+      .filter((favorite) => favorite.type === 'live')
+      .map((favorite) => favorite.id.replace(/^live_/, ''));
+    const channels = favoriteIds
+      .map((id) => liveStreams.find((stream) => String(stream.stream_id) === id))
+      .filter((stream): stream is XtreamLiveStream => Boolean(stream));
+    handlePlayDirect(media, { channels, categoryName: 'Preferiti' });
   };
 
   const handleSelectSavedAccount = (account: SavedAccount) => {
@@ -342,64 +401,32 @@ export default function App() {
     setSeriesCategories([]);
     setSeriesList([]);
     setActiveMedia(null);
+    setLiveZapChannels(undefined);
     setErrorMessage(null);
     setRefreshSuccessMessage(null);
   };
 
-  const handleNextChannel = () => {
-    if (!activeMedia || activeMedia.type !== 'live' || liveStreams.length === 0) return;
-    const currentStreamId = activeMedia.id.replace('live_', '');
-    const currentIndex = liveStreams.findIndex((s) => String(s.stream_id) === String(currentStreamId));
-    const nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % liveStreams.length;
-    const nextStream = liveStreams[nextIndex];
-    if (nextStream) {
-      const streamUrl = buildStreamUrl(
-        serverUrl,
-        username,
-        password,
-        'live',
-        nextStream.stream_id,
-        'm3u8',
-        false
-      );
-      setActiveMedia({
-        id: `live_${nextStream.stream_id}`,
-        title: nextStream.name,
-        type: 'live',
-        streamUrl,
-        poster: nextStream.stream_icon,
-        categoryName: 'Canale Live TV',
-        containerExtension: 'm3u8',
-      });
-    }
+  const stepLiveChannel = (delta: -1 | 1) => {
+    if (!activeMedia || activeMedia.type !== 'live') return;
+    const channels = chooseLiveZapChannels(liveZapChannels, liveStreams);
+    if (!channels.length) return;
+    const currentId = activeMedia.id.replace('live_', '');
+    const currentIndex = channels.findIndex((stream) => String(stream.stream_id) === currentId);
+    const nextIndex = wrapLiveChannelIndex(currentIndex < 0 ? (delta === 1 ? -1 : 0) : currentIndex, delta, channels.length);
+    const nextStream = channels[nextIndex];
+    if (!nextStream) return;
+    const categoryName = liveZapChannels === undefined
+      ? undefined
+      : activeMedia.categoryName;
+    setActiveMedia(makeLiveMedia(nextStream, categoryName));
   };
 
-  const handlePreviousChannel = () => {
-    if (!activeMedia || activeMedia.type !== 'live' || liveStreams.length === 0) return;
-    const currentStreamId = activeMedia.id.replace('live_', '');
-    const currentIndex = liveStreams.findIndex((s) => String(s.stream_id) === String(currentStreamId));
-    const prevIndex = currentIndex === -1 ? liveStreams.length - 1 : (currentIndex - 1 + liveStreams.length) % liveStreams.length;
-    const prevStream = liveStreams[prevIndex];
-    if (prevStream) {
-      const streamUrl = buildStreamUrl(
-        serverUrl,
-        username,
-        password,
-        'live',
-        prevStream.stream_id,
-        'm3u8',
-        false
-      );
-      setActiveMedia({
-        id: `live_${prevStream.stream_id}`,
-        title: prevStream.name,
-        type: 'live',
-        streamUrl,
-        poster: prevStream.stream_icon,
-        categoryName: 'Canale Live TV',
-        containerExtension: 'm3u8',
-      });
-    }
+  const handleNextChannel = () => stepLiveChannel(1);
+  const handlePreviousChannel = () => stepLiveChannel(-1);
+  const handleSelectLiveChannel = (stream: XtreamLiveStream) => {
+    const channels = chooseLiveZapChannels(liveZapChannels, liveStreams);
+    setLiveZapChannels(channels);
+    setActiveMedia(makeLiveMedia(stream, activeMedia?.categoryName));
   };
 
   const isConnected = Boolean(serverUrl && username && password);
@@ -420,7 +447,7 @@ export default function App() {
       serverInfoOpen: showServerInfo,
       settingsSyncOpen: showSettingsSyncModal,
       tvPairingOpen: isTvOverlayOpen('tv-pairing'),
-      seriesModalOpen: selectedSeriesForModal !== null,
+      seriesModalOpen: selectedSeriesForModal !== null || isTvOverlayOpen('series-modal'),
       categoryPanelOpen: isTvOverlayOpen('category-panel'),
       showTvHome: Boolean(isTv && isConnected && !isLoadingCatalog && showTvHome && !activeMedia),
       exitConfirmOpen: showTvExitConfirm,
@@ -458,7 +485,7 @@ export default function App() {
             closeTvOverlay('tv-pairing');
             break;
           case 'series-modal':
-            setSelectedSeriesForModal(null);
+            if (!closeTvOverlay('series-modal')) setSelectedSeriesForModal(null);
             break;
           case 'category-panel':
             closeTvOverlay('category-panel');
@@ -497,6 +524,9 @@ export default function App() {
     //    "disableBackHistoryAPI": true. Si riconosce solo per keyCode.
     const handleKeyDown = (event: KeyboardEvent) => {
       if (!isWebOsBuild() || !isBackKeyCode(event.keyCode)) return;
+      // The mounted player owns Back so it can close nested live layers and
+      // its controls bar before the App considers closing the player itself.
+      if (activeMedia && !showTvExitConfirm) return;
       event.preventDefault();
       handleTvBackPress();
     };
@@ -505,7 +535,7 @@ export default function App() {
       window.removeEventListener('android-tv-back', handleTvBackPress);
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isTv, handleTvBackPress]);
+  }, [isTv, handleTvBackPress, activeMedia, showTvExitConfirm]);
 
   const handleTvExitChoice = (confirmed: boolean) => {
     applyTvBackAction(resolveTvExitConfirmAction(confirmed));
@@ -588,9 +618,11 @@ export default function App() {
           <section className="space-y-3 animate-in fade-in slide-in-from-top-4 duration-300">
             <MediaPlayer
               media={activeMedia}
+              liveChannels={activeMedia.type === 'live' ? chooseLiveZapChannels(liveZapChannels, liveStreams) : undefined}
+              onSelectLiveChannel={handleSelectLiveChannel}
               onClose={() => setActiveMedia(null)}
-              onNext={activeMedia.type === 'live' && liveStreams.length > 1 ? handleNextChannel : undefined}
-              onPrevious={activeMedia.type === 'live' && liveStreams.length > 1 ? handlePreviousChannel : undefined}
+              onNext={activeMedia.type === 'live' && chooseLiveZapChannels(liveZapChannels, liveStreams).length > 1 ? handleNextChannel : undefined}
+              onPrevious={activeMedia.type === 'live' && chooseLiveZapChannels(liveZapChannels, liveStreams).length > 1 ? handlePreviousChannel : undefined}
               onFullscreenChange={setIsPlayerFullscreen}
               accountKey={currentAccountKey}
             />
@@ -842,7 +874,7 @@ export default function App() {
 
             {activeTab === 'favorites' && (
               <FavoritesView
-                onPlay={handlePlayDirect}
+                onPlay={handleFavoritePlay}
                 onOpenSeries={(seriesId) => {
                   setSelectedSeriesForModal(seriesId);
                   setActiveTab('series');
@@ -901,7 +933,7 @@ export default function App() {
         >
           <div className="w-full max-w-2xl rounded-3xl border-2 border-separator-strong bg-surface-0 p-8 text-center shadow-2xl">
             <h2 id="tv-exit-title" className="text-3xl font-black text-label">
-              Uscire da FelixVP?
+              Vuoi uscire?
             </h2>
             <p className="mt-3 text-lg text-label-secondary">
               L'app viene chiusa. Gli account salvati restano sul televisore.
@@ -920,8 +952,18 @@ export default function App() {
               <button
                 type="button"
                 data-tv-exit-choice="exit"
+                onFocus={(event) => {
+                  event.currentTarget.style.borderColor = '#10B981';
+                  event.currentTarget.style.backgroundColor = '#10B981';
+                  event.currentTarget.style.color = '#FFFFFF';
+                }}
+                onBlur={(event) => {
+                  event.currentTarget.style.removeProperty('border-color');
+                  event.currentTarget.style.removeProperty('background-color');
+                  event.currentTarget.style.removeProperty('color');
+                }}
                 onClick={() => handleTvExitChoice(true)}
-                className="min-w-40 rounded-2xl border-2 border-danger/70 bg-danger px-6 py-3 text-xl font-bold text-on-accent transition hover:brightness-110"
+                className="min-w-40 rounded-2xl border-2 border-separator-strong bg-surface-1 px-6 py-3 text-xl font-bold text-label transition hover:bg-surface-2 focus-visible:border-[#10B981] focus-visible:bg-[#10B981] focus-visible:text-white"
               >
                 Esci
               </button>

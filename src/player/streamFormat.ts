@@ -27,6 +27,17 @@ export function defaultLiveStreamFormat(target: PlaybackTarget): LiveStreamForma
   return target === 'webos' ? 'ts' : 'm3u8';
 }
 
+/** Manual format choices are scoped to the currently playing live channel. */
+export function liveFormatForChannel(
+  target: PlaybackTarget,
+  previousChannelId: string | null,
+  nextChannelId: string | null,
+  previousFormat: LiveStreamFormat
+): LiveStreamFormat {
+  if (target === 'webos' && nextChannelId !== previousChannelId) return 'ts';
+  return previousFormat;
+}
+
 export type LiveFormatFallback =
   | { kind: 'retry'; format: LiveStreamFormat }
   | { kind: 'fail' };

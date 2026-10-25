@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   canFallbackToMpegTs,
   defaultLiveStreamFormat,
+  liveFormatForChannel,
   isPublicMockStream,
   nextLiveFormatAfterFailure,
   normalizeLiveStreamUrl,
@@ -37,6 +38,12 @@ describe('live format default and automatic fallback', () => {
   it('starts live on .ts on webOS and on .m3u8 on web', () => {
     expect(defaultLiveStreamFormat('webos')).toBe('ts');
     expect(defaultLiveStreamFormat('web')).toBe('m3u8');
+  });
+
+  it('resets a manual format choice only when a new live channel starts on webOS', () => {
+    expect(liveFormatForChannel('webos', '101', '101', 'm3u8')).toBe('m3u8');
+    expect(liveFormatForChannel('webos', '101', '103', 'm3u8')).toBe('ts');
+    expect(liveFormatForChannel('web', '101', '103', 'm3u8')).toBe('m3u8');
   });
 
   it('webOS retries a failing .ts exactly once with .m3u8', () => {

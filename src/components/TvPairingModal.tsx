@@ -373,7 +373,7 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
   const qrSizeClasses = isTv ? 'w-52 h-52' : 'w-44 h-44 sm:w-52 sm:h-52';
 
   return (
-    <div className="tv-pairing-modal fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
+    <div data-tv-layer="pairing" role="dialog" aria-modal="true" className="tv-pairing-modal fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
       <div className="tv-pairing-panel glass border border-glass-edge rounded-3xl max-w-2xl w-full shadow-2xl overflow-hidden relative my-auto">
         {/* Header Tabs */}
         <div className="flex items-center justify-between border-b border-separator p-4 sm:p-5">

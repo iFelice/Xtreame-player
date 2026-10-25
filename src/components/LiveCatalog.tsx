@@ -23,7 +23,7 @@ interface LiveCatalogProps {
   serverUrl: string;
   username: string;
   password: string;
-  onPlay: (item: PlayableMediaItem) => void;
+  onPlay: (item: PlayableMediaItem, origin?: { channels: XtreamLiveStream[]; categoryName: string }) => void;
   activeMediaId?: string | null;
   isLoading?: boolean;
   accountKey?: string;
@@ -42,6 +42,7 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
 }) => {
   const [, refreshFavorites] = useState(0);
   const channelsListRef = useRef<HTMLDivElement | null>(null);
+  const previousActiveMediaId = useRef<string | null>(null);
   const isTv = isTvEnvironment();
 
   // Always default to the FIRST category (never "all" to prevent freezing)
@@ -119,9 +120,25 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
     return () => clearTimeout(timer);
   }, [activeMediaId]);
 
+  // If the row is part of a virtualized/scrolling catalog, bring it back into
+  // view before restoring its focus after the player closes.
+  useEffect(() => {
+    const previousId = previousActiveMediaId.current;
+    previousActiveMediaId.current = activeMediaId || null;
+    if (activeMediaId || !previousId?.startsWith('live_')) return;
+    const streamId = previousId.replace('live_', '');
+    const timer = window.setTimeout(() => {
+      const row = document.getElementById(`live-channel-${streamId}`);
+      row?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+      row?.focus({ preventScroll: true });
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, [activeMediaId]);
+
   const handlePlayLive = (stream: XtreamLiveStream) => {
     // Scroll selected channel to top of viewport immediately
     const elem = document.getElementById(`live-channel-${stream.stream_id}`);
+    elem?.focus({ preventScroll: true });
     if (elem && channelsListRef.current) {
       const container = channelsListRef.current;
       const containerTop = container.getBoundingClientRect().top;
@@ -150,7 +167,7 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
       containerExtension: 'm3u8',
     };
 
-    onPlay(mediaItem);
+    onPlay(mediaItem, { channels: filteredStreams, categoryName: currentCategory?.category_name || 'Canale Live TV' });
   };
 
   const toggleFavorite = (stream: XtreamLiveStream) => {
@@ -327,6 +344,13 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
                         id={`live-channel-${stream.stream_id}`}
                         data-media-index={idx + 1}
                         tabIndex={0}
+                        onKeyDown={(event) => {
+                          if ((event.target as HTMLElement).closest('button')) return;
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            handlePlayLive(stream);
+                          }
+                        }}
                         onClick={() => handlePlayLive(stream)}
                         className={`group relative rounded-3xl p-4 shadow-lg transition-all cursor-pointer flex flex-col justify-between scroll-mt-2 ${
                           isPlayingThis

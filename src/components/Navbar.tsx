@@ -116,8 +116,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                         {onOpenSettingsSync && (
                           <button
                             onClick={() => {
-                              setShowMobileAccountMenu(false);
-                              onOpenSettingsSync();
+                            onOpenSettingsSync();
                             }}
                             className="text-accent-strong hover:underline flex items-center gap-1 text-xs font-bold cursor-pointer"
                           >
@@ -254,7 +253,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                       {onOpenSettingsSync && (
                         <button
                           onClick={() => {
-                            setShowDesktopAccountMenu(false);
                             onOpenSettingsSync();
                           }}
                           className="text-accent-strong hover:underline flex items-center gap-1 text-xs font-bold cursor-pointer"

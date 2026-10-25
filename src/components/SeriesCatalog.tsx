@@ -30,6 +30,7 @@ import { VirtualizedMediaGrid } from './VirtualizedMediaGrid';
 import { ListPositionIndicator } from './ListPositionIndicator';
 import { canOfferDownloads, triggerMediaDownload, isTvEnvironment } from '../utils/downloadHelper';
 import { CollapsibleCategoryPanel } from './CollapsibleCategoryPanel';
+import { registerTvOverlay } from '../platform/tvOverlays';
 
 interface SeriesCatalogProps {
   categories: XtreamCategory[];
@@ -75,6 +76,14 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
     isLoading: boolean;
     selectedSeason: string;
   } | null>(null);
+
+  useEffect(() => {
+    if (!activeSeriesDetail) return;
+    return registerTvOverlay('series-modal', () => {
+      setActiveSeriesDetail(null);
+      onClearSelectedSeries?.();
+    });
+  }, [Boolean(activeSeriesDetail), onClearSelectedSeries]);
 
   // Sync first category if categories arrive asynchronously
   useEffect(() => {
@@ -401,7 +410,7 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
 
       {/* Episode Selection Modal */}
       {activeSeriesDetail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/50 animate-in fade-in">
+        <div data-tv-layer="series-detail" role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/50 animate-in fade-in">
           <div className="glass border border-glass-edge rounded-3xl max-w-4xl w-full overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
             {/* Modal Header */}
             <div className="p-4 sm:p-5 border-b border-separator flex items-center justify-between">

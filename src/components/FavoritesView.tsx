@@ -4,6 +4,7 @@ import { Star, Clock, Play, Trash2, Film, Tv, Radio } from 'lucide-react';
 import { PlayableMediaItem } from '../types/xtream';
 import { storage, WatchHistoryItem } from '../services/storage';
 import { getSecureImageUrl } from '../utils/imageUrl';
+import { isTvEnvironment } from '../utils/downloadHelper';
 
 interface FavoritesViewProps {
   onPlay: (item: PlayableMediaItem) => void;
@@ -12,6 +13,7 @@ interface FavoritesViewProps {
 }
 
 export const FavoritesView: React.FC<FavoritesViewProps> = ({ onPlay, onOpenSeries, accountKey }) => {
+  const isTv = isTvEnvironment();
   const [favorites, setFavorites] = useState<PlayableMediaItem[]>([]);
   const [history, setHistory] = useState<WatchHistoryItem[]>([]);
 
@@ -143,6 +145,14 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({ onPlay, onOpenSeri
             {favorites.map((item) => (
               <div
                 key={item.id}
+                role={isTv ? 'button' : undefined}
+                tabIndex={isTv ? 0 : undefined}
+                onKeyDown={(event) => {
+                  if (isTv && event.key === 'Enter') {
+                    if (item.type === 'series') onOpenSeries(item.id.replace(/^series_/, ''));
+                    else onPlay(item);
+                  }
+                }}
                 onClick={() => item.type === 'series'
                   ? onOpenSeries(item.id.replace(/^series_/, ''))
                   : onPlay(item)}

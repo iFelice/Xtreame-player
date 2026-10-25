@@ -11,17 +11,10 @@
  * TV dell'app) e una finestra 1920×1080. Il server Xtream è il mock locale
  * (`npm run mock:xtream`), il relay di abbinamento non viene mai usato.
  *
- * Verifiche:
- *  1. schermata di accesso visibile;
- *  2. login al server finto → Novità;
- *  3. ricaricamento → account ripristinato senza nuovo accesso;
- *  4. nessuna richiesta agli endpoint Express (`/api/...`);
- *  5. tasto Indietro (keyCode 461) sulla schermata iniziale → conferma d'uscita
- *     con focus su "Annulla"; un secondo Indietro chiude la conferma.
- *
- * Nota: la riproduzione video non è coperta qui — il Chromium desktop non ha un
- * demuxer MPEG-TS nativo, quindi il comportamento del <video> del TV non è
- * riproducibile (vedi docs/WEBOS.md).
+ * Verifiche: login, scope/inert e focus di pairing/server/settings/serie/conferma,
+ * player live (banner, picker, zapping circolare, .ts → .m3u8, formato manuale e
+ * ripristino focus), player VOD (pausa/barra e seek cumulativo), nessuna chiamata
+ * Express da `file://`. Chromium non certifica il decoder MPEG-TS nativo del TV.
  *
  * Browser: usa nell'ordine `FVP_CHROMIUM_PATH`, i browser installati da
  * Playwright (`npx playwright install chromium`) o un Chrome/Chromium di
@@ -203,6 +196,18 @@ async function run() {
     const page = await context.newPage();
     const pageErrors = [];
     page.on('pageerror', (error) => pageErrors.push(String(error)));
+    await page.addInitScript(() => {
+      // Keep the browser's unavailable MPEG-TS/HLS decoder from racing the
+      // remote-control assertions. Later the smoke releases one error event
+      // deliberately to exercise the production .ts -> .m3u8 fallback.
+      window.__fvpHoldVideoErrors = true;
+      document.addEventListener('error', (event) => {
+        if (window.__fvpHoldVideoErrors && event.target instanceof HTMLVideoElement) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+        }
+      }, true);
+    });
 
     const fileUrl = `file://${indexFile}`;
     console.log(`[tv] apro ${fileUrl}`);
@@ -215,6 +220,26 @@ async function run() {
       'modalità TV attiva (login a schermo intero, niente menu mobile)',
       await page.locator('header').first().isVisible()
     );
+
+    const pairingTrigger = page.getByRole('button', { name: /Configura con QR Code e PIN/i });
+    await pairingTrigger.click();
+    await page.waitForSelector('[data-tv-layer="pairing"]', { timeout: 5000 });
+    await page.waitForFunction(() => document.querySelector('[data-tv-layer="pairing"]')?.contains(document.activeElement), null, { timeout: 5000 });
+    check('pairing TV prende il focus e isola il login sottostante', await page.evaluate(() => {
+      const layer = document.querySelector('[data-tv-layer="pairing"]');
+      const field = document.querySelector('input[placeholder="http://server.iptv.com:8080"]');
+      return Boolean(layer?.contains(document.activeElement) && field?.closest('[inert]'));
+    }));
+    await pressRemoteKey(page, 'ArrowDown', 40);
+    check('le frecce nel pairing restano nello scope del modale', await page.evaluate(() =>
+      Boolean(document.querySelector('[data-tv-layer="pairing"]')?.contains(document.activeElement))
+    ));
+    await pressRemoteKey(page, 'GoBack', 461);
+    await page.waitForFunction(() => !document.querySelector('[data-tv-layer="pairing"]'), null, { timeout: 5000 });
+    await page.waitForFunction(() => document.activeElement?.textContent?.includes('Configura con QR Code e PIN'), null, { timeout: 5000 });
+    check('Indietro chiude il pairing e ripristina il focus al pulsante d’apertura', await page.evaluate(() =>
+      document.activeElement?.textContent?.includes('Configura con QR Code e PIN') ?? false
+    ));
 
     // 2) login al server finto → Novità
     await typeIntoTvField(page, 'input[placeholder="http://server.iptv.com:8080"]', mockUrl);
@@ -243,6 +268,41 @@ async function run() {
     );
     check('dopo il ricaricamento l’account è ripristinato senza nuovo accesso', true);
 
+    await page.locator('button[title="Dettagli abbonamento e server"]').first().click();
+    await page.waitForSelector('[data-tv-layer="server-info"]', { timeout: 5000 });
+    check('info server isola la pagina e riceve il focus', await page.evaluate(() => {
+      const layer = document.querySelector('[data-tv-layer="server-info"]');
+      return Boolean(layer?.contains(document.activeElement) && document.querySelector('main')?.inert);
+    }));
+    await pressRemoteKey(page, 'ArrowRight', 39);
+    check('la navigazione con frecce resta nell’info server', await page.evaluate(() =>
+      Boolean(document.querySelector('[data-tv-layer="server-info"]')?.contains(document.activeElement))
+    ));
+    await page.locator('[data-tv-layer="server-info"] button').first().click();
+    await page.waitForFunction(() => !document.querySelector('[data-tv-layer="server-info"]'), null, { timeout: 5000 });
+    check('chiudendo info server il focus torna al comando che l’ha aperta', await page.evaluate(() =>
+      document.activeElement?.getAttribute('title') === 'Dettagli abbonamento e server'
+    ));
+
+    await page.locator('button[title^="demo@"]').click();
+    await page.getByRole('button', { name: 'Modifica' }).click();
+    await page.waitForSelector('[data-tv-layer="settings-sync"]', { timeout: 5000 });
+    check('sincronizzazione impostazioni isola il contenuto sottostante', await page.evaluate(() => {
+      const layer = document.querySelector('[data-tv-layer="settings-sync"]');
+      return Boolean(layer?.contains(document.activeElement) && document.querySelector('main')?.inert);
+    }));
+    await pressRemoteKey(page, 'ArrowDown', 40);
+    check('la navigazione con frecce resta nella sincronizzazione impostazioni', await page.evaluate(() =>
+      Boolean(document.querySelector('[data-tv-layer="settings-sync"]')?.contains(document.activeElement))
+    ));
+    await pressRemoteKey(page, 'GoBack', 461);
+    await page.waitForFunction(() => !document.querySelector('[data-tv-layer="settings-sync"]'), null, { timeout: 5000 });
+    const settingsFocus = await page.evaluate(() => ({
+      matches: document.activeElement?.textContent?.includes('Modifica') ?? false,
+      label: document.activeElement?.textContent?.trim() || document.activeElement?.tagName || '',
+    }));
+    check('Indietro chiude impostazioni e ripristina il focus', settingsFocus.matches, settingsFocus.label);
+
     // 4) nessuna richiesta agli endpoint Express. Su file:// un path relativo
     //    come /api/proxy/... diventerebbe un file locale: qui si controlla il
     //    path di ogni richiesta emessa dalla pagina (relay escluso).
@@ -269,16 +329,34 @@ async function run() {
       `${await page.locator('[aria-label^="Scarica"], [title^="Scarica"]').count()} elementi`
     );
 
+    // Serie: il dettaglio episodio è uno scope TV annidato e Back lo chiude.
+    await page.getByRole('button', { name: /SERIE TV/i }).click();
+    await page.waitForSelector('.media-content-panel [data-media-index]', { timeout: 20_000 });
+    const seriesCard = page.locator('.media-content-panel [data-media-index]').first();
+    await seriesCard.click();
+    await page.waitForSelector('[data-tv-layer="series-detail"]', { timeout: 10_000 });
+    check('modale serie isola la griglia e acquisisce il focus', await page.evaluate(() => {
+      const layer = document.querySelector('[data-tv-layer="series-detail"]');
+      const card = document.querySelector('.media-content-panel [data-media-index]');
+      return Boolean(layer?.contains(document.activeElement) && card?.closest('[inert]'));
+    }));
+    await pressRemoteKey(page, 'GoBack', 461);
+    await page.waitForFunction(() => !document.querySelector('[data-tv-layer="series-detail"]'), null, { timeout: 5000 });
+    check('Indietro chiude la modale serie e ripristina il focus alla scheda', await page.evaluate(() =>
+      document.activeElement?.matches('.media-content-panel [data-media-index]') ?? false
+    ));
+
     // 5) tasto Indietro: si entra nella schermata iniziale TV
     await pressRemoteKey(page, 'GoBack', 461);
     await page.waitForFunction(() => document.body.innerText.includes('Cosa vuoi guardare?'), null, { timeout: 5000 });
     check('Indietro apre la schermata iniziale TV', true);
 
-    // 6) player su webOS: motore nativo, .ts prima, un solo passaggio a .m3u8
+    // 6) player su webOS: focus, scope live, banner, picker, zapping e formati
     await page.getByRole('button', { name: /LIVE TV/i }).click();
     await page.waitForSelector('[id^="live-channel-"]', { timeout: 20_000 });
     await page.locator('[id^="live-channel-"]').first().click();
     await page.waitForSelector('[data-media-player="true"] video', { timeout: 20_000 });
+    await page.waitForFunction(() => document.activeElement === document.querySelector('[data-media-player="true"]'), null, { timeout: 5000 });
 
     const videoSrc = await page.evaluate(() => document.querySelector('[data-media-player="true"] video')?.src ?? '');
     check(
@@ -286,43 +364,217 @@ async function run() {
       videoSrc.startsWith(mockUrl),
       videoSrc.slice(0, 60)
     );
+    check('all’apertura il player webOS acquisisce il focus', await page.evaluate(() =>
+      document.activeElement === document.querySelector('[data-media-player="true"]')
+    ));
+    check('il catalogo dietro il player è inert', await page.evaluate(() =>
+      Boolean(document.querySelector('.media-catalog')?.closest('[inert]'))
+    ));
+    check('il banner live mostra numero, nome e categoria', await page.evaluate(() => {
+      const banner = document.querySelector('[data-live-channel-banner]');
+      return Boolean(banner?.querySelector('[data-live-channel-number]')?.textContent?.trim() &&
+        banner.querySelector('[data-live-channel-name]')?.textContent?.trim() &&
+        banner.querySelector('[data-live-channel-category]')?.textContent?.trim());
+    }));
+    check('il player live non mostra la barra controlli',
+      await page.locator('[data-controls-bar]').evaluate((element) => getComputedStyle(element).display === 'none'));
 
-    const channelId = await page.evaluate(
-      () => document.querySelector('[id^="live-channel-"]')?.id?.replace('live-channel-', '') ?? ''
-    );
+    await pressRemoteKey(page, 'Enter', 13);
+    check('OK nasconde il banner live', await page.locator('[data-live-channel-banner]').count() === 0);
+    await pressRemoteKey(page, 'Enter', 13);
+    check('OK mostra nuovamente il banner live', await page.locator('[data-live-channel-banner]').count() === 1);
+
+    const initialChannelId = await page.evaluate(() => {
+      const src = document.querySelector('[data-media-player="true"] video')?.src || '';
+      return new URL(src).pathname.split('/').pop()?.replace(/\.(?:ts|m3u8)$/, '') || '';
+    });
+    await pressRemoteKey(page, 'ArrowLeft', 37);
+    await page.waitForSelector('[data-tv-layer="channel-list"]', { timeout: 5000 });
+    await page.waitForFunction(() => document.activeElement?.hasAttribute('data-channel-index'), null, { timeout: 5000 });
+    check('sinistra apre la lista canali e parte dal canale in onda', await page.evaluate(() => {
+      const menu = document.querySelector('[data-tv-layer="channel-list"]');
+      const video = document.querySelector('[data-media-player="true"] video');
+      const activeIndex = Number(document.activeElement?.getAttribute('data-channel-index'));
+      return Boolean(menu?.contains(document.activeElement) && video?.closest('[inert]') && activeIndex === 0);
+    }));
+    await pressRemoteKey(page, 'ArrowDown', 40);
+    await page.waitForFunction(() => document.activeElement?.getAttribute('data-channel-index') === '1', null, { timeout: 5000 });
+    check('su/giù scorre i canali senza cambiare la riproduzione', await page.evaluate(() =>
+      document.activeElement?.getAttribute('data-channel-index') === '1'
+    ));
+    await pressRemoteKey(page, 'Enter', 13);
+    await page.waitForFunction((id) => {
+      const src = document.querySelector('[data-media-player="true"] video')?.src || '';
+      return new URL(src).pathname.split('/').pop()?.replace(/\.(?:ts|m3u8)$/, '') !== id;
+    }, initialChannelId, { timeout: 5000 });
+    check('OK seleziona e chiude la lista sul canale focalizzato', await page.locator('[data-tv-layer="channel-list"]').count() === 0);
+    const secondChannelId = await page.evaluate(() => {
+      const src = document.querySelector('[data-media-player="true"] video')?.src || '';
+      return new URL(src).pathname.split('/').pop()?.replace(/\.(?:ts|m3u8)$/, '') || '';
+    });
+    await pressRemoteKey(page, 'ArrowUp', 38);
+    await page.waitForFunction((id) => {
+      const src = document.querySelector('[data-media-player="true"] video')?.src || '';
+      return new URL(src).pathname.split('/').pop()?.replace(/\.(?:ts|m3u8)$/, '') === id;
+    }, initialChannelId, { timeout: 5000 });
+    check('freccia su zappa al canale precedente nella lista d’origine', secondChannelId !== initialChannelId);
+    await pressRemoteKey(page, 'Unidentified', 33);
+    await page.waitForFunction((id) => {
+      const src = document.querySelector('[data-media-player="true"] video')?.src || '';
+      return new URL(src).pathname.split('/').pop()?.replace(/\.(?:ts|m3u8)$/, '') !== id;
+    }, initialChannelId, { timeout: 5000 });
+    await pressRemoteKey(page, 'Unidentified', 34);
+    await page.waitForFunction((id) => {
+      const src = document.querySelector('[data-media-player="true"] video')?.src || '';
+      return new URL(src).pathname.split('/').pop()?.replace(/\.(?:ts|m3u8)$/, '') === id;
+    }, initialChannelId, { timeout: 5000 });
+    check('CH+/CH− equivalgono a freccia giù/su', true);
+    await pressRemoteKey(page, 'ArrowRight', 39);
+    check('destra non apre il pannello volume né cambia canale', await page.evaluate((id) => {
+      const src = document.querySelector('[data-media-player="true"] video')?.src || '';
+      return new URL(src).pathname.split('/').pop()?.replace(/\.(?:ts|m3u8)$/, '') === id;
+    }, initialChannelId));
+
+    await pressRemoteKey(page, 'ArrowLeft', 37);
+    await page.waitForSelector('[data-tv-layer="channel-list"]', { timeout: 5000 });
+    await pressRemoteKey(page, 'GoBack', 461);
+    await page.waitForFunction(() => !document.querySelector('[data-tv-layer="channel-list"]'), null, { timeout: 5000 });
+    check('Indietro chiude prima la lista canali e lascia il player aperto',
+      (await page.locator('[data-tv-layer="channel-list"]').count()) === 0 && (await page.locator('[data-media-player="true"]').count()) === 1);
+    const bannerVisible = await page.locator('[data-live-channel-banner]').count();
+    if (!bannerVisible) await pressRemoteKey(page, 'Enter', 13);
+    await pressRemoteKey(page, 'GoBack', 461);
+    await page.waitForFunction(() => !document.querySelector('[data-live-channel-banner]'), null, { timeout: 5000 });
+    check('Indietro chiude il banner prima del player',
+      (await page.locator('[data-live-channel-banner]').count()) === 0 && (await page.locator('[data-media-player="true"]').count()) === 1);
+
+    const channelId = initialChannelId;
     const liveRequests = () => requests.filter((url) => url.includes(`/live/demo/demo/${channelId}.`));
     const tsRequested = () => liveRequests().some((url) => /\.ts(\?|$)/.test(url));
     const retryRequested = () => liveRequests().some((url) => /\.m3u8(\?|$)/.test(url));
 
-    // Il TV reale riprodurrebbe entrambi i contenitori; qui l'obiettivo è la
-    // sequenza delle richieste: prima .ts, poi UN solo tentativo in .m3u8.
-    const deadline = Date.now() + 75_000;
-    while (Date.now() < deadline && !(tsRequested() && retryRequested())) await sleep(500);
-    check('il live parte in .ts', tsRequested(), liveRequests().join(' | ').slice(0, 160));
-    check('dopo l’errore in .ts segue un solo tentativo in .m3u8', retryRequested(), `${liveRequests().length} richieste live`);
-    const m3u8Attempts = liveRequests().filter((url) => url.includes('.m3u8')).length;
-    check('il tentativo in .m3u8 non viene ripetuto', m3u8Attempts <= 1, `${m3u8Attempts} richieste .m3u8`);
+    // Chromium desktop non decodifica in modo affidabile MPEG-TS. Le richieste
+    // restano reali al mock, ma rilasciamo un singolo evento error controllato
+    // dopo aver verificato i tasti: il componente esegue così il vero fallback.
+    check('il live webOS richiede .ts per primo', tsRequested(), liveRequests().join(' | ').slice(0, 160));
+    await page.evaluate(() => {
+      window.__fvpHoldVideoErrors = false;
+      document.querySelector('[data-media-player="true"] video')?.dispatchEvent(new Event('error'));
+    });
+    const fallbackDeadline = Date.now() + 20_000;
+    while (Date.now() < fallbackDeadline && !retryRequested()) await sleep(250);
+    check('dopo l’errore .ts viene richiesto il solo fallback .m3u8', retryRequested(), `${liveRequests().length} richieste live`);
+    const m3u8Attempts = liveRequests().filter((url) => /\.m3u8(?:\?|$)/.test(url)).length;
+    check('il fallback automatico .m3u8 è singolo', m3u8Attempts === 1, `${m3u8Attempts} richieste .m3u8`);
 
-    // Dopo due contenitori falliti il TV deve mostrare l'errore, con il
-    // pulsante manuale di cambio formato e SENZA alcun riferimento al proxy.
     const errorShown = await page
       .waitForFunction(() => document.body.innerText.includes('Impossibile riprodurre lo stream'), null, {
-        timeout: 60_000,
+        timeout: 20_000,
       })
       .then(() => true)
       .catch(() => false);
-    check('dopo il secondo fallimento appare il messaggio d’errore', errorShown);
-    const playerText = await page
-      .locator('[data-media-player="true"]')
-      .innerText()
-      .catch(() => '');
+    check('dopo il fallimento del fallback appare il pannello errore', errorShown);
+    check('il focus iniziale del pannello errore è su “Riprova”', await page.evaluate(() =>
+      document.activeElement?.textContent?.includes('Riprova') ?? false
+    ));
+    const playerText = await page.locator('[data-media-player="true"]').innerText().catch(() => '');
     check('nel player nessun pulsante Proxy (modalità diretta)', !/proxy/i.test(playerText));
-    check('il pulsante manuale "Passa a formato" resta nel player', /Passa a formato/.test(playerText));
+    check('il pulsante manuale “Passa a formato” resta nel player', /Passa a formato/.test(playerText));
 
-    // 7) Indietro nel player chiude il lettore (come fa Escape sul web)
+    const tsBeforeManual = liveRequests().filter((url) => /\.ts(?:\?|$)/.test(url)).length;
+    await page.getByRole('button', { name: /Passa a formato MPEG-TS/i }).click();
+    const manualDeadline = Date.now() + 10_000;
+    while (Date.now() < manualDeadline && liveRequests().filter((url) => /\.ts(?:\?|$)/.test(url)).length === tsBeforeManual) await sleep(200);
+    check('la selezione manuale .ts cambia il formato del solo canale corrente',
+      liveRequests().filter((url) => /\.ts(?:\?|$)/.test(url)).length > tsBeforeManual);
+
     await pressRemoteKey(page, 'GoBack', 461);
     await page.waitForFunction(() => !document.querySelector('[data-media-player="true"]'), null, { timeout: 10_000 });
-    check('Indietro chiude il player', true);
+    await page.waitForFunction((id) => document.activeElement?.id === `live-channel-${id}`, channelId, { timeout: 5000 });
+    check('chiudendo il player il focus torna alla riga live d’origine', await page.evaluate((id) =>
+      document.activeElement?.id === `live-channel-${id}`
+    , channelId));
+
+    await page.evaluate(() => { window.__fvpHoldVideoErrors = true; });
+    await page.locator(`#live-channel-${channelId}`).click();
+    await page.waitForFunction(() => document.querySelector('[data-media-player="true"] video')?.src.endsWith('.ts'), null, { timeout: 10_000 }).catch(() => {});
+    const reopenedLiveSrc = await page.locator('[data-media-player="true"] video').evaluate((video) => video.src).catch(() => '');
+    check('un nuovo avvio live riparte da .ts, senza ereditare la scelta manuale', /\.ts(?:\?|$)/.test(reopenedLiveSrc || ''), reopenedLiveSrc);
+    await pressRemoteKey(page, 'GoBack', 461);
+    if (await page.locator('[data-media-player="true"]').count()) await pressRemoteKey(page, 'GoBack', 461);
+    await page.waitForFunction(() => !document.querySelector('[data-media-player="true"]'), null, { timeout: 10_000 });
+
+    // 7) VOD webOS: pausa/riprendi, barra controlli e seek cumulativo.
+    await pressRemoteKey(page, 'GoBack', 461);
+    await page.waitForFunction(() => document.body.innerText.includes('Cosa vuoi guardare?'), null, { timeout: 5000 });
+    await page.getByRole('button', { name: /FILM/i }).click();
+    await page.waitForSelector('.media-content-panel [data-media-index]', { timeout: 20_000 });
+    await page.evaluate(() => {
+      const video = document.querySelector('[data-media-player="true"] video');
+      if (video) return;
+      // Synthetic clock avoids relying on the browser's external HLS decoder.
+      const states = new WeakMap();
+      Object.defineProperty(HTMLVideoElement.prototype, 'currentTime', {
+        configurable: true,
+        get() { return states.get(this)?.time ?? 120; },
+        set(value) { const state = states.get(this) || { time: 120, writes: [] }; state.time = value; state.writes.push(value); states.set(this, state); window.__fvpSeekWrites = state.writes; },
+      });
+      Object.defineProperty(HTMLVideoElement.prototype, 'duration', { configurable: true, get() { return 600; } });
+      Object.defineProperty(HTMLVideoElement.prototype, 'paused', { configurable: true, get() { return states.get(this)?.paused ?? true; } });
+      HTMLVideoElement.prototype.pause = function () { const state = states.get(this) || { time: 120, writes: [] }; state.paused = true; states.set(this, state); this.dispatchEvent(new Event('pause')); };
+      HTMLVideoElement.prototype.play = function () { const state = states.get(this) || { time: 120, writes: [] }; state.paused = false; states.set(this, state); this.dispatchEvent(new Event('play')); return Promise.resolve(); };
+      window.__fvpVideoStates = states;
+      window.__fvpHoldVideoErrors = true;
+    });
+    await page.locator('.media-content-panel [data-media-index]').first().hover();
+    await page.locator('.media-content-panel [data-media-index]').first().locator('button[title="Riproduci ora"]').click({ force: true });
+    await page.waitForSelector('[data-media-player="true"] video', { timeout: 10_000 });
+    await page.evaluate(() => {
+      const video = document.querySelector('[data-media-player="true"] video');
+      if (!video) return;
+      const states = window.__fvpVideoStates;
+      states.set(video, { time: 120, paused: false, writes: [] });
+      Object.defineProperty(video, 'currentTime', { configurable: true, get() { return states.get(video).time; }, set(value) { const state = states.get(video); state.time = value; state.writes.push(value); } });
+      Object.defineProperty(video, 'duration', { configurable: true, value: 600 });
+      video.dispatchEvent(new Event('loadedmetadata'));
+    });
+    await pressRemoteKey(page, 'Enter', 13);
+    check('OK mette in pausa il film e mostra la barra controlli', await page.evaluate(() =>
+      document.querySelector('[data-media-player="true"] video')?.paused === true &&
+      document.querySelector('[data-controls-bar]')?.getAttribute('aria-hidden') === 'false'
+    ));
+    await pressRemoteKey(page, 'ArrowDown', 40);
+    check('Giù porta il focus alla prima azione della barra film', await page.evaluate(() =>
+      document.activeElement?.getAttribute('data-webos-control') === 'play'
+    ));
+    await pressRemoteKey(page, 'Enter', 13);
+    check('OK sul pulsante riprende la riproduzione', await page.evaluate(() =>
+      document.querySelector('[data-media-player="true"] video')?.paused === false
+    ));
+    await pressRemoteKey(page, 'ArrowUp', 38);
+    await page.evaluate(() => {
+      const video = document.querySelector('[data-media-player="true"] video');
+      const state = video && window.__fvpVideoStates.get(video);
+      if (state) state.writes = [];
+      window.__fvpSeekWrites = state?.writes || [];
+    });
+    await pressRemoteKey(page, 'ArrowRight', 39);
+    await pressRemoteKey(page, 'ArrowRight', 39);
+    await pressRemoteKey(page, 'ArrowRight', 39);
+    check('tre pressioni ravvicinate mostrano un singolo feedback +30 s',
+      await page.locator('[data-seek-feedback]').innerText().catch(() => '') === '+30 s');
+    await page.waitForTimeout(1700);
+    check('tre pressioni ravvicinate applicano un solo seek di +30 s', await page.evaluate(() => {
+      const video = document.querySelector('[data-media-player="true"] video');
+      return video?.currentTime === 150 && window.__fvpSeekWrites?.length === 1 && window.__fvpSeekWrites[0] === 150;
+    }));
+    await pressRemoteKey(page, 'GoBack', 461);
+    check('Indietro chiude prima la barra controlli del film', await page.evaluate(() =>
+      document.querySelector('[data-controls-bar]')?.getAttribute('aria-hidden') === 'true' && Boolean(document.querySelector('[data-media-player="true"]'))
+    ));
+    await pressRemoteKey(page, 'GoBack', 461);
+    await page.waitForFunction(() => !document.querySelector('[data-media-player="true"]'), null, { timeout: 10_000 });
+    check('il secondo Indietro chiude il player film', true);
 
     // 8) home TV → conferma d’uscita → secondo Indietro la chiude
     await pressRemoteKey(page, 'GoBack', 461);
@@ -332,8 +584,24 @@ async function run() {
     await pressRemoteKey(page, 'GoBack', 461);
     await page.waitForFunction(() => document.querySelector('[data-tv-exit-choice="exit"]'), null, { timeout: 5000 });
     check('Indietro sulla schermata iniziale mostra la conferma d’uscita', true);
-    const focusedLabel = await page.evaluate(() => document.activeElement?.textContent?.trim() ?? '');
-    check('il focus è su "Annulla"', focusedLabel === 'Annulla', `focus su "${focusedLabel}"`);
+    check('il titolo della conferma è “Vuoi uscire?” e il contenuto dietro è inert', await page.evaluate(() =>
+      document.querySelector('#tv-exit-title')?.textContent?.trim() === 'Vuoi uscire?' && Boolean(document.querySelector('main')?.inert)
+    ));
+    let focusedLabel = await page.evaluate(() => document.activeElement?.textContent?.trim() ?? '');
+    check('il focus iniziale è su "Annulla"', focusedLabel === 'Annulla', `focus su "${focusedLabel}"`);
+    await pressRemoteKey(page, 'ArrowRight', 39);
+    focusedLabel = await page.evaluate(() => document.activeElement?.textContent?.trim() ?? '');
+    check('freccia destra porta il focus su Esci nel solo modale', focusedLabel === 'Esci');
+    await page.waitForTimeout(220);
+    const exitFocusStyle = await page.evaluate(() => {
+      const button = document.querySelector('[data-tv-exit-choice="exit"]');
+      const style = button ? getComputedStyle(button) : null;
+      return style ? `${style.backgroundColor} / ${style.borderColor} / ${style.color}` : 'manca il pulsante';
+    });
+    check('Esci diventa verde al focus', exitFocusStyle.startsWith('rgb(16, 185, 129)'), exitFocusStyle);
+    await pressRemoteKey(page, 'ArrowLeft', 37);
+    check('freccia sinistra resta nel modale e torna su Annulla',
+      (await page.evaluate(() => document.activeElement?.textContent?.trim())) === 'Annulla');
 
     await pressRemoteKey(page, 'GoBack', 461);
     await page.waitForFunction(() => !document.querySelector('[data-tv-exit-choice="exit"]'), null, { timeout: 5000 });
