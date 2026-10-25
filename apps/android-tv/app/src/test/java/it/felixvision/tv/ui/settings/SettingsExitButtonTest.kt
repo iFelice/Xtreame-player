@@ -1,5 +1,7 @@
 package it.felixvision.tv.ui.settings
 
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
@@ -96,7 +98,7 @@ class SettingsExitButtonTest {
         // Contenuto scorrevole: così anche gli ultimi pulsanti restano raggiungibili.
         rule.onNode(hasScrollAction()).assertExists()
 
-        rule.onNodeWithTag(SETTINGS_EXIT_TAG).performClick()
+        rule.onNodeWithTag(SETTINGS_EXIT_TAG).performSemanticsAction(SemanticsActions.OnClick)
         assertEquals(1, exitClicks)
     }
 }
