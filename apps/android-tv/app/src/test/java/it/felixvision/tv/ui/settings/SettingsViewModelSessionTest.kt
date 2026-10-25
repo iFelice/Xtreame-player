@@ -210,7 +210,12 @@ class SettingsViewModelSessionTest {
 
         // I callback della nuova istanza appartengono alla seconda sessione.
         secondVm.onExitConfirm()
-        ShadowLooper.idleMainLooper()
+        // onExitConfirm pulisce gli archivi su IO prima di chiamare onSignOut: attesa limitata.
+        val deadline = System.currentTimeMillis() + 5_000
+        while (!secondSessionSignedOut && System.currentTimeMillis() < deadline) {
+            ShadowLooper.idleMainLooper()
+            Thread.sleep(20)
+        }
         assertFalse(firstSessionSignedOut)
         assertTrue(secondSessionSignedOut)
 
