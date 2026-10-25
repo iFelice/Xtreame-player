@@ -30,11 +30,13 @@ jobs:
           cache: gradle
           cache-dependency-path: apps/android-tv/**/*.gradle*
 
-      - name: Configura Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Installa Android SDK Platform 37 e Build Tools
-        run: sdkmanager --install "platforms;android-37" "build-tools;36.0.0"
+      - name: Installa Android SDK Platform 37 e Build Tools (SDK preinstallato del runner)
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          "$SDKMANAGER" --install "platforms;android-37" "build-tools;36.0.0" "platform-tools"
 
       - name: Determina la versione
         id: version
