@@ -17,6 +17,24 @@ object FvpColors {
     val GreenFocus = Color(0xFF34D399)
     val Error = Color(0xFFFF453A)
 
+    /**
+     * Contenitori "a vetro" senza sfocatura (per esempio la lista canali Live):
+     * riempimento bianco al 4% e bordo bianco al 10% sullo sfondo dell'area.
+     */
+    val GlassFill = Color.White.copy(alpha = 0.04f)
+    val GlassBorder = Color.White.copy(alpha = 0.10f)
+
+    /**
+     * Unico fondo degli elementi del player sopra il video (pannello del volume,
+     * banner del canale, lista canali, barra comandi, pannello tracce, prossimo
+     * episodio, Riprendi, etichetta dei salti, errori): [Surface] al 78%.
+     *
+     * Il valore nasce dal pannello del volume preso come riferimento (0,85),
+     * ridotto di 0,07: 0,85 − 0,07 = 0,78. Sta qui una volta sola, così ogni
+     * elemento sopra il video ha esattamente lo stesso fondo.
+     */
+    val PlayerOverlay = Surface.copy(alpha = 0.78f)
+
     // Colori specifici per le voci del menu laterale (PR2)
     val LiveActive = Color(0xFFFF9F0A)
     val FilmActive = Color(0xFF10B981)

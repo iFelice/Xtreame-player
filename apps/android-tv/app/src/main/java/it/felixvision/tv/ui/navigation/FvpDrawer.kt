@@ -2,10 +2,11 @@ package it.felixvision.tv.ui.navigation
 
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -31,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Border
+import androidx.tv.material3.DenseListItem
 import androidx.tv.material3.DrawerState
 import androidx.tv.material3.DrawerValue
 import androidx.tv.material3.ExperimentalTvMaterial3Api
@@ -45,6 +47,9 @@ import androidx.tv.material3.rememberDrawerState
 import it.felixvision.tv.R
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.theme.FvpColors
+import it.felixvision.tv.ui.theme.drawerClockTop
+import it.felixvision.tv.ui.theme.drawerItemHeight
+import it.felixvision.tv.ui.theme.drawerVerticalPadding
 
 enum class DrawerSection(
     val label: String,
@@ -135,13 +140,17 @@ fun FvpNavigationDrawer(
             Column(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .padding(vertical = scale.dp(12f), horizontal = scale.dp(8f))
+                    // Fondo pieno #1C1C1E: il menu non lascia trasparire gli aloni
+                    // dello sfondo dei contenuti, né chiuso né aperto.
+                    .background(FvpColors.Background)
+                    .padding(vertical = scale.drawerVerticalPadding, horizontal = scale.dp(8f))
             ) {
                 DrawerSection.entries.forEach { section ->
                     val isSelected = section == selected
                     // NavigationDrawerItem forces its own width internally. Keep its ListItem
                     // primitive (and closed dimensions), but let the open width fit the labels.
-                    ListItem(
+                    // Voce compatta: altezza ridotta dal ListItem denso.
+                    DenseListItem(
                         selected = isSelected,
                         onClick = {
                             onSelect(section)
@@ -150,8 +159,8 @@ fun FvpNavigationDrawer(
                         },
                         leadingContent = {
                             // L'icona va centrata nel riquadro della voce: a menu
-                            // chiuso il riquadro è IconSize × ContainerHeightOneLine,
-                            // a menu aperto lo slot cresce con la scala.
+                            // chiuso il riquadro è IconSize per l'altezza della voce
+                            // densa, a menu aperto lo slot cresce con la scala.
                             Box(
                                 modifier = if (expanded) {
                                     Modifier.padding(start = extraInset, end = openGap - 8.dp)
@@ -184,7 +193,7 @@ fun FvpNavigationDrawer(
                         },
                         modifier = Modifier
                             .width(if (expanded) expandedItemWidth else NavigationDrawerItemDefaults.CollapsedDrawerItemWidth)
-                            .height(NavigationDrawerItemDefaults.ContainerHeightOneLine)
+                            .heightIn(min = scale.drawerItemHeight)
                             .focusRequester(itemFocusRequesters.getValue(section))
                             .onKeyEvent { event ->
                                 if (event.key == Key.DirectionRight) {
@@ -208,6 +217,22 @@ fun FvpNavigationDrawer(
                         ),
                         scale = ListItemDefaults.scale(focusedScale = 1.04f),
                         shape = ListItemDefaults.shape(shape = androidx.compose.foundation.shape.RoundedCornerShape(scale.dp(10f))),
+                    )
+                }
+
+                // Ora sotto l'ultima voce (Impostazioni), e data breve a menu
+                // aperto. A menu chiuso resta centrata sotto l'icona: la
+                // larghezza è quella della voce, il testo non è focalizzabile.
+                Box(
+                    modifier = Modifier.width(
+                        if (expanded) expandedItemWidth else NavigationDrawerItemDefaults.CollapsedDrawerItemWidth
+                    ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    DrawerClock(
+                        scale = scale,
+                        expanded = expanded,
+                        modifier = Modifier.padding(top = scale.drawerClockTop),
                     )
                 }
             }

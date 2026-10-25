@@ -12,12 +12,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -151,6 +151,12 @@ fun PlayerScreen(
     }
 
     fun handleBack() {
+        if (state.volumePanelVisible) {
+            // Indietro chiude il pannello del volume e lascia il player com'è.
+            engine.closeVolumePanel()
+            rootFocus.requestFocus()
+            return
+        }
         when {
             state.trackPanel != null -> {
                 engine.closeTrackPanel()
@@ -195,6 +201,8 @@ fun PlayerScreen(
                     when (event.type) {
                         KeyEventType.KeyDown -> {
                             keyTick++
+                            // Qualsiasi tasto rimanda la chiusura del pannello volume.
+                            if (state.volumePanelVisible) engine.keepVolumePanelAlive()
                             if (state.channelListVisible && event.key == Key.DirectionRight) {
                                 engine.closeChannelList()
                                 rootFocus.requestFocus()
@@ -202,6 +210,21 @@ fun PlayerScreen(
                             }
                             if (state.hasModalOverlay) {
                                 return@onPreviewKeyEvent false
+                            }
+                            // Pannello del volume aperto: Su/Giù cambiano il livello
+                            // anche con il focus ancora sulla barra comandi.
+                            if (state.volumePanelVisible) {
+                                when (event.key) {
+                                    Key.DirectionUp -> {
+                                        engine.changeVolume(1)
+                                        return@onPreviewKeyEvent true
+                                    }
+                                    Key.DirectionDown -> {
+                                        engine.changeVolume(-1)
+                                        return@onPreviewKeyEvent true
+                                    }
+                                    else -> Unit
+                                }
                             }
                             // Focus dentro la barra comandi: le frecce servono ai pulsanti.
                             if (state.controlsVisible && !rootFocused) {
@@ -213,19 +236,24 @@ fun PlayerScreen(
                                     true
                                 }
                                 Key.DirectionUp -> {
-                                    if (session.source is PlaybackSource.Live) {
-                                        engine.onUp()
-                                    } else {
+                                    when {
+                                        // Con il pannello aperto Su/Giù cambiano il
+                                        // livello, non il canale.
+                                        state.volumePanelVisible -> engine.changeVolume(1)
+                                        session.source is PlaybackSource.Live -> engine.onUp()
                                         // La barra appare senza mettere in pausa.
-                                        engine.showControls()
+                                        else -> engine.showControls()
                                     }
                                     true
                                 }
                                 Key.DirectionDown -> {
-                                    if (state.controlsVisible && session.source !is PlaybackSource.Live) {
-                                        audioFocus.requestFocus()
-                                    } else {
-                                        engine.onDown()
+                                    when {
+                                        state.volumePanelVisible -> engine.changeVolume(-1)
+                                        state.controlsVisible && session.source !is PlaybackSource.Live ->
+                                            audioFocus.requestFocus()
+                                        session.source is PlaybackSource.Live -> engine.onDown()
+                                        // Film ed episodi: barra chiusa, Giù apre il volume.
+                                        else -> engine.openVolumePanel()
                                     }
                                     true
                                 }
@@ -238,7 +266,18 @@ fun PlayerScreen(
                                     true
                                 }
                                 Key.DirectionRight -> {
-                                    handleSeek(1)
+                                    if (session.source is PlaybackSource.Live) {
+                                        // Live: Destra apre il volume, solo con lista
+                                        // canali e banner chiusi.
+                                        if (!state.channelListVisible && state.banner == null &&
+                                            !state.volumePanelVisible
+                                        ) {
+                                            engine.openVolumePanel()
+                                        }
+                                    } else {
+                                        // Film ed episodi: Destra resta +10 s.
+                                        handleSeek(1)
+                                    }
                                     true
                                 }
                                 else -> false
@@ -305,6 +344,7 @@ fun PlayerScreen(
                     audioFocusRequester = audioFocus,
                     onAudio = { engine.openTrackPanel(TrackPanelType.AUDIO) },
                     onSubtitles = { engine.openTrackPanel(TrackPanelType.SUBTITLES) },
+                    onVolume = { engine.openVolumePanel() },
                     modifier = Modifier.align(Alignment.BottomCenter),
                     audioFormatLabel = state.audioFormatLabel,
                     ffmpegActive = state.ffmpegActive,
@@ -350,6 +390,16 @@ fun PlayerScreen(
                         engine.selectChannel(index)
                         rootFocus.requestFocus()
                     },
+                )
+            }
+
+            if (state.volumePanelVisible && !state.hasModalOverlay) {
+                PlayerVolumePanel(
+                    level = state.volumeLevel,
+                    scale = scale,
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = scale.dp(28f)),
                 )
             }
 

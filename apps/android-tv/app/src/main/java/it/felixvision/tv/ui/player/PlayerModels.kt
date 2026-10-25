@@ -7,6 +7,7 @@ import androidx.media3.common.TrackGroup
 import it.felixvision.tv.data.catalog.LiveStream
 import it.felixvision.tv.data.catalog.VodStream
 import it.felixvision.tv.data.playback.SeriesPlayback
+import it.felixvision.tv.data.volume.PlayerVolume
 
 /** Contenuto scelto nella scheda di origine. Non contiene credenziali. */
 sealed interface PlaybackSource {
@@ -111,6 +112,10 @@ data class PlayerUiState(
     val currentTitle: String = "",
     val currentChannelIndex: Int = 0,
     val totalChannels: Int = 0,
+    /** Livello del volume del player (0–15), non quello del televisore. */
+    val volumeLevel: Int = PlayerVolume.DEFAULT_LEVEL,
+    /** Vero mentre è aperto il pannello del volume. */
+    val volumePanelVisible: Boolean = false,
 ) {
     val progressFraction: Float
         get() = if (durationMillis <= 0L) {

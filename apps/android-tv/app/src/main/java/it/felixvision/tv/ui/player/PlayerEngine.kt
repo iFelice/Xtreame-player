@@ -4,8 +4,8 @@ package it.felixvision.tv.ui.player
 
 import androidx.annotation.OptIn
 import android.content.Context
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -34,6 +34,7 @@ import it.felixvision.tv.data.playback.StreamTarget
 import it.felixvision.tv.data.playback.StreamUrls
 import it.felixvision.tv.data.progress.ProgressKeys
 import it.felixvision.tv.data.progress.WatchRules
+import it.felixvision.tv.data.volume.PlayerVolume
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -84,6 +85,9 @@ class PlayerEngine(
     private var wasPlayingBeforeStop = false
     private var lastPositionBeforeStop = 0L
     private var bannerJob: Job? = null
+    // Volume del nostro ExoPlayer (0-15): livello caricato da DataStore all'avvio.
+    private var volumeLevel: Int = PlayerVolume.DEFAULT_LEVEL
+    private var volumeJob: Job? = null
 
     /**
      * Stato del riquadro "Prossimo episodio" per l'episodio in corso:
@@ -146,6 +150,10 @@ class PlayerEngine(
         if (started) return
         started = true
         scope.launch {
+            // Livello del volume salvato: ripristinato a ogni avvio del player.
+            volumeLevel = runCatching { container.volumeStore.level() }
+                .getOrDefault(PlayerVolume.DEFAULT_LEVEL)
+            state = state.copy(volumeLevel = volumeLevel)
             val contentKey = progressKey()
             val saved = if (contentKey != null) {
                 runCatching {
@@ -207,6 +215,7 @@ class PlayerEngine(
             }
         }
         bannerJob?.cancel()
+        volumeJob?.cancel()
         destroyPlayer()
         container.playbackActivity.setActive(false)
         scope.cancel()
@@ -216,6 +225,7 @@ class PlayerEngine(
         if (exited) return
         exited = true
         bannerJob?.cancel()
+        volumeJob?.cancel()
         val exitInfo = PlayerExitInfo(
             lastLiveChannelId = currentLiveChannel()?.streamId,
             lastEpisodeId = currentEpisode()?.episode?.id,
@@ -265,6 +275,8 @@ class PlayerEngine(
             .setUri(url)
             .setMediaMetadata(MediaMetadata.Builder().setTitle(titleForCurrent()).build())
             .build()
+        // Volume del nostro player: curva percettiva sul livello salvato.
+        newPlayer.volume = PlayerVolume.volumeForLevel(volumeLevel)
         newPlayer.setMediaItem(mediaItem, startPositionMillis.coerceAtLeast(0L))
         newPlayer.prepare()
         newPlayer.playWhenReady = autoPlay
@@ -539,6 +551,49 @@ class PlayerEngine(
         bannerJob = scope.launch {
             delay(BANNER_DURATION_MILLIS)
             state = state.copy(banner = null)
+        }
+    }
+
+    // --- Volume del player ---
+
+    /** Apre il pannello del volume senza toccare il livello. */
+    fun openVolumePanel() {
+        if (state.errorMessage != null) return
+        state = state.copy(volumePanelVisible = true, volumeLevel = volumeLevel)
+        scheduleVolumeHide()
+    }
+
+    /** Chiude subito il pannello del volume. */
+    fun closeVolumePanel() {
+        volumeJob?.cancel()
+        volumeJob = null
+        if (state.volumePanelVisible) state = state.copy(volumePanelVisible = false)
+    }
+
+    /** Sposta il livello di [delta] passi (0-15), apre il pannello e salva. */
+    fun changeVolume(delta: Int) {
+        val updated = PlayerVolume.step(volumeLevel, delta)
+        volumeLevel = updated
+        exoPlayer?.volume = PlayerVolume.volumeForLevel(updated)
+        state = state.copy(volumeLevel = updated, volumePanelVisible = true)
+        scheduleVolumeHide()
+        scope.launch {
+            runCatching { container.volumeStore.saveLevel(updated) }
+        }
+    }
+
+    /** Un tasto qualsiasi con il pannello aperto rimanda la chiusura a 3 s. */
+    fun keepVolumePanelAlive() {
+        if (!state.volumePanelVisible) return
+        scheduleVolumeHide()
+    }
+
+    private fun scheduleVolumeHide() {
+        volumeJob?.cancel()
+        volumeJob = scope.launch {
+            delay(PlayerVolume.HIDE_DELAY_MILLIS)
+            state = state.copy(volumePanelVisible = false)
+            volumeJob = null
         }
     }
 
