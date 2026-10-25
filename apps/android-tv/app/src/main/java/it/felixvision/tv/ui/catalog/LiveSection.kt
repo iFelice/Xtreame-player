@@ -206,8 +206,7 @@ fun LiveSection(
                             modifier = Modifier
                                 .fillMaxWidth(LIVE_LIST_WIDTH_FRACTION)
                                 .fillMaxHeight()
-                                .clip(RoundedCornerShape(scale.surfaceCorner))
-                                .background(FvpColors.GlassFill)
+                                .background(FvpColors.GlassFill, RoundedCornerShape(scale.surfaceCorner))
                                 .border(
                                     width = scale.glassBorder,
                                     color = FvpColors.GlassBorder,
@@ -293,7 +292,7 @@ fun LiveSection(
                                             contentColor = FvpColors.TextPrimary,
                                             focusedContainerColor = FvpColors.SurfaceElevated,
                                         ),
-                                        scale = ListItemDefaults.scale(focusedScale = 1.04f),
+                                        scale = ListItemDefaults.scale(focusedScale = 1.02f),
                                         border = ListItemDefaults.border(focusedBorder = Border(BorderStroke(2.dp, FvpColors.GreenFocus))),
                                         shape = ListItemDefaults.shape(shape = RoundedCornerShape(scale.dp(10f))),
                                     )
