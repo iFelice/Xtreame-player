@@ -104,6 +104,36 @@ class PairingClientTest {
         assertEquals("http://server.esempio:8080", credentials.server)
         assertEquals("demo", credentials.username)
         assertEquals("demo", credentials.password)
+        assertNull(credentials.serverCode)
+    }
+
+    @Test
+    fun `le credenziali pronte accettano serverCode e campi sconosciuti`() = runBlocking {
+        server.enqueue(
+            MockResponse().setResponseCode(200).setBody(
+                """
+                {
+                  "status": "ready",
+                  "relayMetadata": "ignored",
+                  "credentials": {
+                    "v": 1,
+                    "server": "http://server.esempio:8080",
+                    "username": "demo",
+                    "password": "demo",
+                    "serverCode": "001",
+                    "extraCredentialField": true
+                  }
+                }
+                """.trimIndent(),
+            ),
+        )
+
+        val result = client().pollStatus("123456", "token-abc")
+
+        assertTrue(result is ApiResult.Ok)
+        val status = (result as ApiResult.Ok).value
+        assertTrue(status is PairingStatus.Ready)
+        assertEquals("001", (status as PairingStatus.Ready).credentials.serverCode)
     }
 
     @Test

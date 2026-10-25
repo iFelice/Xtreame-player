@@ -230,7 +230,7 @@ class AccessViewModel(private val container: AppContainer) : ViewModel() {
                 password = credentials.password,
                 banner = REMOTE_CONFIGURED_MESSAGE,
                 persist = true,
-                serverCode = outcome.serverCode
+                serverCode = credentials.serverCode ?: outcome.serverCode,
             )
 
             is LoginOutcome.Failure -> {

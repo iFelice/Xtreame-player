@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import it.felixvision.tv.AppContainer
 import it.felixvision.tv.data.pairing.PairingCoordinator
 import it.felixvision.tv.data.pairing.PairingPanelState
+import it.felixvision.tv.data.pairing.RemoteCredentials
 import it.felixvision.tv.data.pairing.PairingStep
 import it.felixvision.tv.data.store.StoredCredentials
 import it.felixvision.tv.data.store.serverLabel
@@ -163,13 +164,16 @@ class SettingsViewModel(
                 }
                 when (step) {
                     is PairingStep.Wait -> if (step.delayMillis > 0) delay(step.delayMillis)
-                    is PairingStep.Delivered -> handleRemoteCredentials(step.credentials.server, step.credentials.username, step.credentials.password)
+                    is PairingStep.Delivered -> handleRemoteCredentials(step.credentials)
                 }
             }
         }
     }
 
-    private fun handleRemoteCredentials(remoteServer: String, remoteUser: String, remotePass: String) {
+    private fun handleRemoteCredentials(credentials: RemoteCredentials) {
+        val remoteServer = credentials.server
+        val remoteUser = credentials.username
+        val remotePass = credentials.password
         viewModelScope.launch {
             _ui.update { it.copy(isRefreshing = true, error = null, message = null) }
             val resolved = resolveServer(remoteServer) ?: run {
@@ -183,10 +187,24 @@ class SettingsViewModel(
                     val oldServer = server
                     val oldUser = username
                     runCatching { container.catalogCache.clear(oldServer, oldUser) }
+                    val effectiveServerCode = credentials.serverCode ?: resolved.serverCode
                     runCatching {
-                        container.credentialStore.save(StoredCredentials(server = result.account.server, username = result.account.username, password = remotePass, serverCode = resolved.serverCode))
+                        container.credentialStore.save(
+                            StoredCredentials(
+                                server = result.account.server,
+                                username = result.account.username,
+                                password = remotePass,
+                                serverCode = effectiveServerCode,
+                            ),
+                        )
                     }
-                    _ui.update { it.copy(isRefreshing = false, message = "Configurato da remoto") }
+                    _ui.update {
+                        it.copy(
+                            isRefreshing = false,
+                            message = "Configurato da remoto",
+                            serverLabel = serverLabel(effectiveServerCode),
+                        )
+                    }
                     onCredentialsReplaced(result.account.server, result.account.username, remotePass)
                     onSettingsHidden()
                 }
