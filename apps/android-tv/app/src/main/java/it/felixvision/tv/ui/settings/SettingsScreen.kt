@@ -7,10 +7,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -198,8 +196,9 @@ const val SETTINGS_EXIT_TAG = "settings_exit"
 const val SETTINGS_EXIT_LABEL = "Esci dall'account"
 
 /** Righe della schermata che ricevono il focus, per il bringIntoView. */
-private const val SETTINGS_ROW_ACTIONS = 0
-private const val SETTINGS_ROW_PAIRING = 1
+private const val SETTINGS_ROW_ACCOUNT = 0
+private const val SETTINGS_ROW_ACTIONS = 1
+private const val SETTINGS_ROW_PAIRING = 2
 
 /**
  * Contenuto della schermata Impostazioni, senza ViewModel: così il pulsante di
@@ -239,7 +238,15 @@ internal fun SettingsContent(
     ) {
         Text(text = "Impostazioni", color = FvpColors.TextPrimary, fontSize = scale.sp(22f), fontWeight = FontWeight.Bold)
 
-        Column(modifier = Modifier.clip(RoundedCornerShape(scale.dp(14f))).background(FvpColors.Surface).padding(scale.settingsSectionPadding), verticalArrangement = Arrangement.spacedBy(scale.settingsRowSpacing)) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .rowInView(SETTINGS_ROW_ACCOUNT)
+                .clip(RoundedCornerShape(scale.dp(14f)))
+                .background(FvpColors.Surface)
+                .padding(scale.settingsSectionPadding),
+            verticalArrangement = Arrangement.spacedBy(scale.settingsRowSpacing),
+        ) {
             Text(text = "Account", color = FvpColors.TextPrimary, fontSize = scale.sp(16f), fontWeight = FontWeight.SemiBold)
             SettingsRow(label = "Utente", value = state.username, scale = scale)
             SettingsRow(label = "Stato", value = state.status, scale = scale)
@@ -251,10 +258,19 @@ internal fun SettingsContent(
                 rowTestTag = "settings_connections_row",
             )
             SettingsRow(label = "Server", value = state.serverLabel, scale = scale, rowTestTag = "settings_server_row")
+            // Uscita dall'account: ultimo elemento del riquadro, subito dopo la
+            // riga "Server", allineata a sinistra come gli altri pulsanti secondari.
+            FvpSecondaryButton(
+                text = SETTINGS_EXIT_LABEL,
+                onClick = onExitClicked,
+                scale = scale,
+                modifier = Modifier
+                    .padding(top = scale.settingsRowSpacing)
+                    .testTag(SETTINGS_EXIT_TAG),
+            )
         }
 
-        // Aggiornamento catalogo e uscita dall'account nella stessa riga:
-        // il pulsante di uscita sta subito dopo quello di aggiornamento.
+        // "Aggiorna catalogo" da solo nella sua riga, con l'ultimo aggiornamento.
         Row(
             modifier = Modifier.fillMaxWidth().rowInView(SETTINGS_ROW_ACTIONS),
             verticalAlignment = Alignment.CenterVertically,
@@ -268,12 +284,6 @@ internal fun SettingsContent(
                 modifier = Modifier
                     .then(if (contentFocusRequester != null) Modifier.focusRequester(contentFocusRequester) else Modifier)
                     .testTag("settings_refresh")
-            )
-            FvpSecondaryButton(
-                text = SETTINGS_EXIT_LABEL,
-                onClick = onExitClicked,
-                scale = scale,
-                modifier = Modifier.testTag(SETTINGS_EXIT_TAG),
             )
             val lastUpdate = catalogLastUpdateMillis ?: state.lastUpdateMillis
             Text(
@@ -314,6 +324,7 @@ internal fun SettingsContent(
         state.message?.let { FvpStatusText(message = it, scale = scale) }
         state.error?.let { Text(text = it, color = FvpColors.Error, fontSize = scale.sp(14f)) }
 
+        // Riquadro compatto: spaziature ridotte, il QR è più piccolo (vedi PairingPanel).
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -321,12 +332,11 @@ internal fun SettingsContent(
                 .clip(RoundedCornerShape(scale.dp(14f)))
                 .background(FvpColors.Surface)
                 .padding(scale.settingsSectionPadding),
+            verticalArrangement = Arrangement.spacedBy(scale.dp(6f)),
         ) {
             Text(text = "Configura da remoto", color = FvpColors.TextPrimary, fontSize = scale.sp(16f), fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(scale.dp(12f)))
             PairingPanel(state = state.pairing, scale = scale, modifier = Modifier.fillMaxWidth())
             if (state.pairing.isExpired) {
-                Spacer(Modifier.height(scale.dp(8f)))
                 FvpSecondaryButton(text = "Mostra un nuovo codice", onClick = onRenewCode, scale = scale)
             }
         }

@@ -1,15 +1,14 @@
 package it.felixvision.tv.ui.settings
 
-import androidx.compose.ui.semantics.SemanticsActions
-import androidx.compose.ui.test.performSemanticsAction
 import androidx.activity.ComponentActivity
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.theme.FvpTheme
@@ -24,9 +23,12 @@ import org.robolectric.annotation.Config
  * Pulsante di uscita dall'account nelle Impostazioni.
  *
  * La schermata si compone senza ViewModel né rete ([SettingsContent]): si
- * verifica che il pulsante esista, che stia nella stessa riga di "Aggiorna
- * catalogo" subito dopo, che la schermata scorra e che il tocco chiami
- * l'uscita. Nessuna simulazione del telecomando.
+ * verifica che il pulsante esista, che stia nel riquadro Account subito dopo la
+ * riga "Server", che la schermata scorra e che venga attivato.
+ *
+ * I pulsanti tv-material non rispondono a `performClick` in Robolectric: si
+ * usano le azioni semantiche (`SemanticsActions.OnClick`). Nessuna simulazione
+ * del telecomando.
  */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [34], qualifiers = "w1920dp-h1080dp-land-television-mdpi")
@@ -64,7 +66,7 @@ class SettingsExitButtonTest {
     }
 
     @Test
-    fun `l'uscita sta nella riga dell'aggiornamento, subito dopo`() {
+    fun `l'uscita sta nel riquadro Account dopo la riga Server`() {
         rule.setContent {
             FvpTheme {
                 SettingsContent(state = settingsState(), scale = scale)
@@ -72,13 +74,16 @@ class SettingsExitButtonTest {
         }
         rule.waitForIdle()
 
-        val refresh = rule.onNodeWithTag("settings_refresh").fetchSemanticsNode().boundsInRoot
+        val server = rule.onNodeWithTag("settings_server_row").fetchSemanticsNode().boundsInRoot
         val exit = rule.onNodeWithTag(SETTINGS_EXIT_TAG).fetchSemanticsNode().boundsInRoot
+        val refresh = rule.onNodeWithTag("settings_refresh").fetchSemanticsNode().boundsInRoot
 
-        // Stessa riga: si sovrappongono in verticale.
-        assertTrue("pulsanti su righe diverse", exit.top < refresh.bottom && refresh.top < exit.bottom)
-        // L'uscita viene dopo l'aggiornamento.
-        assertTrue("l'uscita non sta dopo l'aggiornamento", exit.left >= refresh.right - 1f)
+        // Subito dopo la riga "Server", dentro il riquadro Account.
+        assertTrue("l'uscita non sta sotto la riga Server", exit.top >= server.bottom - 1f)
+        // Allineata a sinistra come le righe del riquadro.
+        assertTrue("l'uscita non è allineata a sinistra", exit.left <= server.left + 2f)
+        // Il riquadro Account finisce prima della riga di "Aggiorna catalogo".
+        assertTrue("l'uscita non sta nel riquadro Account", exit.bottom <= refresh.top + 1f)
     }
 
     @Test

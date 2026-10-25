@@ -68,6 +68,9 @@ import it.felixvision.tv.ui.theme.volumeIcon
 import it.felixvision.tv.ui.theme.volumeLevelText
 import it.felixvision.tv.ui.theme.volumeTickHeight
 
+/** Opacità delle righe a riposo della lista canali del player: 10% di trasparenza. */
+const val PLAYER_CHANNEL_ROW_REST_ALPHA = 0.9f
+
 /**
  * Unico aspetto degli elementi del player che stanno sopra il video: fondo
  * [FvpColors.PlayerOverlay], angoli [it.felixvision.tv.ui.theme.FvpDimens.SURFACE_CORNER_BASE]
@@ -271,7 +274,11 @@ fun PlayerChannelListOverlay(
                             .onFocusChanged { focused = it.isFocused }
                             .testTag("player_channel_${channel.streamId}"),
                         colors = ListItemDefaults.colors(
-                            containerColor = FvpColors.SurfaceElevated,
+                            // Riga a riposo al 90%: lascia intravedere il video
+                            // attraverso il contenitore PlayerOverlay. Con il focus
+                            // la superficie resta piena, come prima.
+                            containerColor = FvpColors.SurfaceElevated
+                                .copy(alpha = PLAYER_CHANNEL_ROW_REST_ALPHA),
                             contentColor = FvpColors.TextPrimary,
                             focusedContainerColor = FvpColors.SurfaceElevated,
                             focusedContentColor = FvpColors.TextPrimary,
