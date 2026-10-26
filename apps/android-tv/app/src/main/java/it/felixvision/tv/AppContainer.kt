@@ -21,6 +21,10 @@ import it.felixvision.tv.data.store.CredentialStore
 import it.felixvision.tv.data.store.DataStoreSecurePreferences
 import it.felixvision.tv.data.store.EncryptedCredentialStore
 import it.felixvision.tv.data.store.KeystoreCredentialCipher
+import it.felixvision.tv.data.update.AndroidUpdateInstaller
+import it.felixvision.tv.data.update.GithubUpdateClient
+import it.felixvision.tv.data.update.UpdateClient
+import it.felixvision.tv.data.update.UpdateInstaller
 import it.felixvision.tv.data.volume.VolumeStore
 import it.felixvision.tv.data.xtream.XtreamClient
 import java.io.File
@@ -37,6 +41,8 @@ import okhttp3.OkHttpClient
 class AppContainer(
     private val context: Context,
     credentialStoreOverride: CredentialStore? = null,
+    updateClientOverride: UpdateClient? = null,
+    updateInstallerOverride: UpdateInstaller? = null,
 ) {
 
     val json = FvpJson
@@ -95,6 +101,17 @@ class AppContainer(
         )
     }
 
+    val updateClient: UpdateClient by lazy {
+        updateClientOverride ?: GithubUpdateClient(
+            http = httpClient,
+            json = json,
+        )
+    }
+
+    val updateInstaller: UpdateInstaller by lazy {
+        updateInstallerOverride ?: AndroidUpdateInstaller(context = context)
+    }
+
     val credentialStore: CredentialStore by lazy {
         credentialStoreOverride ?: EncryptedCredentialStore(
             preferences = DataStoreSecurePreferences(credentialPreferences),
@@ -123,5 +140,10 @@ class AppContainer(
      */
     fun checkPairingServiceHealth(scope: CoroutineScope) {
         scope.launch { pairingClient.healthCheck() }
+    }
+
+    /** Elimina eventuali APK scaricati rimasti da un aggiornamento precedente. */
+    fun cleanupDownloadedUpdates(scope: CoroutineScope) {
+        scope.launch { updateInstaller.cleanupDownloadedFiles() }
     }
 }

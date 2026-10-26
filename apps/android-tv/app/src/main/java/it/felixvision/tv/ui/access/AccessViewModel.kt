@@ -43,7 +43,7 @@ sealed interface Screen {
     ) : Screen
 }
 
-/** Dati mostrati dalla schermata provvisoria dopo l'accesso. */
+/** Riepilogo dell'account autenticato, passato alla schermata principale. */
 data class AccountSummary(
     val username: String,
     val server: String,
@@ -507,3 +507,10 @@ private fun XtreamAccount.toSummary(): AccountSummary = AccountSummary(
     activeConnections = activeConnections,
     allowedOutputFormats = allowedOutputFormats,
 )
+
+internal fun statusLabel(status: AccountStatus): String = when (status) {
+    AccountStatus.ACTIVE -> "Attivo"
+    AccountStatus.EXPIRED -> "Scaduto"
+    AccountStatus.DISABLED -> "Disattivato"
+    AccountStatus.UNKNOWN -> "Non indicato dal server"
+}

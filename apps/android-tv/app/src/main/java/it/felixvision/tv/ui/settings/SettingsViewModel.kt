@@ -3,18 +3,31 @@ package it.felixvision.tv.ui.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import it.felixvision.tv.AppContainer
+import it.felixvision.tv.BuildConfig
+import it.felixvision.tv.data.pairing.ApiResult
 import it.felixvision.tv.data.pairing.PairingCoordinator
 import it.felixvision.tv.data.pairing.PairingPanelState
-import it.felixvision.tv.data.pairing.RemoteCredentials
 import it.felixvision.tv.data.pairing.PairingStep
+import it.felixvision.tv.data.pairing.RemoteCredentials
 import it.felixvision.tv.data.store.CredentialStore
 import it.felixvision.tv.data.store.StoredCredentials
 import it.felixvision.tv.data.store.serverLabel
+import it.felixvision.tv.data.update.ApkDownloadResult
+import it.felixvision.tv.data.update.DOWNLOAD_ERROR_MESSAGE
+import it.felixvision.tv.data.update.DOWNLOAD_SIZE_MISMATCH_MESSAGE
+import it.felixvision.tv.data.update.INSTALL_CANCELLED_MESSAGE
+import it.felixvision.tv.data.update.InstallEvent
+import it.felixvision.tv.data.update.ReleaseCheckResult
+import it.felixvision.tv.data.update.ReleaseInfo
+import it.felixvision.tv.data.update.UNKNOWN_SOURCES_INSTRUCTIONS
+import it.felixvision.tv.data.update.UpdateClient
+import it.felixvision.tv.data.update.UpdateInstaller
+import it.felixvision.tv.data.update.isDebugVersion
+import it.felixvision.tv.data.update.isUpdateAvailable
 import it.felixvision.tv.data.xtream.LoginResult
 import it.felixvision.tv.data.xtream.ServerAddress
 import it.felixvision.tv.data.xtream.ServerInput
 import it.felixvision.tv.ui.access.statusLabel
-import it.felixvision.tv.data.pairing.ApiResult
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -24,6 +37,30 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+
+/** Stato del controllo e dell'installazione degli aggiornamenti dall'app. */
+sealed interface AppUpdateStatus {
+    data object Checking : AppUpdateStatus
+
+    data object UpToDate : AppUpdateStatus
+
+    data object CheckFailed : AppUpdateStatus
+
+    data class Available(
+        val release: ReleaseInfo,
+        val noticeMessage: String? = null,
+        val errorMessage: String? = null,
+    ) : AppUpdateStatus
+
+    data class Downloading(
+        val release: ReleaseInfo,
+        val progressPercent: Int,
+    ) : AppUpdateStatus
+
+    data class Installing(
+        val release: ReleaseInfo,
+    ) : AppUpdateStatus
+}
 
 data class SettingsUiState(
     val username: String = "",
@@ -42,7 +79,15 @@ data class SettingsUiState(
     val message: String? = null,
     val error: String? = null,
     val showExitConfirm: Boolean = false,
-)
+    val clearUserDataOnExit: Boolean = false,
+    val versionName: String = BuildConfig.VERSION_NAME,
+    val versionCode: Int = BuildConfig.VERSION_CODE,
+    val updateStatus: AppUpdateStatus = AppUpdateStatus.Checking,
+    val canInstallPackages: Boolean = false,
+) {
+    val isDownloadingUpdate: Boolean
+        get() = updateStatus is AppUpdateStatus.Downloading
+}
 
 class SettingsViewModel(
     private val container: AppContainer,
@@ -56,6 +101,11 @@ class SettingsViewModel(
     private val onCredentialsReplaced: (String, String, String) -> Unit,
     private val onSignOut: () -> Unit,
     private val credentialStore: CredentialStore = container.credentialStore,
+    private val updateClient: UpdateClient = container.updateClient,
+    private val updateInstaller: UpdateInstaller = container.updateInstaller,
+    private val currentVersionName: String = BuildConfig.VERSION_NAME,
+    private val currentVersionCode: Int = BuildConfig.VERSION_CODE,
+    private val isDebugBuild: Boolean = BuildConfig.DEBUG || isDebugVersion(currentVersionName),
 ) : ViewModel() {
 
     private val coordinator: PairingCoordinator = container.newPairingCoordinator()
@@ -69,6 +119,9 @@ class SettingsViewModel(
             expiresAtEpochSeconds = expiresAtEpochSeconds,
             maxConnections = maxConnections,
             activeConnections = activeConnections,
+            versionName = currentVersionName,
+            versionCode = currentVersionCode,
+            canInstallPackages = updateInstaller.canRequestPackageInstalls(),
         )
     )
     val ui: StateFlow<SettingsUiState> = _ui.asStateFlow()
@@ -77,10 +130,25 @@ class SettingsViewModel(
     private var pairingVisible = false
     private var accountReadJob: Job? = null
     private var serverLabelJob: Job? = null
+    private var updateCheckJob: Job? = null
+    private var downloadJob: Job? = null
+    private var activeRelease: ReleaseInfo? = null
+    private var awaitingInstallPermission = false
+    private var lastInstallNotificationId: Long =
+        updateInstaller.notifications.value?.id ?: 0L
 
     init {
         viewModelScope.launch {
             coordinator.state.collect { panel -> _ui.update { it.copy(pairing = panel) } }
+        }
+        viewModelScope.launch {
+            updateInstaller.notifications.collect { notification ->
+                if (notification == null || notification.id <= lastInstallNotificationId) {
+                    return@collect
+                }
+                lastInstallNotificationId = notification.id
+                handleInstallEvent(notification.event)
+            }
         }
         refreshServerLabel()
         // Carica last update da cache catalogo
@@ -93,9 +161,267 @@ class SettingsViewModel(
     fun onSettingsVisible() {
         refreshServerLabel()
         refreshAccountInfo()
+        recheckInstallPermission()
+        checkForUpdates()
         if (pairingVisible) return
         pairingVisible = true
         startPairingLoop()
+    }
+
+    /**
+     * Al ritorno nelle Impostazioni (es. dalla schermata di sistema per
+     * autorizzare l'installazione di app sconosciute) ricontrolla il permesso
+     * senza avviare scaricamenti automatici.
+     */
+    fun onSettingsResumed() {
+        recheckInstallPermission()
+    }
+
+    fun recheckInstallPermission() {
+        val allowed = updateInstaller.canRequestPackageInstalls()
+        val waiting = awaitingInstallPermission
+        if (allowed) {
+            awaitingInstallPermission = false
+        }
+        _ui.update { state ->
+            val updatedStatus = when (val current = state.updateStatus) {
+                is AppUpdateStatus.Available -> {
+                    if (allowed && current.noticeMessage == UNKNOWN_SOURCES_INSTRUCTIONS) {
+                        current.copy(noticeMessage = null)
+                    } else if (!allowed && waiting && current.noticeMessage == null) {
+                        current.copy(noticeMessage = UNKNOWN_SOURCES_INSTRUCTIONS)
+                    } else {
+                        current
+                    }
+                }
+                else -> current
+            }
+            state.copy(
+                canInstallPackages = allowed,
+                updateStatus = updatedStatus,
+            )
+        }
+    }
+
+    /**
+     * Controlla l'ultima release pubblicata su GitHub (`releases/latest`)
+     * confrontandola semanticamente con la versione installata.
+     */
+    fun checkForUpdates() {
+        val current = _ui.value.updateStatus
+        if (current is AppUpdateStatus.Downloading || current is AppUpdateStatus.Installing) {
+            return
+        }
+        updateCheckJob?.cancel()
+        updateCheckJob = viewModelScope.launch {
+            _ui.update { it.copy(updateStatus = AppUpdateStatus.Checking) }
+            when (val result = updateClient.fetchLatestRelease()) {
+                is ReleaseCheckResult.Available -> {
+                    val release = result.release
+                    val newer = isUpdateAvailable(
+                        currentVersion = currentVersionName,
+                        remoteTag = release.version,
+                        isDebugBuild = isDebugBuild,
+                    )
+                    if (newer) {
+                        activeRelease = release
+                        val notice = if (
+                            awaitingInstallPermission &&
+                            !updateInstaller.canRequestPackageInstalls()
+                        ) {
+                            UNKNOWN_SOURCES_INSTRUCTIONS
+                        } else {
+                            null
+                        }
+                        _ui.update {
+                            it.copy(
+                                updateStatus = AppUpdateStatus.Available(
+                                    release = release,
+                                    noticeMessage = notice,
+                                ),
+                            )
+                        }
+                    } else {
+                        activeRelease = null
+                        _ui.update { it.copy(updateStatus = AppUpdateStatus.UpToDate) }
+                    }
+                }
+
+                ReleaseCheckResult.Failure -> {
+                    activeRelease = null
+                    _ui.update { it.copy(updateStatus = AppUpdateStatus.CheckFailed) }
+                }
+            }
+        }
+    }
+
+    /**
+     * Conferma esplicita dell'utente sul pulsante "Aggiorna": verifica il
+     * permesso di installazione pacchetti e, se concesso, avvia scaricamento e
+     * sessione di installazione.
+     */
+    fun onUpdateClicked() {
+        val available = _ui.value.updateStatus as? AppUpdateStatus.Available ?: return
+        val release = available.release
+        activeRelease = release
+
+        val allowed = updateInstaller.canRequestPackageInstalls()
+        _ui.update { it.copy(canInstallPackages = allowed) }
+        if (!allowed) {
+            awaitingInstallPermission = true
+            val opened = updateInstaller.openUnknownSourcesSettings()
+            if (!opened) {
+                _ui.update {
+                    it.copy(
+                        updateStatus = AppUpdateStatus.Available(
+                            release = release,
+                            noticeMessage = UNKNOWN_SOURCES_INSTRUCTIONS,
+                        ),
+                    )
+                }
+            }
+            return
+        }
+
+        awaitingInstallPermission = false
+        startApkDownloadAndInstall(release)
+    }
+
+    /** Annulla lo scaricamento in corso (tasto Indietro) e cancella il file parziale. */
+    fun cancelUpdateDownload() {
+        val downloading = _ui.value.updateStatus as? AppUpdateStatus.Downloading
+        val release = downloading?.release ?: activeRelease
+        downloadJob?.cancel()
+        downloadJob = null
+        updateInstaller.cleanupDownloadedFiles()
+        if (release != null) {
+            _ui.update {
+                it.copy(updateStatus = AppUpdateStatus.Available(release = release))
+            }
+        }
+    }
+
+    private fun startApkDownloadAndInstall(release: ReleaseInfo) {
+        if (downloadJob?.isActive == true) return
+        downloadJob = viewModelScope.launch {
+            _ui.update {
+                it.copy(
+                    updateStatus = AppUpdateStatus.Downloading(
+                        release = release,
+                        progressPercent = 0,
+                    ),
+                )
+            }
+            val downloadResult = try {
+                updateClient.downloadApk(
+                    release = release,
+                    updatesDir = updateInstaller.updatesDir,
+                    onProgressPercent = { percent ->
+                        _ui.update { state ->
+                            if (state.updateStatus is AppUpdateStatus.Downloading) {
+                                state.copy(
+                                    updateStatus = AppUpdateStatus.Downloading(
+                                        release = release,
+                                        progressPercent = percent.coerceIn(0, 100),
+                                    ),
+                                )
+                            } else {
+                                state
+                            }
+                        }
+                    },
+                )
+            } catch (cancel: CancellationException) {
+                updateInstaller.cleanupDownloadedFiles()
+                _ui.update {
+                    it.copy(updateStatus = AppUpdateStatus.Available(release = release))
+                }
+                throw cancel
+            }
+
+            when (downloadResult) {
+                is ApkDownloadResult.Success -> {
+                    _ui.update {
+                        it.copy(updateStatus = AppUpdateStatus.Installing(release = release))
+                    }
+                    val startError = updateInstaller.installApk(downloadResult.apkFile)
+                    if (startError != null) {
+                        _ui.update {
+                            it.copy(
+                                updateStatus = AppUpdateStatus.Available(
+                                    release = release,
+                                    errorMessage = startError,
+                                ),
+                            )
+                        }
+                    }
+                }
+
+                ApkDownloadResult.SizeMismatch -> {
+                    updateInstaller.cleanupDownloadedFiles()
+                    _ui.update {
+                        it.copy(
+                            updateStatus = AppUpdateStatus.Available(
+                                release = release,
+                                errorMessage = DOWNLOAD_SIZE_MISMATCH_MESSAGE,
+                            ),
+                        )
+                    }
+                }
+
+                ApkDownloadResult.Failure -> {
+                    updateInstaller.cleanupDownloadedFiles()
+                    _ui.update {
+                        it.copy(
+                            updateStatus = AppUpdateStatus.Available(
+                                release = release,
+                                errorMessage = DOWNLOAD_ERROR_MESSAGE,
+                            ),
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private fun handleInstallEvent(event: InstallEvent) {
+        val release = when (val current = _ui.value.updateStatus) {
+            is AppUpdateStatus.Installing -> current.release
+            is AppUpdateStatus.Available -> current.release
+            is AppUpdateStatus.Downloading -> current.release
+            else -> activeRelease
+        } ?: return
+
+        when (event) {
+            InstallEvent.Succeeded -> {
+                updateInstaller.cleanupDownloadedFiles()
+                _ui.update { it.copy(updateStatus = AppUpdateStatus.UpToDate) }
+            }
+
+            InstallEvent.CancelledByUser -> {
+                updateInstaller.cleanupDownloadedFiles()
+                _ui.update {
+                    it.copy(
+                        updateStatus = AppUpdateStatus.Available(
+                            release = release,
+                            noticeMessage = INSTALL_CANCELLED_MESSAGE,
+                        ),
+                    )
+                }
+            }
+
+            is InstallEvent.Failed -> {
+                updateInstaller.cleanupDownloadedFiles()
+                _ui.update {
+                    it.copy(
+                        updateStatus = AppUpdateStatus.Available(
+                            release = release,
+                            errorMessage = event.message,
+                        ),
+                    )
+                }
+            }
+        }
     }
 
     /**
@@ -159,6 +485,11 @@ class SettingsViewModel(
         pairingVisible = false
         pairingJob?.cancel()
         pairingJob = null
+        updateCheckJob?.cancel()
+        updateCheckJob = null
+        if (_ui.value.isDownloadingUpdate) {
+            cancelUpdateDownload()
+        }
     }
 
     fun onRenewCode() {
@@ -259,32 +590,56 @@ class SettingsViewModel(
     private data class ResolvedServer(val server: String, val serverCode: String?)
 
     fun onExitClicked() {
-        _ui.update { it.copy(showExitConfirm = true) }
+        _ui.update { it.copy(showExitConfirm = true, clearUserDataOnExit = false) }
     }
 
     fun onExitCancel() {
-        _ui.update { it.copy(showExitConfirm = false) }
+        _ui.update { it.copy(showExitConfirm = false, clearUserDataOnExit = false) }
+    }
+
+    fun onToggleClearUserDataOnExit() {
+        _ui.update { it.copy(clearUserDataOnExit = !it.clearUserDataOnExit) }
+    }
+
+    fun onSetClearUserDataOnExit(clearUserData: Boolean) {
+        _ui.update { it.copy(clearUserDataOnExit = clearUserData) }
     }
 
     fun onExitConfirm() {
+        val clearUserData = _ui.value.clearUserDataOnExit
+        if (_ui.value.isDownloadingUpdate) {
+            cancelUpdateDownload()
+        }
         viewModelScope.launch {
             runCatching { credentialStore.clear() }
             runCatching { container.catalogCache.clear(server, username) }
-            runCatching { container.favoritesStore.clearForAccount(server, username) }
-            runCatching { container.progressStore.clearForAccount(server, username) }
-            runCatching { container.continueWatchingStore.clearForAccount(server, username) }
-            _ui.update { it.copy(showExitConfirm = false) }
+            if (clearUserData) {
+                runCatching { container.favoritesStore.clearForAccount(server, username) }
+                runCatching { container.progressStore.clearForAccount(server, username) }
+                runCatching { container.continueWatchingStore.clearForAccount(server, username) }
+            }
+            _ui.update { it.copy(showExitConfirm = false, clearUserDataOnExit = false) }
             onSignOut()
         }
     }
 
     override fun onCleared() {
-        // Le letture account e il ciclo di abbinamento non devono sopravvivere
-        // alla schermata che li ha avviati.
+        // Le letture account, gli aggiornamenti e il ciclo di abbinamento non
+        // devono sopravvivere alla schermata che li ha avviati.
         serverLabelJob?.cancel()
         serverLabelJob = null
         accountReadJob?.cancel()
         accountReadJob = null
+        updateCheckJob?.cancel()
+        updateCheckJob = null
+        if (_ui.value.isDownloadingUpdate) {
+            downloadJob?.cancel()
+            downloadJob = null
+            updateInstaller.cleanupDownloadedFiles()
+        } else {
+            downloadJob?.cancel()
+            downloadJob = null
+        }
         pairingJob?.cancel()
         pairingJob = null
         pairingVisible = false

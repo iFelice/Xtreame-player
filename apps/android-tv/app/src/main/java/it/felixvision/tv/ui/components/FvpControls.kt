@@ -2,6 +2,7 @@ package it.felixvision.tv.ui.components
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -15,6 +16,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicSecureTextField
 import androidx.compose.foundation.text.BasicTextField
@@ -32,8 +35,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.tv.material3.Border
@@ -259,6 +264,81 @@ fun FvpSecondaryButton(
         ),
     ) {
         Text(text = text, fontSize = scale.sp(16f), fontWeight = FontWeight.Medium)
+    }
+}
+
+/** Casella di spunta per telecomando: raggiungibile con le frecce, OK la attiva/disattiva. */
+@Composable
+fun FvpCheckboxButton(
+    text: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    scale: UiScale,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    val boxShape = RoundedCornerShape(scale.dp(5f))
+    Button(
+        onClick = { onCheckedChange(!checked) },
+        modifier = modifier,
+        enabled = enabled,
+        scale = ButtonDefaults.scale(focusedScale = 1.03f),
+        colors = ButtonDefaults.colors(
+            containerColor = FvpColors.SurfaceElevated,
+            contentColor = FvpColors.TextPrimary,
+            focusedContainerColor = FvpColors.SurfaceElevated,
+            focusedContentColor = FvpColors.TextPrimary,
+            pressedContainerColor = FvpColors.SurfaceElevated,
+            pressedContentColor = FvpColors.TextPrimary,
+            disabledContainerColor = FvpColors.Surface,
+            disabledContentColor = FvpColors.TextSecondary,
+        ),
+        border = ButtonDefaults.border(
+            border = Border.None,
+            focusedBorder = Border(
+                border = BorderStroke(scale.dp(2.5f), FvpColors.GreenFocus),
+                inset = scale.dp(2f),
+                shape = RoundedCornerShape(scale.dp(26f)),
+            ),
+        ),
+        contentPadding = PaddingValues(
+            horizontal = scale.dp(18f),
+            vertical = scale.dp(12f),
+        ),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(scale.dp(20f))
+                .clip(boxShape)
+                .background(if (checked) FvpColors.Green else FvpColors.Surface)
+                .border(
+                    width = scale.dp(1.5f),
+                    color = if (checked) FvpColors.Green else FvpColors.TextSecondary,
+                    shape = boxShape,
+                )
+                .testTag(if (checked) "fvp_checkbox_on" else "fvp_checkbox_off"),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (checked) {
+                Canvas(modifier = Modifier.size(scale.dp(12f))) {
+                    val stroke = size.minDimension * 0.2f
+                    drawLine(
+                        color = FvpColors.OnGreen,
+                        start = Offset(size.width * 0.15f, size.height * 0.55f),
+                        end = Offset(size.width * 0.42f, size.height * 0.82f),
+                        strokeWidth = stroke,
+                    )
+                    drawLine(
+                        color = FvpColors.OnGreen,
+                        start = Offset(size.width * 0.40f, size.height * 0.82f),
+                        end = Offset(size.width * 0.86f, size.height * 0.22f),
+                        strokeWidth = stroke,
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.width(scale.dp(10f)))
+        Text(text = text, fontSize = scale.sp(15f), fontWeight = FontWeight.Medium)
     }
 }
 
