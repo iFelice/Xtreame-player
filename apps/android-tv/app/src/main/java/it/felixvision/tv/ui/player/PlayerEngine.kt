@@ -4,6 +4,7 @@ package it.felixvision.tv.ui.player
 
 import androidx.annotation.OptIn
 import android.content.Context
+import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -21,10 +22,15 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import it.felixvision.tv.AppContainer
 import it.felixvision.tv.core.AppLog
+import it.felixvision.tv.data.catalog.Category
 import it.felixvision.tv.data.catalog.LiveStream
 import it.felixvision.tv.data.continuewatching.ContinueEntry
 import it.felixvision.tv.data.continuewatching.ContinueEpisode
 import it.felixvision.tv.data.playback.AudioFormatLabels
+import it.felixvision.tv.data.playback.ChannelKeyOutcome
+import it.felixvision.tv.data.playback.ChannelLookupResult
+import it.felixvision.tv.data.playback.ChannelNumberInput
+import it.felixvision.tv.data.playback.ChannelNumberSession
 import it.felixvision.tv.data.playback.EpisodeOrder
 import it.felixvision.tv.data.playback.LiveZapping
 import it.felixvision.tv.data.playback.NextEpisodeRules
@@ -59,7 +65,16 @@ class PlayerEngine(
 
     private val source: PlaybackSource = session.source
     private val isLiveSource: Boolean = source is PlaybackSource.Live
-    private val channels: List<LiveStream> = (source as? PlaybackSource.Live)?.channels.orEmpty()
+    private val allLiveChannels: List<LiveStream> =
+        (source as? PlaybackSource.Live)?.let { live ->
+            live.allChannels.ifEmpty { live.channels }
+        }.orEmpty()
+    private val liveCategories: List<Category> =
+        (source as? PlaybackSource.Live)?.categories.orEmpty()
+    private var channels: List<LiveStream> =
+        (source as? PlaybackSource.Live)?.channels.orEmpty()
+    private var liveCategoryName: String? =
+        (source as? PlaybackSource.Live)?.categoryName
 
     private var liveIndex: Int = LiveZapping.clamp(
         (source as? PlaybackSource.Live)?.startIndex ?: 0,
@@ -72,6 +87,8 @@ class PlayerEngine(
             currentTitle = titleForCurrent(),
             currentChannelIndex = liveIndex,
             totalChannels = channels.size,
+            liveChannels = channels,
+            liveCategoryName = liveCategoryName,
         ),
     )
         private set
@@ -85,6 +102,8 @@ class PlayerEngine(
     private var wasPlayingBeforeStop = false
     private var lastPositionBeforeStop = 0L
     private var bannerJob: Job? = null
+    private val channelNumberSession = ChannelNumberSession()
+    private var channelNumberJob: Job? = null
     // Volume del nostro ExoPlayer (0-15): livello caricato da DataStore all'avvio.
     private var volumeLevel: Int = PlayerVolume.DEFAULT_LEVEL
     private var volumeJob: Job? = null
@@ -215,6 +234,7 @@ class PlayerEngine(
             }
         }
         bannerJob?.cancel()
+        channelNumberJob?.cancel()
         volumeJob?.cancel()
         destroyPlayer()
         container.playbackActivity.setActive(false)
@@ -225,6 +245,7 @@ class PlayerEngine(
         if (exited) return
         exited = true
         bannerJob?.cancel()
+        channelNumberJob?.cancel()
         volumeJob?.cancel()
         val exitInfo = PlayerExitInfo(
             lastLiveChannelId = currentLiveChannel()?.streamId,
@@ -289,6 +310,8 @@ class PlayerEngine(
             currentTitle = titleForCurrent(),
             currentChannelIndex = liveIndex,
             totalChannels = channels.size,
+            liveChannels = channels,
+            liveCategoryName = liveCategoryName,
             audioFormatLabel = "",
             ffmpegActive = false,
         )
@@ -496,11 +519,18 @@ class PlayerEngine(
     }
 
     private fun switchLiveChannel() {
+        channelNumberJob?.cancel()
+        channelNumberJob = null
+        channelNumberSession.dismissOverlay()
         state = state.copy(
             currentChannelIndex = liveIndex,
+            totalChannels = channels.size,
+            liveChannels = channels,
+            liveCategoryName = liveCategoryName,
             currentTitle = currentLiveChannel()?.name.orEmpty(),
             channelListVisible = false,
             controlsVisible = false,
+            channelNumberOverlay = null,
             errorMessage = null,
             isBuffering = true,
             isPlaying = false,
@@ -512,10 +542,102 @@ class PlayerEngine(
         buildPlayer(startPositionMillis = 0L, autoPlay = true)
     }
 
+    /**
+     * Gestisce i tasti del cambio canale numerico (0..9, NUMPAD_0..9, OK,
+     * Indietro e annullamento su frecce). In film ed episodi non fa nulla.
+     */
+    fun onChannelNumberKey(
+        keyCode: Int,
+        action: Int,
+        repeatCount: Int = 0,
+    ): Boolean {
+        if (!isLiveSource || state.hasModalOverlay) return false
+        val outcome = channelNumberSession.handleKeyEvent(
+            keyCode = keyCode,
+            action = action,
+            repeatCount = repeatCount,
+            allStreams = allLiveChannels,
+            categories = liveCategories,
+        )
+        when (outcome) {
+            ChannelKeyOutcome.Ignored -> Unit
+            ChannelKeyOutcome.Consumed -> {
+                if (action == AndroidKeyEvent.ACTION_DOWN &&
+                    repeatCount == 0 &&
+                    ChannelNumberInput.digitFromKeyCode(keyCode) != null
+                ) {
+                    state = state.copy(channelNumberOverlay = channelNumberSession.overlay)
+                    channelNumberJob?.cancel()
+                    channelNumberJob = scope.launch {
+                        delay(ChannelNumberInput.CONFIRM_DELAY_MILLIS)
+                        val result = channelNumberSession.confirm(
+                            allStreams = allLiveChannels,
+                            categories = liveCategories,
+                        ) ?: return@launch
+                        applyChannelLookupResult(result)
+                    }
+                }
+            }
+            is ChannelKeyOutcome.Confirmed -> {
+                channelNumberJob?.cancel()
+                channelNumberJob = null
+                applyChannelLookupResult(outcome.result)
+            }
+            ChannelKeyOutcome.Cancelled,
+            ChannelKeyOutcome.CancelledPassThrough -> {
+                channelNumberJob?.cancel()
+                channelNumberJob = null
+                state = state.copy(channelNumberOverlay = null)
+            }
+        }
+        return outcome.consumed
+    }
+
+    /** Annulla l'inserimento numerico attivo (per esempio su Indietro). */
+    fun cancelNumberInput(): Boolean {
+        if (!channelNumberSession.cancel()) return false
+        channelNumberJob?.cancel()
+        channelNumberJob = null
+        state = state.copy(channelNumberOverlay = null)
+        return true
+    }
+
+    private fun applyChannelLookupResult(result: ChannelLookupResult) {
+        when (result) {
+            is ChannelLookupResult.Found -> {
+                channels = result.zapping.channels
+                liveCategoryName = result.zapping.categoryName
+                liveIndex = LiveZapping.clamp(result.zapping.startIndex, channels.size)
+                switchLiveChannel()
+            }
+            is ChannelLookupResult.NotFound -> {
+                val overlay = channelNumberSession.overlay
+                state = state.copy(channelNumberOverlay = overlay)
+                channelNumberJob?.cancel()
+                channelNumberJob = scope.launch {
+                    delay(ChannelNumberInput.NOT_FOUND_DURATION_MILLIS)
+                    if (state.channelNumberOverlay == overlay) {
+                        channelNumberSession.dismissOverlay()
+                        state = state.copy(channelNumberOverlay = null)
+                    }
+                    channelNumberJob = null
+                }
+            }
+        }
+    }
+
     fun openChannelList() {
         if (!isLiveSource) return
         bannerJob?.cancel()
-        state = state.copy(channelListVisible = true, banner = null, controlsVisible = false)
+        channelNumberJob?.cancel()
+        channelNumberJob = null
+        channelNumberSession.dismissOverlay()
+        state = state.copy(
+            channelListVisible = true,
+            banner = null,
+            controlsVisible = false,
+            channelNumberOverlay = null,
+        )
     }
 
     fun closeChannelList() {
@@ -538,12 +660,11 @@ class PlayerEngine(
     private fun showBanner() {
         if (!isLiveSource) return
         val channel = currentLiveChannel() ?: return
-        val liveSource = source as? PlaybackSource.Live
         state = state.copy(
             banner = ChannelBanner(
                 number = channel.num,
                 name = channel.name,
-                categoryName = liveSource?.categoryName,
+                categoryName = liveCategoryName,
                 logoUrl = channel.streamIcon,
             ),
         )
@@ -848,6 +969,9 @@ class PlayerEngine(
         saveProgress()
         nextPromptState = NextPromptState.NONE
         postponePlan = null
+        channelNumberJob?.cancel()
+        channelNumberJob = null
+        channelNumberSession.dismissOverlay()
         state = state.copy(
             errorMessage = PlaybackErrors.messageFor(error),
             isBuffering = false,
@@ -855,6 +979,7 @@ class PlayerEngine(
             controlsVisible = false,
             banner = null,
             channelListVisible = false,
+            channelNumberOverlay = null,
             trackPanel = null,
             nextEpisode = null,
         )
