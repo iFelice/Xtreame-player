@@ -43,6 +43,7 @@ import it.felixvision.tv.data.catalog.LiveStream
 import it.felixvision.tv.data.catalog.VodStream
 import it.felixvision.tv.data.continuewatching.ContinueEntry
 import it.felixvision.tv.data.favorites.FavoriteItem
+import it.felixvision.tv.data.playback.ChannelNumberInput
 import it.felixvision.tv.data.playback.SeriesPlayback
 import it.felixvision.tv.data.playback.buildEpisodeQueue
 import it.felixvision.tv.data.playback.indexOfEpisode
@@ -281,23 +282,23 @@ fun FvpMainScreen(
 
     fun playLive(channel: LiveStream) {
         val catalog = catalogState.catalog
-        val categoryId = channel.categoryId
-        // Zapping nella categoria di partenza; se il catalogo non è ancora
-        // disponibile si riproduce almeno il canale scelto.
-        val channels = catalog?.liveStreams
-            ?.filter { it.categoryId == categoryId }
-            ?.ifEmpty { listOf(channel) }
-            ?: listOf(channel)
-        val startIndex = channels.indexOfFirst { it.streamId == channel.streamId }.coerceAtLeast(0)
-        val categoryName = catalog?.liveCategories
-            ?.firstOrNull { it.categoryId == categoryId }
-            ?.categoryName
+        val allStreams = catalog?.liveStreams.orEmpty()
+        val categories = catalog?.liveCategories.orEmpty()
+        // Zapping nella categoria di partenza; il player riceve anche tutti i
+        // canali Live del catalogo per il cambio canale digitando il numero.
+        val target = ChannelNumberInput.resolveZappingTarget(
+            channel = channel,
+            allStreams = allStreams,
+            categories = categories,
+        )
         playerSession = newPlayerSession(
             PlaybackSource.Live(
-                channels = channels,
-                startIndex = startIndex,
-                categoryId = categoryId,
-                categoryName = categoryName,
+                channels = target.channels,
+                startIndex = target.startIndex,
+                categoryId = target.categoryId,
+                categoryName = target.categoryName,
+                allChannels = allStreams.ifEmpty { target.channels },
+                categories = categories,
             )
         )
     }

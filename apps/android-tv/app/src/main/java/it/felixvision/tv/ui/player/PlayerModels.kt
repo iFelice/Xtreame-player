@@ -4,8 +4,10 @@ package it.felixvision.tv.ui.player
 
 import androidx.annotation.OptIn
 import androidx.media3.common.TrackGroup
+import it.felixvision.tv.data.catalog.Category
 import it.felixvision.tv.data.catalog.LiveStream
 import it.felixvision.tv.data.catalog.VodStream
+import it.felixvision.tv.data.playback.ChannelNumberOverlay
 import it.felixvision.tv.data.playback.SeriesPlayback
 import it.felixvision.tv.data.volume.PlayerVolume
 
@@ -17,6 +19,8 @@ sealed interface PlaybackSource {
         val startIndex: Int,
         val categoryId: String?,
         val categoryName: String?,
+        val allChannels: List<LiveStream> = channels,
+        val categories: List<Category> = emptyList(),
     ) : PlaybackSource
 
     data class Movie(
@@ -112,6 +116,10 @@ data class PlayerUiState(
     val currentTitle: String = "",
     val currentChannelIndex: Int = 0,
     val totalChannels: Int = 0,
+    val liveChannels: List<LiveStream> = emptyList(),
+    val liveCategoryName: String? = null,
+    /** Indicatore numerico in alto a destra nel Live (cifre o non trovato). */
+    val channelNumberOverlay: ChannelNumberOverlay? = null,
     /** Livello del volume del player (0–15), non quello del televisore. */
     val volumeLevel: Int = PlayerVolume.DEFAULT_LEVEL,
     /** Vero mentre è aperto il pannello del volume. */

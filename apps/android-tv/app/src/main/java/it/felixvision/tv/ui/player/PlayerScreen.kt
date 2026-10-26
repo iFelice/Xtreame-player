@@ -4,6 +4,7 @@ package it.felixvision.tv.ui.player
 
 import androidx.annotation.OptIn
 import android.os.SystemClock
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
@@ -44,6 +45,7 @@ import it.felixvision.tv.AppContainer
 import it.felixvision.tv.data.playback.SeekAcceleration
 import it.felixvision.tv.data.playback.SeekAccumulator
 import it.felixvision.tv.data.playback.SeekFeedback
+import it.felixvision.tv.ui.components.ChannelNumberIndicator
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.theme.FvpColors
 import kotlinx.coroutines.delay
@@ -151,6 +153,10 @@ fun PlayerScreen(
     }
 
     fun handleBack() {
+        if (engine.cancelNumberInput()) {
+            rootFocus.requestFocus()
+            return
+        }
         if (state.volumePanelVisible) {
             // Indietro chiude il pannello del volume e lascia il player com'è.
             engine.closeVolumePanel()
@@ -188,6 +194,7 @@ fun PlayerScreen(
             decorFitsSystemWindows = false,
         ),
     ) {
+        BackHandler { handleBack() }
         val dialogView = LocalView.current
         DisposableEffect(dialogView) {
             dialogView.keepScreenOn = true
@@ -198,6 +205,21 @@ fun PlayerScreen(
                 .fillMaxSize()
                 .background(Color.Black)
                 .onPreviewKeyEvent { event ->
+                    val native = event.nativeKeyEvent
+                    if (session.source is PlaybackSource.Live && !state.hasModalOverlay) {
+                        if (engine.onChannelNumberKey(
+                                keyCode = native.keyCode,
+                                action = native.action,
+                                repeatCount = native.repeatCount,
+                            )
+                        ) {
+                            if (event.type == KeyEventType.KeyDown) {
+                                keyTick++
+                                if (state.volumePanelVisible) engine.keepVolumePanelAlive()
+                            }
+                            return@onPreviewKeyEvent true
+                        }
+                    }
                     when (event.type) {
                         KeyEventType.KeyDown -> {
                             keyTick++
@@ -382,14 +404,24 @@ fun PlayerScreen(
 
             if (state.channelListVisible) {
                 PlayerChannelListOverlay(
-                    channels = (session.source as? PlaybackSource.Live)?.channels.orEmpty(),
+                    channels = state.liveChannels,
                     currentIndex = state.currentChannelIndex,
-                    categoryName = (session.source as? PlaybackSource.Live)?.categoryName,
+                    categoryName = state.liveCategoryName,
                     scale = scale,
                     onSelect = { index ->
                         engine.selectChannel(index)
                         rootFocus.requestFocus()
                     },
+                )
+            }
+
+            if (session.source is PlaybackSource.Live && !state.hasModalOverlay) {
+                ChannelNumberIndicator(
+                    overlay = state.channelNumberOverlay,
+                    scale = scale,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(scale.dp(28f)),
                 )
             }
 

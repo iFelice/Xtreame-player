@@ -107,6 +107,14 @@ object FvpDimens {
 
     /** Numero del livello sotto la barra del volume. */
     const val VOLUME_LEVEL_TEXT_BASE = 20f
+
+    // --- Cambio canale numerico ---------------------------------------------
+
+    /** Cifre grandi nell'indicatore numerico in alto a destra. */
+    const val CHANNEL_NUMBER_DIGITS_TEXT_BASE = 32f
+
+    /** Messaggio "Canale N non trovato" nell'indicatore in alto a destra. */
+    const val CHANNEL_NUMBER_MESSAGE_TEXT_BASE = 18f
 }
 
 /** Testo standard di una riga compatta. */

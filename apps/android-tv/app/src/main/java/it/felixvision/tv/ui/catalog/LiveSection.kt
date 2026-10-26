@@ -1,5 +1,7 @@
 package it.felixvision.tv.ui.catalog
 
+import android.view.KeyEvent as AndroidKeyEvent
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -11,6 +13,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -21,6 +24,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -44,7 +49,13 @@ import androidx.tv.material3.Text
 import it.felixvision.tv.data.catalog.Category
 import it.felixvision.tv.data.catalog.LiveStream
 import it.felixvision.tv.data.favorites.FavoriteItem
+import it.felixvision.tv.data.playback.ChannelKeyOutcome
+import it.felixvision.tv.data.playback.ChannelLookupResult
+import it.felixvision.tv.data.playback.ChannelNumberInput
+import it.felixvision.tv.data.playback.ChannelNumberOverlay
+import it.felixvision.tv.data.playback.ChannelNumberSession
 import it.felixvision.tv.ui.components.ChannelLogoImage
+import it.felixvision.tv.ui.components.ChannelNumberIndicator
 import it.felixvision.tv.ui.components.CollapsingCategoryColumn
 import it.felixvision.tv.ui.components.EmptyState
 import it.felixvision.tv.ui.components.FocusMarqueeText
@@ -59,7 +70,9 @@ import it.felixvision.tv.ui.theme.rowLogo
 import it.felixvision.tv.ui.theme.rowSpacing
 import it.felixvision.tv.ui.theme.rowText
 import it.felixvision.tv.ui.theme.surfaceCorner
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /** Larghezza della lista canali rispetto all'area a destra delle categorie. */
 const val LIVE_LIST_WIDTH_FRACTION = 0.8f
@@ -169,10 +182,98 @@ fun LiveSection(
         onChannelFocusRestored()
     }
 
+    val scope = rememberCoroutineScope()
+    val latestStreams by rememberUpdatedState(streams)
+    val latestCategories by rememberUpdatedState(categories)
+    val latestOnSelectChannel by rememberUpdatedState(onSelectChannel)
+    val channelNumberSession = remember { ChannelNumberSession() }
+    var channelNumberOverlay by remember { mutableStateOf<ChannelNumberOverlay?>(null) }
+    var channelNumberJob by remember { mutableStateOf<Job?>(null) }
+
+    fun applyChannelLookupResult(result: ChannelLookupResult) {
+        when (result) {
+            is ChannelLookupResult.Found -> {
+                channelNumberOverlay = null
+                latestOnSelectChannel(result.channel)
+            }
+            is ChannelLookupResult.NotFound -> {
+                val overlay = channelNumberSession.overlay
+                channelNumberOverlay = overlay
+                channelNumberJob?.cancel()
+                channelNumberJob = scope.launch {
+                    delay(ChannelNumberInput.NOT_FOUND_DURATION_MILLIS)
+                    if (channelNumberOverlay == overlay) {
+                        channelNumberSession.dismissOverlay()
+                        channelNumberOverlay = null
+                    }
+                    channelNumberJob = null
+                }
+            }
+        }
+    }
+
+    fun cancelChannelNumberInput() {
+        if (channelNumberSession.cancel()) {
+            channelNumberJob?.cancel()
+            channelNumberJob = null
+            channelNumberOverlay = null
+        }
+    }
+
+    BackHandler(enabled = channelNumberOverlay is ChannelNumberOverlay.Digits) {
+        cancelChannelNumberInput()
+    }
+
     // Il margine sicuro del focus sta nel contentPadding della lista: la Row
     // resta senza padding per non sommare due volte la stessa quantità.
     // L'indicatore di posizione (contatore e barra) sta sopra, sul bordo destro.
-    Box(modifier = modifier.fillMaxSize()) {
+    Box(
+        modifier = Modifier
+            .onPreviewKeyEvent { event ->
+                val native = event.nativeKeyEvent
+                val outcome = channelNumberSession.handleKeyEvent(
+                    keyCode = native.keyCode,
+                    action = native.action,
+                    repeatCount = native.repeatCount,
+                    allStreams = latestStreams,
+                    categories = latestCategories,
+                )
+                when (outcome) {
+                    ChannelKeyOutcome.Ignored -> Unit
+                    ChannelKeyOutcome.Consumed -> {
+                        if (native.action == AndroidKeyEvent.ACTION_DOWN &&
+                            native.repeatCount == 0 &&
+                            ChannelNumberInput.digitFromKeyCode(native.keyCode) != null
+                        ) {
+                            channelNumberOverlay = channelNumberSession.overlay
+                            channelNumberJob?.cancel()
+                            channelNumberJob = scope.launch {
+                                delay(ChannelNumberInput.CONFIRM_DELAY_MILLIS)
+                                val result = channelNumberSession.confirm(
+                                    allStreams = latestStreams,
+                                    categories = latestCategories,
+                                ) ?: return@launch
+                                applyChannelLookupResult(result)
+                            }
+                        }
+                    }
+                    is ChannelKeyOutcome.Confirmed -> {
+                        channelNumberJob?.cancel()
+                        channelNumberJob = null
+                        applyChannelLookupResult(outcome.result)
+                    }
+                    ChannelKeyOutcome.Cancelled,
+                    ChannelKeyOutcome.CancelledPassThrough -> {
+                        channelNumberJob?.cancel()
+                        channelNumberJob = null
+                        channelNumberOverlay = null
+                    }
+                }
+                outcome.consumed
+            }
+            .then(modifier)
+            .fillMaxSize(),
+    ) {
         Row(modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(scale.dp(12f))) {
             if (categories.isEmpty()) {
                 EmptyState(title = "Nessuna categoria", description = "Il server non ha restituito categorie live.", scale = scale, modifier = Modifier.weight(0.3f))
@@ -312,6 +413,14 @@ fun LiveSection(
                 totalItems = filtered.size,
             ),
             scale = scale,
+        )
+
+        ChannelNumberIndicator(
+            overlay = channelNumberOverlay,
+            scale = scale,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(top = scale.dp(28f), end = scale.dp(20f)),
         )
     }
 }
