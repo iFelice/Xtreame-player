@@ -73,7 +73,7 @@ class ChannelEpgClientTest {
         }
         val results = (1..5).map { async(Dispatchers.IO) { api.load(base, "demo", "demo", "002") } }.map { it.await() }
         assertTrue(results.all { it.isNotEmpty() })
-        assertEquals(4, server.requestCount)
+        assertEquals(3, server.requestCount) // 2 per il canale 001 (vuoto + ripiego), 1 per il 002 (valido, niente ripiego)
     }
 
     @Test fun fixedZoneDayFilterAndFocusFallbackCases() {
