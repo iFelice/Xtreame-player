@@ -16,6 +16,15 @@ import kotlinx.coroutines.launch
 const val UPDATE_RECHECK_INTERVAL_MILLIS = 12L * 60L * 60L * 1000L
 
 /**
+ * Intervallo minimo tra il ritorno in primo piano e un nuovo controllo: su
+ * Android TV l'app resta spesso in memoria e riaprirla dalla Home non la
+ * riavvia, quindi una release pubblicata nel frattempo va cercata anche in
+ * quel momento. Restano comunque 30 minuti dall'ultimo tentativo, riuscito o
+ * fallito che sia.
+ */
+const val FOREGROUND_RECHECK_MIN_INTERVAL_MILLIS = 30L * 60L * 1000L
+
+/**
  * Stato condiviso del controllo aggiornamenti, unico per tutta l'app.
  *
  * Lo osservano sia il menu laterale (pallino di notifica) sia la schermata
@@ -49,9 +58,11 @@ sealed interface UpdateCheckState {
  * Regole:
  * - al massimo una richiesta in corso alla volta: un innesco arrivato mentre il
  *   controllo è in volo viene ignorato;
- * - gli inneschi automatici (apertura della schermata principale e scadenza
- *   delle [recheckIntervalMillis]) partono solo a intervallo scaduto, quindi
- *   dopo un errore nessun nuovo tentativo automatico immediato;
+ * - gli inneschi automatici partono solo a intervallo scaduto — apertura della
+ *   schermata principale e scadenza delle [recheckIntervalMillis] ogni 12 ore,
+ *   ritorno in primo piano ([checkOnForeground]) dopo
+ *   [FOREGROUND_RECHECK_MIN_INTERVAL_MILLIS] — quindi dopo un errore nessun
+ *   nuovo tentativo automatico immediato;
  * - un errore non cancella un aggiornamento già segnalato: il pallino nel menu
  *   sparisce solo quando l'app risulta aggiornata.
  *
@@ -136,6 +147,31 @@ class UpdateChecker(
     fun checkIfDue(): Job? {
         val lastAttempt = lastAttemptMillis
         if (lastAttempt != null && clock.nowMillis() - lastAttempt < recheckIntervalMillis) {
+            return null
+        }
+        return startCheck()
+    }
+
+    /**
+     * Innesco al ritorno in primo piano (evento ON_START dell'activity
+     * principale, vedi `MainActivity`): senza di questo, una release pubblicata
+     * mentre l'app resta in memoria verrebbe vista solo aprendo le
+     * Impostazioni.
+     *
+     * Rispetto a [checkIfDue] basta che siano passati
+     * [FOREGROUND_RECHECK_MIN_INTERVAL_MILLIS] dall'ultimo tentativo, non le 12
+     * ore: il minimo resta però lo stesso anche dopo un errore, così un
+     * ritorno in primo piano ravvicinato non moltiplica le richieste né rilancia
+     * subito un controllo appena fallito. Come sempre, mai mentre una richiesta
+     * è già in corso.
+     *
+     * @return il [Job] del controllo avviato, oppure `null` se non è partito.
+     */
+    fun checkOnForeground(): Job? {
+        val lastAttempt = lastAttemptMillis
+        if (lastAttempt != null &&
+            clock.nowMillis() - lastAttempt < FOREGROUND_RECHECK_MIN_INTERVAL_MILLIS
+        ) {
             return null
         }
         return startCheck()

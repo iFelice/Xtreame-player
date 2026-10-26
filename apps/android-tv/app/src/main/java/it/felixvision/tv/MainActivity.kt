@@ -7,6 +7,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import it.felixvision.tv.ui.FvpApp
 import it.felixvision.tv.ui.theme.FvpTheme
 
@@ -20,6 +22,22 @@ class MainActivity : ComponentActivity() {
         ensureLocalNetworkPermission()
 
         val container = (application as FvpApplication).container
+
+        // Su Android TV l'app resta spesso in memoria: riaprirla dalla Home non
+        // la riavvia, quindi una release pubblicata nel frattempo resterebbe
+        // invisibile finché non si aprono le Impostazioni. Ogni volta che
+        // l'activity torna in primo piano (ON_START) si chiede un controllo,
+        // che parte solo se dall'ultimo tentativo sono passati almeno 30
+        // minuti. Si osserva il Lifecycle di questa Activity perché
+        // lifecycle-process non è tra le dipendenze dell'app.
+        lifecycle.addObserver(
+            LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_START) {
+                    container.updateChecker.checkOnForeground()
+                }
+            },
+        )
+
         setContent {
             FvpTheme {
                 FvpApp(container = container)
