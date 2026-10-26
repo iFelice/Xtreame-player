@@ -132,14 +132,14 @@ fun PlayerScreen(
 
     fun handleSeek(direction: Int) {
         // I salti riguardano film ed episodi: nel Live Sinistra/Destra non toccano nulla.
-        if (session.source is PlaybackSource.Live) return
+        if (session.source is PlaybackSource.Live && !state.isReplay) return
         val now = SystemClock.elapsedRealtime()
         if (seekDirection != direction || now - lastSeekAt > 700L) {
             seekDirection = direction
             seekStartedAt = now
         }
         lastSeekAt = now
-        val step = SeekAcceleration.secondsForHold(now - seekStartedAt)
+        val step = if (state.isReplay) { if (now - seekStartedAt >= 600L) 300 else 60 } else SeekAcceleration.secondsForHold(now - seekStartedAt)
         engine.seekBySeconds(direction * step)
         // Etichetta sul lato del tasto: le pressioni ravvicinate si sommano.
         seekFeedback = SeekAccumulator.next(seekFeedback, direction, step, now)
@@ -156,6 +156,11 @@ fun PlayerScreen(
 
     fun handleBack() {
         if (engine.cancelNumberInput()) {
+            rootFocus.requestFocus()
+            return
+        }
+        if (state.isReplay) {
+            engine.returnToLive()
             rootFocus.requestFocus()
             return
         }
@@ -188,7 +193,7 @@ fun PlayerScreen(
                 rootFocus.requestFocus()
             }
             state.nextEpisode != null -> engine.cancelNextEpisode()
-            state.errorMessage != null -> engine.requestExit()
+            state.errorMessage != null -> if (state.isReplay) engine.returnToLive() else engine.requestExit()
             state.controlsVisible -> {
                 engine.hideControls()
                 rootFocus.requestFocus()
@@ -215,10 +220,10 @@ fun PlayerScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black)
-                .fvpLongPress { if (session.source is PlaybackSource.Live) engine.toggleEpg() }
+                .fvpLongPress { if (session.source is PlaybackSource.Live && !state.isReplay) engine.toggleEpg() }
                 .onPreviewKeyEvent { event ->
                     val native = event.nativeKeyEvent
-                    if (session.source is PlaybackSource.Live && !state.hasModalOverlay) {
+                    if (session.source is PlaybackSource.Live && !state.isReplay && !state.hasModalOverlay) {
                         if (engine.onChannelNumberKey(
                                 keyCode = native.keyCode,
                                 action = native.action,
@@ -232,7 +237,7 @@ fun PlayerScreen(
                             return@onPreviewKeyEvent true
                         }
                     }
-                    if (event.type == KeyEventType.KeyDown && session.source is PlaybackSource.Live) {
+                    if (event.type == KeyEventType.KeyDown && session.source is PlaybackSource.Live && !state.isReplay) {
                         when (native.keyCode) {
                             AndroidKeyEvent.KEYCODE_GUIDE, AndroidKeyEvent.KEYCODE_INFO, AndroidKeyEvent.KEYCODE_TV_DATA_SERVICE -> { engine.toggleEpg(); return@onPreviewKeyEvent true }
                         }
@@ -286,7 +291,7 @@ fun PlayerScreen(
                                         // Con il pannello aperto Su/Giù cambiano il
                                         // livello, non il canale.
                                         state.volumePanelVisible -> engine.changeVolume(1)
-                                        session.source is PlaybackSource.Live -> engine.onUp()
+                                        session.source is PlaybackSource.Live && !state.isReplay -> engine.onUp()
                                         // La barra appare senza mettere in pausa.
                                         else -> engine.showControls()
                                     }
@@ -297,14 +302,14 @@ fun PlayerScreen(
                                         state.volumePanelVisible -> engine.changeVolume(-1)
                                         state.controlsVisible && session.source !is PlaybackSource.Live ->
                                             audioFocus.requestFocus()
-                                        session.source is PlaybackSource.Live -> engine.onDown()
+                                        session.source is PlaybackSource.Live && !state.isReplay -> engine.onDown()
                                         // Film ed episodi: barra chiusa, Giù apre il volume.
                                         else -> engine.openVolumePanel()
                                     }
                                     true
                                 }
                                 Key.DirectionLeft -> {
-                                    if (session.source is PlaybackSource.Live) {
+                                    if (session.source is PlaybackSource.Live && !state.isReplay) {
                                         engine.openChannelList()
                                     } else {
                                         handleSeek(-1)
@@ -312,7 +317,7 @@ fun PlayerScreen(
                                     true
                                 }
                                 Key.DirectionRight -> {
-                                    if (session.source is PlaybackSource.Live) {
+                                    if (session.source is PlaybackSource.Live && !state.isReplay) {
                                         // Live: Destra apre il volume, solo con lista
                                         // canali e banner chiusi.
                                         if (!state.channelListVisible && state.banner == null &&
@@ -347,6 +352,12 @@ fun PlayerScreen(
                 withFrameNanos { }
                 rootFocus.requestFocus()
             }
+            LaunchedEffect(state.isReplay) {
+                if (state.isReplay) {
+                    withFrameNanos { }
+                    rootFocus.requestFocus()
+                }
+            }
 
             // Dopo il riquadro del prossimo episodio (anche a fine countdown)
             // il focus torna alla radice, così i tasti tornano al player.
@@ -373,6 +384,14 @@ fun PlayerScreen(
                 )
             }
 
+            if (state.isReplay && !state.hasModalOverlay) {
+                Text(
+                    text = "REPLAY · ${state.currentTitle}",
+                    color = FvpColors.TextPrimary,
+                    modifier = Modifier.align(Alignment.TopStart).padding(scale.dp(28f)).playerOverlay(scale).padding(horizontal = scale.dp(14f), vertical = scale.dp(8f)),
+                )
+            }
+
             if (state.isBuffering && state.errorMessage == null && !state.hasModalOverlay) {
                 Text(
                     text = "Caricamento…",
@@ -383,7 +402,7 @@ fun PlayerScreen(
                 )
             }
 
-            if (state.controlsVisible && !state.hasModalOverlay && session.source !is PlaybackSource.Live) {
+            if (state.controlsVisible && !state.hasModalOverlay && (session.source !is PlaybackSource.Live || state.isReplay)) {
                 PlayerControlsBar(
                     state = state,
                     scale = scale,
@@ -427,7 +446,7 @@ fun PlayerScreen(
             }
 
             if (state.epgVisible && session.source is PlaybackSource.Live) {
-                PlayerEpgOverlay(channelName = state.currentTitle, programs = state.epgPrograms, loading = state.epgLoading, unavailable = state.epgUnavailable, expanded = state.epgExpanded, scale = scale, clock = container.clock, onDescription = engine::toggleEpgDescription, modifier = Modifier.align(Alignment.CenterEnd))
+                PlayerEpgOverlay(channelName = state.currentTitle, programs = state.epgPrograms, loading = state.epgLoading, unavailable = state.epgUnavailable, expanded = state.epgExpanded, scale = scale, clock = container.clock, onDescription = engine::toggleEpgDescription, channel = state.liveChannels.getOrNull(state.currentChannelIndex), onReplay = engine::startReplay, modifier = Modifier.align(Alignment.CenterEnd))
             }
 
             if (state.channelListVisible) {
@@ -443,7 +462,7 @@ fun PlayerScreen(
                 )
             }
 
-            if (session.source is PlaybackSource.Live && !state.hasModalOverlay) {
+            if (session.source is PlaybackSource.Live && !state.isReplay && !state.hasModalOverlay) {
                 ChannelNumberIndicator(
                     overlay = state.channelNumberOverlay,
                     scale = scale,
@@ -489,7 +508,13 @@ fun PlayerScreen(
                         engine.retry()
                         rootFocus.requestFocus()
                     },
-                    onBack = { engine.requestExit() },
+                    onBack = {
+                        if (state.isReplay) {
+                            engine.returnToLive()
+                            rootFocus.requestFocus()
+                        } else engine.requestExit()
+                    },
+                    showRetry = !state.isReplay,
                 )
             }
 

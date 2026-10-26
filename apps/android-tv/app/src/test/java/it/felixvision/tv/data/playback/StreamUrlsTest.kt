@@ -94,18 +94,37 @@ class StreamUrlsTest {
         val live = "$base/live/demo/segreta/001.ts"
         val movie = "$base/movie/demo/segreta/201.mp4"
         val series = "$base/series/demo/segreta/301.mkv"
+        val replay = "$base/timeshift/demo/segreta/60/2024-04-01:10-00/001.ts"
 
         val redactedLive = StreamUrls.redactStreamUrl(live)
         val redactedMovie = StreamUrls.redactStreamUrl(movie)
         val redactedSeries = StreamUrls.redactStreamUrl(series)
+        val redactedReplay = StreamUrls.redactStreamUrl(replay)
 
         assertTrue(redactedLive.contains("/live/***/***/001.ts"))
         assertTrue(redactedMovie.contains("/movie/***/***/201.mp4"))
         assertTrue(redactedSeries.contains("/series/***/***/301.mkv"))
-        listOf(redactedLive, redactedMovie, redactedSeries).forEach { redacted ->
+        assertTrue(redactedReplay.contains("/timeshift/***/***/60/2024-04-01:10-00/001.ts"))
+        listOf(redactedLive, redactedMovie, redactedSeries, redactedReplay).forEach { redacted ->
             assertFalse(redacted.contains("demo"))
             assertFalse(redacted.contains("segreta"))
         }
+    }
+
+    @Test
+    fun `timeshift usa il fuso del server e arrotonda la durata per eccesso`() {
+        val epoch = java.time.Instant.parse("2024-03-31T01:30:00Z").epochSecond
+        val rome = StreamUrls.buildCatchup(server, "demo", "demo", "001", epoch, 3_601L, "Europe/Rome", java.time.ZoneId.of("UTC"))
+        val deviceUtc = StreamUrls.buildCatchup(server, "demo", "demo", "001", epoch, 3_601L, null, java.time.ZoneId.of("UTC"))
+        assertEquals("$base/timeshift/demo/demo/61/2024-03-31:03-30/001.ts", rome)
+        assertEquals("$base/timeshift/demo/demo/61/2024-03-31:01-30/001.ts", deviceUtc)
+    }
+
+    @Test
+    fun `timeshift spostato arrotonda al minuto e usa la durata residua`() {
+        val epoch = java.time.Instant.parse("2024-04-01T10:00:00Z").epochSecond
+        val url = StreamUrls.buildShiftedCatchup(server, "demo", "demo", "001", epoch, 7_200L, 3_670L, "UTC", java.time.ZoneId.of("Europe/Rome"))
+        assertEquals("$base/timeshift/demo/demo/59/2024-04-01:11-01/001.ts", url)
     }
 
     @Test

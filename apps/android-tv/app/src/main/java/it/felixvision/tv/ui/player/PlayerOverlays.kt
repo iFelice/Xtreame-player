@@ -588,9 +588,10 @@ fun PlayerErrorOverlay(
     scale: UiScale,
     onRetry: () -> Unit,
     onBack: () -> Unit,
+    showRetry: Boolean = true,
 ) {
     val retryFocus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { retryFocus.requestFocus() }
+    LaunchedEffect(showRetry) { retryFocus.requestFocus() }
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -612,19 +613,17 @@ fun PlayerErrorOverlay(
                 fontWeight = FontWeight.SemiBold,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(scale.dp(14f))) {
-                FvpPrimaryButton(
+                if (showRetry) FvpPrimaryButton(
                     text = "Riprova",
                     onClick = onRetry,
                     scale = scale,
-                    modifier = Modifier
-                        .focusRequester(retryFocus)
-                        .testTag("player_retry"),
+                    modifier = Modifier.focusRequester(retryFocus).testTag("player_retry"),
                 )
                 FvpSecondaryButton(
                     text = "Indietro",
                     onClick = onBack,
                     scale = scale,
-                    modifier = Modifier.testTag("player_back"),
+                    modifier = (if (!showRetry) Modifier.focusRequester(retryFocus) else Modifier).testTag("player_back"),
                 )
             }
         }

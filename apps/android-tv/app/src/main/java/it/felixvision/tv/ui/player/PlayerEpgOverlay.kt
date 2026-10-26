@@ -16,6 +16,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.tv.material3.Border
@@ -25,7 +26,15 @@ import androidx.tv.material3.Text
 import it.felixvision.tv.core.Clock
 import it.felixvision.tv.data.epg.EpgProgram
 import it.felixvision.tv.data.epg.EpgRules
+import it.felixvision.tv.data.epg.CatchupRules
+import it.felixvision.tv.data.catalog.LiveStream
+import it.felixvision.tv.R
+import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Arrangement
 import it.felixvision.tv.ui.components.UiScale
+import it.felixvision.tv.ui.components.FvpPrimaryButton
 import it.felixvision.tv.ui.components.focusSafePadding
 import it.felixvision.tv.ui.theme.FvpColors
 import kotlinx.coroutines.delay
@@ -42,6 +51,7 @@ fun epgPanelState(loading: Boolean, unavailable: Boolean, programs: List<EpgProg
 fun PlayerEpgOverlay(
     channelName: String, programs: List<EpgProgram>, loading: Boolean, unavailable: Boolean,
     expanded: Long?, scale: UiScale, clock: Clock, onDescription: (Long) -> Unit,
+    channel: LiveStream? = null, onReplay: (EpgProgram) -> Unit = {},
     modifier: Modifier = Modifier,
     listState: LazyListState = rememberLazyListState(),
 ) {
@@ -81,7 +91,9 @@ fun PlayerEpgOverlay(
                     item { DayTitle("Oggi", scale) }
                     itemsIndexed(dayData.today, key = { index, p -> "today-$index-${p.start}" }) { index, p ->
                         ProgramRow(p, expanded == p.start, p == EpgRules.onAir(displayed, now), now, scale,
-                            requesters[index], onDescription)
+                            requesters[index], onDescription,
+                            canReplay = channel?.let { if (CatchupRules.isOnAir(p, now / 1000L)) CatchupRules.channelSupportsArchive(it) else CatchupRules.isProgramReplayable(p, it, now / 1000L) } == true,
+                            onReplay = onReplay)
                     }
                 }
                 if (dayData.tomorrow.isNotEmpty()) {
@@ -89,7 +101,9 @@ fun PlayerEpgOverlay(
                     itemsIndexed(dayData.tomorrow, key = { index, p -> "tomorrow-$index-${p.start}" }) { index, p ->
                         val global = dayData.today.size + index
                         ProgramRow(p, expanded == p.start, p == EpgRules.onAir(displayed, now), now, scale,
-                            requesters[global], onDescription)
+                            requesters[global], onDescription,
+                            canReplay = channel?.let { if (CatchupRules.isOnAir(p, now / 1000L)) CatchupRules.channelSupportsArchive(it) else CatchupRules.isProgramReplayable(p, it, now / 1000L) } == true,
+                            onReplay = onReplay)
                     }
                 }
             }
@@ -105,6 +119,7 @@ fun PlayerEpgOverlay(
 @Composable private fun ProgramRow(
     program: EpgProgram, expanded: Boolean, onAir: Boolean, now: Long, scale: UiScale,
     requester: FocusRequester, onDescription: (Long) -> Unit,
+    canReplay: Boolean, onReplay: (EpgProgram) -> Unit,
 ) {
     var focused by remember(program.start) { mutableStateOf(false) }
     val selectedText = Color(0xFF1C1C1E)
@@ -112,9 +127,13 @@ fun PlayerEpgOverlay(
         selected = false,
         onClick = { onDescription(program.start) },
         headlineContent = {
-            Text("${EpgRules.time(program.start)}–${EpgRules.time(program.end)}  ${program.title}",
-                color = if (focused) selectedText else if (onAir) FvpColors.TextPrimary else FvpColors.TextSecondary,
-                fontSize = scale.sp(13f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(scale.dp(5f))) {
+                Text("${EpgRules.time(program.start)}–${EpgRules.time(program.end)}  ${program.title}",
+                    modifier = Modifier.weight(1f),
+                    color = if (focused) selectedText else if (onAir) FvpColors.TextPrimary else FvpColors.TextSecondary,
+                    fontSize = scale.sp(13f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                if (canReplay) Image(painterResource(R.drawable.ic_replay), contentDescription = "Replay disponibile", modifier = Modifier.size(scale.dp(17f)))
+            }
         },
         supportingContent = if (expanded) ({
             Text(program.description.ifBlank { "Nessuna descrizione" },
@@ -132,6 +151,14 @@ fun PlayerEpgOverlay(
         border = ListItemDefaults.border(focusedBorder = Border(BorderStroke(1.dp, FvpColors.Green))),
         shape = ListItemDefaults.shape(),
     )
+    if (expanded && canReplay) {
+        FvpPrimaryButton(
+            text = "Guarda dall'inizio",
+            onClick = { onReplay(program) },
+            scale = scale,
+            modifier = Modifier.padding(start = scale.dp(12f)).testTag("epg_replay_${program.start}"),
+        )
+    }
     if (onAir) {
         // Indicator remains visible whether or not the row has focus.
         androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().padding(start = scale.dp(10f), end = scale.dp(10f)).height(scale.dp(3f))) {

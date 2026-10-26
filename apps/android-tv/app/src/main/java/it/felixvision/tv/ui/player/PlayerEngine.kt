@@ -26,6 +26,8 @@ import it.felixvision.tv.data.catalog.Category
 import it.felixvision.tv.data.catalog.LiveStream
 import it.felixvision.tv.data.continuewatching.ContinueEntry
 import it.felixvision.tv.data.continuewatching.ContinueEpisode
+import it.felixvision.tv.data.epg.EpgProgram
+import it.felixvision.tv.data.epg.CatchupRules
 import it.felixvision.tv.data.playback.AudioFormatLabels
 import it.felixvision.tv.data.playback.ChannelKeyOutcome
 import it.felixvision.tv.data.playback.ChannelLookupResult
@@ -95,6 +97,10 @@ class PlayerEngine(
 
     var exoPlayer by mutableStateOf<ExoPlayer?>(null)
         private set
+
+    private var replayProgram: EpgProgram? = null
+    private var replayBaseMillis: Long = 0L
+    private var replayDurationMillis: Long = 0L
 
     private var started = false
     private var exited = false
@@ -270,11 +276,16 @@ class PlayerEngine(
         if (exited) return
         val url = currentUrl()
         if (url == null) {
-            state = state.copy(
-                isReady = true,
-                errorMessage = PlaybackErrors.GENERIC,
-                isBuffering = false,
-            )
+            if (replayProgram != null) {
+                state = state.copy(isReady = true, isReplay = true)
+                showReplayUnavailable()
+            } else {
+                state = state.copy(
+                    isReady = true,
+                    errorMessage = PlaybackErrors.GENERIC,
+                    isBuffering = false,
+                )
+            }
             return
         }
         AppLog.info("Player: apertura ${StreamUrls.redactStreamUrl(url)}")
@@ -294,7 +305,7 @@ class PlayerEngine(
         newPlayer.addAnalyticsListener(analyticsListener)
         val mediaItem = MediaItem.Builder()
             .setUri(url)
-            .setMediaMetadata(MediaMetadata.Builder().setTitle(titleForCurrent()).build())
+            .setMediaMetadata(MediaMetadata.Builder().setTitle(replayProgram?.title ?: titleForCurrent()).build())
             .build()
         // Volume del nostro player: curva percettiva sul livello salvato.
         newPlayer.volume = PlayerVolume.volumeForLevel(volumeLevel)
@@ -307,7 +318,10 @@ class PlayerEngine(
             isReady = true,
             errorMessage = null,
             isBuffering = true,
-            currentTitle = titleForCurrent(),
+            currentTitle = replayProgram?.title ?: titleForCurrent(),
+            isReplay = replayProgram != null,
+            durationMillis = if (replayProgram != null) replayDurationMillis else 0L,
+            positionMillis = if (replayProgram != null) replayBaseMillis else 0L,
             currentChannelIndex = liveIndex,
             totalChannels = channels.size,
             liveChannels = channels,
@@ -326,6 +340,23 @@ class PlayerEngine(
     }
 
     private fun currentUrl(): String? {
+        replayProgram?.let { program ->
+            val channel = currentLiveChannel() ?: return null
+            return if (replayBaseMillis <= 0L) {
+                StreamUrls.buildCatchup(
+                    server = session.server, username = session.username, password = session.password,
+                    streamId = channel.streamId, startEpochSeconds = program.start,
+                    durationSeconds = program.end - program.start, serverTimezone = session.serverTimezone,
+                )
+            } else {
+                StreamUrls.buildShiftedCatchup(
+                    server = session.server, username = session.username, password = session.password,
+                    streamId = channel.streamId, startEpochSeconds = program.start,
+                    durationSeconds = program.end - program.start,
+                    offsetSeconds = replayBaseMillis / 1_000L, serverTimezone = session.serverTimezone,
+                )
+            }
+        }
         val target = when (val currentSource = source) {
             is PlaybackSource.Live -> {
                 val channel = currentLiveChannel() ?: return null
@@ -381,9 +412,14 @@ class PlayerEngine(
         val player = exoPlayer ?: return
         val position = player.currentPosition.coerceAtLeast(0L)
         val duration = playerDuration()
+        val shownPosition = if (replayProgram != null) replayBaseMillis + position else position
+        if (replayProgram != null && replayDurationMillis > 0L && shownPosition >= replayDurationMillis) {
+            returnToLive()
+            return
+        }
         state = state.copy(
-            positionMillis = position,
-            durationMillis = if (duration > 0L) duration else state.durationMillis,
+            positionMillis = shownPosition,
+            durationMillis = if (replayProgram != null) replayDurationMillis else if (duration > 0L) duration else state.durationMillis,
             isPlaying = player.isPlaying,
         )
         updateNextEpisodePrompt(
@@ -485,7 +521,9 @@ class PlayerEngine(
     // --- Comandi Live ---
 
     fun onOk() {
-        if (isLiveSource) {
+        if (replayProgram != null) {
+            togglePlayPause()
+        } else if (isLiveSource) {
             toggleBanner()
         } else {
             togglePlayPause()
@@ -640,6 +678,35 @@ class PlayerEngine(
     fun closeEpg() { state = state.copy(epgVisible = false, epgExpanded = null) }
     fun toggleEpgDescription(start: Long) { state = state.copy(epgExpanded = if (state.epgExpanded == start) null else start) }
 
+    fun startReplay(program: EpgProgram) {
+        val channel = currentLiveChannel() ?: return
+        val now = container.clock.nowMillis() / 1_000L
+        val allowed = if (CatchupRules.isOnAir(program, now)) CatchupRules.channelSupportsArchive(channel)
+            else CatchupRules.isProgramReplayable(program, channel, now)
+        if (!allowed || !isLiveSource) return
+        replayProgram = program
+        replayDurationMillis = (program.end - program.start).coerceAtLeast(0L) * 1_000L
+        replayBaseMillis = 0L
+        state = state.copy(epgVisible = false, epgExpanded = null, isReplay = true,
+            currentTitle = program.title, positionMillis = 0L, durationMillis = replayDurationMillis,
+            controlsVisible = true, errorMessage = null, isBuffering = true)
+        destroyPlayer()
+        buildPlayer(0L, autoPlay = true)
+    }
+
+    /** Torna al canale live corrente, anche dal pannello di errore del replay. */
+    fun returnToLive() {
+        if (replayProgram == null) return
+        replayProgram = null
+        replayBaseMillis = 0L
+        replayDurationMillis = 0L
+        state = state.copy(isReplay = false, errorMessage = null, positionMillis = 0L,
+            durationMillis = 0L, controlsVisible = false, isBuffering = true, isPlaying = false,
+            currentTitle = currentLiveChannel()?.name.orEmpty())
+        destroyPlayer()
+        buildPlayer(0L, autoPlay = true)
+    }
+
     fun openChannelList() {
         if (!isLiveSource) return
         bannerJob?.cancel()
@@ -756,8 +823,28 @@ class PlayerEngine(
     }
 
     fun seekBySeconds(seconds: Int) {
-        if (isLiveSource) return
+        if (isLiveSource && replayProgram == null) return
         val player = exoPlayer ?: return
+        if (replayProgram != null) {
+            val targetShown = (state.positionMillis + seconds * 1_000L).coerceIn(0L, replayDurationMillis)
+            if (player.isCurrentMediaItemSeekable) {
+                player.seekTo((targetShown - replayBaseMillis).coerceAtLeast(0L))
+                state = state.copy(positionMillis = targetShown, controlsVisible = true)
+            } else {
+                val program = replayProgram ?: return
+                val offset = (program.start + targetShown / 1_000L)
+                val roundedStart = Math.floorDiv(offset, 60L) * 60L
+                replayBaseMillis = (roundedStart - program.start).coerceAtLeast(0L) * 1_000L
+                if (replayBaseMillis >= replayDurationMillis) {
+                    returnToLive()
+                } else {
+                    state = state.copy(positionMillis = replayBaseMillis, controlsVisible = true, isBuffering = true)
+                    destroyPlayer()
+                    buildPlayer(0L, autoPlay = true)
+                }
+            }
+            return
+        }
         val duration = playerDuration()
         var target = player.currentPosition + seconds * 1_000L
         target = target.coerceAtLeast(0L)
@@ -767,7 +854,7 @@ class PlayerEngine(
     }
 
     fun openTrackPanel(panel: TrackPanelType) {
-        if (isLiveSource) return
+        if (isLiveSource && replayProgram == null) return
         state = state.copy(trackPanel = panel, controlsVisible = true)
     }
 
@@ -888,6 +975,10 @@ class PlayerEngine(
 
     private fun handlePlaybackEnded() {
         if (exited) return
+        if (replayProgram != null) {
+            if ((exoPlayer?.currentPosition ?: 0L) < 1_000L) showReplayUnavailable() else returnToLive()
+            return
+        }
         saveProgress(completed = true)
         val seriesSource = source as? PlaybackSource.Series
         if (seriesSource != null) {
@@ -975,7 +1066,25 @@ class PlayerEngine(
         }
     }
 
+    private fun showReplayUnavailable() {
+        AppLog.warn("Player: replay non disponibile (HTTP/stream) su ${StreamUrls.redactStreamUrl(currentUrl())}")
+        state = state.copy(
+            errorMessage = "Registrazione non disponibile per questo programma",
+            isBuffering = false,
+            isPlaying = false,
+            controlsVisible = false,
+            banner = null,
+            trackPanel = null,
+        )
+        destroyPlayer()
+        container.playbackActivity.setActive(false)
+    }
+
     private fun handlePlayerError(error: PlaybackException) {
+        if (replayProgram != null) {
+            showReplayUnavailable()
+            return
+        }
         AppLog.warn(
             "Player: errore codice ${error.errorCode} su " +
                 StreamUrls.redactStreamUrl(currentUrl()),

@@ -8,9 +8,11 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import it.felixvision.tv.core.Clock
 import it.felixvision.tv.data.epg.EpgProgram
+import it.felixvision.tv.data.catalog.LiveStream
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.theme.FvpTheme
 import java.time.LocalDate
@@ -93,5 +95,51 @@ class PlayerEpgOverlayTest {
         }
         rule.waitUntil(timeoutMillis = 5_000) { scrollCompleted.get() }
         assertNull(scrollFailure.get())
+    }
+
+    @Test
+    fun replayButtonIsShownOnlyForEligibleExpandedPrograms() {
+        val zone = ZoneId.systemDefault()
+        val nowSeconds = LocalDate.now(zone).atTime(15, 0).atZone(zone).toEpochSecond()
+        val nowMillis = nowSeconds * 1_000L
+        val program = EpgProgram("La lanterna blu", "Una storia inventata", nowSeconds - 2_100L, nowSeconds - 300L, true)
+        val tag = "epg_replay_${program.start}"
+
+        rule.setContent {
+            FvpTheme {
+                PlayerEpgOverlay(
+                    channelName = "Canale di prova", programs = listOf(program), loading = false,
+                    unavailable = false, expanded = program.start, scale = UiScale(1f),
+                    clock = Clock { nowMillis }, onDescription = {},
+                    channel = LiveStream(streamId = "001", tvArchive = 1, tvArchiveDuration = 7),
+                )
+            }
+        }
+        rule.onNodeWithTag(tag).assertExists()
+
+        rule.setContent {
+            FvpTheme {
+                PlayerEpgOverlay(
+                    channelName = "Canale di prova", programs = listOf(program.copy(hasArchive = false)), loading = false,
+                    unavailable = false, expanded = program.start, scale = UiScale(1f),
+                    clock = Clock { nowMillis }, onDescription = {},
+                    channel = LiveStream(streamId = "001", tvArchive = 1, tvArchiveDuration = 7),
+                )
+            }
+        }
+        rule.onNodeWithTag(tag).assertDoesNotExist()
+
+        val onAir = program.copy(start = nowSeconds - 900L, end = nowSeconds + 900L, hasArchive = false)
+        rule.setContent {
+            FvpTheme {
+                PlayerEpgOverlay(
+                    channelName = "Canale di prova", programs = listOf(onAir), loading = false,
+                    unavailable = false, expanded = onAir.start, scale = UiScale(1f),
+                    clock = Clock { nowMillis }, onDescription = {},
+                    channel = LiveStream(streamId = "001", tvArchive = 1, tvArchiveDuration = 7),
+                )
+            }
+        }
+        rule.onNodeWithTag("epg_replay_${onAir.start}").assertExists()
     }
 }

@@ -2,6 +2,10 @@ package it.felixvision.tv.data.playback
 
 import it.felixvision.tv.data.xtream.ServerAddress
 import java.nio.charset.StandardCharsets
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 /**
  * URL di riproduzione Xtream, costruiti senza dipendenze Android per poterli
@@ -45,7 +49,7 @@ object StreamUrls {
     private const val UNRESERVED =
         "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"
 
-    private val CREDENTIALS_IN_PATH = Regex("""(/(?:live|movie|series)/)([^/?#]+)/([^/?#]+)""")
+    private val CREDENTIALS_IN_PATH = Regex("""(/(?:live|movie|series|timeshift)/)([^/?#]+)/([^/?#]+)""")
 
     /**
      * Costruisce l'URL di riproduzione. Restituisce `null` se server o
@@ -74,6 +78,47 @@ object StreamUrls {
                 "$base/series/$user/$pass/${encodePathSegment(target.episodeId)}." +
                     containerExtension(target.containerExtension)
         }
+    }
+
+    /** URL Xtream timeshift. Gli epoch sono secondi e la durata è secondi effettivi. */
+    fun buildCatchup(
+        server: String,
+        username: String,
+        password: String,
+        streamId: String,
+        startEpochSeconds: Long,
+        durationSeconds: Long,
+        serverTimezone: String?,
+        deviceTimezone: ZoneId = ZoneId.systemDefault(),
+    ): String? {
+        if (username.isEmpty() || password.isEmpty() || durationSeconds <= 0L) return null
+        val base = ServerAddress.normalize(server) ?: return null
+        val zone = serverTimezone?.let { runCatching { ZoneId.of(it) }.getOrNull() } ?: deviceTimezone
+        val startMinute = Instant.ofEpochSecond(startEpochSeconds).atZone(zone).withSecond(0).withNano(0)
+        val minutes = ((durationSeconds + 59L) / 60L).coerceAtLeast(1L)
+        val formattedStart = DateTimeFormatter.ofPattern("yyyy-MM-dd:HH-mm", Locale.ROOT).format(startMinute)
+        return "$base/timeshift/${encodePathSegment(username)}/${encodePathSegment(password)}/$minutes/$formattedStart/${encodePathSegment(streamId)}.ts"
+    }
+
+    /** Riposiziona il timeshift: arrotonda l'inizio spostato al minuto e ricalcola la durata residua. */
+    fun buildShiftedCatchup(
+        server: String,
+        username: String,
+        password: String,
+        streamId: String,
+        startEpochSeconds: Long,
+        durationSeconds: Long,
+        offsetSeconds: Long,
+        serverTimezone: String?,
+        deviceTimezone: ZoneId = ZoneId.systemDefault(),
+    ): String? {
+        if (durationSeconds <= 0L) return null
+        val requested = startEpochSeconds + offsetSeconds
+        val roundedStart = Math.floorDiv(requested, 60L) * 60L
+        val end = startEpochSeconds + durationSeconds
+        val remaining = end - roundedStart
+        if (remaining <= 0L) return null
+        return buildCatchup(server, username, password, streamId, roundedStart, remaining, serverTimezone, deviceTimezone)
     }
 
     /**

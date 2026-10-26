@@ -78,6 +78,7 @@ fun FvpApp(container: AppContainer) {
                         maxConnections = screen.summary.maxConnections,
                         activeConnections = screen.summary.activeConnections,
                         allowedOutputFormats = screen.summary.allowedOutputFormats,
+                        serverTimezone = screen.summary.serverTimezone,
                         scale = scale,
                         accessViewModel = viewModel,
                         onSignOut = viewModel::signOut,
