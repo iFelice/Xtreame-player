@@ -4,6 +4,7 @@ package it.felixvision.tv.ui.player
 
 import androidx.annotation.OptIn
 import android.os.SystemClock
+import android.view.KeyEvent as AndroidKeyEvent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
@@ -46,6 +47,7 @@ import it.felixvision.tv.data.playback.SeekAcceleration
 import it.felixvision.tv.data.playback.SeekAccumulator
 import it.felixvision.tv.data.playback.SeekFeedback
 import it.felixvision.tv.ui.components.ChannelNumberIndicator
+import it.felixvision.tv.ui.components.fvpLongPress
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.theme.FvpColors
 import kotlinx.coroutines.delay
@@ -157,6 +159,15 @@ fun PlayerScreen(
             rootFocus.requestFocus()
             return
         }
+        if (state.epgVisible) {
+            if (state.epgExpanded != null) {
+                engine.toggleEpgDescription(state.epgExpanded!!)
+            } else {
+                engine.closeEpg()
+                rootFocus.requestFocus()
+            }
+            return
+        }
         if (state.volumePanelVisible) {
             // Indietro chiude il pannello del volume e lascia il player com'è.
             engine.closeVolumePanel()
@@ -204,6 +215,7 @@ fun PlayerScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black)
+                .fvpLongPress { if (session.source is PlaybackSource.Live) engine.toggleEpg() }
                 .onPreviewKeyEvent { event ->
                     val native = event.nativeKeyEvent
                     if (session.source is PlaybackSource.Live && !state.hasModalOverlay) {
@@ -218,6 +230,18 @@ fun PlayerScreen(
                                 if (state.volumePanelVisible) engine.keepVolumePanelAlive()
                             }
                             return@onPreviewKeyEvent true
+                        }
+                    }
+                    if (event.type == KeyEventType.KeyDown && session.source is PlaybackSource.Live) {
+                        when (native.keyCode) {
+                            AndroidKeyEvent.KEYCODE_GUIDE, AndroidKeyEvent.KEYCODE_INFO, AndroidKeyEvent.KEYCODE_TV_DATA_SERVICE -> { engine.toggleEpg(); return@onPreviewKeyEvent true }
+                        }
+                        if (state.epgVisible) {
+                            when (event.key) {
+                                Key.DirectionUp, Key.DirectionDown -> return@onPreviewKeyEvent false
+                                Key.DirectionCenter, Key.Enter -> return@onPreviewKeyEvent false
+                                else -> Unit
+                            }
                         }
                     }
                     when (event.type) {
@@ -400,6 +424,10 @@ fun PlayerScreen(
                             .padding(top = scale.dp(80f)),
                     )
                 }
+            }
+
+            if (state.epgVisible && session.source is PlaybackSource.Live) {
+                PlayerEpgOverlay(channelName = state.currentTitle, programs = state.epgPrograms, loading = state.epgLoading, unavailable = state.epgUnavailable, expanded = state.epgExpanded, scale = scale, clock = container.clock, onDescription = engine::toggleEpgDescription, modifier = Modifier.align(Alignment.CenterEnd))
             }
 
             if (state.channelListVisible) {

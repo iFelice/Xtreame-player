@@ -12,6 +12,7 @@ import it.felixvision.tv.data.catalog.CatalogCache
 import it.felixvision.tv.data.catalog.CatalogClient
 import it.felixvision.tv.data.continuewatching.ContinueWatchingStore
 import it.felixvision.tv.data.favorites.FavoritesStore
+import it.felixvision.tv.data.epg.ChannelEpgClient
 import it.felixvision.tv.data.images.FvpImageLoader
 import it.felixvision.tv.data.pairing.PairingClient
 import it.felixvision.tv.data.pairing.PairingCoordinator
@@ -67,6 +68,8 @@ class AppContainer(
     val xtreamClient: XtreamClient by lazy {
         XtreamClient(http = httpClient, json = json, clock = clock)
     }
+
+    val channelEpgClient: ChannelEpgClient by lazy { ChannelEpgClient(http = httpClient, clock = clock) }
 
     val catalogClient: CatalogClient by lazy {
         CatalogClient(http = httpClient, json = json)

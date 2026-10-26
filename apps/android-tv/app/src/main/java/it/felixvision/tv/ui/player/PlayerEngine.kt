@@ -626,6 +626,20 @@ class PlayerEngine(
         }
     }
 
+    fun toggleEpg() {
+        if (!isLiveSource) return
+        if (state.epgVisible) { state = state.copy(epgVisible = false, epgExpanded = null); return }
+        state = state.copy(epgVisible = true, epgLoading = true, epgUnavailable = false, epgPrograms = emptyList(), channelListVisible = false, controlsVisible = false)
+        val channel = currentLiveChannel() ?: run { state = state.copy(epgLoading = false, epgUnavailable = true); return }
+        scope.launch {
+            val result = container.channelEpgClient.load(session.server, session.username, session.password, channel.streamId)
+            if (state.epgVisible && currentLiveChannel()?.streamId == channel.streamId) state = state.copy(epgLoading = false, epgPrograms = result, epgUnavailable = result.isEmpty())
+        }
+    }
+
+    fun closeEpg() { state = state.copy(epgVisible = false, epgExpanded = null) }
+    fun toggleEpgDescription(start: Long) { state = state.copy(epgExpanded = if (state.epgExpanded == start) null else start) }
+
     fun openChannelList() {
         if (!isLiveSource) return
         bannerJob?.cancel()
