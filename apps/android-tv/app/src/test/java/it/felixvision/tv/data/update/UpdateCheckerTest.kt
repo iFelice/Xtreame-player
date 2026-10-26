@@ -1,9 +1,13 @@
+@file:OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+
 package it.felixvision.tv.data.update
 
 import it.felixvision.tv.core.Clock
 import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -253,6 +257,7 @@ class UpdateCheckerTest {
             currentVersion = installedVersion,
             scope = this,
             isDebugBuild = false,
+            clock = object : Clock { override fun nowMillis(): Long = testScheduler.currentTime },
         )
 
         // Apertura della schermata principale: controllo subito, poi ogni 12 ore.
