@@ -160,8 +160,12 @@ fun PlayerScreen(
             return
         }
         if (state.epgVisible) {
-            if (state.epgExpanded != null) engine.toggleEpgDescription(state.epgExpanded!!) else engine.closeEpg()
-            rootFocus.requestFocus()
+            if (state.epgExpanded != null) {
+                engine.toggleEpgDescription(state.epgExpanded!!)
+            } else {
+                engine.closeEpg()
+                rootFocus.requestFocus()
+            }
             return
         }
         if (state.volumePanelVisible) {
@@ -423,7 +427,7 @@ fun PlayerScreen(
             }
 
             if (state.epgVisible && session.source is PlaybackSource.Live) {
-                PlayerEpgOverlay(channelName = state.currentTitle, programs = state.epgPrograms, loading = state.epgLoading, unavailable = state.epgUnavailable, expanded = state.epgExpanded, scale = scale, onDescription = engine::toggleEpgDescription, onClose = engine::closeEpg)
+                PlayerEpgOverlay(channelName = state.currentTitle, programs = state.epgPrograms, loading = state.epgLoading, unavailable = state.epgUnavailable, expanded = state.epgExpanded, scale = scale, clock = container.clock, onDescription = engine::toggleEpgDescription, modifier = Modifier.align(Alignment.CenterEnd))
             }
 
             if (state.channelListVisible) {
