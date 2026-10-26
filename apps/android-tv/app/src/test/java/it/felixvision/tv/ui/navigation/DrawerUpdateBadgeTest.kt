@@ -94,7 +94,7 @@ class DrawerUpdateBadgeTest {
 
     private fun newChecker(vararg results: ReleaseCheckResult): Pair<UpdateChecker, ScriptedUpdateClient> {
         val client = ScriptedUpdateClient(results.toMutableList())
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
         scopes.add(scope)
         val checker = UpdateChecker(
             client = client,
