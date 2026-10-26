@@ -32,6 +32,41 @@ object EpgRules {
         } catch (_: Exception) { value }
     }
 
+    /**
+     * Rende affidabili i dati EPG del server: un solo programma per istante
+     * iniziale, nessuna sovrapposizione e ordine cronologico stabile.
+     */
+    fun normalize(programs: List<EpgProgram>): List<EpgProgram> {
+        val exactDuplicates = LinkedHashMap<Triple<Long, Long, String>, EpgProgram>()
+        for (program in programs) {
+            if (program.end <= program.start) continue
+            val key = Triple(program.start, program.end, program.title)
+            val previous = exactDuplicates[key]
+            exactDuplicates[key] = if (previous == null) program else previous.copy(
+                description = if (program.description.length > previous.description.length) program.description else previous.description,
+                hasArchive = previous.hasArchive || program.hasArchive,
+            )
+        }
+
+        val byStart = exactDuplicates.values
+            .groupBy { it.start }
+            .values
+            .mapNotNull { sameStart ->
+                sameStart.maxWithOrNull(
+                    compareBy<EpgProgram> { it.end }
+                        .thenBy { it.description.length }
+                        .thenBy { it.title.isNotBlank() },
+                )
+            }
+            .sortedBy { it.start }
+
+        return byStart.mapIndexedNotNull { index, program ->
+            val nextStart = byStart.getOrNull(index + 1)?.start
+            val correctedEnd = if (nextStart != null && program.end > nextStart) nextStart else program.end
+            if (correctedEnd <= program.start) null else program.copy(end = correctedEnd)
+        }
+    }
+
     fun parse(root: JsonElement): List<EpgProgram> {
         val list = when (root) { is JsonArray -> root; is JsonObject -> (root["epg_listings"] as? JsonArray) ?: (root["programs"] as? JsonArray) ?: JsonArray(emptyList()); else -> JsonArray(emptyList()) }
         return list.mapNotNull { e ->
@@ -75,7 +110,9 @@ class ChannelEpgClient(private val http: OkHttpClient, private val clock: Clock 
                 limit?.let { b.addQueryParameter("limit", it) }
                 http.newCall(Request.Builder().url(b.build()).build()).execute().use { r -> if (!r.isSuccessful) emptyList() else EpgRules.parse(Json.parseToJsonElement(r.body.string())) }
             } catch (_: Exception) { emptyList() }
-            val programs = request("get_simple_data_table").ifEmpty { request("get_short_epg", "50") }
+            val programs = EpgRules.normalize(
+                request("get_simple_data_table").ifEmpty { request("get_short_epg", "50") },
+            )
             val ttl = if (programs.isEmpty()) EMPTY_TTL_MILLIS else PROGRAM_TTL_MILLIS
             cache[key] = Entry(clock.nowMillis() + ttl, programs)
             programs
