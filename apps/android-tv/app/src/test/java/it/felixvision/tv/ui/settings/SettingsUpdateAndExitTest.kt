@@ -35,6 +35,7 @@ import it.felixvision.tv.data.update.ReleaseCheckResult
 import it.felixvision.tv.data.update.ReleaseInfo
 import it.felixvision.tv.data.update.UNKNOWN_SOURCES_INSTRUCTIONS
 import it.felixvision.tv.data.update.UPDATES_DIR_NAME
+import it.felixvision.tv.data.update.UpdateChecker
 import it.felixvision.tv.data.update.UpdateClient
 import it.felixvision.tv.data.update.UpdateFiles
 import it.felixvision.tv.data.update.UpdateInstaller
@@ -42,6 +43,9 @@ import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.theme.FvpTheme
 import java.io.File
 import kotlin.io.path.createTempDirectory
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -242,6 +246,44 @@ class SettingsUpdateAndExitTest {
     }
 
     @Test
+    fun `pallino arancio accanto alla versione disponibile e assente con app aggiornata`() {
+        val release = ReleaseInfo(
+            version = "1.0.3",
+            downloadUrl = "https://github.com/iFelice/felixvp-releases/releases/download/1.0.3/FelixVP.apk",
+            sizeBytes = 1024L,
+        )
+        var uiState by mutableStateOf(
+            SettingsUiState(
+                username = demoUser,
+                serverLabel = demoServer,
+                status = "Attivo",
+                versionName = "1.0.2",
+                versionCode = 102,
+                updateStatus = AppUpdateStatus.Available(release = release),
+            ),
+        )
+
+        rule.setContent {
+            FvpTheme {
+                SettingsContent(state = uiState, scale = scale)
+            }
+        }
+        rule.waitForIdle()
+
+        // Versione installata 1.0.2, disponibile 1.0.3: testo e pallino arancio.
+        rule.onNodeWithText("Disponibile la versione 1.0.3").assertIsDisplayed()
+        val badge = rule.onNodeWithTag(SETTINGS_UPDATE_BADGE_TAG, useUnmergedTree = true)
+        badge.assertIsDisplayed()
+        assertFalse(SemanticsActions.OnClick in badge.fetchSemanticsNode().config)
+
+        // App aggiornata: il pallino sparisce insieme al testo della versione.
+        uiState = uiState.copy(updateStatus = AppUpdateStatus.UpToDate)
+        rule.waitForIdle()
+        rule.onNodeWithText("App aggiornata").assertIsDisplayed()
+        rule.onNodeWithTag(SETTINGS_UPDATE_BADGE_TAG, useUnmergedTree = true).assertDoesNotExist()
+    }
+
+    @Test
     fun `controllo aggiornamenti con MockWebServer distingue nuova versione aggiornata debug ed errore`() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val updatesDir = File(tempDir, UPDATES_DIR_NAME)
@@ -256,6 +298,15 @@ class SettingsUpdateAndExitTest {
             credentialStoreOverride = InMemoryCredentialStore(),
             updateClientOverride = githubClient,
             updateInstallerOverride = installer,
+        )
+        // Il controllo aggiornamenti è il componente condiviso con il menu: qui
+        // costruito con la versione installata 1.0.2 del caso di prova.
+        val checkScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val sharedChecker = UpdateChecker(
+            client = githubClient,
+            currentVersion = "1.0.2",
+            scope = checkScope,
+            isDebugBuild = false,
         )
 
         val apkUrl = mockServer.url("/download/FelixVP.apk").toString()
@@ -277,7 +328,7 @@ class SettingsUpdateAndExitTest {
             onSignOut = {},
             currentVersionName = "1.0.2",
             currentVersionCode = 102,
-            isDebugBuild = false,
+            updateChecker = sharedChecker,
         )
         vmNewer.checkForUpdates()
         awaitCondition { vmNewer.ui.value.updateStatus !is AppUpdateStatus.Checking }
@@ -305,6 +356,12 @@ class SettingsUpdateAndExitTest {
         mockServer.enqueue(
             MockResponse().setResponseCode(200).setBody(latestJsonWithApk("0.1.0", apkUrl, 4096L)),
         )
+        val debugChecker = UpdateChecker(
+            client = githubClient,
+            currentVersion = "0.1.0",
+            scope = checkScope,
+            isDebugBuild = true,
+        )
         val vmDebug = SettingsViewModel(
             container = container,
             server = demoServer,
@@ -318,7 +375,7 @@ class SettingsUpdateAndExitTest {
             onSignOut = {},
             currentVersionName = "0.1.0",
             currentVersionCode = 1,
-            isDebugBuild = true,
+            updateChecker = debugChecker,
         )
         vmDebug.onSettingsVisible()
         awaitCondition { vmDebug.ui.value.updateStatus !is AppUpdateStatus.Checking }
@@ -347,6 +404,14 @@ class SettingsUpdateAndExitTest {
             updateInstallerOverride = installer,
         )
 
+        val checkScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val sharedChecker = UpdateChecker(
+            client = githubClient,
+            currentVersion = "1.0.2",
+            scope = checkScope,
+            isDebugBuild = false,
+        )
+
         val apkPayload = "SIGNED_RELEASE_APK_".repeat(256)
         val apkBytes = apkPayload.toByteArray(Charsets.UTF_8).size.toLong()
         val apkUrl = mockServer.url("/download/FelixVP.apk").toString()
@@ -368,7 +433,7 @@ class SettingsUpdateAndExitTest {
             onSignOut = {},
             currentVersionName = "1.0.2",
             currentVersionCode = 102,
-            isDebugBuild = false,
+            updateChecker = sharedChecker,
         )
         vm.checkForUpdates()
         awaitCondition { vm.ui.value.updateStatus is AppUpdateStatus.Available }

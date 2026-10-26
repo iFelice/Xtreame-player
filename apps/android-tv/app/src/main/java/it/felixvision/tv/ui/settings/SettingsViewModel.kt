@@ -17,13 +17,12 @@ import it.felixvision.tv.data.update.DOWNLOAD_ERROR_MESSAGE
 import it.felixvision.tv.data.update.DOWNLOAD_SIZE_MISMATCH_MESSAGE
 import it.felixvision.tv.data.update.INSTALL_CANCELLED_MESSAGE
 import it.felixvision.tv.data.update.InstallEvent
-import it.felixvision.tv.data.update.ReleaseCheckResult
 import it.felixvision.tv.data.update.ReleaseInfo
 import it.felixvision.tv.data.update.UNKNOWN_SOURCES_INSTRUCTIONS
+import it.felixvision.tv.data.update.UpdateCheckState
+import it.felixvision.tv.data.update.UpdateChecker
 import it.felixvision.tv.data.update.UpdateClient
 import it.felixvision.tv.data.update.UpdateInstaller
-import it.felixvision.tv.data.update.isDebugVersion
-import it.felixvision.tv.data.update.isUpdateAvailable
 import it.felixvision.tv.data.xtream.LoginResult
 import it.felixvision.tv.data.xtream.ServerAddress
 import it.felixvision.tv.data.xtream.ServerInput
@@ -34,6 +33,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -105,7 +105,7 @@ class SettingsViewModel(
     private val updateInstaller: UpdateInstaller = container.updateInstaller,
     private val currentVersionName: String = BuildConfig.VERSION_NAME,
     private val currentVersionCode: Int = BuildConfig.VERSION_CODE,
-    private val isDebugBuild: Boolean = BuildConfig.DEBUG || isDebugVersion(currentVersionName),
+    private val updateChecker: UpdateChecker = container.updateChecker,
 ) : ViewModel() {
 
     private val coordinator: PairingCoordinator = container.newPairingCoordinator()
@@ -130,7 +130,6 @@ class SettingsViewModel(
     private var pairingVisible = false
     private var accountReadJob: Job? = null
     private var serverLabelJob: Job? = null
-    private var updateCheckJob: Job? = null
     private var downloadJob: Job? = null
     private var activeRelease: ReleaseInfo? = null
     private var awaitingInstallPermission = false
@@ -155,6 +154,61 @@ class SettingsViewModel(
         viewModelScope.launch {
             val last = container.catalogCache.lastUpdateMillis(server, username)
             _ui.update { it.copy(lastUpdateMillis = last) }
+        }
+        // Stato condiviso degli aggiornamenti: la stessa fonte usata dal menu,
+        // così Impostazioni non ripete una richiesta già in corso.
+        viewModelScope.launch {
+            combine(updateChecker.state, updateChecker.isChecking) { shared, checking ->
+                shared to checking
+            }.collect { (shared, checking) ->
+                applySharedUpdateState(shared = shared, checking = checking)
+            }
+        }
+    }
+
+    /**
+     * Riporta nello stato della schermata l'esito del controllo condiviso.
+     * Scaricamento e installazione restano locali: lo stato condiviso descrive
+     * solo il controllo, e i messaggi locali (permesso, errori di installazione)
+     * sono conservati finché la release non cambia.
+     */
+    private fun applySharedUpdateState(
+        shared: UpdateCheckState,
+        checking: Boolean,
+    ) {
+        val local = _ui.value.updateStatus
+        val busy = local is AppUpdateStatus.Downloading || local is AppUpdateStatus.Installing
+        if (!busy) {
+            activeRelease = (shared as? UpdateCheckState.Available)?.release
+        }
+        _ui.update { current ->
+            val currentStatus = current.updateStatus
+            if (currentStatus is AppUpdateStatus.Downloading ||
+                currentStatus is AppUpdateStatus.Installing
+            ) {
+                return@update current
+            }
+            val mapped: AppUpdateStatus = when {
+                checking -> AppUpdateStatus.Checking
+
+                shared is UpdateCheckState.Available -> {
+                    val previous = currentStatus as? AppUpdateStatus.Available
+                    val sameRelease = previous?.release == shared.release
+                    AppUpdateStatus.Available(
+                        release = shared.release,
+                        noticeMessage = previous?.takeIf { sameRelease }?.noticeMessage,
+                        errorMessage = previous?.takeIf { sameRelease }?.errorMessage,
+                    )
+                }
+
+                shared is UpdateCheckState.UpToDate -> AppUpdateStatus.UpToDate
+
+                shared is UpdateCheckState.Failed -> AppUpdateStatus.CheckFailed
+
+                // Nessun controllo ancora eseguito: resta lo stato corrente.
+                else -> currentStatus
+            }
+            if (mapped == currentStatus) current else current.copy(updateStatus = mapped)
         }
     }
 
@@ -204,55 +258,17 @@ class SettingsViewModel(
     }
 
     /**
-     * Controlla l'ultima release pubblicata su GitHub (`releases/latest`)
-     * confrontandola semanticamente con la versione installata.
+     * Chiede un controllo aggiornamenti all'apertura delle Impostazioni, come
+     * prima. Il controllo vero e proprio (richiesta a GitHub e confronto
+     * semantico con la versione installata) sta in [UpdateChecker], condiviso
+     * con il menu: se una richiesta è già in corso non ne parte una seconda.
      */
     fun checkForUpdates() {
         val current = _ui.value.updateStatus
         if (current is AppUpdateStatus.Downloading || current is AppUpdateStatus.Installing) {
             return
         }
-        updateCheckJob?.cancel()
-        updateCheckJob = viewModelScope.launch {
-            _ui.update { it.copy(updateStatus = AppUpdateStatus.Checking) }
-            when (val result = updateClient.fetchLatestRelease()) {
-                is ReleaseCheckResult.Available -> {
-                    val release = result.release
-                    val newer = isUpdateAvailable(
-                        currentVersion = currentVersionName,
-                        remoteTag = release.version,
-                        isDebugBuild = isDebugBuild,
-                    )
-                    if (newer) {
-                        activeRelease = release
-                        val notice = if (
-                            awaitingInstallPermission &&
-                            !updateInstaller.canRequestPackageInstalls()
-                        ) {
-                            UNKNOWN_SOURCES_INSTRUCTIONS
-                        } else {
-                            null
-                        }
-                        _ui.update {
-                            it.copy(
-                                updateStatus = AppUpdateStatus.Available(
-                                    release = release,
-                                    noticeMessage = notice,
-                                ),
-                            )
-                        }
-                    } else {
-                        activeRelease = null
-                        _ui.update { it.copy(updateStatus = AppUpdateStatus.UpToDate) }
-                    }
-                }
-
-                ReleaseCheckResult.Failure -> {
-                    activeRelease = null
-                    _ui.update { it.copy(updateStatus = AppUpdateStatus.CheckFailed) }
-                }
-            }
-        }
+        updateChecker.checkNow()
     }
 
     /**
@@ -485,8 +501,8 @@ class SettingsViewModel(
         pairingVisible = false
         pairingJob?.cancel()
         pairingJob = null
-        updateCheckJob?.cancel()
-        updateCheckJob = null
+        // Il controllo aggiornamenti è condiviso e appartiene all'app: chiudendo
+        // le Impostazioni non si annulla una richiesta che serve anche al menu.
         if (_ui.value.isDownloadingUpdate) {
             cancelUpdateDownload()
         }
@@ -624,14 +640,13 @@ class SettingsViewModel(
     }
 
     override fun onCleared() {
-        // Le letture account, gli aggiornamenti e il ciclo di abbinamento non
-        // devono sopravvivere alla schermata che li ha avviati.
+        // Le letture account e il ciclo di abbinamento non devono sopravvivere
+        // alla schermata che li ha avviati. Il controllo aggiornamenti resta
+        // all'app: lo stato condiviso alimenta anche il pallino del menu.
         serverLabelJob?.cancel()
         serverLabelJob = null
         accountReadJob?.cancel()
         accountReadJob = null
-        updateCheckJob?.cancel()
-        updateCheckJob = null
         if (_ui.value.isDownloadingUpdate) {
             downloadJob?.cancel()
             downloadJob = null
