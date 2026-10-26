@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.*
@@ -42,13 +43,13 @@ fun PlayerEpgOverlay(
     channelName: String, programs: List<EpgProgram>, loading: Boolean, unavailable: Boolean,
     expanded: Long?, scale: UiScale, clock: Clock, onDescription: (Long) -> Unit,
     modifier: Modifier = Modifier,
+    listState: LazyListState = rememberLazyListState(),
 ) {
     var now by remember { mutableLongStateOf(clock.nowMillis()) }
     LaunchedEffect(Unit) { while (true) { delay(60_000L); now = clock.nowMillis() } }
     val dayData = remember(programs, now) { EpgRules.days(programs, now) }
     val displayed = remember(dayData) { dayData.today + dayData.tomorrow }
-    val listState = rememberLazyListState()
-    val requesters = remember(displayed) { displayed.map { FocusRequester() } }
+    val requesters = remember(displayed) { displayed.indices.map { FocusRequester() } }
     val focusedProgram = EpgRules.initialFocus(displayed, now)
     val targetIndex = displayed.indexOf(focusedProgram).coerceAtLeast(0)
     val headerOffset = (if (dayData.today.isNotEmpty()) 1 else 0) + if (dayData.tomorrow.isNotEmpty() && targetIndex >= dayData.today.size) 1 else 0
@@ -78,14 +79,14 @@ fun PlayerEpgOverlay(
             ) {
                 if (dayData.today.isNotEmpty()) {
                     item { DayTitle("Oggi", scale) }
-                    itemsIndexed(dayData.today, key = { _, p -> "today-${p.start}" }) { index, p ->
+                    itemsIndexed(dayData.today, key = { index, p -> "today-$index-${p.start}" }) { index, p ->
                         ProgramRow(p, expanded == p.start, p == EpgRules.onAir(displayed, now), now, scale,
                             requesters[index], onDescription)
                     }
                 }
                 if (dayData.tomorrow.isNotEmpty()) {
                     item { DayTitle("Domani", scale) }
-                    itemsIndexed(dayData.tomorrow, key = { _, p -> "tomorrow-${p.start}" }) { index, p ->
+                    itemsIndexed(dayData.tomorrow, key = { index, p -> "tomorrow-$index-${p.start}" }) { index, p ->
                         val global = dayData.today.size + index
                         ProgramRow(p, expanded == p.start, p == EpgRules.onAir(displayed, now), now, scale,
                             requesters[global], onDescription)
