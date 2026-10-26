@@ -14,7 +14,8 @@ class CatchupRulesTest {
         assertFalse(CatchupRules.isProgramReplayable(past.copy(hasArchive = false), LiveStream(tvArchive = 1, tvArchiveDuration = 7), now))
         assertFalse(CatchupRules.isProgramReplayable(past, LiveStream(tvArchive = 0, tvArchiveDuration = 7), now))
         assertFalse(CatchupRules.isProgramReplayable(past, LiveStream(tvArchive = 1, tvArchiveDuration = 0), now))
-        assertFalse(CatchupRules.isProgramReplayable(past, LiveStream(tvArchive = 1, tvArchiveDuration = 1), now))
+        val twoDaysAgo = past.copy(start = now - 2 * 86_400L, end = now - 2 * 86_400L + 1_800L)
+        assertFalse(CatchupRules.isProgramReplayable(twoDaysAgo, LiveStream(tvArchive = 1, tvArchiveDuration = 1), now))
         assertFalse(CatchupRules.isProgramReplayable(past.copy(start = now), LiveStream(tvArchive = 1, tvArchiveDuration = 7), now))
     }
 

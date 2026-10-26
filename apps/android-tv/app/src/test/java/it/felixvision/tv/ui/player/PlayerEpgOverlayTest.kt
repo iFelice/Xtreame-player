@@ -5,6 +5,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onRoot
@@ -103,43 +106,29 @@ class PlayerEpgOverlayTest {
         val nowSeconds = LocalDate.now(zone).atTime(15, 0).atZone(zone).toEpochSecond()
         val nowMillis = nowSeconds * 1_000L
         val program = EpgProgram("La lanterna blu", "Una storia inventata", nowSeconds - 2_100L, nowSeconds - 300L, true)
-        val tag = "epg_replay_${program.start}"
-
-        rule.setContent {
-            FvpTheme {
-                PlayerEpgOverlay(
-                    channelName = "Canale di prova", programs = listOf(program), loading = false,
-                    unavailable = false, expanded = program.start, scale = UiScale(1f),
-                    clock = Clock { nowMillis }, onDescription = {},
-                    channel = LiveStream(streamId = "001", tvArchive = 1, tvArchiveDuration = 7),
-                )
-            }
-        }
-        rule.onNodeWithTag(tag).assertExists()
-
-        rule.setContent {
-            FvpTheme {
-                PlayerEpgOverlay(
-                    channelName = "Canale di prova", programs = listOf(program.copy(hasArchive = false)), loading = false,
-                    unavailable = false, expanded = program.start, scale = UiScale(1f),
-                    clock = Clock { nowMillis }, onDescription = {},
-                    channel = LiveStream(streamId = "001", tvArchive = 1, tvArchiveDuration = 7),
-                )
-            }
-        }
-        rule.onNodeWithTag(tag).assertDoesNotExist()
-
         val onAir = program.copy(start = nowSeconds - 900L, end = nowSeconds + 900L, hasArchive = false)
+        // Un solo setContent per test: i casi si alternano cambiando lo stato.
+        var shown by mutableStateOf(listOf(program))
+        var expanded by mutableStateOf(program.start)
+
         rule.setContent {
             FvpTheme {
                 PlayerEpgOverlay(
-                    channelName = "Canale di prova", programs = listOf(onAir), loading = false,
-                    unavailable = false, expanded = onAir.start, scale = UiScale(1f),
+                    channelName = "Canale di prova", programs = shown, loading = false,
+                    unavailable = false, expanded = expanded, scale = UiScale(1f),
                     clock = Clock { nowMillis }, onDescription = {},
                     channel = LiveStream(streamId = "001", tvArchive = 1, tvArchiveDuration = 7),
                 )
             }
         }
+        rule.onNodeWithTag("epg_replay_${program.start}").assertExists()
+
+        rule.runOnIdle { shown = listOf(program.copy(hasArchive = false)) }
+        rule.waitForIdle()
+        rule.onNodeWithTag("epg_replay_${program.start}").assertDoesNotExist()
+
+        rule.runOnIdle { shown = listOf(onAir); expanded = onAir.start }
+        rule.waitForIdle()
         rule.onNodeWithTag("epg_replay_${onAir.start}").assertExists()
     }
 }
