@@ -277,4 +277,139 @@ class UpdateCheckerTest {
         runCurrent()
         assertEquals(2, client.calls)
     }
+
+    @Test
+    fun `ritorno in primo piano prima di 30 minuti non avvia una nuova richiesta`() = runTest {
+        val clock = FakeClock(startMillis = 1_000L)
+        val client = ScriptedUpdateClient(
+            mutableListOf(ReleaseCheckResult.Available(releaseFor(installedVersion))),
+        )
+        val checker = UpdateChecker(
+            client = client,
+            currentVersion = installedVersion,
+            scope = this,
+            isDebugBuild = false,
+            clock = clock,
+        )
+
+        // Apertura della schermata principale: primo controllo, app aggiornata.
+        assertNotNull(checker.checkIfDue())
+        runCurrent()
+        assertEquals(1, client.calls)
+        assertEquals(UpdateCheckState.UpToDate, checker.state.value)
+
+        // L'app resta in memoria e l'utente torna dopo 29 minuti: troppo
+        // presto, nessuna nuova richiesta.
+        clock.now += FOREGROUND_RECHECK_MIN_INTERVAL_MILLIS - 60_000L
+        assertNull(checker.checkOnForeground())
+        runCurrent()
+        assertEquals(1, client.calls)
+        assertEquals(UpdateCheckState.UpToDate, checker.state.value)
+    }
+
+    @Test
+    fun `ritorno in primo piano dopo 30 minuti avvia un controllo e segnala la versione`() = runTest {
+        val clock = FakeClock(startMillis = 1_000L)
+        val client = ScriptedUpdateClient(
+            mutableListOf(
+                ReleaseCheckResult.Available(releaseFor(installedVersion)),
+                ReleaseCheckResult.Available(releaseFor("1.0.3")),
+            ),
+        )
+        val checker = UpdateChecker(
+            client = client,
+            currentVersion = installedVersion,
+            scope = this,
+            isDebugBuild = false,
+            clock = clock,
+        )
+
+        // All'apertura l'app è aggiornata.
+        assertNotNull(checker.checkIfDue())
+        runCurrent()
+        assertEquals(UpdateCheckState.UpToDate, checker.state.value)
+
+        // Nel frattempo esce la 1.0.3 e l'app resta in memoria: al ritorno in
+        // primo piano, passati esattamente 30 minuti dal primo tentativo, il
+        // controllo riparte una volta sola.
+        clock.now += FOREGROUND_RECHECK_MIN_INTERVAL_MILLIS
+        assertNotNull(checker.checkOnForeground())
+        runCurrent()
+        assertEquals(2, client.calls)
+        assertEquals(UpdateCheckState.Available(releaseFor("1.0.3")), checker.state.value)
+        assertFalse(checker.isChecking.value)
+    }
+
+    @Test
+    fun `dopo un errore il ritorno in primo piano non riprova prima di 30 minuti`() = runTest {
+        val clock = FakeClock(startMillis = 1_000L)
+        val client = ScriptedUpdateClient(
+            mutableListOf(
+                ReleaseCheckResult.Failure,
+                ReleaseCheckResult.Available(releaseFor("1.0.3")),
+            ),
+        )
+        val checker = UpdateChecker(
+            client = client,
+            currentVersion = installedVersion,
+            scope = this,
+            isDebugBuild = false,
+            clock = clock,
+        )
+
+        assertNotNull(checker.checkIfDue())
+        runCurrent()
+        assertEquals(UpdateCheckState.Failed, checker.state.value)
+        assertEquals(1, client.calls)
+
+        // Il server non risponde e l'utente esce subito dalla app: al ritorno
+        // in primo piano dopo 29 minuti non si riprova subito dopo l'errore.
+        clock.now += FOREGROUND_RECHECK_MIN_INTERVAL_MILLIS - 60_000L
+        assertNull(checker.checkOnForeground())
+        runCurrent()
+        assertEquals(1, client.calls)
+        assertEquals(UpdateCheckState.Failed, checker.state.value)
+
+        // Passati i 30 minuti dall'ultimo tentativo il ritorno in primo piano
+        // può ripartire.
+        clock.now += 60_000L
+        assertNotNull(checker.checkOnForeground())
+        runCurrent()
+        assertEquals(2, client.calls)
+        assertEquals(UpdateCheckState.Available(releaseFor("1.0.3")), checker.state.value)
+    }
+
+    @Test
+    fun `nessuna richiesta doppia al ritorno in primo piano mentre un controllo e in corso`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val client = GatedUpdateClient(
+            gate = gate,
+            result = ReleaseCheckResult.Available(releaseFor("1.0.3")),
+        )
+        val clock = FakeClock(startMillis = 1_000L)
+        val checker = UpdateChecker(
+            client = client,
+            currentVersion = installedVersion,
+            scope = this,
+            isDebugBuild = false,
+            clock = clock,
+        )
+
+        // Il controllo dell'apertura è ancora in volo quando l'app torna in
+        // primo piano (qui dopo 30 minuti dall'inizio del tentativo): il
+        // controllo in corso è sufficiente, non ne parte un secondo.
+        assertNotNull(checker.checkNow())
+        runCurrent()
+        assertTrue(checker.isRequestInFlight)
+        clock.now += FOREGROUND_RECHECK_MIN_INTERVAL_MILLIS
+        assertNull(checker.checkOnForeground())
+        runCurrent()
+        assertEquals(1, client.calls)
+
+        gate.complete(Unit)
+        runCurrent()
+        assertEquals(1, client.calls)
+        assertEquals(UpdateCheckState.Available(releaseFor("1.0.3")), checker.state.value)
+        assertFalse(checker.isRequestInFlight)
+    }
 }
