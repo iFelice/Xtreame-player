@@ -129,6 +129,7 @@ fun FvpMainScreen(
     maxConnections: Int?,
     activeConnections: Int?,
     allowedOutputFormats: List<String> = emptyList(),
+    serverTimezone: String? = null,
     scale: UiScale,
     accessViewModel: AccessViewModel,
     onSignOut: () -> Unit,
@@ -285,6 +286,7 @@ fun FvpMainScreen(
         username = currentUsername,
         password = currentPassword,
         allowedOutputFormats = allowedOutputFormats,
+        serverTimezone = serverTimezone,
         source = source,
         autoResume = autoResume,
     )

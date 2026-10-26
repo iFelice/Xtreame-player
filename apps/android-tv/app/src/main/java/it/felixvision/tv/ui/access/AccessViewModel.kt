@@ -54,6 +54,7 @@ data class AccountSummary(
     val activeConnections: Int?,
     /** Formati live ammessi dall'account, usati per scegliere `.ts` o `.m3u8`. */
     val allowedOutputFormats: List<String> = emptyList(),
+    val serverTimezone: String? = null,
 )
 
 /** Valori da riportare nei campi del modulo, per esempio dopo un abbinamento fallito. */
@@ -506,6 +507,7 @@ private fun XtreamAccount.toSummary(): AccountSummary = AccountSummary(
     maxConnections = maxConnections,
     activeConnections = activeConnections,
     allowedOutputFormats = allowedOutputFormats,
+    serverTimezone = serverTimezone,
 )
 
 internal fun statusLabel(status: AccountStatus): String = when (status) {

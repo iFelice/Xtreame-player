@@ -173,6 +173,7 @@ data class LiveStream(
     @SerialName("epg_channel_id") val epgChannelId: String? = null,
     @Serializable(with = NullableFlexibleStringSerializer::class) val added: String? = null,
     @Serializable(with = NullableFlexibleIntSerializer::class) @SerialName("tv_archive") val tvArchive: Int? = null,
+    @Serializable(with = NullableFlexibleIntSerializer::class) @SerialName("tv_archive_duration") val tvArchiveDuration: Int? = null,
 )
 
 @Serializable

@@ -89,6 +89,7 @@ class XtreamClientTest {
         assertEquals(1_800_000_000L, account.expiresAtEpochSeconds ?: -1L)
         assertEquals(2, account.maxConnections)
         assertEquals(1, account.activeConnections)
+        assertEquals("Europe/Rome", account.serverTimezone)
 
         val request = server.takeRequest()
         assertEquals("/player_api.php?username=demo&password=demo", request.path)

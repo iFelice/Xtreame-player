@@ -46,6 +46,15 @@ class CatalogModelsTest {
     }
 
     @Test
+    fun `live stream conserva disponibilita e durata archive`() {
+        val streams = json.decodeFromString<List<LiveStream>>(
+            """[{"name":"Canale 1","stream_id":"001","tv_archive":"1","tv_archive_duration":"7"}]""",
+        )
+        assertEquals(1, streams.single().tvArchive)
+        assertEquals(7, streams.single().tvArchiveDuration)
+    }
+
+    @Test
     fun `series con last_modified testuale e serie_id numerico`() {
         val seriesJson = """
             [

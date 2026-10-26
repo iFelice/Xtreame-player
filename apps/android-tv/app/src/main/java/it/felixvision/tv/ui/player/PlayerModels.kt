@@ -46,6 +46,7 @@ data class PlayerSession(
     val password: String,
     val allowedOutputFormats: List<String>,
     val source: PlaybackSource,
+    val serverTimezone: String? = null,
     /**
      * Vero quando il contenuto arriva da "Continua a guardare": la posizione
      * salvata riparte subito, senza la finestra "Riprendi".
@@ -130,6 +131,7 @@ data class PlayerUiState(
     val epgPrograms: List<EpgProgram> = emptyList(),
     val epgUnavailable: Boolean = false,
     val epgExpanded: Long? = null,
+    val isReplay: Boolean = false,
 ) {
     val progressFraction: Float
         get() = if (durationMillis <= 0L) {
