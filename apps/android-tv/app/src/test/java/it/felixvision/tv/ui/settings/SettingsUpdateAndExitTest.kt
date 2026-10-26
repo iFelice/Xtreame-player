@@ -285,9 +285,9 @@ class SettingsUpdateAndExitTest {
         assertNotNull(available)
         assertEquals("1.0.10", available!!.release.version)
 
-        // Caso B: installata 1.0.10, remota 1.0.9 -> App aggiornata
+        // Caso B: installata 1.0.2, remota 1.0.1 -> App aggiornata
         mockServer.enqueue(
-            MockResponse().setResponseCode(200).setBody(latestJsonWithApk("1.0.9", apkUrl, 4096L)),
+            MockResponse().setResponseCode(200).setBody(latestJsonWithApk("1.0.1", apkUrl, 4096L)),
         )
         vmNewer.checkForUpdates()
         awaitCondition { vmNewer.ui.value.updateStatus is AppUpdateStatus.UpToDate }
