@@ -23,8 +23,10 @@ import it.felixvision.tv.data.store.EncryptedCredentialStore
 import it.felixvision.tv.data.store.KeystoreCredentialCipher
 import it.felixvision.tv.data.update.AndroidUpdateInstaller
 import it.felixvision.tv.data.update.GithubUpdateClient
+import it.felixvision.tv.data.update.UpdateChecker
 import it.felixvision.tv.data.update.UpdateClient
 import it.felixvision.tv.data.update.UpdateInstaller
+import it.felixvision.tv.data.update.isDebugVersion
 import it.felixvision.tv.data.volume.VolumeStore
 import it.felixvision.tv.data.xtream.XtreamClient
 import java.io.File
@@ -110,6 +112,21 @@ class AppContainer(
 
     val updateInstaller: UpdateInstaller by lazy {
         updateInstallerOverride ?: AndroidUpdateInstaller(context = context)
+    }
+
+    /**
+     * Controllo unico degli aggiornamenti, a livello di app: un solo flusso di
+     * stato osservato sia dal menu laterale sia dalle Impostazioni, così non ci
+     * sono richieste duplicate. Vive nello scope di applicazione.
+     */
+    val updateChecker: UpdateChecker by lazy {
+        UpdateChecker(
+            client = updateClient,
+            currentVersion = BuildConfig.VERSION_NAME,
+            scope = applicationScope,
+            isDebugBuild = BuildConfig.DEBUG || isDebugVersion(BuildConfig.VERSION_NAME),
+            clock = clock,
+        )
     }
 
     val credentialStore: CredentialStore by lazy {

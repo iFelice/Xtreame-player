@@ -49,6 +49,7 @@ import it.felixvision.tv.data.playback.buildEpisodeQueue
 import it.felixvision.tv.data.playback.indexOfEpisode
 import it.felixvision.tv.data.progress.ProgressKeys
 import it.felixvision.tv.data.progress.WatchProgress
+import it.felixvision.tv.data.update.UpdateCheckState
 import it.felixvision.tv.ui.access.AccessViewModel
 import it.felixvision.tv.ui.catalog.CatalogViewModel
 import it.felixvision.tv.ui.catalog.ContinueWatchingSection
@@ -215,6 +216,14 @@ fun FvpMainScreen(
         currentUsername,
     ) {
         value = container.continueWatchingStore.getAll(currentServer, currentUsername)
+    }
+
+    // Aggiornamenti dell'app: stato condiviso con le Impostazioni (una sola
+    // fonte, nessuna richiesta duplicata) e controllo all'apertura della
+    // schermata principale, poi ogni 12 ore finché l'app resta aperta.
+    val updateCheckState by container.updateChecker.state.collectAsState()
+    LaunchedEffect(container, sessionId) {
+        container.updateChecker.startPeriodicChecks()
     }
 
     LaunchedEffect(Unit) {
@@ -463,6 +472,9 @@ fun FvpMainScreen(
         drawerState = drawerState,
         contentFocusRequester = contentFocusRequester,
         drawerFocusHandle = drawerFocusHandle,
+        // Pallino arancio su Impostazioni finché l'app non risulta aggiornata;
+        // un errore di controllo non mostra nulla nel menu.
+        updateAvailable = updateCheckState is UpdateCheckState.Available,
     ) {
         // Sfondo unico dell'area a destra del menu (colonna categorie e contenuti
         // compresi): base #1C1C1E e due aloni verdi molto tenui.

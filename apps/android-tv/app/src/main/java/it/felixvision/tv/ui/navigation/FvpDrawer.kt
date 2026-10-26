@@ -5,6 +5,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -46,10 +47,17 @@ import androidx.tv.material3.Text
 import androidx.tv.material3.rememberDrawerState
 import it.felixvision.tv.R
 import it.felixvision.tv.ui.components.UiScale
+import it.felixvision.tv.ui.components.UpdateBadge
 import it.felixvision.tv.ui.theme.FvpColors
 import it.felixvision.tv.ui.theme.drawerClockTop
 import it.felixvision.tv.ui.theme.drawerItemHeight
 import it.felixvision.tv.ui.theme.drawerVerticalPadding
+
+/** Tag di test del pallino di aggiornamento sull'icona Impostazioni. */
+const val DRAWER_UPDATE_BADGE_ICON_TAG = "drawer_update_badge_icon"
+
+/** Tag di test del pallino di aggiornamento accanto all'etichetta, a menu aperto. */
+const val DRAWER_UPDATE_BADGE_LABEL_TAG = "drawer_update_badge_label"
 
 enum class DrawerSection(
     val label: String,
@@ -80,6 +88,7 @@ fun FvpNavigationDrawer(
     drawerState: DrawerState = rememberDrawerState(initialValue = DrawerValue.Closed),
     contentFocusRequester: FocusRequester = remember { FocusRequester() },
     drawerFocusHandle: DrawerFocusHandle? = null,
+    updateAvailable: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val itemFocusRequesters = remember { DrawerSection.entries.associateWith { FocusRequester() } }
@@ -147,6 +156,10 @@ fun FvpNavigationDrawer(
             ) {
                 DrawerSection.entries.forEach { section ->
                     val isSelected = section == selected
+                    // Pallino di aggiornamento disponibile solo su Impostazioni:
+                    // è disegno puro, non è focalizzabile e sta dentro la voce,
+                    // quindi non cambia la larghezza calcolata del menu.
+                    val showUpdateBadge = updateAvailable && section == DrawerSection.Impostazioni
                     // NavigationDrawerItem forces its own width internally. Keep its ListItem
                     // primitive (and closed dimensions), but let the open width fit the labels.
                     // Voce compatta: altezza ridotta dal ListItem denso.
@@ -176,19 +189,39 @@ fun FvpNavigationDrawer(
                                     tint = if (isSelected) section.activeColor else FvpColors.Inactive,
                                     modifier = Modifier.size(scale.dp(20f))
                                 )
+                                if (showUpdateBadge) {
+                                    // In alto a destra dell'icona, a menu chiuso
+                                    // come a menu aperto.
+                                    UpdateBadge(
+                                        scale = scale,
+                                        tag = DRAWER_UPDATE_BADGE_ICON_TAG,
+                                        modifier = Modifier.align(Alignment.TopEnd),
+                                    )
+                                }
                             }
                         },
                         headlineContent = {
                             if (expanded) {
-                                Text(
-                                    text = section.label,
-                                    style = labelStyle,
-                                    color = if (isSelected) section.activeColor else FvpColors.TextSecondary,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    maxLines = 1,
-                                    softWrap = false,
-                                    modifier = Modifier.padding(end = extraInset),
-                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = section.label,
+                                        style = labelStyle,
+                                        color = if (isSelected) section.activeColor else FvpColors.TextSecondary,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        modifier = Modifier.padding(end = extraInset),
+                                    )
+                                    if (showUpdateBadge) {
+                                        // A menu aperto il pallino compare anche
+                                        // accanto all'etichetta "Impostazioni".
+                                        UpdateBadge(
+                                            scale = scale,
+                                            tag = DRAWER_UPDATE_BADGE_LABEL_TAG,
+                                            modifier = Modifier.padding(start = scale.dp(6f)),
+                                        )
+                                    }
+                                }
                             }
                         },
                         modifier = Modifier

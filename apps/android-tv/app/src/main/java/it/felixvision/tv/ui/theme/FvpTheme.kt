@@ -35,6 +35,14 @@ object FvpColors {
      */
     val PlayerOverlay = Surface.copy(alpha = 0.78f)
 
+    /**
+     * Pallino di notifica "aggiornamento disponibile" (menu laterale e riga
+     * della versione nelle Impostazioni): arancio pieno su un bordo sottile del
+     * colore di fondo, che lo stacca dall'icona su cui è appoggiato.
+     */
+    val UpdateBadge = Color(0xFFFF9F0A)
+    val UpdateBadgeBorder = Color(0xFF1C1C1E)
+
     // Colori specifici per le voci del menu laterale (PR2)
     val LiveActive = Color(0xFFFF9F0A)
     val FilmActive = Color(0xFF10B981)
