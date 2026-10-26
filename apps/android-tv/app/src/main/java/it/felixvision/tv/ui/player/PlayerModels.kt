@@ -4,6 +4,7 @@ package it.felixvision.tv.ui.player
 
 import androidx.annotation.OptIn
 import androidx.media3.common.TrackGroup
+import it.felixvision.tv.data.epg.EpgProgram
 import it.felixvision.tv.data.catalog.Category
 import it.felixvision.tv.data.catalog.LiveStream
 import it.felixvision.tv.data.catalog.VodStream
@@ -124,6 +125,11 @@ data class PlayerUiState(
     val volumeLevel: Int = PlayerVolume.DEFAULT_LEVEL,
     /** Vero mentre è aperto il pannello del volume. */
     val volumePanelVisible: Boolean = false,
+    val epgVisible: Boolean = false,
+    val epgLoading: Boolean = false,
+    val epgPrograms: List<EpgProgram> = emptyList(),
+    val epgUnavailable: Boolean = false,
+    val epgExpanded: Long? = null,
 ) {
     val progressFraction: Float
         get() = if (durationMillis <= 0L) {
@@ -135,6 +141,7 @@ data class PlayerUiState(
     val hasModalOverlay: Boolean
         get() = trackPanel != null ||
             channelListVisible ||
+            epgVisible ||
             errorMessage != null ||
             resumePositionMillis != null ||
             nextEpisode != null
