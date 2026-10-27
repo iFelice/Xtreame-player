@@ -2,6 +2,7 @@
 
 package it.felixvision.tv.ui.detail
 
+import android.os.SystemClock
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -124,7 +125,7 @@ fun SeriesDetailOverlay(
     var showPlotDialog by remember { mutableStateOf(false) }
     var hasPlotOverflow by remember { mutableStateOf(false) }
     var watchedMessage by remember { mutableStateOf<String?>(null) }
-    var episodesHaveFocus by remember { mutableStateOf(false) }
+    var episodesListHasFocus by remember { mutableStateOf(false) }
     var lastFocusedEpisodeId by remember { mutableStateOf<String?>(null) }
     var headerDownFocus by remember { mutableStateOf<FocusRequester?>(null) }
     var contentFocusDone by remember { mutableStateOf(false) }
@@ -132,6 +133,7 @@ fun SeriesDetailOverlay(
     var episodeFocusToken by remember { mutableIntStateOf(0) }
     var episodeFocusId by remember { mutableStateOf<String?>(null) }
     var seasonFocusToken by remember { mutableIntStateOf(0) }
+    var lastBackHandledAtMillis by remember { mutableStateOf<Long?>(null) }
     val favoriteFocus = remember { FocusRequester() }
     val readMoreFocus = remember { FocusRequester() }
     val closeFocus = remember { FocusRequester() }
@@ -210,12 +212,10 @@ fun SeriesDetailOverlay(
     fun requestEpisodeFocus(id: String) {
         episodeFocusId = id
         lastFocusedEpisodeId = id
-        episodesHaveFocus = true
         episodeFocusToken++
     }
 
     fun requestSeasonFocus() {
-        episodesHaveFocus = false
         seasonFocusToken++
     }
 
@@ -229,14 +229,12 @@ fun SeriesDetailOverlay(
         if (isLoading) return@LaunchedEffect
         if (error != null) {
             contentFocusDone = false
-            episodesHaveFocus = false
             withFrameNanos { }
             try { retryFocus.requestFocus() } catch (_: Exception) {}
             return@LaunchedEffect
         }
         if (derivedSeasons.isEmpty()) {
             contentFocusDone = false
-            episodesHaveFocus = false
             withFrameNanos { }
             try { closeFocus.requestFocus() } catch (_: Exception) {}
             return@LaunchedEffect
@@ -289,7 +287,6 @@ fun SeriesDetailOverlay(
         }
         if (ok) {
             lastFocusedEpisodeId = id
-            episodesHaveFocus = true
             if (id == episodesForSelected.firstOrNull()?.id) {
                 headerDownFocus = requester
             }
@@ -305,19 +302,18 @@ fun SeriesDetailOverlay(
         if (index >= 0) {
             try { seasonsListState.scrollToItem(index) } catch (_: Exception) {}
         }
-        withFrameNanos { }
+
         val requester = seasonFocusRequesters[season]
-        var ok = try { requester?.requestFocus() == true } catch (_: Exception) { false }
-        if (!ok) {
-            withFrameNanos { }
-            ok = try { requester?.requestFocus() == true } catch (_: Exception) { false }
+        var ok = false
+        var attempts = 0
+        while (!ok && attempts < 5) {
+            attempts++
+            val isComposed = seasonsListState.layoutInfo.visibleItemsInfo.any { it.key == season }
+            if (isComposed) {
+                ok = try { requester?.requestFocus() == true } catch (_: Exception) { false }
+            }
+            if (!ok) withFrameNanos { }
         }
-        if (!ok) {
-            delay(32L)
-            withFrameNanos { }
-            ok = try { requester?.requestFocus() == true } catch (_: Exception) { false }
-        }
-        episodesHaveFocus = false
         if (ok) {
             if (season == firstSeasonNumber) headerDownFocus = requester
         } else {
@@ -327,12 +323,10 @@ fun SeriesDetailOverlay(
         }
     }
 
-    var backConsumed by remember { mutableStateOf(false) }
     var plotWasOpen by remember { mutableStateOf(false) }
     LaunchedEffect(showPlotDialog) {
         if (showPlotDialog) {
             plotWasOpen = true
-            episodesHaveFocus = false
             return@LaunchedEffect
         }
         if (!plotWasOpen) return@LaunchedEffect
@@ -341,26 +335,25 @@ fun SeriesDetailOverlay(
         if (hasPlotOverflow) {
             try { readMoreFocus.requestFocus() } catch (_: Exception) {}
         }
-        episodesHaveFocus = false
     }
 
     fun handleBack() {
-        // BackHandler e onDismissRequest possono arrivare insieme: il secondo,
-        // nello stesso frame, non deve chiudere subito dopo il ritorno alle stagioni.
-        if (backConsumed) return
-        backConsumed = true
-        scope.launch {
-            withFrameNanos { }
-            backConsumed = false
-        }
         when {
             showPlotDialog -> showPlotDialog = false
-            episodesHaveFocus && effectiveSeason != null -> {
-                episodesHaveFocus = false
-                requestSeasonFocus()
-            }
+            episodesListHasFocus && effectiveSeason != null -> requestSeasonFocus()
             else -> onDismiss()
         }
+    }
+
+    fun handleBackFromKey() {
+        lastBackHandledAtMillis = SystemClock.uptimeMillis()
+        handleBack()
+    }
+
+    fun handleBackFromSystem() {
+        val now = SystemClock.uptimeMillis()
+        val lastKeyHandledAt = lastBackHandledAtMillis
+        if (lastKeyHandledAt == null || now - lastKeyHandledAt >= 300L) handleBack()
     }
 
     fun selectSeason(seasonNumber: String) {
@@ -375,15 +368,31 @@ fun SeriesDetailOverlay(
     }
 
     Dialog(
-        onDismissRequest = { handleBack() },
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+        // Back è gestito dal BackHandler; onDismissRequest resta per il tap fuori.
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            dismissOnBackPress = false,
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false,
+        )
     ) {
-        BackHandler(enabled = true) { handleBack() }
+        BackHandler(enabled = true) { handleBackFromSystem() }
         Box(
             modifier = modifier
                 .fillMaxSize()
                 .background(FvpColors.Background.copy(alpha = 0.85f))
                 .padding(scale.dp(28f))
+                .onPreviewKeyEvent { event ->
+                    if (event.key != Key.Back) return@onPreviewKeyEvent false
+                    when (event.type) {
+                        KeyEventType.KeyDown -> true
+                        KeyEventType.KeyUp -> {
+                            handleBackFromKey()
+                            true
+                        }
+                        else -> false
+                    }
+                }
                 .testTag(rootTestTag),
             contentAlignment = Alignment.Center
         ) {
@@ -482,7 +491,9 @@ fun SeriesDetailOverlay(
                                     .fillMaxWidth()
                                     .weight(1f)
                                     .onFocusEvent { state ->
-                                        if (state.hasFocus) episodesHaveFocus = false
+                                        if (state.hasFocus) {
+                                            episodesListHasFocus = false
+                                        }
                                     }
                                     .onPreviewKeyEvent { event ->
                                         if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
@@ -509,7 +520,7 @@ fun SeriesDetailOverlay(
                                     }
                                     val countLabel = episodeCountLabel(season.episodeCount)
                                     DenseListItem(
-                                        selected = false,
+                                        selected = isSelected,
                                         onClick = { selectSeason(season.seasonNumber) },
                                         headlineContent = {
                                             Text(
@@ -540,7 +551,6 @@ fun SeriesDetailOverlay(
                                                         .height(scale.dp(22f))
                                                         .clip(RoundedCornerShape(scale.dp(2f)))
                                                         .background(FvpColors.Green)
-                                                        .testTag("detail_season_selected_${season.seasonNumber}")
                                                 )
                                             }
                                         } else {
@@ -551,7 +561,6 @@ fun SeriesDetailOverlay(
                                             .focusRequester(fr)
                                             .onFocusChanged { state ->
                                                 if (state.isFocused) {
-                                                    episodesHaveFocus = false
                                                     if (isFirst) headerDownFocus = fr
                                                 }
                                             }
@@ -570,6 +579,11 @@ fun SeriesDetailOverlay(
                                             containerColor = FvpColors.SurfaceElevated,
                                             contentColor = FvpColors.TextPrimary,
                                             focusedContainerColor = FvpColors.SurfaceElevated,
+                                            focusedContentColor = FvpColors.TextPrimary,
+                                            selectedContainerColor = FvpColors.SurfaceElevated,
+                                            selectedContentColor = FvpColors.TextPrimary,
+                                            focusedSelectedContainerColor = FvpColors.SurfaceElevated,
+                                            focusedSelectedContentColor = FvpColors.TextPrimary,
                                         ),
                                         scale = ListItemDefaults.scale(focusedScale = 1.04f),
                                         border = ListItemDefaults.border(
@@ -706,13 +720,12 @@ fun SeriesDetailOverlay(
                                                 .fillMaxWidth()
                                                 .weight(1f)
                                                 .onFocusEvent { state ->
-                                                    episodesHaveFocus = state.hasFocus
+                                                    episodesListHasFocus = state.hasFocus
                                                 }
                                                 .onPreviewKeyEvent { event ->
                                                     if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                                                     when (event.key) {
                                                         Key.DirectionLeft -> {
-                                                            episodesHaveFocus = false
                                                             requestSeasonFocus()
                                                             true
                                                         }
@@ -742,7 +755,6 @@ fun SeriesDetailOverlay(
                                                         .onFocusEvent { state ->
                                                             if (state.hasFocus) {
                                                                 lastFocusedEpisodeId = ep.id
-                                                                episodesHaveFocus = true
                                                                 if (isFirst) headerDownFocus = fr
                                                             }
                                                         }
@@ -872,14 +884,30 @@ private fun PlotDialog(
     val density = LocalDensity.current
     val halfViewportPx = with(density) { scale.dp(180f).toPx() }
     val closeFocus = remember { FocusRequester() }
+    var lastBackHandledAtMillis by remember { mutableStateOf<Long?>(null) }
+
+    fun closeBackFromKey() {
+        lastBackHandledAtMillis = SystemClock.uptimeMillis()
+        onClose()
+    }
+
+    fun closeBackFromSystem() {
+        val now = SystemClock.uptimeMillis()
+        val lastKeyHandledAt = lastBackHandledAtMillis
+        if (lastKeyHandledAt == null || now - lastKeyHandledAt >= 300L) onClose()
+    }
 
     LaunchedEffect(Unit) { closeFocus.requestFocus() }
 
     Dialog(
         onDismissRequest = onClose,
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+        properties = DialogProperties(
+            dismissOnBackPress = false,
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false,
+        )
     ) {
-        BackHandler { onClose() }
+        BackHandler { closeBackFromSystem() }
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -887,21 +915,33 @@ private fun PlotDialog(
                 .padding(scale.dp(24f))
                 .testTag("detail_plot_dialog")
                 .onPreviewKeyEvent { event ->
-                    if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                    when (event.key) {
-                        Key.DirectionDown -> {
-                            if (scrollState.canScrollForward) {
-                                scope.launch { scrollState.animateScrollBy(halfViewportPx) }
+                    if (event.key == Key.Back) {
+                        when (event.type) {
+                            KeyEventType.KeyDown -> true
+                            KeyEventType.KeyUp -> {
+                                closeBackFromKey()
                                 true
-                            } else false
+                            }
+                            else -> false
                         }
-                        Key.DirectionUp -> {
-                            if (scrollState.canScrollBackward) {
-                                scope.launch { scrollState.animateScrollBy(-halfViewportPx) }
-                                true
-                            } else false
+                    } else if (event.type != KeyEventType.KeyDown) {
+                        false
+                    } else {
+                        when (event.key) {
+                            Key.DirectionDown -> {
+                                if (scrollState.canScrollForward) {
+                                    scope.launch { scrollState.animateScrollBy(halfViewportPx) }
+                                    true
+                                } else false
+                            }
+                            Key.DirectionUp -> {
+                                if (scrollState.canScrollBackward) {
+                                    scope.launch { scrollState.animateScrollBy(-halfViewportPx) }
+                                    true
+                                } else false
+                            }
+                            else -> false
                         }
-                        else -> false
                     }
                 },
             contentAlignment = Alignment.Center

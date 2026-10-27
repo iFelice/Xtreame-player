@@ -1,7 +1,8 @@
 # Pubblicazione dell'app Android TV
 
 Questa procedura pubblica l'APK firmato di FelixVP nel repository pubblico
-`iFelice/felixvp-releases`. Il link stabile da inserire in Downloader è:
+`iFelice/felixvp-releases`. Le PR mostrano **Android TV CI**: si unisce solo con
+la spunta verde. Il link stabile da inserire in Downloader è:
 
 ```text
 https://github.com/iFelice/felixvp-releases/releases/latest/download/FelixVP.apk
