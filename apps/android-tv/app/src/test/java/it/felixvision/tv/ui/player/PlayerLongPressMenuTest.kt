@@ -1,5 +1,6 @@
 package it.felixvision.tv.ui.player
 
+import android.view.KeyEvent as AndroidKeyEvent
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -8,16 +9,19 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performKeyPress
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.theme.FvpTheme
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -27,9 +31,10 @@ import org.robolectric.annotation.Config
 /**
  * Menu della pressione lunga nel player Live: due voci (guida del canale e
  * "I miei canali"), con la voce giusta a seconda che il canale sia già nella
- * lista personale. Niente simulazione del telecomando: lo stato osservato è
- * cambiato con `runOnIdle` e i pulsanti tv-material si attivano con l'azione
- * di click.
+ * lista personale. Nel primo test lo stato osservato è cambiato con
+ * `runOnIdle` e i pulsanti tv-material si attivano con l'azione di click; il
+ * secondo invia eventi OK grezzi per provare il blocco del tasto ancora premuto
+ * all'apertura.
  */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [34], qualifiers = "w1920dp-h1080dp-land-television-mdpi")
@@ -84,4 +89,48 @@ class PlayerLongPressMenuTest {
         rule.waitForIdle()
         assertTrue(myChannelsOpened)
     }
+
+    @Test
+    fun `OK tenuto premuto all apertura non attiva la guida e una nuova pressione si`() {
+        var guideCalls = 0
+        var myChannelsCalls = 0
+
+        rule.setContent {
+            FvpTheme {
+                PlayerLongPressMenu(
+                    channelName = "Nebbia TV",
+                    inMyChannels = false,
+                    scale = scale,
+                    onGuide = { guideCalls++ },
+                    onMyChannels = { myChannelsCalls++ },
+                    onDismiss = {},
+                )
+            }
+        }
+        rule.waitForIdle()
+
+        val guide = rule.onNodeWithTag("player_long_press_guide")
+        guide.assertIsFocused()
+
+        // Il menu si è aperto con OK ancora giù: le ripetizioni e il rilascio
+        // arrivano alla finestra e vengono consumati senza attivare la guida.
+        assertTrue(guide.performKeyPress(okKey(AndroidKeyEvent.ACTION_DOWN, repeatCount = 3)))
+        assertTrue(guide.performKeyPress(okKey(AndroidKeyEvent.ACTION_UP)))
+        rule.waitForIdle()
+        assertEquals(0, guideCalls)
+        guide.assertIsFocused()
+
+        // Pressione completa successiva: la guida si apre.
+        guide.performKeyPress(okKey(AndroidKeyEvent.ACTION_DOWN))
+        guide.performKeyPress(okKey(AndroidKeyEvent.ACTION_UP))
+        rule.waitForIdle()
+        assertEquals(1, guideCalls)
+        assertEquals(0, myChannelsCalls)
+    }
+
+    /** Evento OK del telecomando (DPAD_CENTER) con il conteggio di ripetizioni dato. */
+    private fun okKey(action: Int, repeatCount: Int = 0): KeyEvent =
+        KeyEvent(
+            AndroidKeyEvent(0L, 0L, action, AndroidKeyEvent.KEYCODE_DPAD_CENTER, repeatCount),
+        )
 }
