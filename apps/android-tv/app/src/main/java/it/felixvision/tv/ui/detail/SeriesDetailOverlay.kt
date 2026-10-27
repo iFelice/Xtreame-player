@@ -50,6 +50,8 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -540,7 +542,6 @@ fun SeriesDetailOverlay(
                                                         .height(scale.dp(22f))
                                                         .clip(RoundedCornerShape(scale.dp(2f)))
                                                         .background(FvpColors.Green)
-                                                        .testTag("detail_season_selected_${season.seasonNumber}")
                                                 )
                                             }
                                         } else {
@@ -555,6 +556,7 @@ fun SeriesDetailOverlay(
                                                     if (isFirst) headerDownFocus = fr
                                                 }
                                             }
+                                            .semantics { selected = isSelected }
                                             .focusProperties {
                                                 if (isFirst) up = upFromLists
                                                 if (isLast) down = FocusRequester.Cancel

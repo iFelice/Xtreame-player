@@ -15,6 +15,8 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotFocused
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -84,8 +86,8 @@ class SeriesDetailOverlayTest {
 
         rule.onNodeWithTag("serie_detail_root").assertIsDisplayed()
         rule.onNodeWithTag("detail_episodes_heading").assertTextEquals("Episodi · Stagione 1")
-        rule.onNodeWithTag("detail_season_selected_1").assertExists()
-        rule.onNodeWithTag("detail_season_selected_2").assertDoesNotExist()
+        rule.onNodeWithTag("detail_season_1").assertIsSelected()
+        rule.onNodeWithTag("detail_season_2").assertIsNotSelected()
         rule.onNodeWithTag("detail_season_1").assertIsFocused()
         rule.onNodeWithTag("serie_seasons_list").assertExists()
         rule.onNodeWithTag("serie_episodes_list").assertExists()
@@ -130,8 +132,8 @@ class SeriesDetailOverlayTest {
         settle()
 
         rule.onNodeWithTag("detail_episodes_heading").assertTextEquals("Episodi · Stagione 2")
-        rule.onNodeWithTag("detail_season_selected_2").assertExists()
-        rule.onNodeWithTag("detail_season_selected_1").assertDoesNotExist()
+        rule.onNodeWithTag("detail_season_2").assertIsSelected()
+        rule.onNodeWithTag("detail_season_1").assertIsNotSelected()
         rule.onNodeWithTag("detail_episode_s2e2").assertIsFocused()
         rule.onNodeWithTag("detail_season_2").assertIsNotFocused()
         rule.onNodeWithTag("detail_episode_s2e1").assertExists()
@@ -156,7 +158,7 @@ class SeriesDetailOverlayTest {
         settle()
 
         rule.onNodeWithTag("detail_episodes_heading").assertTextEquals("Episodi · Stagione 2")
-        rule.onNodeWithTag("detail_season_selected_2").assertExists()
+        rule.onNodeWithTag("detail_season_2").assertIsSelected()
         rule.onNodeWithTag("detail_episode_s2e2").assertIsFocused()
         rule.onNodeWithTag("detail_episode_s1e1").assertDoesNotExist()
     }
@@ -188,7 +190,7 @@ class SeriesDetailOverlayTest {
         settle()
 
         rule.onNodeWithTag("detail_episodes_heading").assertTextEquals("Episodi · Stagione 2")
-        rule.onNodeWithTag("detail_season_selected_2").assertExists()
+        rule.onNodeWithTag("detail_season_2").assertIsSelected()
         rule.onNodeWithTag("detail_episode_s2e1").assertIsFocused()
         rule.onNodeWithTag("detail_episode_s2e2").assertExists()
         rule.onNodeWithTag("detail_episode_s1e3").assertDoesNotExist()
@@ -207,8 +209,8 @@ class SeriesDetailOverlayTest {
         settle()
         rule.onNodeWithTag("detail_season_2").assertIsFocused()
         rule.onNodeWithTag("detail_episodes_heading").assertTextEquals("Episodi · Stagione 1")
-        rule.onNodeWithTag("detail_season_selected_1").assertExists()
-        rule.onNodeWithTag("detail_season_selected_2").assertDoesNotExist()
+        rule.onNodeWithTag("detail_season_1").assertIsSelected()
+        rule.onNodeWithTag("detail_season_2").assertIsNotSelected()
         rule.onNodeWithTag("detail_episode_s1e1").assertExists()
         rule.onNodeWithTag("detail_episode_s1e3").assertExists()
         rule.onNodeWithTag("detail_episode_s2e1").assertDoesNotExist()
@@ -218,8 +220,8 @@ class SeriesDetailOverlayTest {
         rule.onNodeWithTag("detail_season_2").performSemanticsAction(SemanticsActions.OnClick)
         settle()
         rule.onNodeWithTag("detail_episodes_heading").assertTextEquals("Episodi · Stagione 2")
-        rule.onNodeWithTag("detail_season_selected_2").assertExists()
-        rule.onNodeWithTag("detail_season_selected_1").assertDoesNotExist()
+        rule.onNodeWithTag("detail_season_2").assertIsSelected()
+        rule.onNodeWithTag("detail_season_1").assertIsNotSelected()
         rule.onNodeWithTag("detail_episode_s2e1").assertExists()
         rule.onNodeWithTag("detail_episode_s2e2").assertExists()
         rule.onNodeWithTag("detail_episode_s1e1").assertDoesNotExist()
@@ -237,7 +239,7 @@ class SeriesDetailOverlayTest {
         rule.onNodeWithTag("detail_season_1").performSemanticsAction(SemanticsActions.OnClick)
         settle()
         rule.onNodeWithTag("detail_episodes_heading").assertTextEquals("Episodi · Stagione 1")
-        rule.onNodeWithTag("detail_season_selected_1").assertExists()
+        rule.onNodeWithTag("detail_season_1").assertIsSelected()
         rule.onNodeWithTag("detail_episode_s1e1").assertIsFocused()
         rule.onNodeWithTag("detail_episode_s1e2").assertExists()
         rule.onNodeWithTag("detail_episode_s1e3").assertExists()
@@ -246,7 +248,7 @@ class SeriesDetailOverlayTest {
         rule.onNodeWithTag("detail_season_2").performSemanticsAction(SemanticsActions.OnClick)
         settle()
         rule.onNodeWithTag("detail_episodes_heading").assertTextEquals("Episodi · Stagione 2")
-        rule.onNodeWithTag("detail_season_selected_2").assertExists()
+        rule.onNodeWithTag("detail_season_2").assertIsSelected()
         rule.onNodeWithTag("detail_episode_s2e1").assertExists()
         rule.onNodeWithTag("detail_episode_s2e2").assertIsFocused()
         rule.onNodeWithTag("detail_episode_s1e1").assertDoesNotExist()
@@ -272,7 +274,7 @@ class SeriesDetailOverlayTest {
         rule.onNodeWithTag("serie_detail_root").assertIsDisplayed()
         rule.onNodeWithTag("detail_season_2").assertIsFocused()
         rule.onNodeWithTag("detail_episodes_heading").assertTextEquals("Episodi · Stagione 2")
-        rule.onNodeWithTag("detail_season_selected_2").assertExists()
+        rule.onNodeWithTag("detail_season_2").assertIsSelected()
         rule.onNodeWithTag("detail_episode_s2e2").assertExists()
         rule.onNodeWithText("L'alta marea").assertExists()
         assertTrue(open)
@@ -289,7 +291,7 @@ class SeriesDetailOverlayTest {
 
         rule.onNodeWithTag("detail_season_1").assertExists()
         rule.onNodeWithTag("detail_season_2").assertDoesNotExist()
-        rule.onNodeWithTag("detail_season_selected_1").assertExists()
+        rule.onNodeWithTag("detail_season_1").assertIsSelected()
         rule.onNodeWithTag("detail_episodes_heading").assertTextEquals("Episodi · Stagione 1")
         rule.onNodeWithTag("detail_episode_only1").assertExists()
         rule.onNodeWithText("1 episodi").assertExists()
@@ -380,8 +382,8 @@ class SeriesDetailOverlayTest {
         }
         settle()
         rule.onNodeWithTag("detail_episodes_heading").assertTextEquals("Episodi · Stagione 2")
-        rule.onNodeWithTag("detail_season_selected_2").assertExists()
-        rule.onNodeWithTag("detail_season_selected_1").assertDoesNotExist()
+        rule.onNodeWithTag("detail_season_2").assertIsSelected()
+        rule.onNodeWithTag("detail_season_1").assertIsNotSelected()
         rule.onNodeWithTag("detail_episode_s2e2").assertIsFocused()
         rule.onNodeWithTag("detail_episode_s2e1").assertExists()
         rule.onNodeWithTag("detail_episode_s1e1").assertDoesNotExist()
