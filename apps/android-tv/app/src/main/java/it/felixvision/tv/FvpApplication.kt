@@ -1,7 +1,6 @@
 package it.felixvision.tv
 
 import android.app.Application
-import it.felixvision.tv.core.Media3Logging
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob

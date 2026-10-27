@@ -1,6 +1,6 @@
 @file:OptIn(androidx.media3.common.util.UnstableApi::class)
 
-package it.felixvision.tv.core
+package it.felixvision.tv
 
 import androidx.annotation.OptIn
 import androidx.media3.common.util.Log as Media3Log
