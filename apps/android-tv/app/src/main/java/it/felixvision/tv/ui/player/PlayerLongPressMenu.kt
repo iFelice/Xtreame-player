@@ -24,6 +24,7 @@ import androidx.tv.material3.Text
 import it.felixvision.tv.ui.components.FvpPrimaryButton
 import it.felixvision.tv.ui.components.FvpSecondaryButton
 import it.felixvision.tv.ui.components.UiScale
+import it.felixvision.tv.ui.components.ignoreHeldOkUntilReleased
 import it.felixvision.tv.ui.theme.FvpColors
 
 /** Testi del menu della pressione lunga nel player Live. */
@@ -57,6 +58,9 @@ fun PlayerLongPressMenu(
         BackHandler { onDismiss() }
         Box(
             modifier = Modifier
+                // Il menu si apre con OK ancora premuto: ripetizioni e rilascio
+                // non devono attivare "Guida del canale".
+                .ignoreHeldOkUntilReleased()
                 .fillMaxSize()
                 .background(FvpColors.Background.copy(alpha = 0.85f))
                 .padding(scale.dp(32f)),

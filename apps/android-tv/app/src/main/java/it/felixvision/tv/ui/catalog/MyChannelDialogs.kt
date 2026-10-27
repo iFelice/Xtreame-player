@@ -35,6 +35,7 @@ import it.felixvision.tv.data.playback.ChannelNumberInput
 import it.felixvision.tv.ui.components.FvpPrimaryButton
 import it.felixvision.tv.ui.components.FvpSecondaryButton
 import it.felixvision.tv.ui.components.UiScale
+import it.felixvision.tv.ui.components.ignoreHeldOkUntilReleased
 import it.felixvision.tv.ui.theme.FvpColors
 
 /** Testi delle finestre di "I miei canali". */
@@ -104,6 +105,9 @@ fun MyChannelDialog(
         BackHandler { onDismiss() }
         Box(
             modifier = Modifier
+                // Aperta dalla pressione lunga di OK: ripetizioni e rilascio del
+                // tasto ancora premuto non devono attivare il primo pulsante.
+                .ignoreHeldOkUntilReleased()
                 .fillMaxSize()
                 .background(FvpColors.Background.copy(alpha = 0.85f))
                 .padding(scale.dp(32f)),
@@ -213,6 +217,9 @@ fun ChannelNumberDialog(
         BackHandler { onDismiss() }
         Box(
             modifier = Modifier
+                // Aperta dalla pressione lunga di OK (aggiunta): ripetizioni e
+                // rilascio del tasto ancora premuto non confermano il numero.
+                .ignoreHeldOkUntilReleased()
                 .fillMaxSize()
                 .background(FvpColors.Background.copy(alpha = 0.85f))
                 .padding(scale.dp(32f)),

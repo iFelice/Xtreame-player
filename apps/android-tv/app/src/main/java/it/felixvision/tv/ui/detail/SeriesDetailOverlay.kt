@@ -58,6 +58,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.tv.material3.Border
 import androidx.tv.material3.DenseListItem
+import androidx.tv.material3.ListItemColors
 import androidx.tv.material3.ListItemDefaults
 import androidx.tv.material3.Text
 import androidx.compose.foundation.BorderStroke
@@ -1054,7 +1055,10 @@ private fun EpisodeRowItem(
             .onFocusChanged { focused = it.isFocused }
             .fvpLongPress(onToggleWatched)
             .testTag("detail_episode_${episode.id}"),
-        colors = ListItemDefaults.colors(containerColor = FvpColors.SurfaceElevated),
+        // Come per le stagioni: con il focus il fondo resta scuro sotto il testo
+        // bianco (il predefinito tv-material è un riempimento chiaro); il focus
+        // è indicato da bordo verde e ingrandimento.
+        colors = episodeRowColors(),
         scale = ListItemDefaults.scale(focusedScale = 1.04f),
         border = ListItemDefaults.border(focusedBorder = Border(BorderStroke(2.dp, FvpColors.GreenFocus))),
         shape = ListItemDefaults.shape(shape = RoundedCornerShape(scale.dp(8f)))
@@ -1066,6 +1070,24 @@ private fun EpisodeRowItem(
     )
     }
 }
+
+/**
+ * Colori della riga episodio, stesso schema delle stagioni: fondo
+ * [FvpColors.SurfaceElevated] e testo [FvpColors.TextPrimary] anche con focus e
+ * selezione, così il testo bianco non finisce sul riempimento chiaro
+ * predefinito di tv-material.
+ */
+@Composable
+internal fun episodeRowColors(): ListItemColors = ListItemDefaults.colors(
+    containerColor = FvpColors.SurfaceElevated,
+    contentColor = FvpColors.TextPrimary,
+    focusedContainerColor = FvpColors.SurfaceElevated,
+    focusedContentColor = FvpColors.TextPrimary,
+    selectedContainerColor = FvpColors.SurfaceElevated,
+    selectedContentColor = FvpColors.TextPrimary,
+    focusedSelectedContainerColor = FvpColors.SurfaceElevated,
+    focusedSelectedContentColor = FvpColors.TextPrimary,
+)
 
 private fun formatDuration(secs: Int): String {
     val h = secs / 3600
