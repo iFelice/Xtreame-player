@@ -10,8 +10,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -23,9 +25,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -36,6 +41,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.onFocusEvent
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -57,6 +63,7 @@ import androidx.compose.foundation.BorderStroke
 import it.felixvision.tv.data.catalog.Episode
 import it.felixvision.tv.data.catalog.SeriesItem
 import it.felixvision.tv.data.catalog.SeriesInfoResponse
+import it.felixvision.tv.data.continuewatching.ContinueEntry
 import it.felixvision.tv.data.playback.EpisodeOrder
 import it.felixvision.tv.data.playback.SeriesPlayback
 import it.felixvision.tv.data.playback.buildEpisodeQueue
@@ -80,6 +87,13 @@ import it.felixvision.tv.ui.theme.rowText
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+/**
+ * Archivio "Continua a guardare" visibile alla scheda serie. La schermata
+ * principale lo fornisce; senza provider la scheda usa l'avanzamento già
+ * passato, poi la prima stagione.
+ */
+val LocalContinueEntries = staticCompositionLocalOf<List<ContinueEntry>> { emptyList() }
+
 @Composable
 fun SeriesDetailOverlay(
     serie: SeriesItem,
@@ -98,18 +112,31 @@ fun SeriesDetailOverlay(
     refocusTick: Int = 0,
     focusEpisodeId: String? = null,
     progress: Map<String, WatchProgress> = emptyMap(),
+    /**
+     * Episodio da riprendere. Se nullo si usa [LocalContinueEntries], poi
+     * l'episodio iniziato più di recente nell'avanzamento.
+     */
+    resumeEpisodeId: String? = null,
     modifier: Modifier = Modifier,
     rootTestTag: String = "serie_detail_root"
 ) {
-    var selectedSeason by remember { mutableStateOf<String?>(null) }
-    var lastSeason by remember { mutableStateOf<String?>(null) }
+    var lockedSeason by remember { mutableStateOf<String?>(null) }
     var showPlotDialog by remember { mutableStateOf(false) }
     var hasPlotOverflow by remember { mutableStateOf(false) }
     var watchedMessage by remember { mutableStateOf<String?>(null) }
+    var episodesHaveFocus by remember { mutableStateOf(false) }
+    var lastFocusedEpisodeId by remember { mutableStateOf<String?>(null) }
+    var headerDownFocus by remember { mutableStateOf<FocusRequester?>(null) }
+    var contentFocusDone by remember { mutableStateOf(false) }
+    var appliedRefocusTick by remember { mutableIntStateOf(-1) }
+    var episodeFocusToken by remember { mutableIntStateOf(0) }
+    var episodeFocusId by remember { mutableStateOf<String?>(null) }
+    var seasonFocusToken by remember { mutableIntStateOf(0) }
     val favoriteFocus = remember { FocusRequester() }
     val readMoreFocus = remember { FocusRequester() }
     val closeFocus = remember { FocusRequester() }
     val retryFocus = remember { FocusRequester() }
+    val scope = rememberCoroutineScope()
 
     val plotText = info?.info?.plot?.takeIf { it.isNotBlank() } ?: serie.plot ?: ""
     val ratingText = info?.info?.rating?.takeIf { it.isNotBlank() } ?: serie.rating
@@ -120,8 +147,35 @@ fun SeriesDetailOverlay(
         deriveSeasons(info?.seasons ?: emptyList(), info?.episodes ?: emptyMap())
     }
 
-    val episodesForSelected: List<Episode> = remember(info?.episodes, selectedSeason) {
-        if (selectedSeason != null) info?.episodes?.get(selectedSeason) ?: emptyList() else emptyList()
+    val archiveEpisodeId = resumeEpisodeId?.takeIf { it.isNotBlank() }
+        ?: continueEpisodeIdForSeries(LocalContinueEntries.current, serie.seriesId)
+    val resumeId = remember(archiveEpisodeId, info?.episodes, progress) {
+        val episodes = info?.episodes ?: emptyMap()
+        archiveEpisodeId?.takeIf { seasonNumberOf(episodes, it) != null }
+            ?: mostRecentlyStartedEpisodeId(episodes, progress)
+    }
+    val returnSeason = if (refocusTick > 0) {
+        seasonNumberOf(info?.episodes, focusEpisodeId)
+    } else {
+        null
+    }
+    val autoSeason = returnSeason
+        ?: seasonNumberOf(info?.episodes, resumeId)
+        ?: derivedSeasons.firstOrNull()?.seasonNumber
+    val effectiveSeason = lockedSeason?.takeIf { season ->
+        derivedSeasons.any { it.seasonNumber == season }
+    } ?: autoSeason
+
+    SideEffect {
+        if (isLoading || error != null) return@SideEffect
+        val stillValid = lockedSeason != null && derivedSeasons.any { it.seasonNumber == lockedSeason }
+        if (!stillValid && autoSeason != null) {
+            lockedSeason = autoSeason
+        }
+    }
+
+    val episodesForSelected: List<Episode> = remember(info?.episodes, effectiveSeason) {
+        if (effectiveSeason != null) info?.episodes?.get(effectiveSeason) ?: emptyList() else emptyList()
     }
 
     val playbackQueue = remember(derivedSeasons, info?.episodes) {
@@ -131,9 +185,9 @@ fun SeriesDetailOverlay(
         )
     }
 
-    val headerTitle = remember(info?.info?.name, serie.name, selectedSeason) {
+    val headerTitle = remember(info?.info?.name, serie.name, effectiveSeason) {
         val base = info?.info?.name?.takeIf { it.isNotBlank() } ?: serie.name
-        if (selectedSeason != null) "$base · Stagione $selectedSeason" else base
+        if (effectiveSeason != null) "$base · Stagione $effectiveSeason" else base
     }
 
     val seasonsListState = rememberLazyListState()
@@ -147,7 +201,23 @@ fun SeriesDetailOverlay(
     }
 
     val firstSeasonNumber = derivedSeasons.firstOrNull()?.seasonNumber
+    val lastSeasonNumber = derivedSeasons.lastOrNull()?.seasonNumber
     val firstEpisodeId = episodesForSelected.firstOrNull()?.id
+    val lastEpisodeId = episodesForSelected.lastOrNull()?.id
+    val upFromLists = if (hasPlotOverflow) readMoreFocus else favoriteFocus
+    val selectedSeasonFocus = effectiveSeason?.let { seasonFocusRequesters[it] }
+
+    fun requestEpisodeFocus(id: String) {
+        episodeFocusId = id
+        lastFocusedEpisodeId = id
+        episodesHaveFocus = true
+        episodeFocusToken++
+    }
+
+    fun requestSeasonFocus() {
+        episodesHaveFocus = false
+        seasonFocusToken++
+    }
 
     LaunchedEffect(watchedMessage) {
         if (watchedMessage == null) return@LaunchedEffect
@@ -155,80 +225,160 @@ fun SeriesDetailOverlay(
         watchedMessage = null
     }
 
-    LaunchedEffect(derivedSeasons, isLoading, error, selectedSeason) {
-        if (selectedSeason != null) return@LaunchedEffect
-        when {
-            derivedSeasons.isNotEmpty() && !isLoading && error == null -> {
-                seasonFocusRequesters[derivedSeasons.first().seasonNumber]?.requestFocus()
-            }
-            error != null -> {
-                retryFocus.requestFocus()
-            }
-            else -> {
-                closeFocus.requestFocus()
-            }
-        }
-    }
-    LaunchedEffect(selectedSeason, episodesForSelected, focusEpisodeId, refocusTick) {
-        if (selectedSeason != null && episodesForSelected.isNotEmpty()) {
-            val target = if (refocusTick > 0) focusEpisodeId else null
-            if (target != null && episodesForSelected.none { it.id == target }) {
-                // L'episodio è in un'altra stagione: aspetta il cambio stagione.
-                return@LaunchedEffect
-            }
-            val targetId = target ?: episodesForSelected.first().id
-            val targetIndex = episodesForSelected.indexOfFirst { it.id == targetId }.coerceAtLeast(0)
-            episodesListState.scrollToItem(targetIndex)
+    LaunchedEffect(isLoading, error, derivedSeasons, effectiveSeason, resumeId, info) {
+        if (isLoading) return@LaunchedEffect
+        if (error != null) {
+            contentFocusDone = false
+            episodesHaveFocus = false
             withFrameNanos { }
-            episodeFocusRequesters[targetId]?.requestFocus()
+            try { retryFocus.requestFocus() } catch (_: Exception) {}
+            return@LaunchedEffect
+        }
+        if (derivedSeasons.isEmpty()) {
+            contentFocusDone = false
+            episodesHaveFocus = false
+            withFrameNanos { }
+            try { closeFocus.requestFocus() } catch (_: Exception) {}
+            return@LaunchedEffect
+        }
+        if (contentFocusDone) return@LaunchedEffect
+        if (refocusTick > 0 && seasonNumberOf(info?.episodes, focusEpisodeId) != null) {
+            contentFocusDone = true
+            return@LaunchedEffect
+        }
+        val season = effectiveSeason ?: return@LaunchedEffect
+        contentFocusDone = true
+        val resumeInSeason = resumeId?.takeIf { id ->
+            (info?.episodes?.get(season) ?: emptyList()).any { it.id == id }
+        }
+        if (resumeInSeason != null) {
+            requestEpisodeFocus(resumeInSeason)
+        } else {
+            requestSeasonFocus()
         }
     }
 
-    // Al ritorno dal player si riapre la stagione dell'episodio guardato.
-    LaunchedEffect(refocusTick) {
-        if (refocusTick <= 0) return@LaunchedEffect
-        val targetId = focusEpisodeId ?: return@LaunchedEffect
-        val seasonKey = info?.episodes?.entries
-            ?.firstOrNull { entry -> entry.value.any { it.id == targetId } }
-            ?.key
-        if (seasonKey != null) {
-            selectedSeason = seasonKey
-            lastSeason = seasonKey
-        }
+    // Al ritorno dal player: stagione dell'episodio appena visto e focus su di lui.
+    LaunchedEffect(refocusTick, focusEpisodeId, info) {
+        if (refocusTick <= 0 || refocusTick == appliedRefocusTick) return@LaunchedEffect
+        val id = focusEpisodeId ?: return@LaunchedEffect
+        val season = seasonNumberOf(info?.episodes, id) ?: return@LaunchedEffect
+        appliedRefocusTick = refocusTick
+        lockedSeason = season
+        contentFocusDone = true
+        requestEpisodeFocus(id)
     }
-    LaunchedEffect(selectedSeason) {
-        if (selectedSeason == null && lastSeason != null) {
+
+    LaunchedEffect(episodeFocusToken) {
+        if (episodeFocusToken == 0) return@LaunchedEffect
+        val id = episodeFocusId ?: return@LaunchedEffect
+        val index = episodesForSelected.indexOfFirst { it.id == id }
+        if (index < 0) return@LaunchedEffect
+        try { episodesListState.scrollToItem(index) } catch (_: Exception) {}
+        withFrameNanos { }
+        val requester = episodeFocusRequesters[id]
+        var ok = try { requester?.requestFocus() == true } catch (_: Exception) { false }
+        if (!ok) {
             withFrameNanos { }
-            val idx = derivedSeasons.indexOfFirst { it.seasonNumber == lastSeason }
-            if (idx >= 0) {
-                try { seasonsListState.scrollToItem(idx) } catch (_: Exception) { }
-                withFrameNanos { }
+            ok = try { requester?.requestFocus() == true } catch (_: Exception) { false }
+        }
+        if (!ok) {
+            delay(32L)
+            withFrameNanos { }
+            ok = try { requester?.requestFocus() == true } catch (_: Exception) { false }
+        }
+        if (ok) {
+            lastFocusedEpisodeId = id
+            episodesHaveFocus = true
+            if (id == episodesForSelected.firstOrNull()?.id) {
+                headerDownFocus = requester
             }
-            seasonFocusRequesters[lastSeason]?.requestFocus()
+        } else {
+            try { selectedSeasonFocus?.requestFocus() } catch (_: Exception) {}
         }
     }
+
+    LaunchedEffect(seasonFocusToken) {
+        if (seasonFocusToken == 0) return@LaunchedEffect
+        val season = effectiveSeason ?: return@LaunchedEffect
+        val index = derivedSeasons.indexOfFirst { it.seasonNumber == season }
+        if (index >= 0) {
+            try { seasonsListState.scrollToItem(index) } catch (_: Exception) {}
+        }
+        withFrameNanos { }
+        val requester = seasonFocusRequesters[season]
+        var ok = try { requester?.requestFocus() == true } catch (_: Exception) { false }
+        if (!ok) {
+            withFrameNanos { }
+            ok = try { requester?.requestFocus() == true } catch (_: Exception) { false }
+        }
+        if (!ok) {
+            delay(32L)
+            withFrameNanos { }
+            ok = try { requester?.requestFocus() == true } catch (_: Exception) { false }
+        }
+        episodesHaveFocus = false
+        if (ok) {
+            if (season == firstSeasonNumber) headerDownFocus = requester
+        } else {
+            try {
+                if (!favoriteFocus.requestFocus()) closeFocus.requestFocus()
+            } catch (_: Exception) {}
+        }
+    }
+
+    var backConsumed by remember { mutableStateOf(false) }
+    var plotWasOpen by remember { mutableStateOf(false) }
     LaunchedEffect(showPlotDialog) {
-        if (!showPlotDialog) {
+        if (showPlotDialog) {
+            plotWasOpen = true
+            episodesHaveFocus = false
+            return@LaunchedEffect
+        }
+        if (!plotWasOpen) return@LaunchedEffect
+        plotWasOpen = false
+        withFrameNanos { }
+        if (hasPlotOverflow) {
+            try { readMoreFocus.requestFocus() } catch (_: Exception) {}
+        }
+        episodesHaveFocus = false
+    }
+
+    fun handleBack() {
+        // BackHandler e onDismissRequest possono arrivare insieme: il secondo,
+        // nello stesso frame, non deve chiudere subito dopo il ritorno alle stagioni.
+        if (backConsumed) return
+        backConsumed = true
+        scope.launch {
             withFrameNanos { }
-            if (hasPlotOverflow) {
-                readMoreFocus.requestFocus()
+            backConsumed = false
+        }
+        when {
+            showPlotDialog -> showPlotDialog = false
+            episodesHaveFocus && effectiveSeason != null -> {
+                episodesHaveFocus = false
+                requestSeasonFocus()
             }
+            else -> onDismiss()
+        }
+    }
+
+    fun selectSeason(seasonNumber: String) {
+        lockedSeason = seasonNumber
+        contentFocusDone = true
+        val eps = info?.episodes?.get(seasonNumber).orEmpty()
+        val continueHere = resumeId?.takeIf { id -> eps.any { it.id == id } }
+        val target = continueHere ?: eps.firstOrNull()?.id
+        if (target != null) {
+            requestEpisodeFocus(target)
         }
     }
 
     Dialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { handleBack() },
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
     ) {
-        BackHandler(enabled = true) {
-            if (showPlotDialog) {
-                showPlotDialog = false
-            } else if (selectedSeason != null) {
-                selectedSeason = null
-            } else {
-                onDismiss()
-            }
-        }
+        BackHandler(enabled = true) { handleBack() }
         Box(
             modifier = modifier
                 .fillMaxSize()
@@ -267,19 +417,15 @@ fun SeriesDetailOverlay(
                         scale = scale,
                         modifier = Modifier
                             .focusRequester(favoriteFocus)
-                            .then(
-                                if (derivedSeasons.isNotEmpty() || episodesForSelected.isNotEmpty()) {
-                                    Modifier.focusProperties {
-                                        down = when {
-                                            selectedSeason == null && firstSeasonNumber != null ->
-                                                seasonFocusRequesters[firstSeasonNumber] ?: FocusRequester.Default
-                                            selectedSeason != null && firstEpisodeId != null ->
-                                                episodeFocusRequesters[firstEpisodeId] ?: FocusRequester.Default
-                                            else -> FocusRequester.Default
-                                        }
-                                    }
-                                } else Modifier
-                            )
+                            .focusProperties {
+                                right = closeFocus
+                                left = FocusRequester.Cancel
+                                up = FocusRequester.Cancel
+                                down = headerDownFocus
+                                    ?: selectedSeasonFocus
+                                    ?: firstEpisodeId?.let { episodeFocusRequesters[it] }
+                                    ?: FocusRequester.Cancel
+                            }
                             .testTag("detail_favorite")
                     )
                     FvpSecondaryButton(
@@ -288,19 +434,15 @@ fun SeriesDetailOverlay(
                         scale = scale,
                         modifier = Modifier
                             .focusRequester(closeFocus)
-                            .then(
-                                if (derivedSeasons.isNotEmpty() || episodesForSelected.isNotEmpty()) {
-                                    Modifier.focusProperties {
-                                        down = when {
-                                            selectedSeason == null && firstSeasonNumber != null ->
-                                                seasonFocusRequesters[firstSeasonNumber] ?: FocusRequester.Default
-                                            selectedSeason != null && firstEpisodeId != null ->
-                                                episodeFocusRequesters[firstEpisodeId] ?: FocusRequester.Default
-                                            else -> FocusRequester.Default
-                                        }
-                                    }
-                                } else Modifier
-                            )
+                            .focusProperties {
+                                left = favoriteFocus
+                                right = FocusRequester.Cancel
+                                up = FocusRequester.Cancel
+                                down = headerDownFocus
+                                    ?: selectedSeasonFocus
+                                    ?: firstEpisodeId?.let { episodeFocusRequesters[it] }
+                                    ?: FocusRequester.Cancel
+                            }
                             .testTag("detail_close")
                     )
                 }
@@ -309,23 +451,139 @@ fun SeriesDetailOverlay(
                     horizontalArrangement = Arrangement.spacedBy(scale.dp(14f)),
                     modifier = Modifier.weight(1f).fillMaxWidth()
                 ) {
-                    Box(
+                    Column(
                         modifier = Modifier
                             .width(scale.dp(160f))
-                            .aspectRatio(2f / 3f)
-                            .clip(RoundedCornerShape(scale.dp(10f)))
-                            .background(FvpColors.SurfaceElevated)
+                            .fillMaxHeight(),
+                        verticalArrangement = Arrangement.spacedBy(scale.dp(8f))
                     ) {
-                        CatalogPosterImage(
-                            imageUrl = serie.cover ?: info?.info?.cover,
-                            title = serie.name,
-                            scale = scale,
-                            modifier = Modifier.fillMaxSize()
-                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(2f / 3f)
+                                .clip(RoundedCornerShape(scale.dp(10f)))
+                                .background(FvpColors.SurfaceElevated)
+                                .testTag("detail_poster")
+                        ) {
+                            CatalogPosterImage(
+                                imageUrl = serie.cover ?: info?.info?.cover,
+                                title = serie.name,
+                                scale = scale,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+
+                        if (!isLoading && error == null && derivedSeasons.isNotEmpty()) {
+                            LazyColumn(
+                                state = seasonsListState,
+                                verticalArrangement = Arrangement.spacedBy(scale.rowSpacing),
+                                contentPadding = PaddingValues(scale.focusSafePadding),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f)
+                                    .onFocusEvent { state ->
+                                        if (state.hasFocus) episodesHaveFocus = false
+                                    }
+                                    .onPreviewKeyEvent { event ->
+                                        if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                                        when (event.key) {
+                                            Key.DirectionRight -> {
+                                                val target = lastFocusedEpisodeId?.takeIf { id ->
+                                                    episodesForSelected.any { it.id == id }
+                                                } ?: episodesForSelected.firstOrNull()?.id
+                                                if (target != null) requestEpisodeFocus(target)
+                                                true
+                                            }
+                                            Key.DirectionLeft -> true
+                                            else -> false
+                                        }
+                                    }
+                                    .testTag("serie_seasons_list")
+                            ) {
+                                items(derivedSeasons, key = { it.seasonNumber }) { season ->
+                                    val isFirst = season.seasonNumber == firstSeasonNumber
+                                    val isLast = season.seasonNumber == lastSeasonNumber
+                                    val isSelected = season.seasonNumber == effectiveSeason
+                                    val fr = remember(season.seasonNumber, seasonFocusRequesters) {
+                                        seasonFocusRequesters[season.seasonNumber] ?: FocusRequester()
+                                    }
+                                    val countLabel = episodeCountLabel(season.episodeCount)
+                                    DenseListItem(
+                                        selected = false,
+                                        onClick = { selectSeason(season.seasonNumber) },
+                                        headlineContent = {
+                                            Text(
+                                                text = "Stagione ${season.seasonNumber}",
+                                                color = if (isSelected) FvpColors.Green else FvpColors.TextPrimary,
+                                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                                                fontSize = scale.rowText,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                        },
+                                        supportingContent = countLabel?.let { label ->
+                                            {
+                                                Text(
+                                                    text = label,
+                                                    color = if (isSelected) FvpColors.Green else FvpColors.TextSecondary,
+                                                    fontSize = scale.sp(12f),
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                )
+                                            }
+                                        },
+                                        leadingContent = if (isSelected) {
+                                            {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .width(scale.dp(4f))
+                                                        .height(scale.dp(22f))
+                                                        .clip(RoundedCornerShape(scale.dp(2f)))
+                                                        .background(FvpColors.Green)
+                                                        .testTag("detail_season_selected_${season.seasonNumber}")
+                                                )
+                                            }
+                                        } else {
+                                            null
+                                        },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .focusRequester(fr)
+                                            .onFocusChanged { state ->
+                                                if (state.isFocused) {
+                                                    episodesHaveFocus = false
+                                                    if (isFirst) headerDownFocus = fr
+                                                }
+                                            }
+                                            .focusProperties {
+                                                if (isFirst) up = upFromLists
+                                                if (isLast) down = FocusRequester.Cancel
+                                                left = FocusRequester.Cancel
+                                                val rightId = lastFocusedEpisodeId?.takeIf { id ->
+                                                    episodesForSelected.any { it.id == id }
+                                                } ?: firstEpisodeId
+                                                right = rightId?.let { episodeFocusRequesters[it] }
+                                                    ?: FocusRequester.Cancel
+                                            }
+                                            .testTag("detail_season_${season.seasonNumber}"),
+                                        colors = ListItemDefaults.colors(
+                                            containerColor = FvpColors.SurfaceElevated,
+                                            contentColor = FvpColors.TextPrimary,
+                                            focusedContainerColor = FvpColors.SurfaceElevated,
+                                        ),
+                                        scale = ListItemDefaults.scale(focusedScale = 1.04f),
+                                        border = ListItemDefaults.border(
+                                            focusedBorder = Border(BorderStroke(2.dp, FvpColors.GreenFocus))
+                                        ),
+                                        shape = ListItemDefaults.shape(shape = RoundedCornerShape(scale.dp(8f)))
+                                    )
+                                }
+                            }
+                        }
                     }
 
                     Column(
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
                         verticalArrangement = Arrangement.spacedBy(scale.dp(6f))
                     ) {
                         when {
@@ -348,13 +606,22 @@ fun SeriesDetailOverlay(
                                     scale = scale,
                                     modifier = Modifier
                                         .focusRequester(retryFocus)
+                                        .focusProperties {
+                                            up = favoriteFocus
+                                            down = FocusRequester.Cancel
+                                            left = FocusRequester.Cancel
+                                            right = FocusRequester.Cancel
+                                        }
                                         .testTag("detail_retry")
                                 )
                             }
                             info != null -> {
+                                val loadedInfo = info!!
                                 Row(
                                     horizontalArrangement = Arrangement.spacedBy(scale.dp(12f)),
-                                    modifier = Modifier.fillMaxWidth()
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("detail_meta")
                                 ) {
                                     yearText?.let {
                                         Text(text = "Anno: $it", color = FvpColors.TextSecondary, fontSize = scale.sp(13f))
@@ -383,91 +650,38 @@ fun SeriesDetailOverlay(
                                             modifier = Modifier
                                                 .focusRequester(readMoreFocus)
                                                 .focusProperties {
-                                                    down = when {
-                                                        selectedSeason == null && firstSeasonNumber != null ->
-                                                            seasonFocusRequesters[firstSeasonNumber] ?: FocusRequester.Default
-                                                        selectedSeason != null && firstEpisodeId != null ->
-                                                            episodeFocusRequesters[firstEpisodeId] ?: FocusRequester.Default
-                                                        else -> FocusRequester.Default
-                                                    }
+                                                    up = FocusRequester.Cancel
+                                                    left = selectedSeasonFocus ?: FocusRequester.Cancel
+                                                    right = FocusRequester.Cancel
+                                                    down = headerDownFocus
+                                                        ?: firstEpisodeId?.let { episodeFocusRequesters[it] }
+                                                        ?: selectedSeasonFocus
+                                                        ?: FocusRequester.Cancel
                                                 }
                                                 .testTag("detail_read_more")
                                         )
                                     }
                                 }
 
-                                if (selectedSeason == null) {
-                                    if (derivedSeasons.isNotEmpty()) {
-                                        Text(
-                                            text = "Stagioni",
-                                            color = FvpColors.TextPrimary,
-                                            fontWeight = FontWeight.SemiBold,
-                                            fontSize = scale.sp(15f),
-                                            modifier = Modifier.padding(top = scale.dp(6f), bottom = scale.dp(4f))
-                                        )
-                                        LazyColumn(
-                                            state = seasonsListState,
-                                            verticalArrangement = Arrangement.spacedBy(scale.rowSpacing),
-                                            // Ingrandimento e cornice delle voci restano nella lista.
-                                            contentPadding = PaddingValues(scale.focusSafePadding),
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .weight(1f)
-                                                .testTag("serie_seasons_list")
-                                        ) {
-                                            items(derivedSeasons, key = { it.seasonNumber }) { season ->
-                                                val isFirst = season.seasonNumber == firstSeasonNumber
-                                                val fr = remember(season.seasonNumber, seasonFocusRequesters) { seasonFocusRequesters[season.seasonNumber] ?: FocusRequester() }
-                                                val count = season.episodeCount
-                                                val countText = if (count != null) " · $count episodi" else ""
-                                                // Riga compatta della stagione.
-                                                DenseListItem(
-                                                    selected = false,
-                                                    onClick = {
-                                                        lastSeason = season.seasonNumber
-                                                        selectedSeason = season.seasonNumber
-                                                    },
-                                                    headlineContent = {
-                                                        Text(
-                                                            text = "${season.name}$countText",
-                                                            maxLines = 1,
-                                                            overflow = TextOverflow.Ellipsis
-                                                        )
-                                                    },
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .focusRequester(fr)
-                                                        .then(
-                                                            if (isFirst) {
-                                                                Modifier.focusProperties {
-                                                                    up = if (hasPlotOverflow) readMoreFocus else favoriteFocus
-                                                                }
-                                                            } else Modifier
-                                                        )
-                                                        .testTag("detail_season_${season.seasonNumber}"),
-                                                    colors = ListItemDefaults.colors(
-                                                        containerColor = FvpColors.SurfaceElevated,
-                                                        contentColor = FvpColors.TextPrimary,
-                                                        focusedContainerColor = FvpColors.SurfaceElevated
-                                                    ),
-                                                    scale = ListItemDefaults.scale(focusedScale = 1.04f),
-                                                    border = ListItemDefaults.border(
-                                                        focusedBorder = Border(BorderStroke(2.dp, FvpColors.GreenFocus))
-                                                    ),
-                                                    shape = ListItemDefaults.shape(shape = RoundedCornerShape(scale.dp(8f)))
-                                                )
-                                            }
-                                        }
-                                    } else {
-                                        Text(text = "Nessuna stagione disponibile", color = FvpColors.TextSecondary, modifier = Modifier.weight(1f))
-                                    }
-                                } else {
+                                val seasonKey = effectiveSeason
+                                if (derivedSeasons.isEmpty() || seasonKey == null) {
                                     Text(
-                                        text = "Episodi · Stagione $selectedSeason",
+                                        text = "Nessuna stagione disponibile",
+                                        color = FvpColors.TextSecondary,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .testTag("detail_no_seasons")
+                                    )
+                                } else {
+                                    val selectedSeasonKey = requireNotNull(seasonKey)
+                                    Text(
+                                        text = "Episodi · Stagione $selectedSeasonKey",
                                         color = FvpColors.TextPrimary,
                                         fontWeight = FontWeight.SemiBold,
                                         fontSize = scale.sp(15f),
-                                        modifier = Modifier.padding(top = scale.dp(6f), bottom = scale.dp(4f))
+                                        modifier = Modifier
+                                            .padding(top = scale.dp(6f), bottom = scale.dp(4f))
+                                            .testTag("detail_episodes_heading")
                                     )
                                     watchedMessage?.let { message ->
                                         Text(
@@ -478,21 +692,42 @@ fun SeriesDetailOverlay(
                                         )
                                     }
                                     if (episodesForSelected.isEmpty()) {
-                                        Text(text = "Nessun episodio disponibile", color = FvpColors.TextSecondary, modifier = Modifier.weight(1f))
+                                        Text(
+                                            text = "Nessun episodio disponibile",
+                                            color = FvpColors.TextSecondary,
+                                            modifier = Modifier.weight(1f)
+                                        )
                                     } else {
                                         LazyColumn(
                                             state = episodesListState,
                                             verticalArrangement = Arrangement.spacedBy(scale.rowSpacing),
-                                            // Ingrandimento e cornice delle voci restano nella lista.
                                             contentPadding = PaddingValues(scale.focusSafePadding),
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .weight(1f)
+                                                .onFocusEvent { state ->
+                                                    episodesHaveFocus = state.hasFocus
+                                                }
+                                                .onPreviewKeyEvent { event ->
+                                                    if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                                                    when (event.key) {
+                                                        Key.DirectionLeft -> {
+                                                            episodesHaveFocus = false
+                                                            requestSeasonFocus()
+                                                            true
+                                                        }
+                                                        Key.DirectionRight -> true
+                                                        else -> false
+                                                    }
+                                                }
                                                 .testTag("serie_episodes_list")
                                         ) {
                                             items(episodesForSelected, key = { it.id }) { ep ->
                                                 val isFirst = ep.id == firstEpisodeId
-                                                val fr = remember(ep.id, episodeFocusRequesters) { episodeFocusRequesters[ep.id] ?: FocusRequester() }
+                                                val isLast = ep.id == lastEpisodeId
+                                                val fr = remember(ep.id, episodeFocusRequesters) {
+                                                    episodeFocusRequesters[ep.id] ?: FocusRequester()
+                                                }
                                                 val epTitle = ep.title.ifBlank { "Episodio ${ep.episodeNum}" }
                                                 val duration = ep.info?.duration ?: ep.info?.durationSecs?.let { secs -> formatDuration(secs) }
                                                 val epProgress = progress[ProgressKeys.episode(ep.id)]
@@ -501,48 +736,59 @@ fun SeriesDetailOverlay(
                                                     durationSecs = ep.info?.durationSecs,
                                                     durationText = ep.info?.duration,
                                                 ).takeIf { it > 0L } ?: epProgress?.durationMillis ?: 0L
-                                                EpisodeRowItem(
-                                                    episode = ep,
-                                                    title = epTitle,
-                                                    duration = duration,
-                                                    scale = scale,
-                                                    focusRequester = fr,
-                                                    upFocus = if (isFirst) {
-                                                        if (hasPlotOverflow) readMoreFocus else favoriteFocus
-                                                    } else null,
-                                                    progress = epProgress,
-                                                    onToggleWatched = {
-                                                        onSetEpisodeWatched(ep, nextWatched, epDurationMillis)
-                                                        watchedMessage = if (nextWatched) {
-                                                            "Segnato come visto"
-                                                        } else {
-                                                            "Segnato come non visto"
+                                                Box(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .onFocusEvent { state ->
+                                                            if (state.hasFocus) {
+                                                                lastFocusedEpisodeId = ep.id
+                                                                episodesHaveFocus = true
+                                                                if (isFirst) headerDownFocus = fr
+                                                            }
                                                         }
-                                                    },
-                                                    onPlay = {
-                                                        val queueIndex = indexOfEpisode(playbackQueue, ep.id)
-                                                        val queue = if (queueIndex >= 0) {
-                                                            playbackQueue
-                                                        } else {
-                                                            listOf(EpisodeOrder(selectedSeason.orEmpty(), ep))
+                                                ) {
+                                                    EpisodeRowItem(
+                                                        episode = ep,
+                                                        title = epTitle,
+                                                        duration = duration,
+                                                        scale = scale,
+                                                        focusRequester = fr,
+                                                        upFocus = if (isFirst) upFromLists else null,
+                                                        downFocus = if (isLast) FocusRequester.Cancel else null,
+                                                        progress = epProgress,
+                                                        onToggleWatched = {
+                                                            onSetEpisodeWatched(ep, nextWatched, epDurationMillis)
+                                                            watchedMessage = if (nextWatched) {
+                                                                "Segnato come visto"
+                                                            } else {
+                                                                "Segnato come non visto"
+                                                            }
+                                                        },
+                                                        onPlay = {
+                                                            val queueIndex = indexOfEpisode(playbackQueue, ep.id)
+                                                            val queue = if (queueIndex >= 0) {
+                                                                playbackQueue
+                                                            } else {
+                                                                listOf(EpisodeOrder(selectedSeasonKey, ep))
+                                                            }
+                                                            onPlayEpisode(
+                                                                ep,
+                                                                SeriesPlayback(
+                                                                    seriesId = serie.seriesId,
+                                                                    title = loadedInfo.info?.name
+                                                                        ?.takeIf { it.isNotBlank() }
+                                                                        ?: serie.name,
+                                                                    categoryId = serie.categoryId,
+                                                                    queue = queue,
+                                                                    startIndex = if (queueIndex >= 0) queueIndex else 0,
+                                                                    cover = loadedInfo.info?.cover
+                                                                        ?.takeIf { it.isNotBlank() }
+                                                                        ?: serie.cover,
+                                                                ),
+                                                            )
                                                         }
-                                                        onPlayEpisode(
-                                                            ep,
-                                                            SeriesPlayback(
-                                                                seriesId = serie.seriesId,
-                                                                title = info?.info?.name
-                                                                    ?.takeIf { it.isNotBlank() }
-                                                                    ?: serie.name,
-                                                                categoryId = serie.categoryId,
-                                                                queue = queue,
-                                                                startIndex = if (queueIndex >= 0) queueIndex else 0,
-                                                                cover = info?.info?.cover
-                                                                    ?.takeIf { it.isNotBlank() }
-                                                                    ?: serie.cover,
-                                                            ),
-                                                        )
-                                                    }
-                                                )
+                                                    )
+                                                }
                                             }
                                         }
                                     }
@@ -566,6 +812,53 @@ fun SeriesDetailOverlay(
         }
     }
 }
+
+/** Episodio puntato da "Continua a guardare" per questa serie, il più recente. */
+internal fun continueEpisodeIdForSeries(
+    entries: List<ContinueEntry>,
+    seriesId: String,
+): String? = entries
+    .asSequence()
+    .filter { it.isSeries && it.seriesId == seriesId && !it.episodeId.isNullOrBlank() }
+    .maxByOrNull { it.updatedAtMillis }
+    ?.episodeId
+
+/** Stagione che contiene [episodeId], oppure null se non è in questa scheda. */
+internal fun seasonNumberOf(
+    episodes: Map<String, List<Episode>>?,
+    episodeId: String?,
+): String? {
+    if (episodeId.isNullOrBlank() || episodes.isNullOrEmpty()) return null
+    return episodes.entries.firstOrNull { (_, list) -> list.any { it.id == episodeId } }?.key
+}
+
+/**
+ * Episodio iniziato più di recente: posizione salvata (> 0) e [WatchProgress.updatedAtMillis]
+ * massimo. Il solo "segna come visto" senza posizione non conta come avvio.
+ */
+internal fun mostRecentlyStartedEpisodeId(
+    episodes: Map<String, List<Episode>>,
+    progress: Map<String, WatchProgress>,
+): String? {
+    var bestId: String? = null
+    var bestUpdated = Long.MIN_VALUE
+    val seasons = episodes.keys.sortedWith(
+        compareBy<String> { it.toIntOrNull() ?: Int.MAX_VALUE }.thenBy { it }
+    )
+    for (season in seasons) {
+        for (episode in episodes[season].orEmpty()) {
+            val watch = progress[ProgressKeys.episode(episode.id)] ?: continue
+            if (watch.positionMillis <= 0L) continue
+            if (watch.updatedAtMillis > bestUpdated) {
+                bestUpdated = watch.updatedAtMillis
+                bestId = episode.id
+            }
+        }
+    }
+    return bestId
+}
+
+private fun episodeCountLabel(count: Int?): String? = count?.let { "$it episodi" }
 
 @Composable
 private fun PlotDialog(
@@ -664,6 +957,7 @@ private fun EpisodeRowItem(
     scale: UiScale,
     focusRequester: FocusRequester,
     upFocus: FocusRequester?,
+    downFocus: FocusRequester?,
     progress: WatchProgress?,
     onToggleWatched: () -> Unit,
     onPlay: () -> Unit
@@ -713,11 +1007,10 @@ private fun EpisodeRowItem(
         modifier = Modifier
             .fillMaxWidth()
             .focusRequester(focusRequester)
-            .then(
-                if (upFocus != null) {
-                    Modifier.focusProperties { up = upFocus }
-                } else Modifier
-            )
+            .focusProperties {
+                if (upFocus != null) up = upFocus
+                if (downFocus != null) down = downFocus
+            }
             .onFocusChanged { focused = it.isFocused }
             .fvpLongPress(onToggleWatched)
             .testTag("detail_episode_${episode.id}"),
