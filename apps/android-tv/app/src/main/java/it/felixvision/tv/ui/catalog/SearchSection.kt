@@ -111,6 +111,10 @@ fun SearchSection(
     onPlayFilm: (VodStream) -> Unit = {},
     onPlayEpisode: (Episode, SeriesPlayback) -> Unit = { _, _ -> },
     onToggleFavorite: (FavoriteItem) -> Unit = {},
+    /** Pressione lunga su un canale Live: finestra di "I miei canali". */
+    onLongPressLive: (LiveStream) -> Unit = {},
+    /** Canali già in "I miei canali": mostrano la stella. */
+    myChannelIds: Set<String> = emptySet(),
     onSetEpisodeWatched: (Episode, Boolean, Long) -> Unit = { _, _, _ -> },
     onToggleWatched: (VodStream, Boolean, Long) -> Unit = { _, _, _ -> },
     refocusTick: Int = 0,
@@ -313,7 +317,7 @@ fun SearchSection(
                                 LiveResultCard(
                                     channel = channel,
                                     scale = scale,
-                                    isFavorite = favorites.any { it.id == "live_${channel.streamId}" },
+                                    isFavorite = channel.streamId in myChannelIds,
                                     focusRequester = itemFocusRequesters["live_${channel.streamId}"],
                                     onUpToField = { if (index == 0) runCatching { contentFocusRequester.requestFocus() } },
                                     onRowFocused = {
@@ -322,17 +326,7 @@ fun SearchSection(
                                         focusedRowTotal = results.live.size
                                     },
                                     onClick = { onPlayLive(channel) },
-                                    onLongPress = {
-                                        onToggleFavorite(
-                                            FavoriteItem(
-                                                id = "live_${channel.streamId}",
-                                                type = "live",
-                                                title = channel.name,
-                                                poster = channel.streamIcon,
-                                                categoryId = channel.categoryId,
-                                            ),
-                                        )
-                                    },
+                                    onLongPress = { onLongPressLive(channel) },
                                 )
                             }
                         }

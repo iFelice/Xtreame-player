@@ -9,6 +9,7 @@ import it.felixvision.tv.data.catalog.Category
 import it.felixvision.tv.data.catalog.LiveStream
 import it.felixvision.tv.data.catalog.VodStream
 import it.felixvision.tv.data.playback.ChannelNumberOverlay
+import it.felixvision.tv.data.playback.ChannelNumbering
 import it.felixvision.tv.data.playback.SeriesPlayback
 import it.felixvision.tv.data.volume.PlayerVolume
 
@@ -22,6 +23,8 @@ sealed interface PlaybackSource {
         val categoryName: String?,
         val allChannels: List<LiveStream> = channels,
         val categories: List<Category> = emptyList(),
+        /** Numerazione dei tasti numerici: personale quando si arriva da "I miei canali". */
+        val numbering: ChannelNumbering = ChannelNumbering.PROVIDER,
     ) : PlaybackSource
 
     data class Movie(

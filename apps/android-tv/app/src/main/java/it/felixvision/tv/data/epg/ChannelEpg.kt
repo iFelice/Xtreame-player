@@ -9,6 +9,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Base64
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -94,16 +95,40 @@ object EpgRules {
     fun time(epochSeconds: Long, zone: ZoneId = ZoneId.systemDefault()): String = DateTimeFormatter.ofPattern("HH:mm", Locale.ITALIAN).withZone(zone).format(Instant.ofEpochSecond(epochSeconds))
 }
 
-/** Single mutex protects both cache and in-flight requests; concurrent opens for one channel coalesce. */
+/**
+ * Guida dei canali, con normalizzazione e cache.
+ *
+ * La cache ha un solo lucchetto; le richieste in corso sono coalescenti per
+ * canale: due aperture dello stesso canale aspettano la stessa risposta, mentre
+ * canali diversi possono essere chiesti in parallelo (il limite di 4 richieste
+ * contemporanee è applicato da [ChannelScheduleLoader]).
+ */
 class ChannelEpgClient(private val http: OkHttpClient, private val clock: Clock = SystemClock) {
     private data class Entry(val expires: Long, val programs: List<EpgProgram>)
-    private val mutex = Mutex()
+    private val cacheMutex = Mutex()
     private val cache = mutableMapOf<String, Entry>()
+    private val channelLocks = ConcurrentHashMap<String, Mutex>()
+
+    private fun cacheKey(server: String, username: String, streamId: String): String =
+        "$server|$username|$streamId"
+
+    private fun lockFor(key: String): Mutex = channelLocks.computeIfAbsent(key) { Mutex() }
+
+    /** Programmi in cache valida, senza nessuna richiesta al server. */
+    suspend fun cached(server: String, username: String, streamId: String): List<EpgProgram>? =
+        withContext(Dispatchers.IO) {
+            val key = cacheKey(server, username, streamId)
+            cacheMutex.withLock {
+                cache[key]?.takeIf { it.expires > clock.nowMillis() }?.programs
+            }
+        }
 
     suspend fun load(server: String, username: String, password: String, streamId: String): List<EpgProgram> = withContext(Dispatchers.IO) {
-        val key = "$server|$username|$streamId"
-        mutex.withLock {
-            cache[key]?.takeIf { it.expires > clock.nowMillis() }?.let { return@withLock it.programs }
+        val key = cacheKey(server, username, streamId)
+        lockFor(key).withLock {
+            cacheMutex.withLock {
+                cache[key]?.takeIf { it.expires > clock.nowMillis() }?.programs
+            }?.let { return@withLock it }
             val base = server.toHttpUrlOrNull() ?: return@withLock emptyList()
             fun request(action: String, limit: String? = null): List<EpgProgram> = try {
                 val b = base.newBuilder().addPathSegment("player_api.php").addQueryParameter("username", username).addQueryParameter("password", password).addQueryParameter("action", action).addQueryParameter("stream_id", streamId)
@@ -114,7 +139,9 @@ class ChannelEpgClient(private val http: OkHttpClient, private val clock: Clock 
                 request("get_simple_data_table").ifEmpty { request("get_short_epg", "50") },
             )
             val ttl = if (programs.isEmpty()) EMPTY_TTL_MILLIS else PROGRAM_TTL_MILLIS
-            cache[key] = Entry(clock.nowMillis() + ttl, programs)
+            cacheMutex.withLock {
+                cache[key] = Entry(clock.nowMillis() + ttl, programs)
+            }
             programs
         }
     }

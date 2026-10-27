@@ -33,6 +33,7 @@ import it.felixvision.tv.data.playback.ChannelKeyOutcome
 import it.felixvision.tv.data.playback.ChannelLookupResult
 import it.felixvision.tv.data.playback.ChannelNumberInput
 import it.felixvision.tv.data.playback.ChannelNumberSession
+import it.felixvision.tv.data.playback.ChannelNumbering
 import it.felixvision.tv.data.playback.EpisodeOrder
 import it.felixvision.tv.data.playback.LiveZapping
 import it.felixvision.tv.data.playback.NextEpisodeRules
@@ -73,6 +74,9 @@ class PlayerEngine(
         }.orEmpty()
     private val liveCategories: List<Category> =
         (source as? PlaybackSource.Live)?.categories.orEmpty()
+    /** Numerazione dei tasti numerici: personale quando il player arriva da "I miei canali". */
+    private val liveNumbering: ChannelNumbering =
+        (source as? PlaybackSource.Live)?.numbering ?: ChannelNumbering.PROVIDER
     private var channels: List<LiveStream> =
         (source as? PlaybackSource.Live)?.channels.orEmpty()
     private var liveCategoryName: String? =
@@ -108,7 +112,7 @@ class PlayerEngine(
     private var wasPlayingBeforeStop = false
     private var lastPositionBeforeStop = 0L
     private var bannerJob: Job? = null
-    private val channelNumberSession = ChannelNumberSession()
+    private val channelNumberSession = ChannelNumberSession(numbering = liveNumbering)
     private var channelNumberJob: Job? = null
     // Volume del nostro ExoPlayer (0-15): livello caricato da DataStore all'avvio.
     private var volumeLevel: Int = PlayerVolume.DEFAULT_LEVEL
@@ -644,7 +648,10 @@ class PlayerEngine(
         when (result) {
             is ChannelLookupResult.Found -> {
                 channels = result.zapping.channels
-                liveCategoryName = result.zapping.categoryName
+                // Con la numerazione personale la categoria resta "I miei canali".
+                if (liveNumbering == ChannelNumbering.PROVIDER) {
+                    liveCategoryName = result.zapping.categoryName
+                }
                 liveIndex = LiveZapping.clamp(result.zapping.startIndex, channels.size)
                 switchLiveChannel()
             }
@@ -743,7 +750,9 @@ class PlayerEngine(
         val channel = currentLiveChannel() ?: return
         state = state.copy(
             banner = ChannelBanner(
-                number = channel.num,
+                // Con la numerazione personale il banner mostra il TUO numero,
+                // cioè la posizione nella lista.
+                number = if (liveNumbering == ChannelNumbering.PERSONAL) liveIndex + 1 else channel.num,
                 name = channel.name,
                 categoryName = liveCategoryName,
                 logoUrl = channel.streamIcon,

@@ -14,8 +14,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.getValue
@@ -43,14 +46,20 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.ui.PlayerView
 import androidx.tv.material3.Text
 import it.felixvision.tv.AppContainer
+import it.felixvision.tv.data.channels.MyChannel
+import it.felixvision.tv.data.channels.MyChannels
 import it.felixvision.tv.data.playback.SeekAcceleration
 import it.felixvision.tv.data.playback.SeekAccumulator
 import it.felixvision.tv.data.playback.SeekFeedback
+import it.felixvision.tv.ui.catalog.MyChannelDialog
 import it.felixvision.tv.ui.components.ChannelNumberIndicator
 import it.felixvision.tv.ui.components.fvpLongPress
+import it.felixvision.tv.ui.components.rememberChannelSchedulePrograms
+import it.felixvision.tv.ui.components.rememberMinuteNow
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.theme.FvpColors
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * Schermata player a tutto schermo, in una finestra Dialog sopra la scheda di
@@ -87,6 +96,58 @@ fun PlayerScreen(
     var seekStartedAt by remember { mutableStateOf(0L) }
     var lastSeekAt by remember { mutableStateOf(0L) }
     var seekFeedback by remember { mutableStateOf<SeekFeedback?>(null) }
+    val playerScope = rememberCoroutineScope()
+
+    // "I miei canali" dal player Live: pressione lunga sul canale in onda.
+    val myChannelsRevision by container.myChannelsStore.revision.collectAsState()
+    val myChannels by produceState<List<MyChannel>>(
+        initialValue = emptyList(),
+        myChannelsRevision,
+        session.server,
+        session.username,
+    ) {
+        value = container.myChannelsStore.getChannels(session.server, session.username)
+    }
+    var myChannelEdit by remember(session.id) { mutableStateOf<MyChannel?>(null) }
+
+    fun confirmMyChannelPosition(channel: MyChannel, position: Int) {
+        playerScope.launch {
+            val current = container.myChannelsStore.getChannels(session.server, session.username)
+            if (MyChannels.contains(current, channel.streamId)) {
+                container.myChannelsStore.moveTo(session.server, session.username, channel.streamId, position)
+            } else {
+                container.myChannelsStore.insertAt(session.server, session.username, channel, position)
+            }
+            myChannelEdit = null
+        }
+    }
+
+    fun moveMyChannel(channel: MyChannel, up: Boolean) {
+        playerScope.launch {
+            if (up) {
+                container.myChannelsStore.moveUp(session.server, session.username, channel.streamId)
+            } else {
+                container.myChannelsStore.moveDown(session.server, session.username, channel.streamId)
+            }
+        }
+    }
+
+    fun removeMyChannel(channel: MyChannel) {
+        playerScope.launch {
+            container.myChannelsStore.remove(session.server, session.username, channel.streamId)
+            myChannelEdit = null
+        }
+    }
+
+    val currentLiveChannel = state.liveChannels.getOrNull(state.currentChannelIndex)
+    val bannerSchedulePrograms = rememberChannelSchedulePrograms(
+        streamIds = listOfNotNull(currentLiveChannel?.streamId),
+        loader = container.channelScheduleLoader,
+        server = session.server,
+        username = session.username,
+        password = session.password,
+    )
+    val bannerScheduleNow = rememberMinuteNow(container.clock)
 
     LaunchedEffect(engine) { engine.start() }
 
@@ -220,7 +281,17 @@ fun PlayerScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black)
-                .fvpLongPress { if (session.source is PlaybackSource.Live && !state.isReplay) engine.toggleEpg() }
+                .fvpLongPress {
+                    if (session.source is PlaybackSource.Live && !state.isReplay) {
+                        state.liveChannels.getOrNull(state.currentChannelIndex)?.let { channel ->
+                            myChannelEdit = MyChannel(
+                                streamId = channel.streamId,
+                                name = channel.name,
+                                logo = channel.streamIcon,
+                            )
+                        }
+                    }
+                }
                 .onPreviewKeyEvent { event ->
                     val native = event.nativeKeyEvent
                     if (session.source is PlaybackSource.Live && !state.isReplay && !state.hasModalOverlay) {
@@ -426,6 +497,8 @@ fun PlayerScreen(
                             .padding(scale.dp(28f)),
                         audioFormatLabel = state.audioFormatLabel,
                         ffmpegActive = state.ffmpegActive,
+                        schedulePrograms = currentLiveChannel?.let { bannerSchedulePrograms[it.streamId] },
+                        scheduleNowMillis = bannerScheduleNow,
                     )
                 }
             }
@@ -459,6 +532,12 @@ fun PlayerScreen(
                         engine.selectChannel(index)
                         rootFocus.requestFocus()
                     },
+                    epgClient = container.channelScheduleLoader,
+                    epgServer = session.server,
+                    epgUsername = session.username,
+                    epgPassword = session.password,
+                    clock = container.clock,
+                    myChannelIds = myChannels.map { it.streamId }.toSet(),
                 )
             }
 
@@ -548,4 +627,18 @@ fun PlayerScreen(
         }
     }
 
+    // Pressione lunga sul canale in onda: aggiunta o menu di modifica di
+    // "I miei canali", in una finestra sopra il player.
+    myChannelEdit?.let { channel ->
+        MyChannelDialog(
+            channel = channel,
+            channels = myChannels,
+            scale = scale,
+            onInsertAt = { position -> confirmMyChannelPosition(channel, position) },
+            onMoveUp = { moveMyChannel(channel, up = true) },
+            onMoveDown = { moveMyChannel(channel, up = false) },
+            onRemove = { removeMyChannel(channel) },
+            onDismiss = { myChannelEdit = null },
+        )
+    }
 }

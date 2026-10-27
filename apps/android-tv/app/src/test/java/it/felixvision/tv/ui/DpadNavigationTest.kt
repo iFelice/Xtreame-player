@@ -48,11 +48,15 @@ import it.felixvision.tv.data.catalog.Category
 import it.felixvision.tv.data.catalog.LiveStream
 import it.felixvision.tv.data.catalog.SeriesItem
 import it.felixvision.tv.data.catalog.VodStream
+import it.felixvision.tv.data.channels.MyChannel
+import it.felixvision.tv.data.channels.MyChannels
 import it.felixvision.tv.data.favorites.FavoriteItem
 import it.felixvision.tv.data.favorites.FavoritesStore
 import it.felixvision.tv.ui.catalog.FavoritesSection
+import it.felixvision.tv.ui.catalog.MY_CHANNELS_EMPTY_MESSAGE
 import it.felixvision.tv.ui.catalog.FilmSection
 import it.felixvision.tv.ui.catalog.LiveSection
+import it.felixvision.tv.ui.catalog.MyChannelDialog
 import it.felixvision.tv.ui.catalog.NovitaSection
 import it.felixvision.tv.ui.catalog.SerieSection
 import it.felixvision.tv.ui.components.FvpPrimaryButton
@@ -117,6 +121,9 @@ class DpadNavigationTest {
         var showPlaybackMessage by remember { mutableStateOf<String?>(null) }
         var favoritesMessage by remember { mutableStateOf<String?>(null) }
         var favTick by remember { mutableStateOf(0) }
+        // "I miei canali": lista personale e finestra di aggiunta/modifica.
+        var myChannels by remember { mutableStateOf(listOf<MyChannel>()) }
+        var myChannelEdit by remember { mutableStateOf<MyChannel?>(null) }
         val scope = rememberCoroutineScope()
         val context = LocalContext.current
         val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -205,10 +212,16 @@ class DpadNavigationTest {
                             streams = fakeLiveStreams(),
                             scale = scale,
                             onSelectChannel = { showPlaybackMessage = "Riproduzione disponibile nel prossimo aggiornamento" },
+                            // Pressione lunga su un canale: finestra di "I miei
+                            // canali" (non più preferito Live).
                             onLongPressChannel = { stream ->
-                                val fav = FavoriteItem(id = "live_${stream.streamId}", type = "live", title = stream.name, poster = stream.streamIcon, categoryId = stream.categoryId)
-                                toggleFav(fav)
+                                myChannelEdit = MyChannel(
+                                    streamId = stream.streamId,
+                                    name = stream.name,
+                                    logo = stream.streamIcon,
+                                )
                             },
+                            myChannelIds = myChannels.map { it.streamId }.toSet(),
                             contentFocusRequester = contentFocusRequester,
                             modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester).testTag("live_section")
                         )
@@ -251,6 +264,9 @@ class DpadNavigationTest {
                             scale = scale,
                             onSelectFavorite = { showPlaybackMessage = "Riproduzione disponibile nel prossimo aggiornamento" },
                             onToggleFavorite = { toggleFav(it) },
+                            myChannels = myChannels,
+                            onPlayMyChannel = { showPlaybackMessage = "Riproduzione disponibile nel prossimo aggiornamento" },
+                            onLongPressMyChannel = { channel -> myChannelEdit = channel },
                             contentFocusRequester = contentFocusRequester,
                             modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester).testTag("preferiti_section")
                         )
@@ -332,6 +348,27 @@ class DpadNavigationTest {
                     }
                 }
             }
+
+            // Finestra di "I miei canali" aperta dalla pressione lunga su un
+            // canale (in Live, nei Preferiti o nella ricerca).
+            myChannelEdit?.let { channel ->
+                MyChannelDialog(
+                    channel = channel,
+                    channels = myChannels,
+                    scale = scale,
+                    onInsertAt = { position ->
+                        myChannels = MyChannels.insertAt(myChannels, channel, position)
+                        myChannelEdit = null
+                    },
+                    onMoveUp = { myChannels = MyChannels.moveUp(myChannels, channel.streamId) },
+                    onMoveDown = { myChannels = MyChannels.moveDown(myChannels, channel.streamId) },
+                    onRemove = {
+                        myChannels = MyChannels.remove(myChannels, channel.streamId)
+                        myChannelEdit = null
+                    },
+                    onDismiss = { myChannelEdit = null },
+                )
+            }
         }
     }
 
@@ -376,7 +413,9 @@ class DpadNavigationTest {
                     DrawerSection.Film -> rule.onNodeWithTag("film_201").assertIsFocused()
                     DrawerSection.Serie -> rule.onNodeWithTag("serie_301").assertIsFocused()
                     DrawerSection.Preferiti -> {
-                        rule.onNodeWithText("Nessun preferito").assertIsDisplayed()
+                        // "I miei canali" è la scheda aperta per prima: elenco vuoto
+                        // finché non si aggiungono canali.
+                        rule.onNodeWithText(MY_CHANNELS_EMPTY_MESSAGE).assertIsDisplayed()
                         rule.onNodeWithTag("preferiti_section").performKeyInput { pressKey(Key.Back) }
                         rule.waitForIdle()
                         rule.onNodeWithTag("drawer_Preferiti").assertIsFocused()
@@ -430,30 +469,36 @@ class DpadNavigationTest {
     }
 
     @Test
-    fun `c - pressione lunga aggiunge e rimuove preferiti per canale film serie`() {
+    fun `c - pressione lunga aggiunge a I miei canali e gestisce i preferiti film serie`() {
         val favStore = FavoritesStore.InMemory()
         val contentFocusRequester = FocusRequester()
         val drawerFocusHandle = DrawerFocusHandle()
         rule.setContent { TestFvpScreen(contentFocusRequester = contentFocusRequester, drawerFocusHandle = drawerFocusHandle, favoritesInMemory = favStore) }
         try {
             navigateTo(DrawerSection.Live, drawerFocusHandle)
+            // Pressione lunga su un canale Live: si apre "Aggiungi a I miei
+            // canali" con il numero proposto (lista vuota = 1), non il
+            // preferito Live di prima.
             rule.mainClock.autoAdvance = false
             rule.onNodeWithTag("live_channel_101").performKeyInput { keyDown(Key.Enter) }
             rule.mainClock.advanceTimeBy(700)
             rule.onNodeWithTag("live_channel_101").performKeyInput { keyUp(Key.Enter) }
             rule.mainClock.autoAdvance = true
             rule.waitForIdle()
-            assert(favStore.get("http://server.esempio:8080", "demo").any { it.id == "live_101" })
-            rule.onNodeWithText("Aggiunto ai preferiti").assertIsDisplayed()
+            rule.onNodeWithText("Aggiungi a I miei canali").assertIsDisplayed()
+            rule.onNodeWithTag("channel_number_value").assertIsDisplayed()
+            assert(favStore.get("http://server.esempio:8080", "demo").none { it.id == "live_101" })
+            // OK conferma la posizione precompilata: il canale entra in "I miei
+            // canali" come numero 1.
+            rule.onNodeWithTag("channel_number_field").performKeyInput { pressKey(Key.Enter) }
+            rule.waitForIdle()
             navigateTo(DrawerSection.Preferiti, drawerFocusHandle)
-            rule.onNodeWithTag("favorite_live_101").assertIsDisplayed()
-            navigateTo(DrawerSection.Live, drawerFocusHandle)
-            rule.mainClock.autoAdvance = false
-            rule.onNodeWithTag("live_channel_101").performKeyInput { keyDown(Key.Enter) }
-            rule.mainClock.advanceTimeBy(700)
-            rule.onNodeWithTag("live_channel_101").performKeyInput { keyUp(Key.Enter) }
-            rule.mainClock.autoAdvance = true
-            rule.waitForIdle()
+            // I canali Live non stanno più nei preferiti: schede "I miei canali" e
+            // "Film e Serie". La stella di Live indica "I miei canali".
+            rule.onNodeWithTag("favorites_tab_my_channels").assertIsDisplayed()
+            rule.onNodeWithTag("favorites_tab_film_series").assertIsDisplayed()
+            rule.onNodeWithTag("my_channel_101").assertIsDisplayed()
+            rule.onNodeWithTag("my_channel_number_101").assertIsDisplayed()
             assert(favStore.get("http://server.esempio:8080", "demo").none { it.id == "live_101" })
 
             navigateTo(DrawerSection.Film, drawerFocusHandle)

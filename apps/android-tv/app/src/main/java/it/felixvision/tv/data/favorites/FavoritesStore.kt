@@ -36,6 +36,9 @@ data class FavoriteItem(
     val addedAtMillis: Long = 0L,
 ) {
     companion object {
+        const val LIVE = "live"
+        const val VOD = "vod"
+        const val SERIES = "series"
         const val LIVE_CATEGORY = "live_category"
 
         fun liveCategory(categoryId: String, title: String): FavoriteItem = FavoriteItem(
@@ -99,6 +102,19 @@ class FavoritesStore(
         val key = keyFor(server, username)
         val current = getFavorites(server, username).filterNot { it.id == id }
         persist(key, current)
+    }
+
+    /** Rimozione in blocco, usata dalla pulizia dei vecchi preferiti Live. */
+    suspend fun removeFavorites(
+        server: String,
+        username: String,
+        ids: Collection<String>,
+    ): List<FavoriteItem> {
+        if (ids.isEmpty()) return getFavorites(server, username)
+        val key = keyFor(server, username)
+        val updated = getFavorites(server, username).filterNot { it.id in ids }
+        persist(key, updated)
+        return updated
     }
 
     suspend fun toggleFavorite(server: String, username: String, item: FavoriteItem): Boolean {

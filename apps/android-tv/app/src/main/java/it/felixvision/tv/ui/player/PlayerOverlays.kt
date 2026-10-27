@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -34,6 +35,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -46,16 +48,23 @@ import androidx.tv.material3.ListItem
 import androidx.tv.material3.ListItemDefaults
 import androidx.tv.material3.Text
 import it.felixvision.tv.R
+import it.felixvision.tv.core.Clock
+import it.felixvision.tv.core.SystemClock
 import it.felixvision.tv.data.catalog.LiveStream
+import it.felixvision.tv.data.epg.ChannelScheduleLoader
+import it.felixvision.tv.data.epg.EpgProgram
 import it.felixvision.tv.data.playback.PlaybackFormatting
 import it.felixvision.tv.data.playback.SeekFeedback
 import it.felixvision.tv.data.volume.PlayerVolume
 import it.felixvision.tv.ui.components.ChannelLogoImage
+import it.felixvision.tv.ui.components.ChannelScheduleInfo
 import it.felixvision.tv.ui.components.FocusMarqueeText
 import it.felixvision.tv.ui.components.FvpPrimaryButton
 import it.felixvision.tv.ui.components.FvpSecondaryButton
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.components.focusSafePadding
+import it.felixvision.tv.ui.components.rememberChannelSchedulePrograms
+import it.felixvision.tv.ui.components.rememberMinuteNow
 import it.felixvision.tv.ui.theme.FvpColors
 import it.felixvision.tv.ui.theme.glassBorder
 import it.felixvision.tv.ui.theme.rowLogoPlayer
@@ -95,6 +104,8 @@ fun PlayerChannelBanner(
     modifier: Modifier = Modifier,
     audioFormatLabel: String = "",
     ffmpegActive: Boolean = false,
+    schedulePrograms: List<EpgProgram>? = null,
+    scheduleNowMillis: Long = 0L,
 ) {
     Row(
         modifier = modifier
@@ -110,7 +121,12 @@ fun PlayerChannelBanner(
             scale = scale,
             modifier = Modifier.size(scale.dp(64f)),
         )
-        Column(verticalArrangement = Arrangement.spacedBy(scale.dp(2f))) {
+        Column(
+            // Larghezza massima per la riga "in onda / a seguire": il banner
+            // resta compatto sopra il video.
+            modifier = Modifier.widthIn(max = scale.dp(420f)),
+            verticalArrangement = Arrangement.spacedBy(scale.dp(2f)),
+        ) {
             val number = banner.number?.let { "#$it · " }.orEmpty()
             Text(
                 text = number + banner.name,
@@ -135,6 +151,17 @@ fun PlayerChannelBanner(
                 scale = scale,
                 modifier = Modifier.testTag("player_banner_audio"),
             )
+            // In onda con avanzamento e a seguire, quando la guida c'è.
+            if (schedulePrograms != null && scheduleNowMillis > 0L) {
+                ChannelScheduleInfo(
+                    programs = schedulePrograms,
+                    nowMillis = scheduleNowMillis,
+                    scale = scale,
+                    showNext = true,
+                    textSizeBase = 12f,
+                    testTagPrefix = "player_banner_schedule",
+                )
+            }
         }
     }
 }
@@ -188,10 +215,32 @@ fun PlayerChannelListOverlay(
     categoryName: String?,
     scale: UiScale,
     onSelect: (Int) -> Unit,
+    epgClient: ChannelScheduleLoader? = null,
+    epgServer: String = "",
+    epgUsername: String = "",
+    epgPassword: String = "",
+    clock: Clock = SystemClock,
+    myChannelIds: Set<String> = emptySet(),
 ) {
     val listState = rememberLazyListState()
     val focusRequesters = remember(channels) { channels.map { FocusRequester() } }
     val safeIndex = currentIndex.coerceIn(0, (channels.size - 1).coerceAtLeast(0))
+    // Guida solo per i canali visibili nella lista del player.
+    val visibleIds by remember(channels) {
+        androidx.compose.runtime.derivedStateOf {
+            listState.layoutInfo.visibleItemsInfo.mapNotNull { info ->
+                channels.getOrNull(info.index)?.streamId
+            }
+        }
+    }
+    val schedulePrograms = rememberChannelSchedulePrograms(
+        streamIds = visibleIds,
+        loader = epgClient,
+        server = epgServer,
+        username = epgUsername,
+        password = epgPassword,
+    )
+    val scheduleNow = rememberMinuteNow(clock)
 
     LaunchedEffect(channels) {
         if (channels.isNotEmpty()) {
@@ -239,20 +288,38 @@ fun PlayerChannelListOverlay(
                         selected = false,
                         onClick = { onSelect(index) },
                         headlineContent = {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(scale.dp(6f)),
-                            ) {
-                                FocusMarqueeText(
-                                    text = channel.name,
-                                    focused = focused,
-                                    color = if (isCurrent) FvpColors.Green else FvpColors.TextPrimary,
-                                    fontSize = scale.rowText,
-                                    modifier = Modifier.weight(1f, fill = false),
-                                )
-                                if (isCurrent) {
-                                    Text(text = "●", color = FvpColors.Green, fontSize = scale.sp(12f))
+                            Column {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(scale.dp(6f)),
+                                ) {
+                                    FocusMarqueeText(
+                                        text = channel.name,
+                                        focused = focused,
+                                        color = if (isCurrent) FvpColors.Green else FvpColors.TextPrimary,
+                                        fontSize = scale.rowText,
+                                        modifier = Modifier.weight(1f, fill = false),
+                                    )
+                                    if (isCurrent) {
+                                        Text(text = "●", color = FvpColors.Green, fontSize = scale.sp(12f))
+                                    }
+                                    if (channel.streamId in myChannelIds) {
+                                        Text(
+                                            text = "★",
+                                            color = Color(0xFFFBBF24),
+                                            fontSize = scale.sp(12f),
+                                            modifier = Modifier.testTag("player_channel_${channel.streamId}_fav_star"),
+                                        )
+                                    }
                                 }
+                                ChannelScheduleInfo(
+                                    programs = schedulePrograms[channel.streamId],
+                                    nowMillis = scheduleNow,
+                                    scale = scale,
+                                    showNext = true,
+                                    textSizeBase = 11f,
+                                    testTagPrefix = "player_channel_schedule_${channel.streamId}",
+                                )
                             }
                         },
                         leadingContent = {
