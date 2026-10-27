@@ -1,6 +1,7 @@
 package it.felixvision.tv
 
 import android.app.Application
+import it.felixvision.tv.core.Media3Logging
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -14,6 +15,7 @@ class FvpApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        Media3Logging.configure(isDebugBuild = BuildConfig.DEBUG)
         container = AppContainer(this)
         container.cleanupDownloadedUpdates(applicationScope)
         // Prima della prima creazione di una sessione di abbinamento si verifica
