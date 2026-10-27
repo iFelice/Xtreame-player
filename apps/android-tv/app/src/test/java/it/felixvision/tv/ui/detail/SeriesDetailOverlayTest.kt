@@ -13,6 +13,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotFocused
@@ -22,6 +23,7 @@ import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.isFocused
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performKeyInput
@@ -100,8 +102,8 @@ class SeriesDetailOverlayTest {
         rule.onNodeWithTag("detail_episode_s1e3").assertExists()
         rule.onNodeWithTag("detail_episode_s2e1").assertDoesNotExist()
         rule.onNodeWithTag("detail_episode_s2e2").assertDoesNotExist()
-        rule.onNodeWithText("La lanterna").assertExists()
-        rule.onNodeWithText("Il molo").assertDoesNotExist()
+        rule.onAllNodesWithText("La lanterna", substring = true).onFirst().assertExists()
+        rule.onAllNodesWithText("Il molo", substring = true).assertCountEquals(0)
         rule.onNodeWithText("3 episodi").assertExists()
         rule.onNodeWithText("2 episodi").assertExists()
         rule.onNodeWithText("Anno: 2024").assertExists()
@@ -142,8 +144,8 @@ class SeriesDetailOverlayTest {
         rule.onNodeWithTag("detail_season_2").assertIsNotFocused()
         rule.onNodeWithTag("detail_episode_s2e1").assertExists()
         rule.onNodeWithTag("detail_episode_s1e1").assertDoesNotExist()
-        rule.onNodeWithText("L'alta marea").assertExists()
-        rule.onNodeWithText("La lanterna").assertDoesNotExist()
+        rule.onAllNodesWithText("L'alta marea", substring = true).onFirst().assertExists()
+        rule.onAllNodesWithText("La lanterna", substring = true).assertCountEquals(0)
     }
 
     @Test
@@ -198,8 +200,8 @@ class SeriesDetailOverlayTest {
         assertFocusedTag("detail_episode_s2e1")
         rule.onNodeWithTag("detail_episode_s2e2").assertExists()
         rule.onNodeWithTag("detail_episode_s1e3").assertDoesNotExist()
-        rule.onNodeWithText("Il molo").assertExists()
-        rule.onNodeWithText("La carta").assertDoesNotExist()
+        rule.onAllNodesWithText("Il molo", substring = true).onFirst().assertExists()
+        rule.onAllNodesWithText("La carta", substring = true).assertCountEquals(0)
     }
 
     @Test
@@ -218,8 +220,8 @@ class SeriesDetailOverlayTest {
         rule.onNodeWithTag("detail_episode_s1e1").assertExists()
         rule.onNodeWithTag("detail_episode_s1e3").assertExists()
         rule.onNodeWithTag("detail_episode_s2e1").assertDoesNotExist()
-        rule.onNodeWithText("La lanterna").assertExists()
-        rule.onNodeWithText("Il molo").assertDoesNotExist()
+        rule.onAllNodesWithText("La lanterna", substring = true).onFirst().assertExists()
+        rule.onAllNodesWithText("Il molo", substring = true).assertCountEquals(0)
 
         rule.onNodeWithTag("detail_season_2").performSemanticsAction(SemanticsActions.OnClick)
         settle()
@@ -230,8 +232,8 @@ class SeriesDetailOverlayTest {
         rule.onNodeWithTag("detail_episode_s2e2").assertExists()
         rule.onNodeWithTag("detail_episode_s1e1").assertDoesNotExist()
         assertFocusedTag("detail_episode_s2e1")
-        rule.onNodeWithText("Il molo").assertExists()
-        rule.onNodeWithText("La lanterna").assertDoesNotExist()
+        rule.onAllNodesWithText("Il molo", substring = true).onFirst().assertExists()
+        rule.onAllNodesWithText("La lanterna", substring = true).assertCountEquals(0)
     }
 
     @Test
@@ -280,7 +282,7 @@ class SeriesDetailOverlayTest {
         rule.onNodeWithTag("detail_episodes_heading").assertTextEquals("Episodi · Stagione 2")
         rule.onNodeWithTag("detail_season_2").assertIsSelected()
         rule.onNodeWithTag("detail_episode_s2e2").assertExists()
-        rule.onNodeWithText("L'alta marea").assertExists()
+        rule.onAllNodesWithText("L'alta marea", substring = true).onFirst().assertExists()
         assertTrue(open)
 
         pressBack()
@@ -299,7 +301,7 @@ class SeriesDetailOverlayTest {
         rule.onNodeWithTag("detail_episodes_heading").assertTextEquals("Episodi · Stagione 1")
         rule.onNodeWithTag("detail_episode_only1").assertExists()
         rule.onNodeWithText("1 episodi").assertExists()
-        rule.onNodeWithText("Unico faro").assertExists()
+        rule.onAllNodesWithText("Unico faro", substring = true).onFirst().assertExists()
         rule.onNodeWithTag("detail_no_seasons").assertDoesNotExist()
         rule.onNodeWithTag("serie_seasons_list").assertExists()
         rule.onNodeWithTag("serie_episodes_list").assertExists()
@@ -391,8 +393,8 @@ class SeriesDetailOverlayTest {
         assertFocusedTag("detail_episode_s2e2")
         rule.onNodeWithTag("detail_episode_s2e1").assertExists()
         rule.onNodeWithTag("detail_episode_s1e1").assertDoesNotExist()
-        rule.onNodeWithText("L'alta marea").assertExists()
-        rule.onNodeWithText("La lanterna").assertDoesNotExist()
+        rule.onAllNodesWithText("L'alta marea", substring = true).onFirst().assertExists()
+        rule.onAllNodesWithText("La lanterna", substring = true).assertCountEquals(0)
     }
 
     @Test

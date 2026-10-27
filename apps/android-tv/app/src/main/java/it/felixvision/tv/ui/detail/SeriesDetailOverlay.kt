@@ -2,6 +2,7 @@
 
 package it.felixvision.tv.ui.detail
 
+import android.os.SystemClock
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -132,6 +133,7 @@ fun SeriesDetailOverlay(
     var episodeFocusToken by remember { mutableIntStateOf(0) }
     var episodeFocusId by remember { mutableStateOf<String?>(null) }
     var seasonFocusToken by remember { mutableIntStateOf(0) }
+    var lastBackHandledAtMillis by remember { mutableStateOf<Long?>(null) }
     val favoriteFocus = remember { FocusRequester() }
     val readMoreFocus = remember { FocusRequester() }
     val closeFocus = remember { FocusRequester() }
@@ -343,6 +345,17 @@ fun SeriesDetailOverlay(
         }
     }
 
+    fun handleBackFromKey() {
+        lastBackHandledAtMillis = SystemClock.uptimeMillis()
+        handleBack()
+    }
+
+    fun handleBackFromSystem() {
+        val now = SystemClock.uptimeMillis()
+        val lastKeyHandledAt = lastBackHandledAtMillis
+        if (lastKeyHandledAt == null || now - lastKeyHandledAt >= 300L) handleBack()
+    }
+
     fun selectSeason(seasonNumber: String) {
         lockedSeason = seasonNumber
         contentFocusDone = true
@@ -363,12 +376,23 @@ fun SeriesDetailOverlay(
             decorFitsSystemWindows = false,
         )
     ) {
-        BackHandler(enabled = true) { handleBack() }
+        BackHandler(enabled = true) { handleBackFromSystem() }
         Box(
             modifier = modifier
                 .fillMaxSize()
                 .background(FvpColors.Background.copy(alpha = 0.85f))
                 .padding(scale.dp(28f))
+                .onPreviewKeyEvent { event ->
+                    if (event.key != Key.Back) return@onPreviewKeyEvent false
+                    when (event.type) {
+                        KeyEventType.KeyDown -> true
+                        KeyEventType.KeyUp -> {
+                            handleBackFromKey()
+                            true
+                        }
+                        else -> false
+                    }
+                }
                 .testTag(rootTestTag),
             contentAlignment = Alignment.Center
         ) {
@@ -860,14 +884,30 @@ private fun PlotDialog(
     val density = LocalDensity.current
     val halfViewportPx = with(density) { scale.dp(180f).toPx() }
     val closeFocus = remember { FocusRequester() }
+    var lastBackHandledAtMillis by remember { mutableStateOf<Long?>(null) }
+
+    fun closeBackFromKey() {
+        lastBackHandledAtMillis = SystemClock.uptimeMillis()
+        onClose()
+    }
+
+    fun closeBackFromSystem() {
+        val now = SystemClock.uptimeMillis()
+        val lastKeyHandledAt = lastBackHandledAtMillis
+        if (lastKeyHandledAt == null || now - lastKeyHandledAt >= 300L) onClose()
+    }
 
     LaunchedEffect(Unit) { closeFocus.requestFocus() }
 
     Dialog(
         onDismissRequest = onClose,
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+        properties = DialogProperties(
+            dismissOnBackPress = false,
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false,
+        )
     ) {
-        BackHandler { onClose() }
+        BackHandler { closeBackFromSystem() }
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -875,21 +915,33 @@ private fun PlotDialog(
                 .padding(scale.dp(24f))
                 .testTag("detail_plot_dialog")
                 .onPreviewKeyEvent { event ->
-                    if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                    when (event.key) {
-                        Key.DirectionDown -> {
-                            if (scrollState.canScrollForward) {
-                                scope.launch { scrollState.animateScrollBy(halfViewportPx) }
+                    if (event.key == Key.Back) {
+                        when (event.type) {
+                            KeyEventType.KeyDown -> true
+                            KeyEventType.KeyUp -> {
+                                closeBackFromKey()
                                 true
-                            } else false
+                            }
+                            else -> false
                         }
-                        Key.DirectionUp -> {
-                            if (scrollState.canScrollBackward) {
-                                scope.launch { scrollState.animateScrollBy(-halfViewportPx) }
-                                true
-                            } else false
+                    } else if (event.type != KeyEventType.KeyDown) {
+                        false
+                    } else {
+                        when (event.key) {
+                            Key.DirectionDown -> {
+                                if (scrollState.canScrollForward) {
+                                    scope.launch { scrollState.animateScrollBy(halfViewportPx) }
+                                    true
+                                } else false
+                            }
+                            Key.DirectionUp -> {
+                                if (scrollState.canScrollBackward) {
+                                    scope.launch { scrollState.animateScrollBy(-halfViewportPx) }
+                                    true
+                                } else false
+                            }
+                            else -> false
                         }
-                        else -> false
                     }
                 },
             contentAlignment = Alignment.Center

@@ -1,3 +1,5 @@
+import org.gradle.api.tasks.testing.Test
+
 plugins {
     alias(libs.plugins.android.application)
     // Con AGP 9 il supporto a Kotlin è integrato: non si applica più
@@ -94,6 +96,14 @@ android {
         // dipendenze (Dependabot/aggiornamenti) ma solo per errori reali.
         abortOnError = true
         disable += setOf("GradleDependency", "AndroidGradlePluginVersion", "NewerVersionAvailable")
+    }
+}
+
+tasks.withType<Test>().configureEach {
+    testLogging {
+        events("failed")
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+        showStackTraces = true
     }
 }
 
