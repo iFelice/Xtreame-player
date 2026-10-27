@@ -10,20 +10,21 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotFocused
-import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.isFocused
+import androidx.compose.ui.test.onAllNodes
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performSemanticsAction
-import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.requestFocus
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import it.felixvision.tv.data.catalog.Episode
@@ -61,6 +62,7 @@ class SeriesDetailOverlayTest {
     val rule = createAndroidComposeRule<ComponentActivity>()
 
     private val scale = UiScale(1f)
+    private val dismissCalls = AtomicInteger(0)
 
     @Test
     fun `senza episodio iniziato seleziona la prima stagione e mostra i suoi episodi`() {
@@ -88,7 +90,7 @@ class SeriesDetailOverlayTest {
         rule.onNodeWithTag("detail_episodes_heading").assertTextEquals("Episodi · Stagione 1")
         rule.onNodeWithTag("detail_season_1").assertIsSelected()
         rule.onNodeWithTag("detail_season_2").assertIsNotSelected()
-        rule.onNodeWithTag("detail_season_1").assertIsFocused()
+        assertFocusedTag("detail_season_1")
         rule.onNodeWithTag("serie_seasons_list").assertExists()
         rule.onNodeWithTag("serie_episodes_list").assertExists()
         rule.onNodeWithTag("detail_episode_s1e1").assertExists()
@@ -134,7 +136,7 @@ class SeriesDetailOverlayTest {
         rule.onNodeWithTag("detail_episodes_heading").assertTextEquals("Episodi · Stagione 2")
         rule.onNodeWithTag("detail_season_2").assertIsSelected()
         rule.onNodeWithTag("detail_season_1").assertIsNotSelected()
-        rule.onNodeWithTag("detail_episode_s2e2").assertIsFocused()
+        assertFocusedTag("detail_episode_s2e2")
         rule.onNodeWithTag("detail_season_2").assertIsNotFocused()
         rule.onNodeWithTag("detail_episode_s2e1").assertExists()
         rule.onNodeWithTag("detail_episode_s1e1").assertDoesNotExist()
@@ -159,7 +161,7 @@ class SeriesDetailOverlayTest {
 
         rule.onNodeWithTag("detail_episodes_heading").assertTextEquals("Episodi · Stagione 2")
         rule.onNodeWithTag("detail_season_2").assertIsSelected()
-        rule.onNodeWithTag("detail_episode_s2e2").assertIsFocused()
+        assertFocusedTag("detail_episode_s2e2")
         rule.onNodeWithTag("detail_episode_s1e1").assertDoesNotExist()
     }
 
@@ -191,7 +193,7 @@ class SeriesDetailOverlayTest {
 
         rule.onNodeWithTag("detail_episodes_heading").assertTextEquals("Episodi · Stagione 2")
         rule.onNodeWithTag("detail_season_2").assertIsSelected()
-        rule.onNodeWithTag("detail_episode_s2e1").assertIsFocused()
+        assertFocusedTag("detail_episode_s2e1")
         rule.onNodeWithTag("detail_episode_s2e2").assertExists()
         rule.onNodeWithTag("detail_episode_s1e3").assertDoesNotExist()
         rule.onNodeWithText("Il molo").assertExists()
@@ -207,7 +209,7 @@ class SeriesDetailOverlayTest {
 
         rule.onNodeWithTag("detail_season_2").requestFocus()
         settle()
-        rule.onNodeWithTag("detail_season_2").assertIsFocused()
+        assertFocusedTag("detail_season_2")
         rule.onNodeWithTag("detail_episodes_heading").assertTextEquals("Episodi · Stagione 1")
         rule.onNodeWithTag("detail_season_1").assertIsSelected()
         rule.onNodeWithTag("detail_season_2").assertIsNotSelected()
@@ -225,7 +227,7 @@ class SeriesDetailOverlayTest {
         rule.onNodeWithTag("detail_episode_s2e1").assertExists()
         rule.onNodeWithTag("detail_episode_s2e2").assertExists()
         rule.onNodeWithTag("detail_episode_s1e1").assertDoesNotExist()
-        rule.onNodeWithTag("detail_episode_s2e1").assertIsFocused()
+        assertFocusedTag("detail_episode_s2e1")
         rule.onNodeWithText("Il molo").assertExists()
         rule.onNodeWithText("La lanterna").assertDoesNotExist()
     }
@@ -234,13 +236,13 @@ class SeriesDetailOverlayTest {
     fun `OK sulla stagione da continuare mette il focus su quell'episodio non sul primo`() {
         rule.setContent { Host(info = twoSeasons(), resumeEpisodeId = "s2e2") }
         settle()
-        rule.onNodeWithTag("detail_episode_s2e2").assertIsFocused()
+        assertFocusedTag("detail_episode_s2e2")
 
         rule.onNodeWithTag("detail_season_1").performSemanticsAction(SemanticsActions.OnClick)
         settle()
         rule.onNodeWithTag("detail_episodes_heading").assertTextEquals("Episodi · Stagione 1")
         rule.onNodeWithTag("detail_season_1").assertIsSelected()
-        rule.onNodeWithTag("detail_episode_s1e1").assertIsFocused()
+        assertFocusedTag("detail_episode_s1e1")
         rule.onNodeWithTag("detail_episode_s1e2").assertExists()
         rule.onNodeWithTag("detail_episode_s1e3").assertExists()
         rule.onNodeWithTag("detail_episode_s2e2").assertDoesNotExist()
@@ -250,7 +252,7 @@ class SeriesDetailOverlayTest {
         rule.onNodeWithTag("detail_episodes_heading").assertTextEquals("Episodi · Stagione 2")
         rule.onNodeWithTag("detail_season_2").assertIsSelected()
         rule.onNodeWithTag("detail_episode_s2e1").assertExists()
-        rule.onNodeWithTag("detail_episode_s2e2").assertIsFocused()
+        assertFocusedTag("detail_episode_s2e2")
         rule.onNodeWithTag("detail_episode_s1e1").assertDoesNotExist()
     }
 
@@ -267,12 +269,12 @@ class SeriesDetailOverlayTest {
             }
         }
         settle()
-        rule.onNodeWithTag("detail_episode_s2e2").assertIsFocused()
+        assertFocusedTag("detail_episode_s2e2")
         rule.onNodeWithTag("detail_episodes_heading").assertTextEquals("Episodi · Stagione 2")
 
         pressBack()
         rule.onNodeWithTag("serie_detail_root").assertIsDisplayed()
-        rule.onNodeWithTag("detail_season_2").assertIsFocused()
+        assertFocusedTag("detail_season_2")
         rule.onNodeWithTag("detail_episodes_heading").assertTextEquals("Episodi · Stagione 2")
         rule.onNodeWithTag("detail_season_2").assertIsSelected()
         rule.onNodeWithTag("detail_episode_s2e2").assertExists()
@@ -374,7 +376,7 @@ class SeriesDetailOverlayTest {
         }
         settle()
         rule.onNodeWithTag("detail_episodes_heading").assertTextEquals("Episodi · Stagione 1")
-        rule.onNodeWithTag("detail_season_1").assertIsFocused()
+        assertFocusedTag("detail_season_1")
 
         rule.runOnIdle {
             episodeId = "s2e2"
@@ -384,7 +386,7 @@ class SeriesDetailOverlayTest {
         rule.onNodeWithTag("detail_episodes_heading").assertTextEquals("Episodi · Stagione 2")
         rule.onNodeWithTag("detail_season_2").assertIsSelected()
         rule.onNodeWithTag("detail_season_1").assertIsNotSelected()
-        rule.onNodeWithTag("detail_episode_s2e2").assertIsFocused()
+        assertFocusedTag("detail_episode_s2e2")
         rule.onNodeWithTag("detail_episode_s2e1").assertExists()
         rule.onNodeWithTag("detail_episode_s1e1").assertDoesNotExist()
         rule.onNodeWithText("L'alta marea").assertExists()
@@ -432,8 +434,36 @@ class SeriesDetailOverlayTest {
         rule.waitForIdle()
     }
 
+    private fun assertFocusedTag(expected: String) {
+        val expectedIsFocused = try {
+            rule.onNodeWithTag(expected).assertIsFocused()
+            true
+        } catch (_: AssertionError) {
+            false
+        }
+        if (expectedIsFocused) return
+
+        val focusedNodes = rule.onAllNodes(isFocused(), useUnmergedTree = true).fetchSemanticsNodes()
+        val actualFocus = focusedNodes.joinToString(separator = "; ") { node ->
+            val tag = node.config.getOrElse(SemanticsProperties.TestTag) { "" }
+            val text = node.config.getOrElse(SemanticsProperties.Text) { emptyList() }
+                .joinToString(separator = " ") { it.text }
+            listOfNotNull(
+                tag.takeIf { it.isNotBlank() }?.let { "testTag=$it" },
+                text.takeIf { it.isNotBlank() }?.let { "text=$it" },
+            ).joinToString(", ").ifBlank { node.config.toString() }
+        }.ifBlank { "<nessun nodo focalizzato>" }
+        val detailVisible = rule.onAllNodesWithTag("serie_detail_root").fetchSemanticsNodes().isNotEmpty()
+
+        assertTrue(
+            "Atteso focus su testTag=$expected; focus effettivo: $actualFocus; " +
+                "onDismiss chiamato ${dismissCalls.get()} volte; dettaglio visibile=$detailVisible",
+            expectedIsFocused,
+        )
+    }
+
     private fun pressBack() {
-        rule.onNodeWithTag("serie_detail_root").performKeyInput { pressKey(Key.Back) }
+        rule.activity.onBackPressedDispatcher.onBackPressed()
         settle()
     }
 
@@ -502,7 +532,10 @@ class SeriesDetailOverlayTest {
             scale = scale,
             isFavorite = false,
             contentFocusRequester = contentFocus,
-            onDismiss = onDismiss,
+            onDismiss = {
+                dismissCalls.incrementAndGet()
+                onDismiss()
+            },
             onToggleFavorite = {},
             onPlayEpisode = { _, _ -> },
             onRetry = onRetry,
