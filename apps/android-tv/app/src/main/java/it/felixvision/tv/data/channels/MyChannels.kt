@@ -102,6 +102,19 @@ object MyChannels {
 }
 
 /**
+ * Allineamento del player alla lista personale aggiornata mentre si guarda:
+ * lo zapping resta la [channels] nuova, [index] è la posizione da cui
+ * proseguono Su/Giù, [onAir] il canale che deve restare in onda e [number] il
+ * suo numero personale (`null` quando non è più nella lista).
+ */
+data class MyChannelZapping(
+    val channels: List<LiveStream>,
+    val index: Int,
+    val onAir: LiveStream?,
+    val number: Int?,
+)
+
+/**
  * Canali Live nello stesso ordine di "I miei canali": i dati del catalogo
  * (numero del provider, categoria, guida) restano disponibili quando il canale
  * è già nel catalogo, altrimenti si usano nome e logo salvati.
@@ -125,6 +138,59 @@ object MyChannelPlayback {
                 )
             }
         }
+    }
+
+    /**
+     * Allinea il player alla lista personale appena cambiata (aggiunta,
+     * spostamento o rimozione dal menu del player).
+     *
+     * - canale in onda ancora in lista: resta in onda, prende il nuovo numero
+     *   (la sua nuova posizione) e Su/Giù ripartono da lì;
+     * - canale in onda rimosso: resta in onda finché non si cambia canale, non
+     *   ha più un numero e Su/Giù proseguono dalla posizione in cui si trovava;
+     * - lista nuova vuota: si lascia tutto com'è, così il canale continua senza
+     *   zapping finché la lista non torna.
+     */
+    fun sync(
+        previousChannels: List<LiveStream>,
+        previousIndex: Int,
+        updated: List<LiveStream>,
+    ): MyChannelZapping {
+        val current = previousChannels.getOrNull(previousIndex)
+        if (updated.isEmpty()) {
+            return MyChannelZapping(
+                channels = previousChannels,
+                index = previousIndex.coerceAtLeast(0),
+                onAir = current,
+                number = if (current == null) null else previousIndex + 1,
+            )
+        }
+        if (current == null) {
+            val index = previousIndex.coerceIn(0, updated.size - 1)
+            return MyChannelZapping(
+                channels = updated,
+                index = index,
+                onAir = updated[index],
+                number = index + 1,
+            )
+        }
+        val position = updated.indexOfFirst { it.streamId == current.streamId }
+        if (position >= 0) {
+            return MyChannelZapping(
+                channels = updated,
+                index = position,
+                onAir = updated[position],
+                number = position + 1,
+            )
+        }
+        // Canale rimosso: resta in onda e lo zapping riparte dalla sua vecchia
+        // posizione nella lista nuova.
+        return MyChannelZapping(
+            channels = updated,
+            index = previousIndex.coerceIn(0, updated.size - 1),
+            onAir = current,
+            number = null,
+        )
     }
 }
 

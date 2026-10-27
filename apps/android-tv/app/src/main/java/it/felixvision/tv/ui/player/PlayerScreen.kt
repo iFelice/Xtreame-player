@@ -47,7 +47,9 @@ import androidx.media3.ui.PlayerView
 import androidx.tv.material3.Text
 import it.felixvision.tv.AppContainer
 import it.felixvision.tv.data.channels.MyChannel
+import it.felixvision.tv.data.channels.MyChannelPlayback
 import it.felixvision.tv.data.channels.MyChannels
+import it.felixvision.tv.data.playback.ChannelNumbering
 import it.felixvision.tv.data.playback.SeekAcceleration
 import it.felixvision.tv.data.playback.SeekAccumulator
 import it.felixvision.tv.data.playback.SeekFeedback
@@ -109,6 +111,26 @@ fun PlayerScreen(
         value = container.myChannelsStore.getChannels(session.server, session.username)
     }
     var myChannelEdit by remember(session.id) { mutableStateOf<MyChannel?>(null) }
+    // Menu della pressione lunga sul canale in onda (guida o "I miei canali").
+    var longPressMenuOpen by remember(session.id) { mutableStateOf(false) }
+
+    // Player aperto da "I miei canali": la lista personale può cambiare mentre
+    // si guarda (aggiunta, spostamento o rimozione dal menu del player). Lo
+    // zapping e la numerazione seguono il nuovo ordine, il canale in onda resta
+    // lo stesso; nel player aperto da Live non succede nulla.
+    val liveSource = session.source as? PlaybackSource.Live
+    val personalNumbering = liveSource?.numbering == ChannelNumbering.PERSONAL
+    val liveChannelMetadata = remember(session.id) {
+        liveSource
+            ?.let { live -> (live.allChannels + live.channels).associateBy { it.streamId } }
+            .orEmpty()
+    }
+    LaunchedEffect(personalNumbering, myChannels) {
+        if (!personalNumbering) return@LaunchedEffect
+        val ordered = MyChannelPlayback.streams(myChannels, liveChannelMetadata.values.toList())
+        if (ordered.isEmpty()) return@LaunchedEffect
+        engine.updatePersonalChannels(ordered)
+    }
 
     fun confirmMyChannelPosition(channel: MyChannel, position: Int) {
         playerScope.launch {
@@ -139,7 +161,8 @@ fun PlayerScreen(
         }
     }
 
-    val currentLiveChannel = state.liveChannels.getOrNull(state.currentChannelIndex)
+    // Canale davvero in onda: resta valido anche se tolto da "I miei canali".
+    val currentLiveChannel = engine.onAirChannel
     val bannerSchedulePrograms = rememberChannelSchedulePrograms(
         streamIds = listOfNotNull(currentLiveChannel?.streamId),
         loader = container.channelScheduleLoader,
@@ -282,14 +305,10 @@ fun PlayerScreen(
                 .fillMaxSize()
                 .background(Color.Black)
                 .fvpLongPress {
+                    // Menu sopra il player: guida del canale oppure "I miei
+                    // canali". La riproduzione continua.
                     if (session.source is PlaybackSource.Live && !state.isReplay) {
-                        state.liveChannels.getOrNull(state.currentChannelIndex)?.let { channel ->
-                            myChannelEdit = MyChannel(
-                                streamId = channel.streamId,
-                                name = channel.name,
-                                logo = channel.streamIcon,
-                            )
-                        }
+                        if (engine.onAirChannel != null) longPressMenuOpen = true
                     }
                 }
                 .onPreviewKeyEvent { event ->
@@ -439,6 +458,15 @@ fun PlayerScreen(
                 }
             }
 
+            // Chiuso il menu della pressione lunga (o la finestra di "I miei
+            // canali") il focus torna al player: i tasti continuano a
+            // funzionare anche con la guida appena aperta.
+            LaunchedEffect(longPressMenuOpen, myChannelEdit) {
+                if (longPressMenuOpen || myChannelEdit != null) return@LaunchedEffect
+                withFrameNanos { }
+                runCatching { rootFocus.requestFocus() }
+            }
+
             val currentPlayer = engine.exoPlayer
             if (currentPlayer != null) {
                 AndroidView(
@@ -519,7 +547,7 @@ fun PlayerScreen(
             }
 
             if (state.epgVisible && session.source is PlaybackSource.Live) {
-                PlayerEpgOverlay(channelName = state.currentTitle, programs = state.epgPrograms, loading = state.epgLoading, unavailable = state.epgUnavailable, expanded = state.epgExpanded, scale = scale, clock = container.clock, onDescription = engine::toggleEpgDescription, channel = state.liveChannels.getOrNull(state.currentChannelIndex), onReplay = engine::startReplay, modifier = Modifier.align(Alignment.CenterEnd))
+                PlayerEpgOverlay(channelName = state.currentTitle, programs = state.epgPrograms, loading = state.epgLoading, unavailable = state.epgUnavailable, expanded = state.epgExpanded, scale = scale, clock = container.clock, onDescription = engine::toggleEpgDescription, channel = currentLiveChannel, onReplay = engine::startReplay, modifier = Modifier.align(Alignment.CenterEnd))
             }
 
             if (state.channelListVisible) {
@@ -627,8 +655,34 @@ fun PlayerScreen(
         }
     }
 
-    // Pressione lunga sul canale in onda: aggiunta o menu di modifica di
-    // "I miei canali", in una finestra sopra il player.
+    // Pressione lunga sul canale in onda: due voci, la guida del canale (come
+    // GUIDE/INFO) e "I miei canali" (aggiunta o modifica).
+    if (longPressMenuOpen) {
+        val channel = engine.onAirChannel
+        PlayerLongPressMenu(
+            channelName = channel?.name ?: state.currentTitle,
+            inMyChannels = channel != null && myChannels.any { it.streamId == channel.streamId },
+            scale = scale,
+            onGuide = {
+                longPressMenuOpen = false
+                engine.toggleEpg()
+            },
+            onMyChannels = {
+                longPressMenuOpen = false
+                channel?.let {
+                    myChannelEdit = MyChannel(
+                        streamId = it.streamId,
+                        name = it.name,
+                        logo = it.streamIcon,
+                    )
+                }
+            },
+            onDismiss = { longPressMenuOpen = false },
+        )
+    }
+
+    // Aggiunta o menu di modifica di "I miei canali", in una finestra sopra il
+    // player.
     myChannelEdit?.let { channel ->
         MyChannelDialog(
             channel = channel,
