@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableIntStateOf
@@ -60,6 +61,7 @@ import it.felixvision.tv.ui.catalog.NovitaSection
 import it.felixvision.tv.ui.catalog.SearchSection
 import it.felixvision.tv.ui.catalog.SerieSection
 import it.felixvision.tv.ui.catalog.deriveSeasons
+import it.felixvision.tv.ui.detail.LocalContinueEntries
 import it.felixvision.tv.ui.components.AppBackground
 import it.felixvision.tv.ui.components.BrandBackdrop
 import it.felixvision.tv.ui.components.EmptyState
@@ -463,6 +465,8 @@ fun FvpMainScreen(
         }
     }
 
+    // La scheda serie legge da qui la stagione dell'episodio da continuare.
+    CompositionLocalProvider(LocalContinueEntries provides continueEntries) {
     FvpNavigationDrawer(
         selected = selectedTab,
         onSelect = {
@@ -763,5 +767,6 @@ fun FvpMainScreen(
         BrandBackdrop(scale = scale) {
             LoadingState(message = "Caricamento catalogo in corso…", scale = scale)
         }
+    }
     }
 }
