@@ -54,7 +54,13 @@ import it.felixvision.tv.data.playback.ChannelLookupResult
 import it.felixvision.tv.data.playback.ChannelNumberInput
 import it.felixvision.tv.data.playback.ChannelNumberOverlay
 import it.felixvision.tv.data.playback.ChannelNumberSession
+import it.felixvision.tv.core.Clock
+import it.felixvision.tv.core.SystemClock
+import it.felixvision.tv.data.epg.ChannelScheduleLoader
 import it.felixvision.tv.ui.components.ChannelLogoImage
+import it.felixvision.tv.ui.components.ChannelScheduleInfo
+import it.felixvision.tv.ui.components.rememberChannelSchedulePrograms
+import it.felixvision.tv.ui.components.rememberMinuteNow
 import it.felixvision.tv.ui.components.ChannelNumberIndicator
 import it.felixvision.tv.ui.components.CollapsingCategoryColumn
 import it.felixvision.tv.ui.components.EmptyState
@@ -88,6 +94,13 @@ fun LiveSection(
     onSelectChannel: (LiveStream) -> Unit,
     onLongPressChannel: (LiveStream) -> Unit = {},
     favorites: List<FavoriteItem> = emptyList(),
+    /** Canali presenti in "I miei canali": mostrano la stella. */
+    myChannelIds: Set<String> = emptySet(),
+    epgClient: ChannelScheduleLoader? = null,
+    epgServer: String = "",
+    epgUsername: String = "",
+    epgPassword: String = "",
+    clock: Clock = SystemClock,
     modifier: Modifier = Modifier,
     contentFocusRequester: FocusRequester = remember { FocusRequester() },
     onBackToDrawer: (() -> Unit)? = null,
@@ -116,6 +129,22 @@ fun LiveSection(
 
     val categoryListState = rememberLazyListState()
     val channelsListState = rememberLazyListState()
+    // Guida "in onda / a seguire" solo per i canali visibili a schermo.
+    val visibleChannelIds by remember(filtered) {
+        androidx.compose.runtime.derivedStateOf {
+            channelsListState.layoutInfo.visibleItemsInfo.mapNotNull { info ->
+                filtered.getOrNull(info.index)?.streamId
+            }
+        }
+    }
+    val schedulePrograms = rememberChannelSchedulePrograms(
+        streamIds = visibleChannelIds,
+        loader = epgClient,
+        server = epgServer,
+        username = epgUsername,
+        password = epgPassword,
+    )
+    val scheduleNow = rememberMinuteNow(clock)
     // Indice del canale con il focus, per il contatore "N / Totale".
     var focusedChannelIndex by remember(filtered) { mutableStateOf<Int?>(null) }
     val channelFocusRequesters = remember(filtered) {
@@ -322,7 +351,7 @@ fun LiveSection(
                                 modifier = Modifier.fillMaxSize().testTag("live_channels_list"),
                             ) {
                                 itemsIndexed(filtered, key = { _, ch -> ch.streamId }) { index, channel ->
-                                    val isFav = favorites.any { it.id == "live_${channel.streamId}" }
+                                    val isFav = channel.streamId in myChannelIds
                                     val channelFr = channelFocusRequesters[channel.streamId]
                                     var focused by remember(channel.streamId) { mutableStateOf(false) }
                                     // Riga compatta: altezza e logo ridotti, testo invariato.
@@ -331,32 +360,41 @@ fun LiveSection(
                                     DenseListItem(
                                         selected = false,
                                         onClick = { onSelectChannel(channel) },
-                                        onLongClick = { onLongPressChannel(channel) },
                                         headlineContent = {
-                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(scale.dp(6f))) {
-                                                FocusMarqueeText(
-                                                    text = channel.name,
-                                                    focused = focused,
-                                                    fontSize = scale.rowText,
-                                                    fontWeight = FontWeight.Medium,
-                                                    modifier = Modifier.weight(1f, fill = false),
-                                                )
-                                                channel.epgChannelId?.let { epg ->
-                                                    Text(
-                                                        text = epg,
-                                                        color = FvpColors.TextSecondary,
-                                                        fontSize = scale.sp(12f),
-                                                        maxLines = 1,
+                                            Column {
+                                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(scale.dp(6f))) {
+                                                    FocusMarqueeText(
+                                                        text = channel.name,
+                                                        focused = focused,
+                                                        fontSize = scale.rowText,
+                                                        fontWeight = FontWeight.Medium,
+                                                        modifier = Modifier.weight(1f, fill = false),
                                                     )
-                                                }
-                                                if (isFav) {
-                                                    Box(
-                                                        modifier = Modifier.size(scale.dp(22f)).clip(CircleShape).background(Color(0xCC1C1C1E)).testTag("live_channel_${channel.streamId}_fav_star"),
-                                                        contentAlignment = Alignment.Center
-                                                    ) {
-                                                        Text(text = "★", color = Color(0xFFFBBF24), fontSize = scale.sp(12f))
+                                                    channel.epgChannelId?.let { epg ->
+                                                        Text(
+                                                            text = epg,
+                                                            color = FvpColors.TextSecondary,
+                                                            fontSize = scale.sp(12f),
+                                                            maxLines = 1,
+                                                        )
+                                                    }
+                                                    if (isFav) {
+                                                        Box(
+                                                            modifier = Modifier.size(scale.dp(22f)).clip(CircleShape).background(Color(0xCC1C1C1E)).testTag("live_channel_${channel.streamId}_fav_star"),
+                                                            contentAlignment = Alignment.Center
+                                                        ) {
+                                                            Text(text = "★", color = Color(0xFFFBBF24), fontSize = scale.sp(12f))
+                                                        }
                                                     }
                                                 }
+                                                ChannelScheduleInfo(
+                                                    programs = schedulePrograms[channel.streamId],
+                                                    nowMillis = scheduleNow,
+                                                    scale = scale,
+                                                    showNext = false,
+                                                    textSizeBase = 11f,
+                                                    testTagPrefix = "live_channel_schedule_${channel.streamId}",
+                                                )
                                             }
                                         },
                                         leadingContent = {

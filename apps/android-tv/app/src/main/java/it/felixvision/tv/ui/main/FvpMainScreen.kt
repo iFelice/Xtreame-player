@@ -42,8 +42,12 @@ import it.felixvision.tv.data.catalog.Catalog
 import it.felixvision.tv.data.catalog.Episode
 import it.felixvision.tv.data.catalog.LiveStream
 import it.felixvision.tv.data.catalog.VodStream
+import it.felixvision.tv.data.channels.MyChannel
+import it.felixvision.tv.data.channels.MyChannelPlayback
+import it.felixvision.tv.data.channels.MyChannels
 import it.felixvision.tv.data.continuewatching.ContinueEntry
 import it.felixvision.tv.data.favorites.FavoriteItem
+import it.felixvision.tv.data.playback.ChannelListOrigin
 import it.felixvision.tv.data.playback.ChannelNumberInput
 import it.felixvision.tv.data.playback.SeriesPlayback
 import it.felixvision.tv.data.playback.buildEpisodeQueue
@@ -57,6 +61,7 @@ import it.felixvision.tv.ui.catalog.ContinueWatchingSection
 import it.felixvision.tv.ui.catalog.FavoritesSection
 import it.felixvision.tv.ui.catalog.FilmSection
 import it.felixvision.tv.ui.catalog.LiveSection
+import it.felixvision.tv.ui.catalog.MyChannelDialog
 import it.felixvision.tv.ui.catalog.NovitaSection
 import it.felixvision.tv.ui.catalog.SearchSection
 import it.felixvision.tv.ui.catalog.SerieSection
@@ -150,6 +155,10 @@ fun FvpMainScreen(
     var returnLiveChannelId by remember(sessionId) { mutableStateOf<String?>(null) }
     var returnEpisodeId by remember(sessionId) { mutableStateOf<String?>(null) }
     var favoritesTick by remember(sessionId) { mutableStateOf(0L) }
+    // Canale della finestra "Aggiungi a I miei canali" / menu di modifica.
+    var myChannelEdit by remember(sessionId, currentServer, currentUsername) { mutableStateOf<MyChannel?>(null) }
+    var myChannelFocusId by remember(sessionId, currentServer, currentUsername) { mutableStateOf<String?>(null) }
+    var myChannelFocusTick by remember(sessionId) { mutableIntStateOf(0) }
     var favoritesMessage by remember(sessionId) { mutableStateOf<String?>(null) }
     var continueLoadingKey by remember(sessionId) { mutableStateOf<String?>(null) }
     var continueErrorMessage by remember(sessionId) { mutableStateOf<String?>(null) }
@@ -197,6 +206,29 @@ fun FvpMainScreen(
     // Favorites for all sections
     val allFavorites by produceState<List<FavoriteItem>>(initialValue = emptyList(), favoritesTick, currentServer, currentUsername) {
         value = container.favoritesStore.getFavorites(currentServer, currentUsername)
+    }
+
+    // "I miei canali": lista personale numerata, ricaricata a ogni scrittura.
+    val myChannelsRevision by container.myChannelsStore.revision.collectAsState()
+    val myChannels by produceState<List<MyChannel>>(
+        initialValue = emptyList(),
+        myChannelsRevision,
+        currentServer,
+        currentUsername,
+    ) {
+        value = container.myChannelsStore.getChannels(currentServer, currentUsername)
+    }
+    val myChannelIds = remember(myChannels) { myChannels.map { it.streamId }.toSet() }
+
+    // Alla prima apertura dell'account i vecchi preferiti "live" si tolgono
+    // dall'archivio preferiti: non vengono migrati in "I miei canali".
+    LaunchedEffect(sessionId, currentServer, currentUsername) {
+        container.myChannelsStore.migrateLegacyLiveFavorites(
+            server = currentServer,
+            username = currentUsername,
+            favoritesStore = container.favoritesStore,
+        )
+        favoritesTick += 1
     }
 
     // Avanzamento di film ed episodi: si ricarica a ogni salvataggio del player.
@@ -314,6 +346,78 @@ fun FvpMainScreen(
                 categories = categories,
             )
         )
+    }
+
+    /**
+     * OK su un canale di "I miei canali": player con zapping Su/Giù nell'ordine
+     * della lista (circolare) e numerazione personale dei tasti numerici.
+     */
+    fun playMyChannel(channel: MyChannel) {
+        val catalog = catalogState.catalog
+        val ordered = MyChannelPlayback.streams(myChannels, catalog?.liveStreams.orEmpty())
+            .ifEmpty { listOf(LiveStream(streamId = channel.streamId, name = channel.name, streamIcon = channel.logo)) }
+        val index = ordered.indexOfFirst { it.streamId == channel.streamId }.coerceAtLeast(0)
+        playerSession = newPlayerSession(
+            PlaybackSource.Live(
+                channels = ordered,
+                startIndex = index,
+                categoryId = null,
+                categoryName = "I miei canali",
+                allChannels = ordered,
+                categories = emptyList(),
+                numbering = ChannelListOrigin.MY_CHANNELS.numbering,
+            )
+        )
+    }
+
+    /** Pressione lunga su un canale: aggiunta o menu di modifica. */
+    fun openMyChannelDialog(stream: LiveStream) {
+        myChannelEdit = MyChannel(
+            streamId = stream.streamId,
+            name = stream.name,
+            logo = stream.streamIcon,
+        )
+    }
+
+    fun closeMyChannelDialog(channel: MyChannel?) {
+        myChannelEdit = null
+        if (channel != null) {
+            myChannelFocusId = channel.streamId
+            myChannelFocusTick += 1
+        }
+    }
+
+    fun confirmMyChannelPosition(channel: MyChannel, position: Int) {
+        scope.launch {
+            val current = container.myChannelsStore.getChannels(currentServer, currentUsername)
+            if (MyChannels.contains(current, channel.streamId)) {
+                container.myChannelsStore.moveTo(currentServer, currentUsername, channel.streamId, position)
+            } else {
+                container.myChannelsStore.insertAt(currentServer, currentUsername, channel, position)
+            }
+            closeMyChannelDialog(channel)
+        }
+    }
+
+    /**
+     * Spostamento di una posizione dal menu: il menu resta aperto e mostra il
+     * numero aggiornato; alla chiusura il focus torna sul canale modificato.
+     */
+    fun moveMyChannel(channel: MyChannel, up: Boolean) {
+        scope.launch {
+            if (up) {
+                container.myChannelsStore.moveUp(currentServer, currentUsername, channel.streamId)
+            } else {
+                container.myChannelsStore.moveDown(currentServer, currentUsername, channel.streamId)
+            }
+        }
+    }
+
+    fun removeMyChannel(channel: MyChannel) {
+        scope.launch {
+            container.myChannelsStore.remove(currentServer, currentUsername, channel.streamId)
+            closeMyChannelDialog(channel)
+        }
     }
 
     fun playMovie(film: VodStream, autoResume: Boolean = false) {
@@ -546,17 +650,14 @@ fun FvpMainScreen(
                                     streams = catalog.liveStreams,
                                     scale = scale,
                                     onSelectChannel = { stream -> playLive(stream) },
-                                    onLongPressChannel = { stream ->
-                                        val fav = FavoriteItem(
-                                            id = "live_${stream.streamId}",
-                                            type = "live",
-                                            title = stream.name,
-                                            poster = stream.streamIcon,
-                                            categoryId = stream.categoryId
-                                        )
-                                        toggleFavorite(fav)
-                                    },
+                                    onLongPressChannel = { stream -> openMyChannelDialog(stream) },
                                     favorites = allFavorites,
+                                    myChannelIds = myChannelIds,
+                                    epgClient = container.channelScheduleLoader,
+                                    epgServer = currentServer,
+                                    epgUsername = currentUsername,
+                                    epgPassword = currentPassword,
+                                    clock = container.clock,
                                     contentFocusRequester = contentFocusRequester,
                                     focusChannelId = returnLiveChannelId,
                                     focusChannelTick = playerReturnTick,
@@ -634,6 +735,19 @@ fun FvpMainScreen(
                                         focusEpisodeId = returnEpisodeId,
                                         catalogViewModel = catalogViewModel,
                                         contentFocusRequester = contentFocusRequester,
+                                        myChannels = myChannels,
+                                        epgClient = container.channelScheduleLoader,
+                                        epgServer = currentServer,
+                                        epgUsername = currentUsername,
+                                        epgPassword = currentPassword,
+                                        clock = container.clock,
+                                        onPlayMyChannel = { channel -> playMyChannel(channel) },
+                                        onLongPressMyChannel = { channel ->
+                                            myChannelEdit = channel
+                                        },
+                                        focusMyChannelId = myChannelFocusId,
+                                        focusMyChannelTick = myChannelFocusTick,
+                                        onMyChannelFocusRestored = { myChannelFocusId = null },
                                         modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
                                     )
                                 }
@@ -648,6 +762,8 @@ fun FvpMainScreen(
                                     onPlayFilm = { film -> playMovie(film) },
                                     onPlayEpisode = { _, playback -> playEpisode(playback) },
                                     onToggleFavorite = { favorite -> toggleFavorite(favorite) },
+                                    onLongPressLive = { stream -> openMyChannelDialog(stream) },
+                                    myChannelIds = myChannelIds,
                                     onSetEpisodeWatched = { episode, watched, duration ->
                                         setEpisodeWatched(episode, watched, duration)
                                     },
@@ -758,6 +874,22 @@ fun FvpMainScreen(
                     returnEpisodeId = info.lastEpisodeId
                 }
             },
+        )
+    }
+
+    // Pressione lunga su un canale (Live, Cerca, player): aggiunta se il canale
+    // non è in "I miei canali", menu di modifica se è già presente.
+    myChannelEdit?.let { channel ->
+        MyChannelDialog(
+            channel = channel,
+            channels = myChannels,
+            scale = scale,
+            onInsertAt = { position -> confirmMyChannelPosition(channel, position) },
+            onMoveUp = { moveMyChannel(channel, up = true) },
+            onMoveDown = { moveMyChannel(channel, up = false) },
+            onRemove = { removeMyChannel(channel) },
+            // Indietro chiude e riporta il focus sul canale modificato.
+            onDismiss = { closeMyChannelDialog(channel) },
         )
     }
 

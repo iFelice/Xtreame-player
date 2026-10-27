@@ -9,10 +9,12 @@ import it.felixvision.tv.core.FvpJson
 import it.felixvision.tv.core.HttpClientFactory
 import it.felixvision.tv.core.SystemClock
 import it.felixvision.tv.data.catalog.CatalogCache
+import it.felixvision.tv.data.channels.MyChannelsStore
 import it.felixvision.tv.data.catalog.CatalogClient
 import it.felixvision.tv.data.continuewatching.ContinueWatchingStore
 import it.felixvision.tv.data.favorites.FavoritesStore
 import it.felixvision.tv.data.epg.ChannelEpgClient
+import it.felixvision.tv.data.epg.ChannelScheduleLoader
 import it.felixvision.tv.data.images.FvpImageLoader
 import it.felixvision.tv.data.pairing.PairingClient
 import it.felixvision.tv.data.pairing.PairingCoordinator
@@ -71,6 +73,11 @@ class AppContainer(
 
     val channelEpgClient: ChannelEpgClient by lazy { ChannelEpgClient(http = httpClient, clock = clock) }
 
+    /** Guida "in onda / a seguire": solo i canali richiesti, al massimo 4 richieste insieme. */
+    val channelScheduleLoader: ChannelScheduleLoader by lazy {
+        ChannelScheduleLoader(client = channelEpgClient)
+    }
+
     val catalogClient: CatalogClient by lazy {
         CatalogClient(http = httpClient, json = json)
     }
@@ -81,6 +88,11 @@ class AppContainer(
 
     val favoritesStore: FavoritesStore by lazy {
         FavoritesStore(context = context, json = json, clock = clock)
+    }
+
+    /** "I miei canali": lista personale numerata, una per server+utente. */
+    val myChannelsStore: MyChannelsStore by lazy {
+        MyChannelsStore(context = context, json = json, clock = clock)
     }
 
     val progressStore: ProgressStore by lazy {

@@ -22,6 +22,7 @@ import it.felixvision.tv.AppContainer
 import it.felixvision.tv.core.AppLog
 import it.felixvision.tv.data.catalog.Category
 import it.felixvision.tv.data.catalog.LiveStream
+import it.felixvision.tv.data.channels.MyChannelPlayback
 import it.felixvision.tv.data.continuewatching.ContinueEntry
 import it.felixvision.tv.data.continuewatching.ContinueEpisode
 import it.felixvision.tv.data.epg.EpgProgram
@@ -31,6 +32,7 @@ import it.felixvision.tv.data.playback.ChannelKeyOutcome
 import it.felixvision.tv.data.playback.ChannelLookupResult
 import it.felixvision.tv.data.playback.ChannelNumberInput
 import it.felixvision.tv.data.playback.ChannelNumberSession
+import it.felixvision.tv.data.playback.ChannelNumbering
 import it.felixvision.tv.data.playback.EpisodeOrder
 import it.felixvision.tv.data.playback.LiveZapping
 import it.felixvision.tv.data.playback.NextEpisodeRules
@@ -71,10 +73,25 @@ class PlayerEngine(
         }.orEmpty()
     private val liveCategories: List<Category> =
         (source as? PlaybackSource.Live)?.categories.orEmpty()
+    /** Numerazione dei tasti numerici: personale quando il player arriva da "I miei canali". */
+    private val liveNumbering: ChannelNumbering =
+        (source as? PlaybackSource.Live)?.numbering ?: ChannelNumbering.PROVIDER
     private var channels: List<LiveStream> =
         (source as? PlaybackSource.Live)?.channels.orEmpty()
     private var liveCategoryName: String? =
         (source as? PlaybackSource.Live)?.categoryName
+
+    /**
+     * Canale in onda tolto da "I miei canali" mentre lo si guardava: resta in
+     * onda finché non si cambia canale, anche se non è più nella lista.
+     */
+    private var detachedLiveChannel: LiveStream? = null
+
+    /**
+     * Posizione che il canale staccato occupava nella lista (`0..size`): da lì
+     * ripartono Su/Giù, cioè dai canali che gli stavano subito sopra e sotto.
+     */
+    private var detachedInsertIndex: Int = 0
 
     private var liveIndex: Int = LiveZapping.clamp(
         (source as? PlaybackSource.Live)?.startIndex ?: 0,
@@ -106,7 +123,7 @@ class PlayerEngine(
     private var wasPlayingBeforeStop = false
     private var lastPositionBeforeStop = 0L
     private var bannerJob: Job? = null
-    private val channelNumberSession = ChannelNumberSession()
+    private val channelNumberSession = ChannelNumberSession(numbering = liveNumbering)
     private var channelNumberJob: Job? = null
     // Volume del nostro ExoPlayer (0-15): livello caricato da DataStore all'avvio.
     private var volumeLevel: Int = PlayerVolume.DEFAULT_LEVEL
@@ -391,7 +408,20 @@ class PlayerEngine(
         is PlaybackSource.Series -> currentEpisode()?.let { ProgressKeys.episode(it.episode.id) }
     }
 
-    private fun currentLiveChannel(): LiveStream? = channels.getOrNull(liveIndex)
+    private fun currentLiveChannel(): LiveStream? =
+        detachedLiveChannel ?: channels.getOrNull(liveIndex)
+
+    /** Canale in onda in questo momento, anche se tolto da "I miei canali". */
+    val onAirChannel: LiveStream?
+        get() = currentLiveChannel()
+
+    /**
+     * Canali su cui vale la numerazione dei tasti numerici: in "I miei canali"
+     * è la lista personale corrente (può cambiare mentre si guarda), nel Live
+     * è il catalogo del provider.
+     */
+    private fun numberingChannels(): List<LiveStream> =
+        if (liveNumbering == ChannelNumbering.PERSONAL) channels else allLiveChannels
 
     private fun currentPlaybackKind(): PlaybackKind = when {
         replayProgram != null -> PlaybackKind.CATCHUP
@@ -552,20 +582,88 @@ class PlayerEngine(
 
     fun nextChannel() {
         if (channels.isEmpty()) return
+        if (detachedLiveChannel != null) {
+            // Canale tolto dalla lista: si va a quello che stava subito sotto.
+            liveIndex = MyChannelPlayback.zapFromDetached(
+                insertIndex = detachedInsertIndex,
+                size = channels.size,
+                down = true,
+            )
+            detachedLiveChannel = null
+            detachedInsertIndex = 0
+            switchLiveChannel()
+            return
+        }
         liveIndex = LiveZapping.next(liveIndex, channels.size)
         switchLiveChannel()
     }
 
     fun previousChannel() {
         if (channels.isEmpty()) return
+        if (detachedLiveChannel != null) {
+            // Canale tolto dalla lista: si va a quello che stava subito sopra.
+            liveIndex = MyChannelPlayback.zapFromDetached(
+                insertIndex = detachedInsertIndex,
+                size = channels.size,
+                down = false,
+            )
+            detachedLiveChannel = null
+            detachedInsertIndex = 0
+            switchLiveChannel()
+            return
+        }
         liveIndex = LiveZapping.previous(liveIndex, channels.size)
         switchLiveChannel()
     }
 
     fun selectChannel(index: Int) {
         if (channels.isEmpty()) return
+        detachedLiveChannel = null
+        detachedInsertIndex = 0
         liveIndex = LiveZapping.clamp(index, channels.size)
         switchLiveChannel()
+    }
+
+    /**
+     * Player aperto da "I miei canali": allinea zapping e numerazione personale
+     * alla lista appena cambiata, senza interrompere la riproduzione.
+     *
+     * Lo stesso canale resta in onda con il nuovo numero; se è stato rimosso
+     * resta in onda senza numero e Su/Giù vanno ai canali che gli stavano
+     * subito sopra e subito sotto nella lista nuova. Diventa di nuovo normale
+     * al primo cambio canale. Nel player aperto da Live (numerazione del
+     * provider) non fa nulla.
+     */
+    fun updatePersonalChannels(updated: List<LiveStream>) {
+        if (!isLiveSource) return
+        if (liveNumbering != ChannelNumbering.PERSONAL) return
+        // Riferimento: il canale davvero in onda, che può essere già stato
+        // tolto dalla lista (detachedLiveChannel).
+        val sync = MyChannelPlayback.sync(
+            onAir = currentLiveChannel(),
+            positionHint = if (detachedLiveChannel != null) detachedInsertIndex else liveIndex,
+            updated = updated,
+        )
+        channels = sync.channels
+        liveIndex = LiveZapping.clamp(sync.index, channels.size)
+        if (sync.number == null && sync.onAir != null) {
+            // Canale tolto dalla lista: resta in onda e Su/Giù ripartono dalla
+            // posizione che occupava.
+            detachedLiveChannel = sync.onAir
+            detachedInsertIndex = sync.insertIndex
+        } else {
+            // Canale in lista (anche se era stato tolto e viene riaggiunto).
+            detachedLiveChannel = null
+            detachedInsertIndex = 0
+        }
+        state = state.copy(
+            currentChannelIndex = liveIndex,
+            totalChannels = channels.size,
+            liveChannels = channels,
+            currentTitle = sync.onAir?.name ?: state.currentTitle,
+        )
+        // Il banner aperto mostra subito il nuovo numero.
+        if (state.banner != null && !state.isReplay) showBanner()
     }
 
     private fun switchLiveChannel() {
@@ -607,7 +705,7 @@ class PlayerEngine(
             keyCode = keyCode,
             action = action,
             repeatCount = repeatCount,
-            allStreams = allLiveChannels,
+            allStreams = numberingChannels(),
             categories = liveCategories,
         )
         when (outcome) {
@@ -622,7 +720,7 @@ class PlayerEngine(
                     channelNumberJob = scope.launch {
                         delay(ChannelNumberInput.CONFIRM_DELAY_MILLIS)
                         val result = channelNumberSession.confirm(
-                            allStreams = allLiveChannels,
+                            allStreams = numberingChannels(),
                             categories = liveCategories,
                         ) ?: return@launch
                         applyChannelLookupResult(result)
@@ -656,8 +754,13 @@ class PlayerEngine(
     private fun applyChannelLookupResult(result: ChannelLookupResult) {
         when (result) {
             is ChannelLookupResult.Found -> {
+                detachedLiveChannel = null
+                detachedInsertIndex = 0
                 channels = result.zapping.channels
-                liveCategoryName = result.zapping.categoryName
+                // Con la numerazione personale la categoria resta "I miei canali".
+                if (liveNumbering == ChannelNumbering.PROVIDER) {
+                    liveCategoryName = result.zapping.categoryName
+                }
                 liveIndex = LiveZapping.clamp(result.zapping.startIndex, channels.size)
                 switchLiveChannel()
             }
@@ -757,7 +860,14 @@ class PlayerEngine(
         val channel = currentLiveChannel() ?: return
         state = state.copy(
             banner = ChannelBanner(
-                number = channel.num,
+                // Con la numerazione personale il banner mostra il TUO numero,
+                // cioè la posizione nella lista; un canale tolto dalla lista
+                // resta in onda senza numero.
+                number = when {
+                    liveNumbering == ChannelNumbering.PERSONAL ->
+                        if (detachedLiveChannel != null) null else liveIndex + 1
+                    else -> channel.num
+                },
                 name = channel.name,
                 categoryName = liveCategoryName,
                 logoUrl = channel.streamIcon,

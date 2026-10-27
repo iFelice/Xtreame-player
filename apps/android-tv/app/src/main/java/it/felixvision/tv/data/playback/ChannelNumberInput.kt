@@ -88,6 +88,26 @@ sealed interface ChannelKeyOutcome {
     }
 }
 
+/** Numerazione usata dai tasti numerici. */
+enum class ChannelNumbering {
+
+    /** Numero del provider (`LiveStream.num`), comportamento del Live. */
+    PROVIDER,
+
+    /** Posizione in "I miei canali" (1..N). */
+    PERSONAL,
+}
+
+/**
+ * Da dove si è aperta la lista o il player: la numerazione personale vale in
+ * "I miei canali" e nel player aperto da lì, quella del provider in Live e nel
+ * player aperto da Live.
+ */
+enum class ChannelListOrigin(val numbering: ChannelNumbering) {
+    LIVE(ChannelNumbering.PROVIDER),
+    MY_CHANNELS(ChannelNumbering.PERSONAL),
+}
+
 /**
  * Regole pure del cambio canale digitando il numero del provider (`LiveStream.num`):
  * - massimo 4 cifre (una cifra ulteriore sostituisce l'inserimento con la nuova cifra);
@@ -210,6 +230,39 @@ object ChannelNumberInput {
             zapping = resolveZappingTarget(channel, allStreams, categories),
         )
     }
+
+    /**
+     * Numerazione personale di "I miei canali": il numero è la posizione nella
+     * lista (1..N) e lo zapping segue lo stesso ordine.
+     */
+    fun lookupPersonal(
+        number: Int,
+        channels: List<LiveStream>,
+    ): ChannelLookupResult {
+        val channel = channels.getOrNull(number - 1)
+            ?: return ChannelLookupResult.NotFound(number)
+        return ChannelLookupResult.Found(
+            number = number,
+            channel = channel,
+            zapping = LiveZappingTarget(
+                channels = channels,
+                startIndex = number - 1,
+                categoryId = null,
+                categoryName = null,
+            ),
+        )
+    }
+
+    /** Ricerca per numero con la numerazione dell'origine scelta. */
+    fun lookup(
+        number: Int,
+        allStreams: List<LiveStream>,
+        categories: List<Category> = emptyList(),
+        numbering: ChannelNumbering,
+    ): ChannelLookupResult = when (numbering) {
+        ChannelNumbering.PROVIDER -> lookup(number, allStreams, categories)
+        ChannelNumbering.PERSONAL -> lookupPersonal(number, allStreams)
+    }
 }
 
 /**
@@ -218,6 +271,7 @@ object ChannelNumberInput {
  */
 class ChannelNumberSession(
     private val clock: Clock = SystemClock,
+    private val numbering: ChannelNumbering = ChannelNumbering.PROVIDER,
 ) {
 
     var digits: String = ""
@@ -269,7 +323,7 @@ class ChannelNumberSession(
         digits = ""
         lastDigitAtMillis = 0L
         val number = entered.toIntOrNull() ?: return null
-        val result = ChannelNumberInput.lookup(number, allStreams, categories)
+        val result = ChannelNumberInput.lookup(number, allStreams, categories, numbering)
         when (result) {
             is ChannelLookupResult.Found -> {
                 notFoundNumber = null
