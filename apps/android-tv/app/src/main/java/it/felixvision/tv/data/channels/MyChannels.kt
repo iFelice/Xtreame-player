@@ -103,15 +103,18 @@ object MyChannels {
 
 /**
  * Allineamento del player alla lista personale aggiornata mentre si guarda:
- * lo zapping resta la [channels] nuova, [index] è la posizione da cui
- * proseguono Su/Giù, [onAir] il canale che deve restare in onda e [number] il
- * suo numero personale (`null` quando non è più nella lista).
+ * lo zapping resta la [channels] nuova, [index] è la posizione del canale in
+ * onda (o, se non è più in lista, la posizione valida più vicina), [onAir] il
+ * canale che deve restare in onda, [number] il suo numero personale (`null`
+ * quando non è più nella lista) e [insertIndex] la posizione che il canale
+ * occupava nella lista (`0..size`), da cui ripartono Su/Giù.
  */
 data class MyChannelZapping(
     val channels: List<LiveStream>,
     val index: Int,
     val onAir: LiveStream?,
     val number: Int?,
+    val insertIndex: Int,
 )
 
 /**
@@ -144,53 +147,70 @@ object MyChannelPlayback {
      * Allinea il player alla lista personale appena cambiata (aggiunta,
      * spostamento o rimozione dal menu del player).
      *
-     * - canale in onda ancora in lista: resta in onda, prende il nuovo numero
-     *   (la sua nuova posizione) e Su/Giù ripartono da lì;
-     * - canale in onda rimosso: resta in onda finché non si cambia canale, non
-     *   ha più un numero e Su/Giù proseguono dalla posizione in cui si trovava;
-     * - lista nuova vuota: si lascia tutto com'è, così il canale continua senza
-     *   zapping finché la lista non torna.
+     * Il riferimento è sempre [onAir], il canale davvero in onda: se è già
+     * stato tolto dalla lista, la posizione che occupa in [updated] è di un
+     * altro canale e non va usata come riferimento. [positionHint] è la
+     * posizione che occupava prima del cambio.
+     *
+     * - canale in onda presente nella lista nuova: resta in onda con il nuovo
+     *   numero, cioè la sua nuova posizione (vale anche se era stato tolto e
+     *   viene riaggiunto: `number` non è più `null`);
+     * - canale in onda assente: resta in onda senza numero e [MyChannelZapping.insertIndex]
+     *   è la posizione che occupava, da cui ripartono Su/Giù;
+     * - lista nuova vuota: resta il canale in onda, senza numero.
      */
     fun sync(
-        previousChannels: List<LiveStream>,
-        previousIndex: Int,
+        onAir: LiveStream?,
+        positionHint: Int,
         updated: List<LiveStream>,
     ): MyChannelZapping {
-        val current = previousChannels.getOrNull(previousIndex)
-        if (updated.isEmpty()) {
-            return MyChannelZapping(
-                channels = previousChannels,
-                index = previousIndex.coerceAtLeast(0),
-                onAir = current,
-                number = if (current == null) null else previousIndex + 1,
-            )
-        }
-        if (current == null) {
-            val index = previousIndex.coerceIn(0, updated.size - 1)
+        val position = if (onAir == null) -1 else updated.indexOfFirst { it.streamId == onAir.streamId }
+        if (onAir == null) {
+            // Nessun canale in onda: si resta sulla posizione valida più vicina.
+            val index = positionHint.coerceIn(0, (updated.size - 1).coerceAtLeast(0))
             return MyChannelZapping(
                 channels = updated,
                 index = index,
-                onAir = updated[index],
-                number = index + 1,
+                onAir = updated.getOrNull(index),
+                number = if (updated.isEmpty()) null else index + 1,
+                insertIndex = positionHint.coerceIn(0, updated.size),
             )
         }
-        val position = updated.indexOfFirst { it.streamId == current.streamId }
         if (position >= 0) {
             return MyChannelZapping(
                 channels = updated,
                 index = position,
-                onAir = updated[position],
+                onAir = onAir,
                 number = position + 1,
+                insertIndex = position,
             )
         }
-        // Canale rimosso: resta in onda e lo zapping riparte dalla sua vecchia
-        // posizione nella lista nuova.
+        // Canale tolto dalla lista: resta in onda, senza numero, e Su/Giù
+        // ripartono dalla posizione che occupava (0..size).
+        val insertIndex = positionHint.coerceIn(0, updated.size)
         return MyChannelZapping(
             channels = updated,
-            index = previousIndex.coerceIn(0, updated.size - 1),
-            onAir = current,
+            index = if (updated.isEmpty()) 0 else insertIndex.coerceIn(0, updated.size - 1),
+            onAir = onAir,
             number = null,
+            insertIndex = insertIndex,
         )
+    }
+
+    /**
+     * Indice per Su/Giù mentre il canale in onda non è più nella lista
+     * personale: si va al canale che stava subito sotto ([down]) o a quello
+     * subito sopra, ripartendo dalla posizione che il canale occupava.
+     * Circolare: sotto l'ultimo c'è il primo, sopra il primo c'è l'ultimo.
+     */
+    fun zapFromDetached(insertIndex: Int, size: Int, down: Boolean): Int {
+        if (size <= 0) return 0
+        val index = insertIndex.coerceIn(0, size)
+        return if (down) {
+            if (index >= size) 0 else index
+        } else {
+            if (index == 0) size - 1 else index - 1
+        }
     }
 }
 
