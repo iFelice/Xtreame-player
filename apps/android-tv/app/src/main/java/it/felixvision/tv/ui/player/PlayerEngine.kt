@@ -18,8 +18,6 @@ import androidx.media3.common.Tracks
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.analytics.AnalyticsListener
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import it.felixvision.tv.AppContainer
 import it.felixvision.tv.core.AppLog
 import it.felixvision.tv.data.catalog.Category
@@ -125,12 +123,17 @@ class PlayerEngine(
     /** Rinvio in corso: posizione nel video in cui il riquadro deve tornare. */
     private var postponePlan: PostponePlan? = null
 
+    /** Un solo riavvio silenzioso del canale live dopo un errore di rete persistente. */
+    private val liveAutoRestart = LiveAutoRestart()
+
     private val playerListener = object : Player.Listener {
 
         override fun onPlaybackStateChanged(playbackState: Int) {
             when (playbackState) {
                 Player.STATE_BUFFERING -> state = state.copy(isBuffering = true)
                 Player.STATE_READY -> {
+                    // Lo stream è ripartito: un errore futuro ha di nuovo il suo riavvio.
+                    liveAutoRestart.reset()
                     val duration = playerDuration()
                     state = state.copy(
                         isBuffering = false,
@@ -220,6 +223,7 @@ class PlayerEngine(
         if (!hostStopped || exited) return
         hostStopped = false
         if (!state.isReady || state.errorMessage != null) return
+        liveAutoRestart.reset()
         val resumeVisible = state.resumePositionMillis != null
         buildPlayer(
             startPositionMillis = lastPositionBeforeStop,
@@ -294,9 +298,8 @@ class PlayerEngine(
             // La decodifica di sistema resta preferita; FFmpeg è il ripiego
             // per gli audio che il dispositivo non decodifica (AC3/EAC3/DTS).
             .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
-        val mediaSourceFactory = DefaultMediaSourceFactory(context)
-            // Nessun nuovo tentativo automatico a livello di sorgente.
-            .setLoadErrorHandlingPolicy(DefaultLoadErrorHandlingPolicy(0))
+        // Tempi di rete, redirect e nuovi tentativi: vedi PlayerNetworkConfig.
+        val mediaSourceFactory = PlayerNetworkConfig.mediaSourceFactory(context, streamUrl = url)
         val newPlayer = ExoPlayer.Builder(context)
             .setRenderersFactory(renderersFactory)
             .setMediaSourceFactory(mediaSourceFactory)
@@ -389,6 +392,15 @@ class PlayerEngine(
     }
 
     private fun currentLiveChannel(): LiveStream? = channels.getOrNull(liveIndex)
+
+    private fun currentPlaybackKind(): PlaybackKind = when {
+        replayProgram != null -> PlaybackKind.CATCHUP
+        else -> when (source) {
+            is PlaybackSource.Live -> PlaybackKind.LIVE
+            is PlaybackSource.Movie -> PlaybackKind.MOVIE
+            is PlaybackSource.Series -> PlaybackKind.EPISODE
+        }
+    }
 
     private fun currentEpisode() = (source as? PlaybackSource.Series)
         ?.playback
@@ -576,6 +588,7 @@ class PlayerEngine(
             durationMillis = 0L,
         )
         showBanner()
+        liveAutoRestart.reset()
         destroyPlayer()
         buildPlayer(startPositionMillis = 0L, autoPlay = true)
     }
@@ -703,6 +716,7 @@ class PlayerEngine(
         state = state.copy(isReplay = false, errorMessage = null, positionMillis = 0L,
             durationMillis = 0L, controlsVisible = false, isBuffering = true, isPlaying = false,
             currentTitle = currentLiveChannel()?.name.orEmpty())
+        liveAutoRestart.reset()
         destroyPlayer()
         buildPlayer(0L, autoPlay = true)
     }
@@ -967,6 +981,7 @@ class PlayerEngine(
         nextPromptState = NextPromptState.NONE
         postponePlan = null
         state = state.copy(errorMessage = null, nextEpisode = null)
+        liveAutoRestart.reset()
         destroyPlayer()
         buildPlayer(startPositionMillis = startPosition, autoPlay = true)
     }
@@ -1085,6 +1100,17 @@ class PlayerEngine(
             showReplayUnavailable()
             return
         }
+        // Canale live ancora senza rete dopo i nuovi tentativi: un solo riavvio
+        // silenzioso dello stesso canale prima di mostrare l'errore.
+        if (liveAutoRestart.onPlayerError(currentPlaybackKind(), error) == PlayerErrorAction.SILENT_RESTART) {
+            AppLog.warn(
+                "Player: errore di rete codice ${error.errorCode}, riavvio automatico " +
+                    "${liveAutoRestart.restartsUsed} di ${PlayerNetworkConfig.MAX_LIVE_AUTO_RESTARTS} su " +
+                    StreamUrls.redactStreamUrl(currentUrl()),
+            )
+            restartLiveSilently()
+            return
+        }
         AppLog.warn(
             "Player: errore codice ${error.errorCode} su " +
                 StreamUrls.redactStreamUrl(currentUrl()),
@@ -1108,6 +1134,15 @@ class PlayerEngine(
         )
         destroyPlayer()
         container.playbackActivity.setActive(false)
+    }
+
+    /**
+     * Riapre la sorgente del canale live corrente senza messaggi intermedi:
+     * [buildPlayer] lascia il caricamento visibile e nessun errore a schermo.
+     */
+    private fun restartLiveSilently() {
+        destroyPlayer()
+        buildPlayer(startPositionMillis = 0L, autoPlay = true)
     }
 
     private fun refreshTracks() {

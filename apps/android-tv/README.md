@@ -229,7 +229,9 @@ server Xtream raggiunti con indirizzo privato non risponderebbero.
 - **Media3 1.9.0** (`media3-exoplayer`, `media3-exoplayer-hls`, `media3-ui`) con
   `org.jellyfin.media3:media3-ffmpeg-decoder:1.9.0+1`: decodifica di sistema preferita,
   FFmpeg solo come ripiego audio per AC3/EAC3/DTS (`EXTENSION_RENDERER_MODE_ON`).
-  Nessun nuovo tentativo automatico (`DefaultLoadErrorHandlingPolicy(0)`).
+  Rete in `PlayerNetworkConfig`: connessione 20 s, lettura 30 s, redirect anche tra http
+  e https, User-Agent di sistema; errori di rete e timeout ritentati fino a 3 volte (dopo
+  1, 2 e 4 s), nessun nuovo tentativo per HTTP 401/403/404 e per gli altri errori.
 - **URL** in `StreamUrls`: live `/live/{utente}/{password}/{id}.ts`, con `.m3u8` solo se
   l'account non ammette `ts` ma ammette `m3u8`; film `/movie/…`; episodi `/series/…`;
   estensione da `container_extension`, default `mp4`; credenziali codificate per il
@@ -256,7 +258,9 @@ server Xtream raggiunti con indirizzo privato non risponderebbero.
   Indietro chiude la barra o torna alla scheda di origine con focus sul contenuto.
 - **Errori**: messaggio comprensibile senza URL; per 401/403/409/429/456 "Connessioni
   esaurite o accesso negato: l'account potrebbe essere in uso su un altro dispositivo";
-  pulsanti Riprova e Indietro, nessun retry automatico.
+  pulsanti Riprova e Indietro. Solo sui canali live, se dopo i tentativi resta un errore
+  di rete, la sorgente riparte una volta in silenzio (stesso canale, caricamento visibile)
+  prima del messaggio.
 - **Avanzamento**: archivio per server+utente (`vod_<id>`/`ep_<id>`), salvataggio ogni
   10 s, in pausa e all'uscita, posizioni sotto 30 s ignorate, visto al 90%; icona occhio
   (Lucide) in alto a sinistra della copertina e a destra nella riga episodio, barra verde

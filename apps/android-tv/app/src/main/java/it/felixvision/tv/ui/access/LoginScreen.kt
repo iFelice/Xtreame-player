@@ -42,12 +42,20 @@ import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.theme.FvpColors
 import kotlinx.coroutines.flow.distinctUntilChanged
 
+/** Tag di test dei campi del modulo di accesso (l'elemento che riceve il focus). */
+const val LOGIN_SERVER_FIELD_TAG = "login_server_field"
+const val LOGIN_USERNAME_FIELD_TAG = "login_username_field"
+const val LOGIN_PASSWORD_FIELD_TAG = "login_password_field"
+
 /**
  * Schermata di accesso: modulo a sinistra, abbinamento remoto a destra.
  *
  * Navigazione solo con il telecomando: ogni elemento interattivo è focalizzabile
- * e mostra il focus con bordo verde e leggero ingrandimento. Il pannello di
- * abbinamento vive solo finché la schermata è in primo piano.
+ * e mostra il focus con bordo verde e leggero ingrandimento. I campi aprono la
+ * tastiera solo con OK: il focus da solo non la mostra, così Su/Giù passano da
+ * un campo all'altro senza tastiera. All'apertura il focus va su "Server o
+ * codice". Il pannello di abbinamento vive solo finché la schermata è in primo
+ * piano.
  */
 @Composable
 fun LoginScreen(
@@ -201,6 +209,8 @@ private fun LoginForm(
                 keyboardType = KeyboardType.Uri,
                 imeAction = ImeAction.Next,
             ),
+            openKeyboardOnOk = true,
+            fieldTag = LOGIN_SERVER_FIELD_TAG,
         )
         FvpTextField(
             label = "Utente",
@@ -212,6 +222,8 @@ private fun LoginForm(
                 keyboardType = KeyboardType.Text,
                 imeAction = ImeAction.Next,
             ),
+            openKeyboardOnOk = true,
+            fieldTag = LOGIN_USERNAME_FIELD_TAG,
         )
         Row(verticalAlignment = Alignment.Bottom) {
             FvpPasswordField(
@@ -221,6 +233,10 @@ private fun LoginForm(
                 visible = state.passwordVisible,
                 scale = scale,
                 enabled = !state.busy,
+                // "Fine" chiude la tastiera e lascia il focus sulla password.
+                imeAction = ImeAction.Done,
+                openKeyboardOnOk = true,
+                fieldTag = LOGIN_PASSWORD_FIELD_TAG,
                 modifier = Modifier.weight(1f),
             )
             Spacer(Modifier.width(scale.dp(10f)))
