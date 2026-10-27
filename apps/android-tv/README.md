@@ -230,8 +230,9 @@ server Xtream raggiunti con indirizzo privato non risponderebbero.
   `org.jellyfin.media3:media3-ffmpeg-decoder:1.9.0+1`: decodifica di sistema preferita,
   FFmpeg solo come ripiego audio per AC3/EAC3/DTS (`EXTENSION_RENDERER_MODE_ON`).
   Rete in `PlayerNetworkConfig`: connessione 20 s, lettura 30 s, redirect anche tra http
-  e https, User-Agent di sistema; errori di rete e timeout ritentati fino a 3 volte (dopo
-  1, 2 e 4 s), nessun nuovo tentativo per HTTP 401/403/404 e per gli altri errori.
+  e https, User-Agent di sistema; errori di rete, timeout e risposte HTTP 500/502/503/504
+  ritentati fino a 3 volte (dopo 1, 2 e 4 s), nessun nuovo tentativo per HTTP 401/403/404,
+  per gli altri codici HTTP e per gli altri errori.
 - **URL** in `StreamUrls`: live `/live/{utente}/{password}/{id}.ts`, con `.m3u8` solo se
   l'account non ammette `ts` ma ammette `m3u8`; film `/movie/…`; episodi `/series/…`;
   estensione da `container_extension`, default `mp4`; credenziali codificate per il

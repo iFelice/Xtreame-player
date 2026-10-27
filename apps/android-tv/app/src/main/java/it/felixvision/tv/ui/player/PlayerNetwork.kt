@@ -38,13 +38,23 @@ object PlayerNetworkConfig {
     /** `null`: User-Agent predefinito di sistema, invariato rispetto a prima. */
     val USER_AGENT: String? = null
 
-    /** Nuovi tentativi per gli errori di rete e i timeout. */
+    /** Nuovi tentativi per gli errori di rete, i timeout e le risposte [RETRYABLE_HTTP_CODES]. */
     const val MAX_NETWORK_RETRIES: Int = 3
 
     /** Attesa prima del primo nuovo tentativo; poi raddoppia: 1 s, 2 s, 4 s. */
     const val FIRST_RETRY_DELAY_MILLIS: Long = 1_000L
 
-    /** Risposte HTTP definitive: nessun nuovo tentativo, il messaggio arriva subito. */
+    /**
+     * Risposte HTTP temporanee del server (errore interno, gateway non valido,
+     * servizio non disponibile, timeout del gateway): nuovi tentativi come per
+     * gli errori di rete. Ogni altro codice HTTP resta senza nuovi tentativi.
+     */
+    val RETRYABLE_HTTP_CODES: Set<Int> = setOf(500, 502, 503, 504)
+
+    /**
+     * Risposte HTTP definitive: nessun nuovo tentativo, il messaggio arriva
+     * subito. Hanno la precedenza su [RETRYABLE_HTTP_CODES].
+     */
     val NON_RETRYABLE_HTTP_CODES: Set<Int> = setOf(401, 403, 404)
 
     /** Riavvii automatici e silenziosi della sorgente live dopo un errore di rete. */
@@ -119,14 +129,24 @@ object PlayerNetworkErrors {
     }
 
     /**
+     * Vero se l'errore merita nuovi tentativi: errori di rete, timeout e
+     * risposte HTTP in [PlayerNetworkConfig.RETRYABLE_HTTP_CODES] (500, 502,
+     * 503, 504). Falso per 401/403/404, per ogni altro codice HTTP e per gli
+     * errori che non sono di rete.
+     */
+    fun isRetryable(error: Throwable?): Boolean {
+        val httpCode = httpResponseCode(error) ?: return isNetworkOrTimeout(error)
+        if (httpCode in PlayerNetworkConfig.NON_RETRYABLE_HTTP_CODES) return false
+        return httpCode in PlayerNetworkConfig.RETRYABLE_HTTP_CODES
+    }
+
+    /**
      * Attesa prima del nuovo tentativo numero [errorCount] (1, 2, 3), oppure
-     * `null` se non si riprova: risposte HTTP 401/403/404, tentativi esauriti e
-     * ogni errore che non è di rete (come prima, nessun nuovo tentativo).
+     * `null` se non si riprova: errore senza nuovi tentativi (vedi
+     * [isRetryable]) o tentativi esauriti.
      */
     fun retryDelayMillis(error: Throwable?, errorCount: Int): Long? {
-        val httpCode = httpResponseCode(error)
-        if (httpCode != null && httpCode in PlayerNetworkConfig.NON_RETRYABLE_HTTP_CODES) return null
-        if (!isNetworkOrTimeout(error)) return null
+        if (!isRetryable(error)) return null
         if (errorCount < 1 || errorCount > PlayerNetworkConfig.MAX_NETWORK_RETRIES) return null
         return PlayerNetworkConfig.FIRST_RETRY_DELAY_MILLIS shl (errorCount - 1)
     }
@@ -144,11 +164,11 @@ object PlayerNetworkErrors {
 }
 
 /**
- * Nuovi tentativi di caricamento: fino a 3 per errori di rete e timeout, con
- * attese di 1, 2 e 4 secondi; nessuno per le risposte HTTP definitive e per gli
- * altri errori. Il player segnala l'errore solo dopo i tentativi, quindi nel
- * frattempo resta visibile il caricamento. Ogni log porta il numero del
- * tentativo e l'URL oscurato.
+ * Nuovi tentativi di caricamento: fino a 3 per errori di rete, timeout e
+ * risposte HTTP 500/502/503/504, con attese di 1, 2 e 4 secondi; nessuno per
+ * 401/403/404, per gli altri codici HTTP e per gli altri errori. Il player
+ * segnala l'errore solo dopo i tentativi, quindi nel frattempo resta visibile
+ * il caricamento. Ogni log porta il numero del tentativo e l'URL oscurato.
  */
 class PlayerLoadErrorPolicy(
     private val streamUrl: String?,
@@ -162,17 +182,17 @@ class PlayerLoadErrorPolicy(
         val httpCode = PlayerNetworkErrors.httpResponseCode(error)
         val cause = PlayerNetworkErrors.causeName(error)
         val target = StreamUrls.redactStreamUrl(streamUrl)
-        val message = when {
-            delayMillis != null ->
-                "errore di rete ($cause), nuovo tentativo $attempt di $maxRetries tra $delayMillis ms"
-            httpCode != null && httpCode in PlayerNetworkConfig.NON_RETRYABLE_HTTP_CODES ->
-                "risposta HTTP $httpCode, nessun nuovo tentativo"
-            PlayerNetworkErrors.isNetworkOrTimeout(error) ->
-                "errore di rete ($cause), tentativi esauriti ($maxRetries di $maxRetries)"
-            else ->
-                "errore di caricamento ($cause), nessun nuovo tentativo"
+        val reason = when {
+            httpCode != null -> "risposta HTTP $httpCode"
+            PlayerNetworkErrors.isNetworkOrTimeout(error) -> "errore di rete ($cause)"
+            else -> "errore di caricamento ($cause)"
         }
-        AppLog.warn("Player: $message su $target")
+        val outcome = when {
+            delayMillis != null -> "nuovo tentativo $attempt di $maxRetries tra $delayMillis ms"
+            PlayerNetworkErrors.isRetryable(error) -> "tentativi esauriti ($maxRetries di $maxRetries)"
+            else -> "nessun nuovo tentativo"
+        }
+        AppLog.warn("Player: $reason, $outcome su $target")
         return delayMillis ?: C.TIME_UNSET
     }
 }
@@ -191,10 +211,11 @@ enum class PlayerErrorAction {
 
 /**
  * Riavvio automatico e silenzioso della sorgente: solo per i canali live, solo
- * per errori di rete rimasti dopo i nuovi tentativi, al massimo
- * [maxRestarts] volte prima di mostrare l'errore. Mai per film, episodi e
- * catch-up. Il conteggio riparte con un nuovo avvio della riproduzione (cambio
- * canale, "Riprova", ritorno alla diretta) o quando lo stream è pronto.
+ * per errori di rete rimasti dopo i nuovi tentativi (mai per le risposte HTTP,
+ * 500/502/503/504 compresi), al massimo [maxRestarts] volte prima di mostrare
+ * l'errore. Mai per film, episodi e catch-up. Il conteggio riparte con un
+ * nuovo avvio della riproduzione (cambio canale, "Riprova", ritorno alla
+ * diretta) o quando lo stream è pronto.
  */
 class LiveAutoRestart(
     private val maxRestarts: Int = PlayerNetworkConfig.MAX_LIVE_AUTO_RESTARTS,
