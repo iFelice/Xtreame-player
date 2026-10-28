@@ -55,7 +55,7 @@ jobs:
 
       - name: Test, assembleDebug e lint
         working-directory: apps/android-mobile
-        run: ./gradlew test assembleDebug lint
+        run: ./gradlew testDebugUnitTest assembleDebug lintDebug
 
       - name: Carica l'APK di debug
         if: always()

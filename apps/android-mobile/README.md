@@ -45,10 +45,11 @@ Tutti i comandi vanno eseguiti dalla cartella dell'app:
 cd apps/android-mobile
 ```
 
-Test unitari (JVM con Robolectric, nessun emulatore):
+Test unitari della sola variante debug (JVM con Robolectric, nessun
+emulatore, stesso comando della CI):
 
 ```bash
-./gradlew test
+./gradlew testDebugUnitTest
 ```
 
 Build dell'APK di debug:
@@ -64,10 +65,10 @@ installata mantenendo i dati):
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Controllo statico (come in CI):
+Controllo statico della variante debug (come in CI):
 
 ```bash
-./gradlew lint
+./gradlew lintDebug
 ```
 
 Release firmata: le variabili d'ambiente `FVP_VERSION_CODE`,
@@ -132,7 +133,9 @@ motivo è spiegato nel file.
 
 `.github/workflows/android-mobile-ci.yml` (push su qualunque branch e
 `pull_request` verso `main`, più `workflow_dispatch`) esegue
-`./gradlew test assembleDebug lint` da `apps/android-mobile` e carica:
+`./gradlew testDebugUnitTest assembleDebug lintDebug` da
+`apps/android-mobile` — test e lint della sola variante debug, stesso
+schema del CI della TV — e carica:
 
 - **FelixVP-mobile-debug**: APK di debug (retention 7 giorni);
 - **android-mobile-ci-reports**: report di test e lint, anche in caso di errore.
