@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
@@ -125,10 +126,10 @@ fun TouchListRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     onLongClick: (() -> Unit)? = null,
-    backgroundColor: androidx.compose.ui.graphics.Color = FvpColors.Surface,
+    backgroundColor: Color = FvpColors.Surface,
     horizontalPadding: Dp = 12.dp,
     verticalPadding: Dp = 8.dp,
-    content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit,
+    content: @Composable RowScope.() -> Unit,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -153,7 +154,7 @@ fun TouchListRow(
 fun RowTitle(
     text: String,
     modifier: Modifier = Modifier,
-    color: androidx.compose.ui.graphics.Color = FvpColors.TextPrimary,
+    color: Color = FvpColors.TextPrimary,
 ) {
     Text(
         text = text,

@@ -66,6 +66,7 @@ import it.felixvision.tv.data.epg.ChannelScheduleLoader
 import it.felixvision.tv.data.epg.EpgProgram
 import it.felixvision.tv.data.favorites.FavoriteItem
 import it.felixvision.tv.data.progress.ProgressKeys
+import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
 /** Messaggio dello stato vuoto di "I miei canali". */
@@ -165,7 +166,7 @@ fun PreferitiSection(
                     dragOffsetPx += step
                 }
             }
-            if (step == 0f) kotlinx.coroutines.delay(16) else kotlinx.coroutines.delay(8)
+            if (step == 0f) delay(16) else delay(8)
         }
     }
 
