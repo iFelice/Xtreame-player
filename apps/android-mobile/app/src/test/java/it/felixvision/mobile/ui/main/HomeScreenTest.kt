@@ -234,7 +234,8 @@ class HomeScreenTest {
                     null
                 }
                 if (tag != null) {
-                    println("SFERA_DUMP depth=" + depth + " tag=" + tag)
+                    val b = n.boundsInRoot
+                    println("SFERA_DUMP depth=" + depth + " tag=" + tag + " bounds=" + b)
                 }
                 for (child in n.children) visit(child, depth + 1)
             }
