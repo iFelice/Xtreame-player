@@ -341,6 +341,8 @@ private fun DetailHost(
     container: AppContainer,
     summary: AccountSummary,
     password: String,
+    imageLoader: ImageLoader,
+    channelScheduleLoader: ChannelScheduleLoader?,
     modifier: Modifier = Modifier,
 ) {
     when (target) {
