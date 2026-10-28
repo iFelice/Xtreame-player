@@ -1,0 +1,15 @@
+# Catalogo delle versioni specifiche dell'app Android mobile (tablet) di
+# FelixVisionPlayer.
+#
+# Contiene SOLO le librerie che l'app TV non dichiara: tutto il resto viene
+# letto dal catalogo condiviso "libs" (../android-tv/gradle/libs.versions.toml,
+# dichiarato in settings.gradle.kts). Qui non c'è una sezione [versions]:
+# material3 e la navigation suite sono gestiti dal Compose BOM già presente
+# in "libs" (androidx.compose:compose-bom:2026.09.00), che li include con le
+# versioni 1.4.0. Verificato sul POM del BOM su Google Maven
+# (dl.google.com/dl/android/maven2/androidx/compose/compose-bom/2026.09.00/):
+#   androidx.compose.material3:material3:1.4.0
+#   androidx.compose.material3:material3-adaptive-navigation-suite:1.4.0
+[libraries]
+androidx-compose-material3 = { module = "androidx.compose.material3:material3" }
+androidx-compose-material3-adaptive-navigation-suite = { module = "androidx.compose.material3:material3-adaptive-navigation-suite" }

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Palette FelixVisionPlayer: stesso fondo scuro delle altre app del prodotto. -->
+    <color name="fvp_background">#1C1C1E</color>
+    <color name="fvp_green">#10B981</color>
+    <color name="ic_launcher_background">#1C1C1E</color>
+</resources>
