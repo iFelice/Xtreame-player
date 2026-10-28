@@ -45,7 +45,6 @@ import it.felixvision.mobile.ui.theme.FvpColors
 import it.felixvision.tv.core.Clock
 import it.felixvision.tv.data.catalog.LiveStream
 import it.felixvision.tv.data.epg.ChannelScheduleLoader
-import it.felixvision.tv.data.epg.ChannelScheduleRules
 import it.felixvision.tv.data.epg.EpgProgram
 import it.felixvision.tv.data.favorites.FavoriteItem
 
@@ -263,11 +262,9 @@ fun LiveChannelRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            val scheduleLine = ChannelScheduleRules.line(programs, nowMillis)
             NowOnLine(
-                now = scheduleLine.onAir,
-                next = scheduleLine.next,
-                catchUp = null,
+                programs = programs.orEmpty(),
+                nowMillis = nowMillis,
                 modifier = Modifier.testTag("live_schedule_${channel.streamId}"),
             )
         }

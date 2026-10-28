@@ -84,14 +84,14 @@ fun rememberChannelSchedulePrograms(
  */
 @Composable
 fun NowOnLine(
-    programs: List<EpgProgram>?,
+    programs: List<EpgProgram>,
     nowMillis: Long,
     modifier: Modifier = Modifier,
     showNext: Boolean = false,
     testTagPrefix: String = "channel_schedule",
 ) {
     val line = remember(programs, nowMillis) {
-        ChannelScheduleRules.line(programs.orEmpty(), nowMillis)
+        ChannelScheduleRules.line(programs, nowMillis)
     }
     if (!line.isAvailable) return
     val onAirText = ChannelScheduleRules.onAirText(line)

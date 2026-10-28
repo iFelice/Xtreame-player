@@ -63,7 +63,6 @@ import it.felixvision.mobile.ui.theme.FvpColors
 import it.felixvision.tv.core.Clock
 import it.felixvision.tv.data.channels.MyChannel
 import it.felixvision.tv.data.epg.ChannelScheduleLoader
-import it.felixvision.tv.data.epg.ChannelScheduleRules
 import it.felixvision.tv.data.epg.EpgProgram
 import it.felixvision.tv.data.favorites.FavoriteItem
 import it.felixvision.tv.data.progress.ProgressKeys
@@ -497,11 +496,9 @@ fun MyChannelRow(
                 maxLines = 1,
             )
             if (!editMode) {
-                val scheduleLine = ChannelScheduleRules.line(programs, nowMillis)
                 NowOnLine(
-                    now = scheduleLine.onAir,
-                    next = scheduleLine.next,
-                    catchUp = null,
+                    programs = programs.orEmpty(),
+                    nowMillis = nowMillis,
                     modifier = Modifier.testTag("mychannel_schedule_${channel.streamId}"),
                 )
             }
