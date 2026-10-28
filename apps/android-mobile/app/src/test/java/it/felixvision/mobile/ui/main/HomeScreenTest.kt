@@ -1,6 +1,7 @@
-@file:OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-
-@file:OptIn(androidx.compose.ui.test.ExperimentalTestApi::class)
+@file:OptIn(
+    kotlinx.coroutines.ExperimentalCoroutinesApi::class,
+    androidx.compose.ui.test.ExperimentalTestApi::class,
+)
 
 package it.felixvision.mobile.ui.main
 
