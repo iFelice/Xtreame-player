@@ -55,7 +55,20 @@ jobs:
 
       - name: Test, assembleDebug e lint
         working-directory: apps/android-mobile
-        run: ./gradlew testDebugUnitTest assembleDebug lintDebug
+        run: |
+          set -o pipefail
+          ./gradlew testDebugUnitTest assembleDebug lintDebug --console=plain --stacktrace 2>&1 | tee /tmp/fvp-mobile-build.log
+
+      # Gli errori del compilatore Kotlin ("e: file://...:riga:colonna ...") diventano
+      # annotazioni GitHub così restano leggibili dalla pagina del run e dalla PR.
+      - name: Annota gli errori di compilazione Kotlin
+        if: failure()
+        shell: bash
+        run: |
+          set +e
+          REPO_PREFIX="/home/runner/work/${{ github.repository }}/${{ github.repository#*/ }}"
+          sed -n -E "s|^e: file://${REPO_PREFIX}/([^:]+):([0-9]+):([0-9]+) (.*)$|::error file=\1,line=\2,col=\3::\4|p" /tmp/fvp-mobile-build.log | head -40
+          grep -E "^(e:|> Task .* FAILED|\* What went wrong)" /tmp/fvp-mobile-build.log | head -10 || true
 
       - name: Carica l'APK di debug
         if: always()
