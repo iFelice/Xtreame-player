@@ -8,7 +8,6 @@ package it.felixvision.mobile.ui.main
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.isRoot
-import androidx.compose.ui.test.printToLog
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithTag
@@ -225,6 +224,22 @@ class HomeScreenTest {
     /** Orologio fisso: sufficiente senza debounce in questa suite UI. */
     private val fixedClock = Clock { 1_761_000_000_000L }
 
+    /** Stampa su stdout tutti i tag semantici presenti: li raccoglie la CI. */
+    private fun dumpTagsToStdout(node: androidx.compose.ui.semantics.SemanticsNode) {
+        val walker = object {
+            fun visit(n: androidx.compose.ui.semantics.SemanticsNode, depth: Int) {
+                val tag = n.config.getOrNull(
+                    androidx.compose.ui.semantics.SemanticsProperties.TestTag,
+                )
+                if (tag != null) {
+                    println("SFERA_DUMP depth=" + depth + " tag=" + tag)
+                }
+                for (child in n.children) visit(child, depth + 1)
+            }
+        }
+        walker.visit(node, 0)
+    }
+
     private fun createCatalogViewModel(
         myChannels: List<MyChannel> = emptyList(),
     ): CatalogViewModel {
@@ -383,7 +398,7 @@ class HomeScreenTest {
         rule.waitForIdle()
         rule.onNodeWithTag("favorites_edit").performClick()
         rule.waitForIdle()
-        rule.onNode(isRoot()).printToLog("TEST_DUMP_MODIFICA")
+        dumpTagsToStdout(rule.onNode(isRoot()).fetchSemanticsNode())
         rule.onNodeWithTag("mychannel_drag_101").assertIsDisplayed()
         rule.onNodeWithTag("mychannel_drag_102").assertIsDisplayed()
         rule.onNodeWithTag("favorites_done").performClick()

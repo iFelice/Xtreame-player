@@ -85,13 +85,13 @@ class CatalogViewModelTest {
             onStage: suspend (CatalogStage) -> Unit,
         ): CatalogResult {
             loadCalls += 1
-            onStage(
-                CatalogStage(
-                    section = CatalogSection.LIVE,
-                    status = CatalogSectionStatus.COMPLETED,
-                    itemCount = catalog.liveStreams.size,
-                ),
+            val stage = CatalogStage(
+                section = CatalogSection.LIVE,
+                status = CatalogSectionStatus.COMPLETED,
+                itemCount = catalog.liveStreams.size,
             )
+            stagesSeen.add(stage)
+            onStage(stage)
             return CatalogResult.Success(catalog)
         }
 
