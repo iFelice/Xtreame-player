@@ -83,7 +83,7 @@ fun rememberChannelSchedulePrograms(
  * (nessun messaggio e nessuno spazio vuoto).
  */
 @Composable
-fun ChannelScheduleLine(
+fun NowOnLine(
     programs: List<EpgProgram>?,
     nowMillis: Long,
     modifier: Modifier = Modifier,

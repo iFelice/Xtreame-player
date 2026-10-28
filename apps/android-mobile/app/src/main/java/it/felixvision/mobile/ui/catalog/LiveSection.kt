@@ -32,7 +32,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.ImageLoader
 import it.felixvision.mobile.ui.components.CategorySideColumn
 import it.felixvision.mobile.ui.components.ChannelLogoImage
-import it.felixvision.mobile.ui.components.ChannelScheduleLine
+import it.felixvision.mobile.ui.components.NowOnLine
 import it.felixvision.mobile.ui.components.CollapsingCategoryHeader
 import it.felixvision.mobile.ui.components.CollapsingCategoryPanel
 import it.felixvision.mobile.ui.components.EmptyState
@@ -45,6 +45,7 @@ import it.felixvision.mobile.ui.theme.FvpColors
 import it.felixvision.tv.core.Clock
 import it.felixvision.tv.data.catalog.LiveStream
 import it.felixvision.tv.data.epg.ChannelScheduleLoader
+import it.felixvision.tv.data.epg.ChannelScheduleRules
 import it.felixvision.tv.data.epg.EpgProgram
 import it.felixvision.tv.data.favorites.FavoriteItem
 
@@ -262,10 +263,12 @@ fun LiveChannelRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            ChannelScheduleLine(
-                programs = programs,
-                nowMillis = nowMillis,
-                testTagPrefix = "live_schedule_${channel.streamId}",
+            val scheduleLine = ChannelScheduleRules.line(programs, nowMillis)
+            NowOnLine(
+                now = scheduleLine.onAir,
+                next = scheduleLine.next,
+                catchUp = null,
+                modifier = Modifier.testTag("live_schedule_${channel.streamId}"),
             )
         }
         IconButton(

@@ -48,7 +48,7 @@ import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.ImageLoader
 import it.felixvision.mobile.ui.components.ChannelLogoImage
-import it.felixvision.mobile.ui.components.ChannelScheduleLine
+import it.felixvision.mobile.ui.components.NowOnLine
 import it.felixvision.mobile.ui.components.EmptyState
 import it.felixvision.mobile.ui.components.FavoriteBadge
 import it.felixvision.mobile.ui.components.FvpIcons
@@ -63,6 +63,7 @@ import it.felixvision.mobile.ui.theme.FvpColors
 import it.felixvision.tv.core.Clock
 import it.felixvision.tv.data.channels.MyChannel
 import it.felixvision.tv.data.epg.ChannelScheduleLoader
+import it.felixvision.tv.data.epg.ChannelScheduleRules
 import it.felixvision.tv.data.epg.EpgProgram
 import it.felixvision.tv.data.favorites.FavoriteItem
 import it.felixvision.tv.data.progress.ProgressKeys
@@ -496,10 +497,12 @@ fun MyChannelRow(
                 maxLines = 1,
             )
             if (!editMode) {
-                ChannelScheduleLine(
-                    programs = programs,
-                    nowMillis = nowMillis,
-                    testTagPrefix = "mychannel_schedule_${channel.streamId}",
+                val scheduleLine = ChannelScheduleRules.line(programs, nowMillis)
+                NowOnLine(
+                    now = scheduleLine.onAir,
+                    next = scheduleLine.next,
+                    catchUp = null,
+                    modifier = Modifier.testTag("mychannel_schedule_${channel.streamId}"),
                 )
             }
         }
