@@ -65,7 +65,7 @@ jobs:
       # tutte le reti: le annotazioni restano leggibili dalla pagina del run,
       # dalla PR e via API.
       - name: Annota errori di compilazione, test e lint
-        if: failure()
+        if: always()
         shell: bash
         run: |
           set +e
@@ -75,11 +75,15 @@ jobs:
           #    interno dei test (pattern generico "(NomeTest.kt:N)")
           python3 - <<'PY'
           import glob, re, xml.etree.ElementTree as ET
+          tot = fail = err = 0
           for path in glob.glob('apps/android-mobile/app/build/test-results/**/*.xml', recursive=True):
               try:
                   root = ET.parse(path).getroot()
               except Exception:
                   continue
+              tot += int(root.get('tests') or 0)
+              fail += int(root.get('failures') or 0)
+              err += int(root.get('errors') or 0)
               for case in root.iter('testcase'):
                   cid = (case.get('classname') or '').replace('.', '/') + '.kt'
                   for f in list(case):
@@ -94,6 +98,9 @@ jobs:
                                   break
                           text = ' || '.join(lines)[:1500]
                           print(f"::error file={cid},line=1::test «{case.get('name','?')}»: {text}")
+          if tot:
+              name = f"apps/android-mobile/app/src/test/java/it/felixvision/mobile/ui/main/HomeScreenTest.kt"
+              print(f"::notice file={name},line=1::test eseguiti: {tot}, falliti: {fail}, errori: {err}, superati: {tot - fail - err}")
           PY
           # 3) errori di lint
           if [ -f apps/android-mobile/app/build/reports/lint-results-debug.txt ]; then
