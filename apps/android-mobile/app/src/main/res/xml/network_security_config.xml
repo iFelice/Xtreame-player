@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Traffico in chiaro consentito di proposito: gli elenchi Xtream Codes vengono
+  serviti molto spesso su http:// (porte 8080/25461 e server in rete locale),
+  quindi una policy solo HTTPS impedirebbe l'accesso a una parte dei server
+  dell'utente. Il traffico resta limitato ai domini/indirizzi che l'utente
+  configura: l'app non contatta altri host se non il server Xtream indicato e
+  il servizio di abbinamento (che usa https).
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

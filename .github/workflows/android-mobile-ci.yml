@@ -1,0 +1,77 @@
+name: Android Mobile CI
+
+on:
+  push:
+    paths:
+      - "apps/android-mobile/**"
+      - "apps/android-tv/app/src/main/java/it/felixvision/tv/data/**"
+      - "apps/android-tv/app/src/main/java/it/felixvision/tv/core/**"
+      - "apps/android-tv/gradle/libs.versions.toml"
+      - ".github/workflows/android-mobile-ci.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "apps/android-mobile/**"
+      - "apps/android-tv/app/src/main/java/it/felixvision/tv/data/**"
+      - "apps/android-tv/app/src/main/java/it/felixvision/tv/core/**"
+      - "apps/android-tv/gradle/libs.versions.toml"
+      - ".github/workflows/android-mobile-ci.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: android-mobile-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Nessun segreto: la build di debug e i test non richiedono credenziali.
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Imposta JDK 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+          cache-dependency-path: |
+            apps/android-mobile/**/*.gradle*
+            apps/android-mobile/**/*.toml
+            apps/android-tv/gradle/libs.versions.toml
+
+      - name: Accetta le licenze Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+
+      - name: Test, assembleDebug e lint
+        working-directory: apps/android-mobile
+        run: ./gradlew test assembleDebug lint
+
+      - name: Carica l'APK di debug
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: FelixVP-mobile-debug
+          path: apps/android-mobile/app/build/outputs/apk/debug/*.apk
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Carica i report di test e lint
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-mobile-ci-reports
+          path: |
+            apps/android-mobile/app/build/reports/tests
+            apps/android-mobile/app/build/reports/lint-results*
+          if-no-files-found: ignore
