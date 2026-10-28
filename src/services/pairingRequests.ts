@@ -1,4 +1,8 @@
 import { isRubricaCode, normalizeRubricaCode } from '../../shared/pairing';
+import { STATIC_DEPLOY } from '../utils/deployTarget';
+
+export const PAIRING_RELAY_REQUIRED_MESSAGE =
+  'Per l’abbinamento e i codici server configura VITE_PAIRING_RELAY_URL durante la build statica.';
 
 export interface PairingRequestOptions {
   native: boolean;
@@ -17,11 +21,12 @@ export function getPairingRelayUrl(override?: string | null): string {
   if (typeof override === 'string') {
     return override.trim().replace(/\/+$/, '');
   }
-  const metaEnv = (import.meta as { env?: Record<string, unknown> }).env;
-  const fromMeta = metaEnv?.VITE_PAIRING_RELAY_URL;
+  const fromMeta = import.meta.env.VITE_PAIRING_RELAY_URL;
   if (typeof fromMeta === 'string' && fromMeta.trim()) {
     return fromMeta.trim().replace(/\/+$/, '');
   }
+  // Static deployments read their relay only from Vite's build-time environment.
+  if (STATIC_DEPLOY) return '';
   if (
     typeof process !== 'undefined' &&
     typeof process.env?.VITE_PAIRING_RELAY_URL === 'string' &&
@@ -33,6 +38,7 @@ export function getPairingRelayUrl(override?: string | null): string {
 }
 
 function pairingUrl(path: string, native: boolean, nativeServer: string): string {
+  if (STATIC_DEPLOY) throw new Error(PAIRING_RELAY_REQUIRED_MESSAGE);
   if (!native) return path;
   return `${nativeServer.replace(/\/+$/, '')}${path}`;
 }
@@ -45,6 +51,7 @@ export function buildPairingCreateRequest(options: PairingRequestOptions): Pairi
       url: `${relayUrl}/api/pair/create`,
     };
   }
+  if (STATIC_DEPLOY) throw new Error(PAIRING_RELAY_REQUIRED_MESSAGE);
   return {
     url: pairingUrl('/api/session/create', options.native, options.nativeServer),
   };
@@ -65,6 +72,7 @@ export function buildPairingStatusRequest(
     return request;
   }
 
+  if (STATIC_DEPLOY) throw new Error(PAIRING_RELAY_REQUIRED_MESSAGE);
   const request: PairingRequest = {
     url: pairingUrl(
       `/api/session/status/${encodeURIComponent(code)}`,
@@ -86,6 +94,7 @@ export function buildPairingSubmitRequest(options: PairingRequestOptions): Pairi
       url: `${relayUrl}/api/pair/submit`,
     };
   }
+  if (STATIC_DEPLOY) throw new Error(PAIRING_RELAY_REQUIRED_MESSAGE);
   return {
     method: 'POST',
     url: pairingUrl('/api/session/submit', options.native, options.nativeServer),
@@ -102,6 +111,7 @@ export function buildPairingWebUrl(
   },
 ): string {
   const relayUrl = getPairingRelayUrl(options?.relayUrl);
+  if (STATIC_DEPLOY && !relayUrl) return '';
   const base = relayUrl
     ? relayUrl
     : options?.native
@@ -126,8 +136,11 @@ export async function resolveRubricaServerUrl(
 ): Promise<{ ok: true; server: string } | { ok: false; message: string }> {
   const clean = serverOrCode.trim();
   const relayUrl = getPairingRelayUrl(relayUrlOverride);
-  if (!relayUrl || !isRubricaCode(clean)) {
-    return { ok: true, server: clean };
+  if (!isRubricaCode(clean)) return { ok: true, server: clean };
+  if (!relayUrl) {
+    return STATIC_DEPLOY
+      ? { ok: false, message: PAIRING_RELAY_REQUIRED_MESSAGE }
+      : { ok: true, server: clean };
   }
 
   const normalizedCode = normalizeRubricaCode(clean);

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Tv, Send, CheckCircle2, AlertCircle, Sparkles, ArrowLeft, Shield, Wifi } from 'lucide-react';
 import { parseXtreamUrl } from '../utils/parseXtreamUrl';
+import { STATIC_DEPLOY } from '../utils/deployTarget';
+import { buildPairingSubmitRequest, getPairingRelayUrl, PAIRING_RELAY_REQUIRED_MESSAGE } from '../services/pairingRequests';
 
 interface RemoteLoginViewProps {
   onBackToApp?: () => void;
@@ -16,6 +18,7 @@ export const RemoteLoginView: React.FC<RemoteLoginViewProps> = ({ onBackToApp, i
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [useQuickLink, setUseQuickLink] = useState(false);
+  const relayMissing = STATIC_DEPLOY && !getPairingRelayUrl();
 
   useEffect(() => {
     try {
@@ -41,6 +44,10 @@ export const RemoteLoginView: React.FC<RemoteLoginViewProps> = ({ onBackToApp, i
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setStatusMessage(null);
+    if (relayMissing) {
+      setStatusMessage({ type: 'error', text: PAIRING_RELAY_REQUIRED_MESSAGE });
+      return;
+    }
 
     const cleanCode = code.trim();
     const cleanServer = server.trim();
@@ -60,8 +67,12 @@ export const RemoteLoginView: React.FC<RemoteLoginViewProps> = ({ onBackToApp, i
     setIsSubmitting(true);
 
     try {
-      const res = await fetch('/api/session/submit', {
-        method: 'POST',
+      // Preserve the Express endpoint in normal builds; static hosting uses only the relay.
+      const request = STATIC_DEPLOY
+        ? buildPairingSubmitRequest({ native: false, nativeServer: '' })
+        : { url: '/api/session/submit', method: 'POST' as const };
+      const res = await fetch(request.url, {
+        method: request.method || 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           code: cleanCode,
@@ -74,7 +85,7 @@ export const RemoteLoginView: React.FC<RemoteLoginViewProps> = ({ onBackToApp, i
 
       const data = await res.json();
 
-      if (res.ok && data.success) {
+      if (res.ok && (STATIC_DEPLOY ? data.ok : data.success)) {
         setStatusMessage({
           type: 'success',
           text: 'Credenziali inviate con successo alla TV! Lo schermo della TV si aggiornerà automaticamente tra un istante.',
@@ -136,6 +147,12 @@ export const RemoteLoginView: React.FC<RemoteLoginViewProps> = ({ onBackToApp, i
           Inserisci qui sotto i dati del tuo abbonamento Xtream Codes per trasmetterli istantaneamente alla tua Smart TV senza dover usare il telecomando!
         </p>
 
+        {relayMissing && (
+          <div role="alert" className="mb-4 rounded-xl border border-danger/40 bg-danger/15 p-3 text-sm font-semibold text-label">
+            {PAIRING_RELAY_REQUIRED_MESSAGE}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* PIN Input */}
           <div>
@@ -179,7 +196,7 @@ export const RemoteLoginView: React.FC<RemoteLoginViewProps> = ({ onBackToApp, i
                 rows={3}
                 value={quickLink}
                 onChange={(e) => handleQuickLinkChange(e.target.value)}
-                placeholder="http://server.com:8080/movie/user/pass/123.mp4 oppure player_api.php?..."
+                placeholder="http://server.esempio:8080/movie/demo/demo/123.mp4"
                 className="w-full px-3.5 py-2.5 bg-surface-0 border border-separator-strong focus:border-accent rounded-xl text-xs text-label placeholder-label-tertiary focus:outline-hidden transition resize-none"
               />
               <p className="text-[11px] text-label-secondary mt-1">
@@ -197,7 +214,7 @@ export const RemoteLoginView: React.FC<RemoteLoginViewProps> = ({ onBackToApp, i
               type="text"
               value={server}
               onChange={(e) => setServer(e.target.value)}
-              placeholder="http://esempio.com:8080"
+              placeholder="http://server.esempio:8080"
               className="w-full px-3.5 py-2.5 bg-surface-0 border border-separator-strong focus:border-accent rounded-xl text-sm text-label placeholder-label-tertiary focus:outline-hidden transition"
               required
             />

@@ -31,6 +31,7 @@ import { xtreamClient } from './services/xtreamClient';
 import { pingPairingRelayHealth } from './services/pairingRequests';
 import { storage, SavedAccount } from './services/storage';
 import { buildStreamUrl } from './utils/parseXtreamUrl';
+import { STATIC_DEPLOY } from './utils/deployTarget';
 import { cleanupLegacyNativeDownloads, isTvEnvironment } from './utils/downloadHelper';
 import { useTvNavigation } from './utils/tvNavigation';
 import { chooseInitialTab, shouldShowMobileBar } from './utils/navigation';
@@ -267,8 +268,11 @@ export default function App() {
 
     const restoreSession = async () => {
       try {
-        const response = await fetch('/api/runtime-config');
-        const runtime = (await response.json()) as { safeMode?: boolean };
+        // Static hosting has no /api routes. Restore the account and query
+        // parameters as in a normal non-safe deployment, without Express.
+        const runtime: { safeMode?: boolean } = STATIC_DEPLOY
+          ? { safeMode: false }
+          : await (await fetch('/api/runtime-config')).json();
         if (cancelled) return;
         setSafeMode(Boolean(runtime.safeMode));
         if (isRemoteLoginPage) return;

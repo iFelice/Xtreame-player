@@ -36,6 +36,22 @@ In `npm run dev:safe` (`XTREAM_SAFE_MODE=1`) il proxy inoltra solo verso `localh
 
 ---
 
+## Build statica (iPhone/iPad)
+
+Per pubblicare l'app su un hosting di soli file, senza Express, genera e carica il contenuto di `dist/`:
+
+```bash
+npm run build:static
+# Se servono pairing e codici rubrica, imposta l'URL del relay alla build:
+VITE_PAIRING_RELAY_URL="$URL_DEL_RELAY" npm run build:static
+```
+
+Il catalogo e gli stream vengono richiesti direttamente al provider (che deve consentire CORS per le API); i download tramite proxy non sono disponibili. L'abbinamento, l'accesso remoto e il login con codice rubrica richiedono il relay configurato in fase di build. Per MKV e AVI su iPhone/iPad l'app propone VLC.
+
+La pagina deve restare in **HTTP** se gli stream del provider sono HTTP: una pagina HTTPS verrebbe bloccata da Safari per contenuto misto. `dist/.htaccess` imposta il reindirizzamento verso HTTP su Apache con `mod_rewrite`; su altri hosting occorre configurare una regola equivalente e disattivare HTTPS obbligatorio/HSTS. **HTTP non cifra credenziali né stream**: usa solo reti fidate e valuta il rischio prima di esporre il sito.
+
+---
+
 ## 📺 Accesso da TV e telefono sulla rete di casa
 
 Il server ascolta su `0.0.0.0`: dalla TV o dal telefono, collegati alla stessa rete domestica, raggiungi il PC con il suo indirizzo LAN, per esempio `http://192.168.1.10:3000`. Nessun port forwarding né esposizione su Internet: il servizio è pensato per la rete di casa.
