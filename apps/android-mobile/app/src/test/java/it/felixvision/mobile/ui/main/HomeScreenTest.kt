@@ -228,9 +228,11 @@ class HomeScreenTest {
     private fun dumpTagsToStdout(node: androidx.compose.ui.semantics.SemanticsNode) {
         val walker = object {
             fun visit(n: androidx.compose.ui.semantics.SemanticsNode, depth: Int) {
-                val tag = n.config.getOrNull(
-                    androidx.compose.ui.semantics.SemanticsProperties.TestTag,
-                )
+                val tag = if (androidx.compose.ui.semantics.SemanticsProperties.TestTag in n.config) {
+                    n.config[androidx.compose.ui.semantics.SemanticsProperties.TestTag]
+                } else {
+                    null
+                }
                 if (tag != null) {
                     println("SFERA_DUMP depth=" + depth + " tag=" + tag)
                 }
