@@ -59,16 +59,34 @@ jobs:
           set -o pipefail
           ./gradlew testDebugUnitTest assembleDebug lintDebug --console=plain --stacktrace 2>&1 | tee /tmp/fvp-mobile-build.log
 
-      # Gli errori del compilatore Kotlin ("e: file://...:riga:colonna ...") diventano
-      # annotazioni GitHub così restano leggibili dalla pagina del run e dalla PR.
-      - name: Annota gli errori di compilazione Kotlin
+      # Gli errori del compilatore Kotlin ("e: file://...:riga:colonna ..."), i test
+      # falliti (XML JUnit) e gli errori di lint diventano annotazioni GitHub così
+      # restano leggibili dalla pagina del run, dalla PR e via API (i log di blob
+      # alcune reti non li raggiungono).
+      - name: Annota errori di compilazione, test e lint
         if: failure()
         shell: bash
         run: |
           set +e
-          REPO_PREFIX="$GITHUB_WORKSPACE"
-          sed -n -E "s|^e: file://${REPO_PREFIX}/([^:]+):([0-9]+):([0-9]+) (.*)$|::error file=\1,line=\2,col=\3::\4|p" /tmp/fvp-mobile-build.log | head -40
-          grep -E "^(e:|> Task .* FAILED|\* What went wrong)" /tmp/fvp-mobile-build.log | head -10 || true
+          sed -n -E "s|^e: file://$GITHUB_WORKSPACE/([^:]+):([0-9]+):([0-9]+) (.*)$|::error file=\1,line=\2,col=\3::\4|p" /tmp/fvp-mobile-build.log | head -40
+          grep -E "^(e:|> Task .* FAILED)" /tmp/fvp-mobile-build.log | head -6 || true
+          if [ -f apps/android-mobile/app/build/reports/lint-results-debug.txt ]; then
+            sed -n -E "s|^$GITHUB_WORKSPACE/([^:]+):([0-9]+) Error: (.*)$|::error file=\1,line=\2::lint: \3|p" apps/android-mobile/app/build/reports/lint-results-debug.txt | head -20
+          fi
+          python3 - <<'PY'
+          import glob, xml.etree.ElementTree as ET
+          for path in glob.glob('apps/android-mobile/app/build/test-results/**/*.xml', recursive=True):
+              try:
+                  root = ET.parse(path).getroot()
+              except Exception:
+                  continue
+              for case in root.iter('testcase'):
+                  cid = (case.get('classname') or '').replace('.', '/') + '.kt'
+                  for f in list(case):
+                      if f.tag in ('failure', 'error'):
+                          first = (f.text or '').lstrip().split('\n')[0][:200] or (f.get('message') or '')[:200]
+                          print(f"::error file={cid},line=1::test «{case.get('name','?')}»: {first}")
+          PY
 
       - name: Carica l'APK di debug
         if: always()
