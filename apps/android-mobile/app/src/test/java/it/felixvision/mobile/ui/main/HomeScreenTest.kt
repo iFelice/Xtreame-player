@@ -7,6 +7,7 @@ package it.felixvision.mobile.ui.main
 
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithTag
@@ -381,7 +382,7 @@ class HomeScreenTest {
         rule.waitForIdle()
         rule.onNodeWithTag("favorites_edit").performClick()
         rule.waitForIdle()
-        rule.onRoot().printToLog("TEST_DUMP_MODIFICA")
+        rule.onNode(isRoot()).printToLog("TEST_DUMP_MODIFICA")
         rule.onNodeWithTag("mychannel_drag_101").assertIsDisplayed()
         rule.onNodeWithTag("mychannel_drag_102").assertIsDisplayed()
         rule.onNodeWithTag("favorites_done").performClick()
