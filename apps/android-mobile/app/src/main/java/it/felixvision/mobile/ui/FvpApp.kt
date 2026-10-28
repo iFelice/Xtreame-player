@@ -10,13 +10,15 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import it.felixvision.mobile.AppContainer
 import it.felixvision.mobile.ui.access.AccessScreen
 import it.felixvision.mobile.ui.access.AccessViewModel
-import it.felixvision.mobile.ui.access.AccountScreen
 import it.felixvision.mobile.ui.access.BootingScreen
 import it.felixvision.mobile.ui.access.Screen
+import it.felixvision.mobile.ui.main.HomeScreen
 
 /**
  * Radice dell'app: osserva [AccessViewModel] e mostra la schermata corrente
- * (avvio, accesso, riepilogo account). I cataloghi arrivano nel PR2.
+ * (avvio, accesso, oppure la schermata principale con cataloghi e sezioni).
+ * La schermata provvisoria del PR1 ([ui.access.AccountScreen]) è stata
+ * sostituita da [HomeScreen] nel PR2.
  */
 @Composable
 fun FvpApp(container: AppContainer) {
@@ -43,10 +45,15 @@ fun FvpApp(container: AppContainer) {
             onRenewCode = viewModel::onRenewPairingCode,
         )
 
-        is Screen.Account -> AccountScreen(
+        is Screen.Account -> HomeScreen(
+            container = container,
             summary = screen.summary,
+            // La password resta solo nel modello di sessione in memoria.
+            password = viewModel.getCurrentCredentials()?.password.orEmpty(),
             banner = screen.banner,
             onSignOut = viewModel::signOut,
+            channelScheduleLoader = container.channelScheduleLoader,
+            imageLoader = container.imageLoader,
         )
     }
 }

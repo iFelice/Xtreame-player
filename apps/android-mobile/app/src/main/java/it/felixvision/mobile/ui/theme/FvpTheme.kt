@@ -40,6 +40,7 @@ object FvpColors {
     val ContinuaActive = Color(0xFF38BDF8)
     val PreferitiActive = Color(0xFFFBBF24)
     val CercaActive = Color(0xFFA78BFA)
+    val ImpostazioniActive = Color(0xFFFFFFFF)
     val Inactive = Color(0xFFAEAEB2)
 }
 
