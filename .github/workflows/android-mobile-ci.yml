@@ -74,7 +74,7 @@ jobs:
             sed -n -E "s|^$GITHUB_WORKSPACE/([^:]+):([0-9]+) Error: (.*)$|::error file=\1,line=\2::lint: \3|p" apps/android-mobile/app/build/reports/lint-results-debug.txt | head -20
           fi
           python3 - <<'PY'
-          import glob, xml.etree.ElementTree as ET
+          import glob, re, xml.etree.ElementTree as ET
           for path in glob.glob('apps/android-mobile/app/build/test-results/**/*.xml', recursive=True):
               try:
                   root = ET.parse(path).getroot()
@@ -84,8 +84,17 @@ jobs:
                   cid = (case.get('classname') or '').replace('.', '/') + '.kt'
                   for f in list(case):
                       if f.tag in ('failure', 'error'):
-                          first = (f.text or '').lstrip().split('\n')[0][:200] or (f.get('message') or '')[:200]
-                          print(f"::error file={cid},line=1::test «{case.get('name','?')}»: {first}")
+                          body = f.text or f.get('message') or ''
+                          lines = [re.sub(r'\s+', ' ', ln).strip()[:180]
+                                   for ln in body.split('\n') if ln.strip()][:10]
+                          # linea riga della traccia dentro ai nostri test
+                          for ln in body.split('\n'):
+                              m = re.search(r'\((CatalogViewModelTest|HomeScreenTest|AccessViewModelTest|LoginScreenTest)\.kt:(\d+)\)', ln)
+                              if m:
+                                  lines.append(f"__AT__ {m.group(1)}.kt:{m.group(2)}")
+                                  break
+                          text = ' || '.join(lines)[:1500]
+                          print(f"::error file={cid},line=1::test «{case.get('name','?')}»: {text}")
           PY
 
       - name: Carica l'APK di debug
