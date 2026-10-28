@@ -66,7 +66,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          REPO_PREFIX="/home/runner/work/${{ github.repository }}/${{ github.repository#*/ }}"
+          REPO_PREFIX="$GITHUB_WORKSPACE"
           sed -n -E "s|^e: file://${REPO_PREFIX}/([^:]+):([0-9]+):([0-9]+) (.*)$|::error file=\1,line=\2,col=\3::\4|p" /tmp/fvp-mobile-build.log | head -40
           grep -E "^(e:|> Task .* FAILED|\* What went wrong)" /tmp/fvp-mobile-build.log | head -10 || true
 
