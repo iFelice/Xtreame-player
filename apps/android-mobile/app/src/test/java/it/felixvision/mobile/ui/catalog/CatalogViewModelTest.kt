@@ -275,12 +275,12 @@ class CatalogViewModelTest {
 
         advanceUntilIdle()
 
-        assertEquals(1, gateway.loadCalls)
-        assertEquals(1, cache.savedCount)
+        assertEquals("caricamenti di rete", 1, gateway.loadCalls)
+        assertEquals("salvataggi in cache", 1, cache.savedCount)
         assertNull(viewModel.ui.value.errorMessage)
-        assertEquals(gateway.catalog, viewModel.ui.value.catalog)
-        assertTrue(gateway.stagesSeen.isNotEmpty())
-        assertTrue(viewModel.ui.value.lastUpdateMillis != null)
+        assertEquals("catalogo caricato", gateway.catalog, viewModel.ui.value.catalog)
+        assertTrue("tappe di avanzamento viste: ${gateway.stagesSeen}", gateway.stagesSeen.isNotEmpty())
+        assertTrue("data aggiornamento valorizzata", viewModel.ui.value.lastUpdateMillis != null)
     }
 
     @Test

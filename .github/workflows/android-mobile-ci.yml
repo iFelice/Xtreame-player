@@ -87,7 +87,6 @@ jobs:
                           body = f.text or f.get('message') or ''
                           lines = [re.sub(r'\s+', ' ', ln).strip()[:180]
                                    for ln in body.split('\n') if ln.strip()][:10]
-                          # linea riga della traccia dentro ai nostri test
                           for ln in body.split('\n'):
                               m = re.search(r'\((CatalogViewModelTest|HomeScreenTest|AccessViewModelTest|LoginScreenTest)\.kt:(\d+)\)', ln)
                               if m:
@@ -95,6 +94,12 @@ jobs:
                                   break
                           text = ' || '.join(lines)[:1500]
                           print(f"::error file={cid},line=1::test «{case.get('name','?')}»: {text}")
+              # stdout del test: dump dell'albero dei nodi e righe richieste dai test
+              for so in root.iter('system-out'):
+                  for ln in (so.text or '').split('\n'):
+                      if re.search(r"Tag = '(home_|mychannel|preferiti_|rail_|nav_item|favorites_)", ln):
+                          println = ln.strip()[:200]
+                          print(f"::notice file=apps/android-mobile/app/src/main/java/it/felixvision/mobile/ui/main/HomeScreen.kt,line=1::stdout: {println}")
           PY
 
       - name: Carica l'APK di debug

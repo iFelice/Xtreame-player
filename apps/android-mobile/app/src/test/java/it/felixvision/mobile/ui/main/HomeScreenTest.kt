@@ -381,6 +381,7 @@ class HomeScreenTest {
         rule.waitForIdle()
         rule.onNodeWithTag("favorites_edit").performClick()
         rule.waitForIdle()
+        rule.onRoot().printToLog("TEST_DUMP_MODIFICA")
         rule.onNodeWithTag("mychannel_drag_101").assertIsDisplayed()
         rule.onNodeWithTag("mychannel_drag_102").assertIsDisplayed()
         rule.onNodeWithTag("favorites_done").performClick()
