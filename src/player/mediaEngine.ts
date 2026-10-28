@@ -16,11 +16,13 @@ export function selectMediaEngine(options: {
   supportsMpegTs: boolean;
   supportsHlsJs: boolean;
   supportsNativeHls: boolean;
+  isAppleMobile: boolean;
 }): MediaEngineKind {
   const isHls = options.isLive
     ? options.liveFormat === 'm3u8'
     : options.mediaExtension?.toLowerCase() === 'm3u8';
   if (options.isLive && !isHls && options.supportsMpegTs) return 'mpegts';
+  if (isHls && options.isAppleMobile && options.supportsNativeHls) return 'native-hls';
   if (isHls && options.supportsHlsJs) return 'hls-js';
   if (isHls && options.supportsNativeHls) return 'native-hls';
   return 'native-video';

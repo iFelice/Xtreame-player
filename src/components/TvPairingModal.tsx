@@ -27,7 +27,9 @@ import {
   buildPairingWebUrl,
   formatShortServiceUrl,
   getPairingRelayUrl,
+  PAIRING_RELAY_REQUIRED_MESSAGE,
 } from '../services/pairingRequests';
+import { isStaticDeploy } from '../utils/deployTarget';
 
 const DEFAULT_PAIRING_SERVER = 'https://login-extream-neyt.onrender.com';
 
@@ -91,6 +93,7 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
   const creationStartedRef = useRef<boolean>(false);
   const savedAccounts = storage.getAccounts();
   const isTv = isTvEnvironment();
+  const relayMissing = isStaticDeploy() && !getPairingRelayUrl();
 
   // If initialCode changes, set remotePin and switch mode
   useEffect(() => {
@@ -105,6 +108,11 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
     const relayUrl = getPairingRelayUrl();
     const useRelay = Boolean(relayUrl);
     const native = Capacitor.isNativePlatform();
+    if (relayMissing) {
+      setPollError(PAIRING_RELAY_REQUIRED_MESSAGE);
+      setIsWaitingForPhone(false);
+      return;
+    }
     if (!useRelay && !native && !pairingEnabled) return;
 
     try {
@@ -251,11 +259,11 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
     }
     const relayUrl = getPairingRelayUrl();
     const native = Capacitor.isNativePlatform();
-    if (mode !== 'tv' || pinCode || creationStartedRef.current) return;
+    if (mode !== 'tv' || pinCode || creationStartedRef.current || relayMissing) return;
     if (!relayUrl && !native && !pairingEnabled) return;
     creationStartedRef.current = true;
     void generateNewSession();
-  }, [isOpen, mode, pinCode, pairingEnabled]);
+  }, [isOpen, mode, pinCode, pairingEnabled, relayMissing]);
 
   // Handle remote form paste link
   const handlePastedLinkChange = (value: string) => {
@@ -376,8 +384,14 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
           </div>
         </div>
 
+        {relayMissing && (
+          <div role="alert" className="m-5 rounded-xl border border-danger/40 bg-danger/15 p-4 text-sm font-semibold text-label">
+            {PAIRING_RELAY_REQUIRED_MESSAGE}
+          </div>
+        )}
+
         {/* MODAL CONTENT: TV MODE (SHOW QR & PIN) */}
-        {mode === 'tv' && (
+        {!relayMissing && mode === 'tv' && (
           <div className="p-5 sm:p-7 space-y-6">
             {receivedSuccess ? (
               <div className="p-8 text-center space-y-4 animate-in zoom-in-95 duration-300">
@@ -505,7 +519,7 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
         )}
 
         {/* MODAL CONTENT: REMOTE SENDER MODE (FROM SMARTPHONE) */}
-        {mode === 'remote' && (
+        {!relayMissing && mode === 'remote' && (
           <div className="p-5 sm:p-7 space-y-5">
             {sendSuccessMessage ? (
               <div className="p-6 text-center space-y-4 bg-accent/15 border border-accent/40 rounded-2xl animate-in zoom-in-95 text-label">

@@ -1,5 +1,7 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { Directory, Filesystem } from '@capacitor/filesystem';
+import { STATIC_DEPLOY } from './deployTarget';
+import { getDirectStreamUrl } from './streamUrl';
 
 interface DocumentExporterPlugin {
   exportFile(options: { path: string }): Promise<{ path: string }>;
@@ -40,14 +42,7 @@ export function isTvEnvironment(): boolean {
 }
 
 export function unwrapProxyUrl(streamUrl: string): string {
-  if (!streamUrl.includes('/api/proxy/stream?url=')) return streamUrl;
-
-  try {
-    const query = streamUrl.split('?')[1] || '';
-    return new URLSearchParams(query).get('url') || streamUrl;
-  } catch {
-    return streamUrl;
-  }
+  return getDirectStreamUrl(streamUrl) || streamUrl;
 }
 
 export type NativeDownloadStatus = 'started' | 'exporting' | 'finished' | 'cancelled' | 'error';
@@ -108,7 +103,7 @@ export async function triggerMediaDownload(
   containerExtension: string = 'mp4',
   accountKey?: string
 ): Promise<boolean> {
-  if (typeof window === 'undefined') return false;
+  if (typeof window === 'undefined' || STATIC_DEPLOY) return false;
 
   const rawUrl = unwrapProxyUrl(streamUrl);
   const filename = safeFilename(title, containerExtension);
@@ -147,7 +142,8 @@ export async function triggerMediaDownload(
         notifyDownloadStatus('cancelled', title);
         return false;
       }
-      console.error('Native media download failed:', error);
+      // Plugin errors may contain the stream URL and credentials.
+      console.error('Native media download failed.');
       notifyDownloadStatus('error', title);
       window.alert(`Download non riuscito: ${message}`);
       return false;
@@ -188,8 +184,9 @@ export async function triggerMediaDownload(
     a.click();
     setTimeout(() => a.remove(), 1500);
     return true;
-  } catch (error) {
-    console.warn('Could not trigger browser download:', error);
+  } catch {
+    // The failed anchor may contain a provider URL with credentials.
+    console.warn('Could not trigger browser download.');
     return false;
   }
 }

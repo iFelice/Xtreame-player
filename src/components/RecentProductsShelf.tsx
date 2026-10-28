@@ -22,6 +22,7 @@ import { buildStreamUrl } from '../utils/parseXtreamUrl';
 import { storage } from '../services/storage';
 import { isTvEnvironment, triggerMediaDownload } from '../utils/downloadHelper';
 import { getSecureImageUrl } from '../utils/imageUrl';
+import { STATIC_DEPLOY } from '../utils/deployTarget';
 
 interface RecentProductsShelfProps {
   vodStreams: XtreamVodStream[];
@@ -227,7 +228,7 @@ export const RecentProductsShelf: React.FC<RecentProductsShelfProps> = ({
                       <Play className="w-5 h-5 ml-0.5 fill-white" />
                     </div>
 
-                    {!isTv && (
+                    {!STATIC_DEPLOY && !isTv && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();

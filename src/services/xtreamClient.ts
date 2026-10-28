@@ -1,5 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import { fetchJson } from './httpClient';
+import { STATIC_DEPLOY } from '../utils/deployTarget';
 import {
   XtreamAuthResponse,
   XtreamCategory,
@@ -12,9 +13,9 @@ import {
 
 async function fetchFromXtream<T>(url: string): Promise<T> {
   const isNative = Capacitor.isNativePlatform();
-  // Il desktop passa dal proxy locale per CORS. I vecchi prototipi Capacitor,
-  // conservati nel backup, continuano a poter contattare direttamente il server.
-  const requestUrl = isNative ? url : `/api/proxy/api?url=${encodeURIComponent(url)}`;
+  // La build statica e le app native non hanno un server Express: il provider
+  // deve consentire CORS per le richieste dirette dal browser.
+  const requestUrl = isNative || STATIC_DEPLOY ? url : `/api/proxy/api?url=${encodeURIComponent(url)}`;
   return fetchJson<T>(requestUrl);
 }
 

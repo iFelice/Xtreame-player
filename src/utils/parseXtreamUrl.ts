@@ -1,14 +1,14 @@
 import { Capacitor } from '@capacitor/core';
 import { XtreamParsedUrl } from '../types/xtream';
+import { STATIC_DEPLOY } from './deployTarget';
 
 /**
  * Parses any Xtream Codes URL, including direct media links such as:
- * - http://reload.loginflash.com/movie/User/Password/10112.mp4
- * - http://reload.loginflash.com/series/User/Password/10112.mkv
- * - http://reload.loginflash.com/live/User/Password/10112.ts
- * - http://reload.loginflash.com/User/Password/10112
- * - http://reload.loginflash.com/get.php?username=User&password=Password...
- * - http://reload.loginflash.com/player_api.php?username=User&password=Password
+ * - http://server.esempio:8080/movie/demo/demo/10112.mp4
+ * - http://server.esempio:8080/series/demo/demo/10112.mkv
+ * - http://server.esempio:8080/live/demo/demo/10112.m3u8
+ * - http://server.esempio:8080/demo/demo/10112
+ * - http://server.esempio:8080/player_api.php?username=demo&password=demo
  */
 export function parseXtreamUrl(rawInput: string): XtreamParsedUrl | null {
   if (!rawInput || typeof rawInput !== 'string') return null;
@@ -132,8 +132,8 @@ export function parseXtreamUrl(rawInput: string): XtreamParsedUrl | null {
       password: '',
       isDirectStream: false,
     };
-  } catch (err) {
-    console.error('Error parsing Xtream URL:', err);
+  } catch {
+    // URL parsing errors may contain credentials; do not include them in logs.
     return null;
   }
 }
@@ -162,8 +162,8 @@ export function buildStreamUrl(
   }
 
   if (useProxy) {
-    // Su app nativa iOS / Android NON usiamo MAI il proxy: il flusso viene riprodotto direttamente dal server
-    if (Capacitor.isNativePlatform()) {
+    // Né la build statica né le app native hanno il proxy Express.
+    if (STATIC_DEPLOY || Capacitor.isNativePlatform()) {
       return streamPath;
     }
     return `/api/proxy/stream?url=${encodeURIComponent(streamPath)}`;
@@ -185,6 +185,7 @@ export function buildDownloadUrl(
 ): string {
   const cleanServer = serverUrl.replace(/\/+$/, '');
   const ext = containerExtension || 'mp4';
+  if (STATIC_DEPLOY) throw new Error('Download non disponibile nella build statica.');
   const path = `${cleanServer}/${type}/${encodeURIComponent(username)}/${encodeURIComponent(password)}/${streamId}.${ext}`;
   const cleanFilename = filename.toLowerCase().endsWith(`.${ext}`) ? filename : `${filename}.${ext}`;
   return `/api/proxy/stream?url=${encodeURIComponent(path)}&download=1&filename=${encodeURIComponent(cleanFilename)}`;

@@ -32,9 +32,14 @@ import { getSecureImageUrl } from '../utils/imageUrl';
 import { initialPlaybackState, isPlaybackLoading, playbackReducer } from '../player/playbackState';
 import { destroyMediaEngines, releaseVideoElement, selectMediaEngine } from '../player/mediaEngine';
 import { HLS_CONFIG, MPEGTS_CONFIG } from '../player/engineConfig';
-import { canFallbackToMpegTs, isPublicMockStream, normalizeLiveStreamUrl } from '../player/streamFormat';
+import { canFallbackToMpegTs, isPublicMockStream } from '../player/streamFormat';
 import { useIsMobileViewport } from '../utils/mobileLayout';
 import { MobilePlayerErrorPanel } from './MobilePlayerErrorPanel';
+import { AppleUnsupportedFormatPanel } from './AppleUnsupportedFormatPanel';
+import { isAppleMobile } from '../utils/appleMobile';
+import { STATIC_DEPLOY } from '../utils/deployTarget';
+import { getPlaybackStreamUrl } from '../utils/streamUrl';
+import { needsVlcOnAppleMobile } from '../utils/vlc';
 
 interface MediaPlayerProps {
   media: PlayableMediaItem | null;
@@ -87,16 +92,19 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
   const isTv = isTvEnvironment();
   const isMobile = useIsMobileViewport();
+  const appleMobile = isAppleMobile();
+  const needsExternalPlayer = Boolean(media && needsVlcOnAppleMobile(media.type, media.containerExtension, appleMobile));
+  const staticDeploy = STATIC_DEPLOY;
   const isNative = typeof window !== 'undefined' && (Capacitor.isNativePlatform() || window.location.protocol === 'capacitor:');
-  const isSafeMode = typeof window !== 'undefined' && !isNative && sessionStorage.getItem('xtream_safe_mode') === '1';
-  const canSwitchLiveFormat = Boolean(media?.type === 'live' && !isPublicMockStream(media.streamUrl));
+  const isSafeMode = typeof window !== 'undefined' && !staticDeploy && !isNative && sessionStorage.getItem('xtream_safe_mode') === '1';
+  const canSwitchLiveFormat = Boolean(!appleMobile && media?.type === 'live' && !isPublicMockStream(media.streamUrl));
   const [aspectRatio, setAspectRatio] = useState<'contain' | '16_9' | '4_3' | 'cover' | 'fill'>('contain');
   const [showSettings, setShowSettings] = useState<boolean>(false);
   const [controlsVisible, setControlsVisible] = useState<boolean>(true);
   const [useProxy, setUseProxy] = useState<boolean>(() => {
     // A Capacitor WebView has no Express server behind capacitor://localhost.
     // Never restore a web proxy preference when running the native app.
-    if (isNative) return false;
+    if (isNative || staticDeploy) return false;
     try {
       // Safe development must never inherit a previous "direct stream" choice.
       if (sessionStorage.getItem('xtream_safe_mode') === '1') return true;
@@ -131,14 +139,14 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   }, []);
 
   useEffect(() => {
-    if (playback.status !== 'loading') {
+    if (needsExternalPlayer || playback.status !== 'loading') {
       setStartupSeconds(0);
       return;
     }
     setStartupSeconds(0);
     const timer = window.setInterval(() => setStartupSeconds((value) => value + 1), 1000);
     return () => window.clearInterval(timer);
-  }, [playback.status, media?.id]);
+  }, [playback.status, media?.id, needsExternalPlayer]);
 
   // Keep the app shell (mobile section bar and page padding) in sync with the
   // player takeover, whether it comes from the document or the window mode.
@@ -178,36 +186,11 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     return () => video.removeEventListener('webkitendfullscreen', handleNativeFullscreenEnd);
   }, [media?.id]);
 
-  // Derive source URL: either through backend proxy or direct
+  // Static and native builds always unwrap saved proxy URLs before playback.
   const getEffectiveUrl = useCallback(() => {
     if (!media) return '';
-    let target = media.streamUrl;
-
-    if (media.type === 'live') {
-      target = normalizeLiveStreamUrl(target, liveFormat);
-    }
-
-    // Native Capacitor builds cannot use relative Express routes. Unwrap any
-    // previously generated proxy URL and always connect to the IPTV host.
-    if (isNative && target.startsWith('/api/proxy/stream?url=')) {
-      const query = target.split('?')[1] || '';
-      return new URLSearchParams(query).get('url') || target;
-    }
-    if (isNative) return target;
-
-    if (useProxy) {
-      if (target.startsWith('/api/proxy/stream')) {
-        return target;
-      }
-      return `/api/proxy/stream?url=${encodeURIComponent(target)}`;
-    }
-
-    if (target.startsWith('/api/proxy/stream?url=')) {
-      const query = target.split('?')[1] || '';
-      return new URLSearchParams(query).get('url') || target;
-    }
-    return target;
-  }, [media, useProxy, liveFormat, isNative]);
+    return getPlaybackStreamUrl(media, { useProxy, isNative, isAppleMobile: appleMobile, liveFormat });
+  }, [media, useProxy, liveFormat, isNative, appleMobile]);
 
   // Activity timer to hide controls during playback
   const showControlsTemporarily = useCallback(() => {
@@ -227,6 +210,11 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
 
     const video = videoRef.current;
     const url = getEffectiveUrl();
+    if (!url) {
+      setIsLoading(false);
+      setErrorMessage('Il link diretto dello stream non è disponibile.');
+      return;
+    }
     if (bufferingUiDelayRef.current) clearTimeout(bufferingUiDelayRef.current);
     bufferingUiDelayRef.current = null;
     setShowBufferingIndicator(false);
@@ -252,7 +240,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     destroyEngines();
 
     const isLive = media.type === 'live';
-    const allowsMpegTsFallback = canFallbackToMpegTs(media.type, media.streamUrl);
+    const allowsMpegTsFallback = !appleMobile && canFallbackToMpegTs(media.type, media.streamUrl);
     const failOrFallback = (message: string) => {
       if (allowsMpegTsFallback) {
         setLiveFormat('ts');
@@ -263,14 +251,17 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     };
     const engine = selectMediaEngine({
       isLive,
-      liveFormat,
+      liveFormat: appleMobile ? 'm3u8' : liveFormat,
       mediaExtension: media.containerExtension,
       supportsMpegTs: mpegts.isSupported(),
       supportsHlsJs: Hls.isSupported(),
       supportsNativeHls: Boolean(video.canPlayType('application/vnd.apple.mpegurl')),
+      isAppleMobile: appleMobile,
     });
 
     if (engine === 'mpegts') {
+      // Engine diagnostics may contain provider URLs with credentials.
+      mpegts.LoggingControl.enableAll = false;
       // Enhanced Real-time MPEG-TS streaming with higher buffer & latency protection
       try {
         const player = mpegts.createPlayer(
@@ -290,8 +281,9 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
           setIsPlaying(true);
         });
 
-        player.on(mpegts.Events.ERROR, (errorType: string, errorDetail: string, info: any) => {
-          console.warn('mpegts event warning/error:', errorType, errorDetail, info);
+        player.on(mpegts.Events.ERROR, () => {
+          // Engine diagnostics may contain the stream URL and credentials.
+          console.warn('Errore del motore MPEG-TS.');
           if (video && (video.currentTime > 1 || video.readyState >= 2)) {
             return;
           }
@@ -307,12 +299,12 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
             setIsLoading(false);
             setIsPlaying(true);
           })
-          .catch((e) => {
-            console.warn('Playback waiting on user action:', e);
+          .catch(() => {
+            console.warn('Playback waiting on user action.');
             setIsLoading(false);
           });
-      } catch (err: any) {
-        console.error('MPEG-TS init failed, falling back to HLS:', err);
+      } catch {
+        console.error('MPEG-TS init failed, falling back to HLS.');
         setLiveFormat('m3u8');
       }
     } else if (engine === 'hls-js') {
@@ -328,8 +320,8 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
         video
           .play()
           .then(() => setIsPlaying(true))
-          .catch((e) => {
-            console.warn('Autoplay prevented:', e);
+          .catch(() => {
+            console.warn('Autoplay prevented.');
             setIsLoading(false);
           });
       });
@@ -344,7 +336,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
               hls.startLoad();
             } else {
               const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
-              if (isHttps && !useProxy) {
+              if (isHttps && !useProxy && !staticDeploy) {
                 setErrorMessage(
                   'Il browser blocca lo stream HTTP diretto. Clicca su "Attiva Proxy HTTPS" sotto.'
                 );
@@ -396,8 +388,8 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
           setIsLoading(false);
           setIsPlaying(true);
         })
-        .catch((err) => {
-          console.warn('Autoplay prevented or playback error:', err);
+        .catch(() => {
+          console.warn('Autoplay prevented or playback error.');
           setIsLoading(false);
         });
     }
@@ -410,7 +402,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       // after the player is closed or another title is selected.
       releaseVideoElement(video);
     };
-  }, [media, getEffectiveUrl, liveFormat, playbackAttempt, clearPlaybackWatchdogs, destroyEngines]);
+  }, [media, getEffectiveUrl, liveFormat, playbackAttempt, clearPlaybackWatchdogs, destroyEngines, appleMobile, staticDeploy, useProxy]);
 
   // Video event handlers
   const handlePlaybackReady = () => {
@@ -573,8 +565,8 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
         } else if ((videoRef.current as any)?.webkitEnterFullscreen) {
           (videoRef.current as any).webkitEnterFullscreen();
         }
-      } catch (err) {
-        console.warn('Native requestFullscreen fallback to full window', err);
+      } catch {
+        console.warn('Native requestFullscreen fallback to full window.');
       }
     }
   };
@@ -606,13 +598,20 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   const togglePiP = async () => {
     if (!videoRef.current) return;
     try {
+      const video = videoRef.current as HTMLVideoElement & {
+        webkitPresentationMode?: string;
+        webkitSupportsPresentationMode?: (mode: string) => boolean;
+        webkitSetPresentationMode?: (mode: string) => void;
+      };
       if (document.pictureInPictureElement) {
         await document.exitPictureInPicture();
-      } else if (document.pictureInPictureEnabled) {
-        await videoRef.current.requestPictureInPicture();
+      } else if (document.pictureInPictureEnabled && video.requestPictureInPicture) {
+        await video.requestPictureInPicture();
+      } else if (video.webkitSupportsPresentationMode?.('picture-in-picture')) {
+        video.webkitSetPresentationMode?.(video.webkitPresentationMode === 'picture-in-picture' ? 'inline' : 'picture-in-picture');
       }
-    } catch (e) {
-      console.error('PiP error:', e);
+    } catch {
+      console.error('Picture-in-Picture non disponibile.');
     }
   };
 
@@ -692,6 +691,9 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   };
 
   if (!media) return null;
+  if (needsExternalPlayer) {
+    return <AppleUnsupportedFormatPanel key={`${media.type}-${media.id}`} streamUrl={media.streamUrl} title={media.title} onClose={onClose} />;
+  }
 
   return (
     <div
@@ -720,20 +722,25 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
         onPlaying={handlePlaybackReady}
         onError={() => {
           clearPlaybackWatchdogs();
-          if (videoRef.current && (videoRef.current.currentTime > 1 || videoRef.current.readyState >= 3 || videoRef.current.videoWidth > 0)) {
+          if (!appleMobile && videoRef.current && (videoRef.current.currentTime > 1 || videoRef.current.readyState >= 3 || videoRef.current.videoWidth > 0)) {
             console.warn('HTML5 video onError ignored because video is actively playing');
             return;
           }
-          // The fallback exists only on web: native Capacitor builds have no
-          // Express proxy available at capacitor://localhost.
-          if (!isNative && !useProxy) {
+          // Static/native builds have no Express proxy; on Apple mobile keep
+          // the error visible instead of switching sources automatically.
+          if (!staticDeploy && !isNative && !appleMobile && !useProxy) {
             console.log('Video error on direct stream, auto-switching to proxy...');
             setUseProxy(true);
             return;
           }
+          if (appleMobile && videoRef.current) {
+            videoRef.current.pause();
+            setIsPlaying(false);
+          }
           setIsLoading(false);
-          setErrorMessage(
-            'Errore di caricamento del flusso video. Verifica se il canale o server IPTV è attivo, oppure prova a cambiare formato (.ts / .m3u8).'
+          setErrorMessage(appleMobile
+            ? 'Errore di caricamento del flusso video. Verifica la connessione e riprova.'
+            : 'Errore di caricamento del flusso video. Verifica se il canale o server IPTV è attivo, oppure prova a cambiare formato (.ts / .m3u8).'
           );
         }}
         onClick={togglePlay}
@@ -807,7 +814,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
             message={errorMessage}
             canSwitchFormat={canSwitchLiveFormat}
             formatLabel={`Passa a formato ${liveFormat === 'm3u8' ? 'MPEG-TS (.ts)' : 'HLS (.m3u8)'}`}
-            showProxyOption={!isNative && !isSafeMode}
+            showProxyOption={!staticDeploy && !isNative && !isSafeMode}
             proxyLabel={useProxy ? '⚡ Passa a Stream Diretto' : '🛡️ Attiva Proxy HTTPS'}
             proxyFilled={!useProxy}
             onRetry={() => dispatchPlayback({ type: 'RETRY' })}
@@ -857,7 +864,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
                 </button>
               )}
 
-              {!isNative && !isSafeMode && (
+              {!staticDeploy && !isNative && !isSafeMode && (
                 <button
                   onClick={() => {
                     const nextVal = !useProxy;
@@ -975,7 +982,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          {!isTv && media.type !== 'live' && isDirectFileDownload(media.containerExtension) && (
+          {!staticDeploy && !isTv && media.type !== 'live' && isDirectFileDownload(media.containerExtension) && (
             <button
               type="button"
               onClick={(e) => {
