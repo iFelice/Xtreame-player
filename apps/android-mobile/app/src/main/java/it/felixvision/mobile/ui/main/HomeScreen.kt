@@ -179,6 +179,8 @@ fun HomeScreen(
                     container = container,
                     summary = summary,
                     password = password,
+                    imageLoader = imageLoader,
+                    channelScheduleLoader = channelScheduleLoader,
                     modifier = Modifier.fillMaxSize(),
                 )
             } else {
@@ -220,6 +222,8 @@ fun HomeScreen(
                                     summary = summary,
                                     password = password,
                                     wideLayout = wideLayout,
+                                    imageLoader = imageLoader,
+                                    channelScheduleLoader = channelScheduleLoader,
                                     modifier = Modifier.fillMaxSize(),
                                 )
                             }
@@ -268,6 +272,8 @@ private fun SectionContent(
     summary: AccountSummary,
     password: String,
     wideLayout: Boolean,
+    imageLoader: ImageLoader,
+    channelScheduleLoader: ChannelScheduleLoader?,
     modifier: Modifier = Modifier,
 ) {
     when (section) {
