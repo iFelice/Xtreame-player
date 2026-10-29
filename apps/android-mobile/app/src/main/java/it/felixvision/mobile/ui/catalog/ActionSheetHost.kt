@@ -183,7 +183,7 @@ fun ActionSheetHost(viewModel: CatalogViewModel) {
                     testTag = "sheet_play",
                     onClick = {
                         close()
-                        viewModel.onPlayRequest(PlayTarget.LiveChannel(channel.streamId))
+                        viewModel.onPlayRequest(PlayTarget.LiveChannel(channel.streamId, fromMyChannels = true))
                     },
                 ),
                 SheetAction(

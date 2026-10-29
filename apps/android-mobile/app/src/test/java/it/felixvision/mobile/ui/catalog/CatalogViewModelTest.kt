@@ -414,19 +414,19 @@ class CatalogViewModelTest {
         }
 
     @Test
-    fun `onPlayRequest pubblica l'avviso provvisorio e consumeNotice lo consuma`() =
+    fun `onPlayRequest pubblica la destinazione del player senza snackbar provvisoria`() =
         runTest(scheduler) {
             val viewModel = newViewModel()
             advanceUntilIdle()
 
-            viewModel.onPlayRequest(PlayTarget.LiveChannel("101"))
+            val target = PlayTarget.LiveChannel("101")
+            viewModel.onPlayRequest(target)
             advanceUntilIdle()
 
-            val notice = viewModel.notice.value
-            assertEquals(CatalogViewModel.PLAYBACK_NOTICE, notice?.message)
-
-            viewModel.consumeNotice(notice!!.id)
+            assertEquals(target, viewModel.playRequest.value)
             assertNull(viewModel.notice.value)
+            viewModel.consumePlayRequest(target)
+            assertNull(viewModel.playRequest.value)
         }
 
     @Test

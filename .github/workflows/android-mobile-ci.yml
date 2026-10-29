@@ -23,7 +23,7 @@ concurrency:
   group: android-mobile-ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# Nessun segreto: la build di debug e i test non richiedono credenziali.
+# La firma di debug fissa usa un secret opzionale; test e build funzionano anche senza.
 permissions:
   contents: read
 
@@ -53,11 +53,38 @@ jobs:
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKMANAGER" --licenses > /dev/null || true
 
+      - name: Prepara la chiave di debug fissa
+        shell: bash
+        env:
+          FVP_DEBUG_KEYSTORE_BASE64: ${{ secrets.FVP_DEBUG_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$FVP_DEBUG_KEYSTORE_BASE64" ]]; then
+            key="$RUNNER_TEMP/fvp-debug.keystore"
+            printf '%s' "$FVP_DEBUG_KEYSTORE_BASE64" | base64 --decode > "$key"
+            chmod 600 "$key"
+            echo "FVP_DEBUG_KEYSTORE_PATH=$key" >> "$GITHUB_ENV"
+          else
+            echo "::warning::Chiave di debug fissa assente: l'APK avrà una firma diversa a ogni run"
+          fi
+
       - name: Test, assembleDebug e lint
         working-directory: apps/android-mobile
         run: |
           set -o pipefail
           ./gradlew testDebugUnitTest assembleDebug lintDebug --console=plain --stacktrace 2>&1 | tee /tmp/fvp-mobile-build.log
+
+      - name: Impronta certificato APK debug
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk="apps/android-mobile/app/build/outputs/apk/debug/app-debug.apk"
+          apksigner=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
+          fingerprint=$("$apksigner" verify --print-certs "$apk" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -1)
+          test -n "$fingerprint"
+          echo "Certificato SHA-256 APK debug: $fingerprint"
+          echo "::notice::Certificato SHA-256 APK debug: $fingerprint"
 
       # GitHub mostra al massimo 10 annotazioni per tipo per passo e 50 per job:
       # gli errori principali devono comparire per primi — prima il compilatore,
@@ -125,3 +152,8 @@ jobs:
             apps/android-mobile/app/build/reports/tests
             apps/android-mobile/app/build/reports/lint-results*
           if-no-files-found: ignore
+
+      - name: Rimuovi la chiave di debug temporanea
+        if: always()
+        shell: bash
+        run: rm -f "$RUNNER_TEMP/fvp-debug.keystore"

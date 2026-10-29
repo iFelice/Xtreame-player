@@ -56,7 +56,7 @@ data class CatalogUiState(
  */
 sealed interface PlayTarget {
 
-    data class LiveChannel(val streamId: String) : PlayTarget
+    data class LiveChannel(val streamId: String, val fromMyChannels: Boolean = false) : PlayTarget
 
     data class CatchupProgram(val streamId: String, val programTitle: String) : PlayTarget
 
@@ -240,6 +240,9 @@ class CatalogViewModel(
     /** Conferma breve da mostrare; la UI la consuma con [consumeNotice]. */
     private val _notice = MutableStateFlow<ActionNotice?>(null)
     val notice: StateFlow<ActionNotice?> = _notice.asStateFlow()
+
+    private val _playRequest = MutableStateFlow<PlayTarget?>(null)
+    val playRequest: StateFlow<PlayTarget?> = _playRequest.asStateFlow()
 
     private var noticeCounter = 0L
 
@@ -545,16 +548,13 @@ class CatalogViewModel(
         }
     }
 
-    // --- Riproduzione (provvisorio, PR3) ---
-
-    /**
-     * Unico punto di ingresso di ogni riproduzione (canale, catch-up,
-     * Riproduci, episodio, voce di "Continua a guardare"): in questo PR
-     * mostra solo l'avviso temporaneo; il PR3 lo sostituirà con l'apertura
-     * del player. Nessun URL di stream viene costruito o loggato.
-     */
+    // --- Riproduzione: richieste osservate dalla schermata host del player. ---
     fun onPlayRequest(target: PlayTarget) {
-        postNotice(PLAYBACK_NOTICE)
+        _playRequest.value = target
+    }
+
+    fun consumePlayRequest(target: PlayTarget) {
+        if (_playRequest.value == target) _playRequest.value = null
     }
 
     // --- Avvisi brevi (snackbar) ---
@@ -571,9 +571,6 @@ class CatalogViewModel(
     }
 
     companion object {
-        /** Avviso temporaneo di ogni azione di riproduzione (sostituita nel PR3). */
-        const val PLAYBACK_NOTICE = "Riproduzione disponibile nel prossimo aggiornamento"
-
         const val FAVORITE_ADDED = "Aggiunto ai preferiti"
         const val FAVORITE_REMOVED = "Rimosso dai preferiti"
         const val CATEGORY_FAVORITE_ADDED = "Categoria aggiunta ai preferiti"

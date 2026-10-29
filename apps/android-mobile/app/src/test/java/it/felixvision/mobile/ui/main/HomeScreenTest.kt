@@ -390,17 +390,17 @@ class HomeScreenTest {
         rule.onNodeWithTag("mychannel_drag_101", useUnmergedTree = true).assertDoesNotExist()
     }
 
-    // --- Riproduzione provvisoria ---
+    // --- Apertura del player dalla riga Live ---
 
     @Test
     @Config(sdk = [34], qualifiers = "w1280dp-h800dp-land-mdpi")
-    fun `tocco Riproduci mostra lo snackbar provvisorio`() {
+    fun `tocco sulla riga Live apre il player`() {
         mount()
         rule.onNodeWithTag("rail_item_live").performClick()
         rule.waitForIdle()
         rule.onNodeWithTag("live_row_101").performClick()
         rule.waitForIdle()
-        rule.onNodeWithText("Riproduzione disponibile nel prossimo aggiornamento")
-            .assertIsDisplayed()
+        rule.onNodeWithText("Canale Uno").assertIsDisplayed()
+        rule.onNodeWithText("IN DIRETTA").assertIsDisplayed()
     }
 }
