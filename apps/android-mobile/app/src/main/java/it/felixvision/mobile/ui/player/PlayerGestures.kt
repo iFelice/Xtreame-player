@@ -5,6 +5,7 @@ import android.content.Context
 import android.media.AudioManager
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
@@ -16,10 +17,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.PointerEvent
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.PointerInputScope
-import androidx.compose.ui.input.pointer.util.calculateZoom
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.geometry.Offset
 import kotlin.math.abs
+import kotlin.math.sqrt
 
 class PlayerGestureFeedback {
     var volume by mutableStateOf<Float?>(null)
@@ -120,7 +121,7 @@ fun Modifier.playerGestureLayer(
         )
     }.pointerInput(playbackType, enabled) {
         if (!enabled) return@pointerInput
-        androidx.compose.foundation.gestures.detectTapGestures(
+        detectTapGestures(
             onTap = { onToggleControls() },
             onDoubleTap = { point ->
                 val direction = when {
@@ -197,7 +198,7 @@ private suspend fun PointerInputScope.detectPlayerGestures(
             val pressed = event.changes.filter { it.pressed }
             if (pressed.size > 1) {
                 hadMultiplePointers = true
-                accumulatedZoom *= event.calculateZoom()
+                accumulatedZoom *= event.zoomFactor()
                 if (!zoomModeChanged) {
                     val mode = TouchGestureRules.zoomModeForAccumulatedScale(accumulatedZoom)
                     if (mode != null) {
@@ -282,6 +283,22 @@ private suspend fun PointerInputScope.detectPlayerGestures(
         }
         if (previewPosition != null) feedback.gestureFinished()
     }
+}
+
+private fun PointerEvent.zoomFactor(): Float {
+    val pointers = changes.filter { it.pressed }
+    if (pointers.size < 2) return 1f
+    val count = pointers.size.toFloat()
+    val currentCenter = pointers.fold(Offset.Zero) { total, change -> total + change.position } / count
+    val previousCenter = pointers.fold(Offset.Zero) { total, change -> total + change.previousPosition } / count
+    fun radius(position: Offset, center: Offset): Float {
+        val dx = position.x - center.x
+        val dy = position.y - center.y
+        return sqrt(dx * dx + dy * dy)
+    }
+    val currentSpan = pointers.sumOf { radius(it.position, currentCenter).toDouble() }.toFloat() / count
+    val previousSpan = pointers.sumOf { radius(it.previousPosition, previousCenter).toDouble() }.toFloat() / count
+    return if (previousSpan > 0f) currentSpan / previousSpan else 1f
 }
 
 private fun PointerEvent.consumePressedChanges() {

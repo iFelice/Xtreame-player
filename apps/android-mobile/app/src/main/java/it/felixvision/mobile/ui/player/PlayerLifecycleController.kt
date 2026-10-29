@@ -33,7 +33,7 @@ interface PlayerProgressPort {
 
 /** Lifecycle and resume behavior shared by production and deterministic fake-player tests. */
 class PlayerLifecycleController(
-    initialSource: MobilePlaybackSource,
+    private val initialSource: MobilePlaybackSource,
     private val player: PlayerLifecyclePort,
     private val progress: PlayerProgressPort,
     private val scope: CoroutineScope,
