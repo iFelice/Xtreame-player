@@ -744,6 +744,9 @@ export default function App() {
                   setActiveTab('series');
                 }}
                 accountKey={currentAccountKey}
+                serverUrl={serverUrl}
+                username={username}
+                password={password}
               />
             )}
           </div>

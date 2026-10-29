@@ -16,9 +16,8 @@ import {
   Radio,
   Download,
 } from 'lucide-react';
-import { XtreamCategory, XtreamVodStream, XtreamVodDetails, PlayableMediaItem } from '../types/xtream';
-import { buildStreamUrl, formatDuration } from '../utils/parseXtreamUrl';
-import { xtreamClient } from '../services/xtreamClient';
+import { XtreamCategory, XtreamVodStream, PlayableMediaItem } from '../types/xtream';
+import { buildStreamUrl } from '../utils/parseXtreamUrl';
 import { storage } from '../services/storage';
 import { sortVodStreams } from '../utils/recentSorting';
 import { getSecureImageUrl } from '../utils/imageUrl';
@@ -28,6 +27,9 @@ import { triggerMediaDownload, isDirectFileDownload, isTvEnvironment } from '../
 import { CollapsibleCategoryPanel } from './CollapsibleCategoryPanel';
 import { STATIC_DEPLOY } from '../utils/deployTarget';
 import { AppleDownloadLink } from './AppleDownloadLink';
+import { MovieDetailModal } from './MovieDetailModal';
+import { useTouchCardMode } from '../utils/useTouchCardMode';
+import { showsHoverVeil } from '../utils/touchDevice';
 
 interface VodCatalogProps {
   categories: XtreamCategory[];
@@ -55,6 +57,9 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
   const [, refreshFavorites] = useState(0);
   const moviesListRef = useRef<HTMLDivElement | null>(null);
   const isTv = isTvEnvironment();
+  // Touch cards (iPhone/iPad and other pointer-less screens, TV excluded) have
+  // no hover veil: a tap opens the movie sheet instead of playing at once.
+  const touchCardMode = useTouchCardMode(isTv);
 
   // Always default to the first category to avoid rendering 20,000 items at once
   const [selectedCategory, setSelectedCategory] = useState<string>(() => {
@@ -63,11 +68,7 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
 
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [sortBy, setSortBy] = useState<'recent' | 'rating' | 'name' | 'id'>('recent');
-  const [activeMovieDetail, setActiveMovieDetail] = useState<{
-    stream: XtreamVodStream;
-    details: XtreamVodDetails | null;
-    isLoading: boolean;
-  } | null>(null);
+  const [activeMovieDetail, setActiveMovieDetail] = useState<XtreamVodStream | null>(null);
 
   // Sync first category if categories load asynchronously
   useEffect(() => {
@@ -114,15 +115,27 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
   // Natural list order preserved (all movies visible and naturally scrollable)
   const visibleStreams = filteredStreams;
 
-  const handleOpenDetails = async (stream: XtreamVodStream) => {
-    setActiveMovieDetail({ stream, details: null, isLoading: true });
-    try {
-      const info = await xtreamClient.getVodInfo(serverUrl, username, password, stream.stream_id);
-      setActiveMovieDetail({ stream, details: info, isLoading: false });
-    } catch {
-      setActiveMovieDetail({ stream, details: null, isLoading: false });
-    }
+  const handleOpenDetails = (stream: XtreamVodStream) => {
+    setActiveMovieDetail(stream);
   };
+
+  const movieDetailTarget = activeMovieDetail
+    ? {
+        id: activeMovieDetail.stream_id,
+        title: activeMovieDetail.name,
+        poster: activeMovieDetail.stream_icon,
+        containerExtension: activeMovieDetail.container_extension,
+        streamUrl: buildStreamUrl(
+          serverUrl,
+          username,
+          password,
+          'movie',
+          activeMovieDetail.stream_id,
+          activeMovieDetail.container_extension || 'mp4',
+          false
+        ),
+      }
+    : null;
 
   const handlePlayStream = (stream: XtreamVodStream) => {
     const ext = stream.container_extension || 'mp4';
@@ -289,6 +302,7 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                     onKeyDown={(event) => {
                       if (event.key === 'Enter') handleOpenDetails(stream);
                     }}
+                    onClick={touchCardMode ? () => handleOpenDetails(stream) : undefined}
                     className={`group relative rounded-2xl overflow-hidden shadow-lg transition-all duration-300 flex flex-col ${
                       isPlayingThis
                         ? 'bg-accent/15 border-2 border-accent ring-2 ring-accent/40 shadow-2xl scale-[1.02]'
@@ -383,7 +397,9 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                         </button>
                       </div>
 
-                      {/* Hover Overlay with Action Buttons */}
+                      {/* Hover Overlay with Action Buttons (desktop/TV only: on
+                          touch it would be invisible but still receive taps). */}
+                      {showsHoverVeil(touchCardMode) && (
                       <div className="absolute inset-0 bg-surface-1/75 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col items-center justify-center p-3 gap-2.5">
                         <button
                           onClick={() => handlePlayStream(stream)}
@@ -405,6 +421,7 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
 
                         </div>
                       </div>
+                      )}
                     </div>
 
                     {/* Movie Info below Poster */}
@@ -426,125 +443,17 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
         </section>
       </div>
 
-      {/* Movie Details Modal */}
-      {activeMovieDetail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center safe-area-overlay bg-black/50 animate-in fade-in">
-          <div className="glass border border-glass-edge rounded-3xl max-w-2xl w-full overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
-            {/* Header */}
-            <div className="p-4 sm:p-5 border-b border-separator flex items-center justify-between">
-              <h3 className="text-base sm:text-lg font-bold text-label truncate pr-4">
-                {activeMovieDetail.stream.name}
-              </h3>
-              <button
-                onClick={() => setActiveMovieDetail(null)}
-                className="p-1.5 rounded-xl text-label-secondary hover:text-label hover:bg-surface-1 transition cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Content */}
-            <div className="p-5 sm:p-6 overflow-y-auto space-y-4">
-              <div className="flex flex-col sm:flex-row gap-5">
-                {activeMovieDetail.stream.stream_icon && (
-                  <RemoteImage
-                    src={getSecureImageUrl(activeMovieDetail.stream.stream_icon)}
-                    alt={activeMovieDetail.stream.name}
-                    className="w-36 sm:w-44 aspect-2/3 object-cover rounded-2xl shadow-xl shrink-0"
-                  />
-                )}
-                <div className="space-y-2.5 flex-1">
-                  {activeMovieDetail.details?.info?.plot && (
-                    <div>
-                      <h4 className="text-xs font-bold text-label-secondary uppercase tracking-wider mb-1">Trama:</h4>
-                      <p className="text-sm text-label leading-relaxed">
-                        {activeMovieDetail.details.info.plot}
-                      </p>
-                    </div>
-                  )}
-
-                  {activeMovieDetail.details?.info?.genre && (
-                    <div className="text-sm text-label-secondary">
-                      <strong className="text-label-secondary">Genere:</strong> {activeMovieDetail.details.info.genre}
-                    </div>
-                  )}
-
-                  {activeMovieDetail.details?.info?.releasedate && (
-                    <div className="text-sm text-label-secondary">
-                      <strong className="text-label-secondary">Data uscita:</strong> {activeMovieDetail.details.info.releasedate}
-                    </div>
-                  )}
-
-                  {activeMovieDetail.details?.info?.duration && (
-                    <div className="text-sm text-label-secondary">
-                      <strong className="text-label-secondary">Durata:</strong> {formatDuration(activeMovieDetail.details.info.duration)}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Footer with play and download buttons */}
-            <div className="p-4 sm:p-5 border-t border-separator flex items-center justify-end gap-3 bg-surface-0/50">
-              {!STATIC_DEPLOY && !isTv && isDirectFileDownload(activeMovieDetail.stream.container_extension) && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const ext = activeMovieDetail.stream.container_extension || 'mp4';
-                    const streamUrl = buildStreamUrl(
-                      serverUrl,
-                      username,
-                      password,
-                      'movie',
-                      activeMovieDetail.stream.stream_id,
-                      ext,
-                      false
-                    );
-                    triggerMediaDownload(
-                      streamUrl,
-                      activeMovieDetail.stream.name,
-                      'movie',
-                      activeMovieDetail.stream.stream_icon,
-                      ext,
-                      accountKey
-                    );
-                  }}
-                  title="Scarica nella cartella locale dell’app"
-                  aria-label="Scarica film"
-                  className="p-3 rounded-xl border border-separator-strong hover:border-series bg-surface-0 hover:bg-surface-1 text-series hover:text-label transition cursor-pointer"
-                >
-                  <Download className="w-5 h-5" />
-                </button>
-              )}
-
-              {/* Static Apple build: long-press on the direct file link. */}
-              <AppleDownloadLink
-                streamUrl={buildStreamUrl(
-                  serverUrl,
-                  username,
-                  password,
-                  'movie',
-                  activeMovieDetail.stream.stream_id,
-                  activeMovieDetail.stream.container_extension || 'mp4',
-                  false
-                )}
-                containerExtension={activeMovieDetail.stream.container_extension}
-              />
-
-              <button
-                onClick={() => {
-                  handlePlayStream(activeMovieDetail.stream);
-                  setActiveMovieDetail(null);
-                }}
-                className="px-6 py-3 bg-accent hover:bg-accent-strong text-on-accent rounded-xl text-sm font-bold flex items-center gap-2 shadow-xl  transition cursor-pointer"
-              >
-                <Play className="w-5 h-5 fill-white" />
-                Guarda Film
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Movie Details Modal: shared sheet, also used by Recent and Favorites. */}
+      <MovieDetailModal
+        movie={movieDetailTarget}
+        credentials={{ serverUrl, username, password }}
+        accountKey={accountKey}
+        onClose={() => setActiveMovieDetail(null)}
+        onPlay={() => {
+          if (activeMovieDetail) handlePlayStream(activeMovieDetail);
+          setActiveMovieDetail(null);
+        }}
+      />
 
     </div>
   );

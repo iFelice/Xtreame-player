@@ -13,6 +13,7 @@ function stubDevice(options: { appleMobile: boolean; standalone: boolean }) {
   });
   vi.stubGlobal('window', {
     innerWidth: 390,
+    location: { host: '192.168.1.10:5174' },
     matchMedia: () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }),
     addEventListener: () => {},
     removeEventListener: () => {},
@@ -48,12 +49,23 @@ afterEach(() => {
 });
 
 describe('standalone one-time notice', () => {
+  it('names the current host and the Home Screen installation steps', async () => {
+    const { standaloneNoticeMessage } = await import('./StandaloneNotice');
+    const expected = 'Picture-in-Picture e download non funzionano in questa modalità. Per averli: apri 192.168.1.10:5174 in Safari → Condividi → Aggiungi alla schermata Home e disattiva «Apri come app web».';
+    expect(standaloneNoticeMessage('192.168.1.10:5174')).toBe(expected);
+    // The host is taken from the page, never hard-coded.
+    expect(standaloneNoticeMessage('')).not.toContain('192.168');
+    expect(standaloneNoticeMessage('server.esempio:8080')).toContain('apri server.esempio:8080 in Safari');
+  });
+
   it('is shown once in the standalone Apple web app and stays dismissed', async () => {
     stubDevice({ appleMobile: true, standalone: true });
-    const { STANDALONE_NOTICE_MESSAGE } = await import('./StandaloneNotice');
+    const { standaloneNoticeMessage } = await import('./StandaloneNotice');
     const renderer = await mountNotice('static');
 
-    expect(JSON.stringify(renderer.toJSON())).toContain(STANDALONE_NOTICE_MESSAGE);
+    const text = JSON.stringify(renderer.toJSON());
+    expect(text).toContain(standaloneNoticeMessage('192.168.1.10:5174'));
+    expect(text).toContain('in Safari → Condividi → Aggiungi alla schermata Home e disattiva «Apri come app web».');
     const close = renderer.root.findByProps({ 'aria-label': 'Chiudi avviso' });
     await act(async () => {
       close.props.onClick();
