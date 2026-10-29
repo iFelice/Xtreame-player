@@ -129,9 +129,11 @@ jobs:
           patterns = re.compile(r'FAILURE:|What went wrong|Execution failed for task|FAILED|Lint found|Issues found|^e: file://|^w: file://')
           selected = [(i, line) for i, line in enumerate(lines) if patterns.search(line)]
           for i, line in selected[-40:]:
-              print(f"build-log:{i + 1}: {line[:600]}")
-              for following in lines[i + 1:min(i + 4, len(lines))]:
-                  if following.strip(): print(f"build-log:  {following[:600]}")
+              snippets = [f"build-log:{i + 1}: {line[:600]}"]
+              snippets.extend(f"build-log: {following[:600]}" for following in lines[i + 1:min(i + 4, len(lines))] if following.strip())
+              for snippet in snippets:
+                  escaped = snippet.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+                  print(f"::error title=Gradle failure::{escaped}")
           PY
 
       # GitHub mostra al massimo 10 annotazioni per tipo per passo e 50 per job:
