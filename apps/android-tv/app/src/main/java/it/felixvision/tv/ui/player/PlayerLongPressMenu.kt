@@ -32,15 +32,16 @@ object PlayerLongPressTexts {
     const val GUIDE = "Guida del canale"
     const val ADD_TO_MY_CHANNELS = "Aggiungi a I miei canali"
     const val EDIT_IN_MY_CHANNELS = "Modifica in I miei canali"
+    const val FORMAT = "Formato schermo"
 }
 
 /**
  * Menu della pressione lunga nel player Live, sopra il video.
  *
- * Due voci: la guida del canale (la stessa che aprono GUIDE/INFO) e
- * l'aggiunta a "I miei canali" oppure, se il canale è già nella lista, la
- * modifica. Il focus parte dalla prima voce e Indietro chiude il menu senza
- * fare nulla: la riproduzione continua sotto.
+ * Tre voci: la guida del canale (la stessa che aprono GUIDE/INFO), il formato
+ * dello schermo e l'aggiunta a "I miei canali" oppure, se il canale è già
+ * nella lista, la modifica. Il focus parte dalla prima voce e Indietro chiude
+ * il menu senza fare nulla: la riproduzione continua sotto.
  */
 @Composable
 fun PlayerLongPressMenu(
@@ -48,6 +49,7 @@ fun PlayerLongPressMenu(
     inMyChannels: Boolean,
     scale: UiScale,
     onGuide: () -> Unit,
+    onFormat: () -> Unit,
     onMyChannels: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -71,6 +73,7 @@ fun PlayerLongPressMenu(
                 inMyChannels = inMyChannels,
                 scale = scale,
                 onGuide = onGuide,
+                onFormat = onFormat,
                 onMyChannels = onMyChannels,
             )
         }
@@ -78,7 +81,7 @@ fun PlayerLongPressMenu(
 }
 
 /**
- * Contenuto del menu, senza finestra: due pulsanti con il nome del canale
+ * Contenuto del menu, senza finestra: tre pulsanti con il nome del canale
  * sopra, focus iniziale sulla guida. Stesso stile delle finestre di "I miei
  * canali".
  */
@@ -88,6 +91,7 @@ fun PlayerLongPressMenuContent(
     inMyChannels: Boolean,
     scale: UiScale,
     onGuide: () -> Unit,
+    onFormat: () -> Unit,
     onMyChannels: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -117,6 +121,12 @@ fun PlayerLongPressMenuContent(
             modifier = Modifier
                 .focusRequester(firstItem)
                 .testTag("player_long_press_guide"),
+        )
+        FvpSecondaryButton(
+            text = PlayerLongPressTexts.FORMAT,
+            onClick = onFormat,
+            scale = scale,
+            modifier = Modifier.testTag("player_long_press_format"),
         )
         FvpSecondaryButton(
             text = if (inMyChannels) {

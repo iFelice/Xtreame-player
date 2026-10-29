@@ -9,6 +9,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
@@ -264,6 +265,10 @@ fun PlayerScreen(
             return
         }
         when {
+            state.formatPanelVisible -> {
+                engine.closeFormatPanel()
+                rootFocus.requestFocus()
+            }
             state.trackPanel != null -> {
                 engine.closeTrackPanel()
                 rootFocus.requestFocus()
@@ -463,24 +468,45 @@ fun PlayerScreen(
             // funzionare anche con la guida appena aperta.
             LaunchedEffect(longPressMenuOpen, myChannelEdit) {
                 if (longPressMenuOpen || myChannelEdit != null) return@LaunchedEffect
+                // Con un pannello aperto (per esempio il formato, scelto dal
+                // menu appena chiuso) il focus resta dove sta: toccarlo
+                // chiuderebbe il pannello al primo tasto.
+                if (state.hasModalOverlay) return@LaunchedEffect
                 withFrameNanos { }
                 runCatching { rootFocus.requestFocus() }
             }
 
             val currentPlayer = engine.exoPlayer
-            if (currentPlayer != null) {
-                AndroidView(
-                    factory = { ctx ->
-                        PlayerView(ctx).apply {
-                            // Nessun controller Media3: i comandi sono in Compose.
-                            useController = false
-                            keepScreenOn = true
-                        }
-                    },
-                    update = { view -> view.player = currentPlayer },
-                    onRelease = { view -> view.player = null },
-                    modifier = Modifier.fillMaxSize(),
-                )
+            // Un solo AndroidView in questo punto della composizione, sempre lo
+            // stesso: cambiare ramo ricreerebbe la superficie del video. Il
+            // riquadro cambia solo per grandezza, con "16:9" e "4:3" che
+            // impongono il rapporto e con gli altri due modi che occupano tutto.
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (currentPlayer != null) {
+                    val aspectRatio = VideoFormatLayout.aspectRatioFor(state.videoFormat)
+                    AndroidView(
+                        factory = { ctx ->
+                            PlayerView(ctx).apply {
+                                // Nessun controller Media3: i comandi sono in Compose.
+                                useController = false
+                                keepScreenOn = true
+                            }
+                        },
+                        update = { view ->
+                            view.player = currentPlayer
+                            view.resizeMode = VideoFormatLayout.resizeModeFor(state.videoFormat)
+                        },
+                        onRelease = { view -> view.player = null },
+                        modifier = if (aspectRatio == null) {
+                            Modifier.fillMaxSize()
+                        } else {
+                            Modifier.aspectRatio(aspectRatio)
+                        },
+                    )
+                }
             }
 
             if (state.isReplay && !state.hasModalOverlay) {
@@ -509,6 +535,7 @@ fun PlayerScreen(
                     onAudio = { engine.openTrackPanel(TrackPanelType.AUDIO) },
                     onSubtitles = { engine.openTrackPanel(TrackPanelType.SUBTITLES) },
                     onVolume = { engine.openVolumePanel() },
+                    onFormat = { engine.openFormatPanel() },
                     modifier = Modifier.align(Alignment.BottomCenter),
                     audioFormatLabel = state.audioFormatLabel,
                     ffmpegActive = state.ffmpegActive,
@@ -579,6 +606,18 @@ fun PlayerScreen(
                 )
             }
 
+            state.videoFormatIndicator?.let { format ->
+                if (!state.hasModalOverlay) {
+                    PlayerFormatIndicator(
+                        format = format,
+                        scale = scale,
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(scale.dp(28f)),
+                    )
+                }
+            }
+
             if (state.volumePanelVisible && !state.hasModalOverlay) {
                 PlayerVolumePanel(
                     level = state.volumeLevel,
@@ -586,6 +625,17 @@ fun PlayerScreen(
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
                         .padding(end = scale.dp(28f)),
+                )
+            }
+
+            if (state.formatPanelVisible) {
+                PlayerFormatPanel(
+                    current = state.videoFormat,
+                    scale = scale,
+                    onSelect = { format ->
+                        engine.selectVideoFormat(format)
+                        rootFocus.requestFocus()
+                    },
                 )
             }
 
@@ -666,6 +716,10 @@ fun PlayerScreen(
             onGuide = {
                 longPressMenuOpen = false
                 engine.toggleEpg()
+            },
+            onFormat = {
+                longPressMenuOpen = false
+                engine.openFormatPanel()
             },
             onMyChannels = {
                 longPressMenuOpen = false

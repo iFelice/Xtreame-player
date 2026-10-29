@@ -130,6 +130,23 @@ class PlayerEngine(
     private var volumeJob: Job? = null
 
     /**
+     * Formato dello schermo salvato per ogni canale Live di questo account:
+     * chi manca dalla mappa parte da "Adatta". Caricato una volta all'avvio,
+     * tiene la scelta del canale per tutta la sessione e anche in replay.
+     */
+    private var channelFormats: Map<String, VideoFormat> = emptyMap()
+
+    /**
+     * Formato scelto in questa riproduzione quando la sorgente non è il Live
+     * (film, serie ed episodi): non si salva e ogni riproduzione riparte da
+     * "Adatta".
+     */
+    private var sessionFormat: VideoFormat = VideoFormat.FIT
+
+    /** Etichetta "Formato: <nome>" dei 2 secondi dopo la scelta. */
+    private var formatIndicatorJob: Job? = null
+
+    /**
      * Stato del riquadro "Prossimo episodio" per l'episodio in corso:
      * `DISMISSED` significa "Annulla", quindi a fine video si torna alla scheda.
      */
@@ -199,6 +216,11 @@ class PlayerEngine(
             volumeLevel = runCatching { container.volumeStore.level() }
                 .getOrDefault(PlayerVolume.DEFAULT_LEVEL)
             state = state.copy(volumeLevel = volumeLevel)
+            // Formato dello schermo ricordato per ogni canale Live: basta una
+            // lettura all'avvio, il resto della sessione lavora in memoria.
+            channelFormats = runCatching {
+                container.channelVideoFormatStore.getAll(session.server, session.username)
+            }.getOrDefault(emptyMap())
             val contentKey = progressKey()
             val saved = if (contentKey != null) {
                 runCatching {
@@ -263,6 +285,7 @@ class PlayerEngine(
         bannerJob?.cancel()
         channelNumberJob?.cancel()
         volumeJob?.cancel()
+        formatIndicatorJob?.cancel()
         destroyPlayer()
         container.playbackActivity.setActive(false)
         scope.cancel()
@@ -274,6 +297,7 @@ class PlayerEngine(
         bannerJob?.cancel()
         channelNumberJob?.cancel()
         volumeJob?.cancel()
+        formatIndicatorJob?.cancel()
         val exitInfo = PlayerExitInfo(
             lastLiveChannelId = currentLiveChannel()?.streamId,
             lastEpisodeId = currentEpisode()?.episode?.id,
@@ -410,6 +434,18 @@ class PlayerEngine(
 
     private fun currentLiveChannel(): LiveStream? =
         detachedLiveChannel ?: channels.getOrNull(liveIndex)
+
+    /**
+     * Formato dello schermo in vigore adesso: nel Live è quello ricordato per
+     * il canale in onda (anche in replay), altrove quello scelto in questa
+     * riproduzione. [buildPlayer] lo rilegge a ogni cambio canale, così lo
+     * zapping applica il formato del canale su cui si arriva.
+     */
+    private fun currentVideoFormat(): VideoFormat {
+        if (!isLiveSource) return sessionFormat
+        val streamId = currentLiveChannel()?.streamId ?: return VideoFormat.FIT
+        return channelFormats[streamId] ?: VideoFormat.FIT
+    }
 
     /** Canale in onda in questo momento, anche se tolto da "I miei canali". */
     val onAirChannel: LiveStream?
@@ -920,6 +956,71 @@ class PlayerEngine(
             delay(PlayerVolume.HIDE_DELAY_MILLIS)
             state = state.copy(volumePanelVisible = false)
             volumeJob = null
+        }
+    }
+
+    // --- Formato dello schermo ---
+
+    /**
+     * Apre il pannello del formato. A differenza di [openTrackPanel] funziona
+     * anche sul Live senza replay: "Adatta", "Zoom", "16:9" e "4:3" riguardano
+     * qualunque cosa sia in onda.
+     */
+    fun openFormatPanel() {
+        if (state.errorMessage != null) return
+        // Un pannello per volta: il volume si chiude e il suo conteggio si ferma.
+        closeVolumePanel()
+        state = state.copy(formatPanelVisible = true)
+    }
+
+    /** Chiude subito il pannello del formato, senza cambiare nulla. */
+    fun closeFormatPanel() {
+        state = state.copy(formatPanelVisible = false)
+    }
+
+    /**
+     * Applica il formato scelto e lo mostra per [VideoFormatLayout.INDICATOR_MILLIS]
+     * con l'etichetta "Formato: <nome>".
+     *
+     * Nel Live la scelta è ricordata per il canale in onda (anche in replay:
+     * il canale è lo stesso) e finisce in DataStore; scegliendo "Adatta" la
+     * voce si cancella. In film e serie vale per questa riproduzione soltanto.
+     */
+    fun selectVideoFormat(format: VideoFormat) {
+        state = state.copy(
+            videoFormat = format,
+            formatPanelVisible = false,
+            videoFormatIndicator = format,
+        )
+        val streamId = if (isLiveSource) currentLiveChannel()?.streamId else null
+        if (streamId != null) {
+            channelFormats = if (format == VideoFormat.FIT) {
+                channelFormats - streamId
+            } else {
+                channelFormats + (streamId to format)
+            }
+            scope.launch {
+                runCatching {
+                    container.channelVideoFormatStore.save(
+                        server = session.server,
+                        username = session.username,
+                        streamId = streamId,
+                        format = format,
+                    )
+                }
+            }
+        } else {
+            sessionFormat = format
+        }
+        scheduleFormatIndicatorHide()
+    }
+
+    private fun scheduleFormatIndicatorHide() {
+        formatIndicatorJob?.cancel()
+        formatIndicatorJob = scope.launch {
+            delay(VideoFormatLayout.INDICATOR_MILLIS)
+            state = state.copy(videoFormatIndicator = null)
+            formatIndicatorJob = null
         }
     }
 
