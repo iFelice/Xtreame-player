@@ -1,5 +1,3 @@
-@file:OptIn(androidx.media3.common.util.UnstableApi::class)
-
 package it.felixvision.mobile.ui.player
 
 import androidx.compose.foundation.background
@@ -98,6 +96,7 @@ fun PlayerControls(
     }
 }
 
+@androidx.media3.common.util.UnstableApi
 @Composable
 private fun PlayerTopControls(
     state: MobilePlayerState,
@@ -153,6 +152,7 @@ private fun PlayerTopControls(
     }
 }
 
+@androidx.media3.common.util.UnstableApi
 @Composable
 private fun PlayerTimeline(
     state: MobilePlayerState,

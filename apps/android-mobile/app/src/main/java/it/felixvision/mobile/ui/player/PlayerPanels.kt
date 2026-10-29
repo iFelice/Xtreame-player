@@ -1,5 +1,3 @@
-@file:OptIn(androidx.media3.common.util.UnstableApi::class)
-
 package it.felixvision.mobile.ui.player
 
 import androidx.compose.foundation.background
@@ -229,6 +227,7 @@ private fun PanelContent(
     }
 }
 
+@androidx.media3.common.util.UnstableApi
 @Composable
 private fun PanelHeader(panel: PlayerPanel, onClose: () -> Unit) {
     Row(
