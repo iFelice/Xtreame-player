@@ -308,10 +308,12 @@ class PlayerScreenTest {
             up()
         }
         assertTrue(seekedTo.get() > 20_000L)
+        rule.mainClock.advanceTimeByFrame()
         rule.onNodeWithText("Position: 20000").assertDoesNotExist()
         rule.onNodeWithTag("gesture_surface").performTouchInput {
             doubleClick(androidx.compose.ui.geometry.Offset(700f, 600f))
         }
+        rule.mainClock.advanceTimeByFrame()
         rule.onNodeWithText("+10 s").assertIsDisplayed()
         rule.mainClock.advanceTimeBy(1_600L)
         rule.onNodeWithText("+10 s").assertDoesNotExist()
