@@ -202,3 +202,13 @@ TV, perché il tablet compila quei sorgenti. Nessun segreto nel workflow.
   vive nel ViewModel e sopravvive alla rotazione.
 - **Colori**: palette del brand (verde #10B981, grigi #1C1C1E/#2C2C2E); il
   rosso è riservato agli errori; font di sistema; target touch ≥48dp.
+
+## Player tablet (PR3)
+
+Il player è una schermata di `MainActivity` e mantiene un'unica istanza Media3 durante il cambio di orientamento. In verticale mostra il video 16:9 e il pannello contestuale; in orizzontale usa la modalità immersiva. I comandi touch si nascondono dopo quattro secondi, consentono Play/Pausa, ricerca, scelta delle tracce e modalità Adatta/Riempi. Il doppio tocco sui terzi laterali salta di dieci secondi, i trascinamenti orizzontali cambiano canale Live o spostano la riproduzione VOD, e quelli verticali regolano volume di sistema e luminosità temporanea della finestra. Il classificatore e le soglie sono in `TouchGestureRules`.
+
+È disponibile il Picture-in-Picture con play/pausa e rapporto d'aspetto limitato ai valori ammessi da Android. L'audio usa il focus di sistema, si mette in pausa quando diventano indisponibili le cuffie e salva i progressi; non viene avviato un servizio in background.
+
+### Firma di debug fissa nel CI
+
+Il workflow legge il secret opzionale `FVP_DEBUG_KEYSTORE_BASE64`, ne decodifica il contenuto solo in `$RUNNER_TEMP` e lo rimuove sempre alla fine del job. Se il secret è configurato, l'APK debug usa quella firma fissa (password e alias standard Android); il log del CI stampa l'impronta SHA-256 del certificato, mai il keystore. Senza secret il job continua con la chiave debug effimera standard di Gradle e segnala che la firma può cambiare a ogni esecuzione. Per rendere stabile la firma è necessario configurare il secret Base64 del keystore debug, senza committare file o credenziali.

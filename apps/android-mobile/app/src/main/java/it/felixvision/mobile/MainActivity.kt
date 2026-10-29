@@ -8,6 +8,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import it.felixvision.mobile.ui.FvpApp
+import it.felixvision.mobile.ui.player.PlayerPipRegistry
+import it.felixvision.mobile.ui.player.updatePlayerPip
 import it.felixvision.mobile.ui.theme.FvpTheme
 
 class MainActivity : ComponentActivity() {
@@ -26,6 +28,19 @@ class MainActivity : ComponentActivity() {
                 FvpApp(container = container)
             }
         }
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (Build.VERSION.SDK_INT in 26..30) {
+            val player = PlayerPipRegistry.player
+            if (player?.isPlaying == true) updatePlayerPip(this, player, PlayerPipRegistry.videoView, enter = true, autoEnter = false)
+        }
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: android.content.res.Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        PlayerPipRegistry.inPip = isInPictureInPictureMode
     }
 
     /**
