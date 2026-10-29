@@ -126,11 +126,11 @@ jobs:
           from pathlib import Path
           import re
           lines = Path('/tmp/fvp-mobile-build.log').read_text(errors='replace').splitlines()
-          patterns = re.compile(r'FAILURE:|What went wrong|Execution failed for task|FAILED|Lint found|Issues found|^e: file://|^w: file://')
+          patterns = re.compile(r'FAILURE:|What went wrong|Execution failed|Lint found|Issues found|^e: file://|^> Task .* FAILED|^.* Error:|^.* error:')
           selected = [(i, line) for i, line in enumerate(lines) if patterns.search(line)]
-          for i, line in selected[-40:]:
-              snippets = [f"build-log:{i + 1}: {line[:600]}"]
-              snippets.extend(f"build-log: {following[:600]}" for following in lines[i + 1:min(i + 4, len(lines))] if following.strip())
+          for i, line in selected[-5:]:
+              snippets = [f"build-log:{i + 1}: {line[:700]}"]
+              snippets.extend(f"build-log: {following[:700]}" for following in lines[i + 1:min(i + 3, len(lines))] if following.strip())
               for snippet in snippets:
                   escaped = snippet.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
                   print(f"::error title=Gradle failure::{escaped}")
