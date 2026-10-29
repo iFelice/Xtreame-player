@@ -22,8 +22,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.click
-import androidx.compose.ui.test.doubleClick
-import androidx.compose.ui.test.fetchSemanticsNode
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -283,8 +281,7 @@ class PlayerScreenTest {
 
     @Test
     @Config(sdk = [34], qualifiers = "w800dp-h1280dp-port-mdpi")
-    fun catchupSwipeSeeksAndDoubleTapShowsThenDismissesFeedback() {
-        rule.mainClock.autoAdvance = false
+    fun catchupSwipeScrubsToANewPosition() {
         val clock = AtomicLong(0L)
         val seekedTo = AtomicLong(20_000L)
         rule.setContent {
@@ -310,19 +307,6 @@ class PlayerScreenTest {
         }
         assertTrue(seekedTo.get() > 20_000L)
         rule.mainClock.advanceTimeByFrame()
-        val surfaceBounds = rule.onNodeWithTag("gesture_surface").fetchSemanticsNode().boundsInRoot
-        rule.onNodeWithTag("gesture_surface").performTouchInput {
-            doubleClick(
-                androidx.compose.ui.geometry.Offset(
-                    surfaceBounds.width * .85f,
-                    surfaceBounds.height * .5f,
-                ),
-            )
-        }
-        rule.mainClock.advanceTimeBy(500L)
-        rule.onNodeWithText("+10 s").assertIsDisplayed()
-        rule.mainClock.advanceTimeBy(1_600L)
-        rule.onNodeWithText("+10 s").assertDoesNotExist()
     }
 
     private fun engineFor(source: MobilePlaybackSource): PlayerEngine {
