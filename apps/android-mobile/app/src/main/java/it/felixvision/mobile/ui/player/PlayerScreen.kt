@@ -6,6 +6,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -285,7 +286,7 @@ fun PlayerScreen(
 
 @androidx.media3.common.util.UnstableApi
 @Composable
-private fun ControlsOverlay(
+private fun BoxScope.ControlsOverlay(
     state: MobilePlayerState,
     guidePrograms: List<EpgProgram>,
     fit: Boolean,
