@@ -63,6 +63,7 @@ data class MobilePlayerState(
 )
 
 /** Tablet engine: ExoPlayer ownership stays in the Activity's composition across configuration changes. */
+@androidx.media3.common.util.UnstableApi
 class PlayerEngine(private val context: Context, private val container: AppContainer, val session: MobilePlayerSession) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager

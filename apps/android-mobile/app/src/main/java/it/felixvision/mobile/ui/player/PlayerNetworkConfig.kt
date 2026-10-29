@@ -24,6 +24,7 @@ import java.net.UnknownHostException
  * reti lente e VPN, redirect anche tra http e https, User-Agent di sistema
  * (lo stesso di prima) e regole dei nuovi tentativi.
  */
+@androidx.media3.common.util.UnstableApi
 object PlayerNetworkConfig {
 
     /** Tempo massimo per aprire la connessione con il server. */
@@ -80,6 +81,7 @@ object PlayerNetworkConfig {
 }
 
 /** Riconoscimento degli errori di rete, separati dalle risposte HTTP del server. */
+@androidx.media3.common.util.UnstableApi
 object PlayerNetworkErrors {
 
     private const val MAX_CAUSE_DEPTH = 8
@@ -170,6 +172,7 @@ object PlayerNetworkErrors {
  * segnala l'errore solo dopo i tentativi, quindi nel frattempo resta visibile
  * il caricamento. Ogni log porta il numero del tentativo e l'URL oscurato.
  */
+@androidx.media3.common.util.UnstableApi
 class PlayerLoadErrorPolicy(
     private val streamUrl: String?,
 ) : DefaultLoadErrorHandlingPolicy(PlayerNetworkConfig.MAX_NETWORK_RETRIES) {
@@ -217,6 +220,7 @@ enum class PlayerErrorAction {
  * nuovo avvio della riproduzione (cambio canale, "Riprova", ritorno alla
  * diretta) o quando lo stream è pronto.
  */
+@androidx.media3.common.util.UnstableApi
 class LiveAutoRestart(
     private val maxRestarts: Int = PlayerNetworkConfig.MAX_LIVE_AUTO_RESTARTS,
 ) {

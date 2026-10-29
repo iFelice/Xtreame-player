@@ -16,12 +16,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.media3.common.Player
 
+@androidx.media3.common.util.UnstableApi
 object PlayerPipRegistry {
     var inPip by mutableStateOf(false)
     @Volatile var player: Player? = null
     @Volatile var videoView: View? = null
 }
 
+@androidx.media3.common.util.UnstableApi
 fun updatePlayerPip(activity: Activity?, player: Player?, view: View?, enter: Boolean, autoEnter: Boolean) {
     if (activity == null || player == null || Build.VERSION.SDK_INT < 26) return
     val size = player.videoSize
@@ -47,6 +49,7 @@ fun updatePlayerPip(activity: Activity?, player: Player?, view: View?, enter: Bo
     if (enter && player.isPlaying) activity.enterPictureInPictureMode(params)
 }
 
+@androidx.media3.common.util.UnstableApi
 class PlayerPipAction : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {

@@ -39,6 +39,7 @@ import it.felixvision.tv.data.epg.EpgRules
 import it.felixvision.tv.data.catalog.VodInfoResponse
 import kotlinx.coroutines.delay
 
+@androidx.media3.common.util.UnstableApi
 @Composable
 fun PlayerScreen(container: AppContainer, session: MobilePlayerSession, onExit: () -> Unit) {
     val context = LocalContext.current
@@ -264,10 +265,12 @@ fun PlayerScreen(container: AppContainer, session: MobilePlayerSession, onExit: 
     }
 }
 
+@androidx.media3.common.util.UnstableApi
 @Composable private fun VideoSurface(player: Player?, fit: Boolean, modifier: Modifier, onView: (PlayerView) -> Unit) {
     AndroidView(modifier = modifier, factory = { context -> PlayerView(context).apply { useController = false; resizeMode = if (fit) AspectRatioFrameLayout.RESIZE_MODE_FIT else AspectRatioFrameLayout.RESIZE_MODE_ZOOM; this.player = player; onView(this) } }, update = { it.player = player; it.resizeMode = if (fit) AspectRatioFrameLayout.RESIZE_MODE_FIT else AspectRatioFrameLayout.RESIZE_MODE_ZOOM; onView(it) })
 }
 
+@androidx.media3.common.util.UnstableApi
 @Composable private fun PlayerControls(state: MobilePlayerState, engine: PlayerEngine, onBack: () -> Unit, onTracks: (String) -> Unit, onFit: () -> Unit, onPip: () -> Unit, modifier: Modifier) {
     Column(modifier.background(Color.Black.copy(alpha = .58f)).padding(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -293,6 +296,7 @@ fun PlayerScreen(container: AppContainer, session: MobilePlayerSession, onExit: 
     }
 }
 
+@androidx.media3.common.util.UnstableApi
 @Composable private fun TrackOrLivePanel(type: String, state: MobilePlayerState, engine: PlayerEngine, programs: List<EpgProgram>, loading: Boolean, onClose: () -> Unit) {
     Surface(Modifier.fillMaxSize(), color = Color.Black.copy(alpha = .94f)) {
         Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
