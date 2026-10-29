@@ -1,5 +1,3 @@
-@file:OptIn(androidx.media3.common.util.UnstableApi::class)
-
 package it.felixvision.mobile.ui.player
 
 import android.content.Context
