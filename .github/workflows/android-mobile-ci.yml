@@ -168,6 +168,10 @@ jobs:
           # 3) errori di lint
           if [ -f apps/android-mobile/app/build/reports/lint-results-debug.txt ]; then
             sed -n -E "s|^$GITHUB_WORKSPACE/([^:]+):([0-9]+) Error: (.*)$|::error file=\1,line=\2::lint: \3|p" apps/android-mobile/app/build/reports/lint-results-debug.txt | head -10
+            lint_errors=$(grep -E ' Error: ' apps/android-mobile/app/build/reports/lint-results-debug.txt | head -14 | tr '\n' ' ' | cut -c1-5000)
+            if [ -n "$lint_errors" ]; then
+              echo "::error title=Lint findings::$lint_errors"
+            fi
           fi
 
       - name: Carica l'APK di debug
