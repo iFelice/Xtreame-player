@@ -38,10 +38,10 @@ object PlayerLongPressTexts {
 /**
  * Menu della pressione lunga nel player Live, sopra il video.
  *
- * Tre voci: la guida del canale (la stessa che aprono GUIDE/INFO), il formato
- * dello schermo e l'aggiunta a "I miei canali" oppure, se il canale è già
- * nella lista, la modifica. Il focus parte dalla prima voce e Indietro chiude
- * il menu senza fare nulla: la riproduzione continua sotto.
+ * Tre voci: la guida del canale (la stessa che aprono GUIDE/INFO),
+ * l'aggiunta a "I miei canali" oppure, se il canale è già nella lista, la
+ * modifica e il formato dello schermo. Il focus parte dalla prima voce e
+ * Indietro chiude il menu senza fare nulla: la riproduzione continua sotto.
  */
 @Composable
 fun PlayerLongPressMenu(
@@ -82,8 +82,8 @@ fun PlayerLongPressMenu(
 
 /**
  * Contenuto del menu, senza finestra: tre pulsanti con il nome del canale
- * sopra, focus iniziale sulla guida. Stesso stile delle finestre di "I miei
- * canali".
+ * sopra, focus iniziale sulla guida e il formato dello schermo in fondo. Stesso
+ * stile delle finestre di "I miei canali".
  */
 @Composable
 fun PlayerLongPressMenuContent(
@@ -123,12 +123,6 @@ fun PlayerLongPressMenuContent(
                 .testTag("player_long_press_guide"),
         )
         FvpSecondaryButton(
-            text = PlayerLongPressTexts.FORMAT,
-            onClick = onFormat,
-            scale = scale,
-            modifier = Modifier.testTag("player_long_press_format"),
-        )
-        FvpSecondaryButton(
             text = if (inMyChannels) {
                 PlayerLongPressTexts.EDIT_IN_MY_CHANNELS
             } else {
@@ -137,6 +131,12 @@ fun PlayerLongPressMenuContent(
             onClick = onMyChannels,
             scale = scale,
             modifier = Modifier.testTag("player_long_press_my_channels"),
+        )
+        FvpSecondaryButton(
+            text = PlayerLongPressTexts.FORMAT,
+            onClick = onFormat,
+            scale = scale,
+            modifier = Modifier.testTag("player_long_press_format"),
         )
     }
 }

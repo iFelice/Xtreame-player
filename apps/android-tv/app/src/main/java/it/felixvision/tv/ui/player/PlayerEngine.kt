@@ -40,6 +40,7 @@ import it.felixvision.tv.data.playback.PostponeMode
 import it.felixvision.tv.data.playback.PostponePlan
 import it.felixvision.tv.data.playback.StreamTarget
 import it.felixvision.tv.data.playback.StreamUrls
+import it.felixvision.tv.data.playback.VideoFormat
 import it.felixvision.tv.data.progress.ProgressKeys
 import it.felixvision.tv.data.progress.WatchRules
 import it.felixvision.tv.data.volume.PlayerVolume

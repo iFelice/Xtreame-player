@@ -30,7 +30,7 @@ import org.robolectric.annotation.Config
 
 /**
  * Menu della pressione lunga nel player Live: tre voci (guida del canale,
- * "Formato schermo" e "I miei canali"), con la voce giusta a seconda che il
+ * "I miei canali" e "Formato schermo"), con la voce giusta a seconda che il
  * canale sia già nella lista personale. Nel primo test lo stato osservato è
  * cambiato con `runOnIdle` e i pulsanti tv-material si attivano con l'azione di
  * click; il secondo invia eventi OK grezzi per provare il blocco del tasto
@@ -85,18 +85,18 @@ class PlayerLongPressMenuTest {
         rule.waitForIdle()
         assertTrue(guideOpened)
 
-        // "Formato schermo" apre il pannello del formato del player.
+        // La seconda voce apre la finestra di "I miei canali".
+        rule.onNodeWithTag("player_long_press_my_channels")
+            .performSemanticsAction(SemanticsActions.OnClick)
+        rule.waitForIdle()
+        assertTrue(myChannelsOpened)
+
+        // La terza voce, "Formato schermo", apre il pannello del formato.
         rule.onNodeWithText("Formato schermo").assertIsDisplayed()
         rule.onNodeWithTag("player_long_press_format")
             .performSemanticsAction(SemanticsActions.OnClick)
         rule.waitForIdle()
         assertTrue(formatOpened)
-
-        // La terza voce apre la finestra di "I miei canali".
-        rule.onNodeWithTag("player_long_press_my_channels")
-            .performSemanticsAction(SemanticsActions.OnClick)
-        rule.waitForIdle()
-        assertTrue(myChannelsOpened)
     }
 
     @Test
