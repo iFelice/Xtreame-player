@@ -74,6 +74,7 @@ import it.felixvision.tv.data.epg.ChannelScheduleLoader
  * I ViewModel hanno costruttori iniettabili per i test; qui vengono creati
  * con l'[AppContainer] e la tupla server/utente della sessione.
  */
+@androidx.media3.common.util.UnstableApi
 @Composable
 fun HomeScreen(
     container: AppContainer,

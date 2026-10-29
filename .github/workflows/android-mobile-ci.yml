@@ -179,10 +179,25 @@ jobs:
               name = f"apps/android-mobile/app/src/test/java/it/felixvision/mobile/ui/main/HomeScreenTest.kt"
               print(f"::notice file={name},line=1::test eseguiti: {tot}, falliti: {fail}, errori: {err}, superati: {tot - fail - err}")
           PY
-          # 3) errori di lint
-          if [ -f apps/android-mobile/app/build/reports/lint-results-debug.txt ]; then
-            sed -n -E "s|^$GITHUB_WORKSPACE/([^:]+):([0-9]+) Error: (.*)$|::error file=\1,line=\2::lint: \3|p" apps/android-mobile/app/build/reports/lint-results-debug.txt | head -10
-          fi
+          # 3) errori di lint: il report può contenere percorsi assoluti o relativi.
+          python3 - <<'PY'
+          from pathlib import Path
+          import os, re
+          report = Path('apps/android-mobile/app/build/reports/lint-results-debug.txt')
+          if report.exists():
+              root = Path(os.environ['GITHUB_WORKSPACE']).resolve()
+              for line in report.read_text(errors='replace').splitlines():
+                  match = re.match(r'^(.*?):(\d+): Error: (.*)$', line)
+                  if not match:
+                      continue
+                  raw_path, number, message = match.groups()
+                  try:
+                      rel = Path(raw_path).resolve().relative_to(root).as_posix()
+                  except (OSError, ValueError):
+                      rel = raw_path
+                  escaped = message.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+                  print(f'::error file={rel},line={number}::lint: {escaped}')
+          PY
 
       - name: Carica l'APK di debug
         if: always()
