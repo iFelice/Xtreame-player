@@ -27,6 +27,7 @@ import { ListPositionIndicator } from './ListPositionIndicator';
 import { triggerMediaDownload, isDirectFileDownload, isTvEnvironment } from '../utils/downloadHelper';
 import { CollapsibleCategoryPanel } from './CollapsibleCategoryPanel';
 import { STATIC_DEPLOY } from '../utils/deployTarget';
+import { AppleDownloadLink } from './AppleDownloadLink';
 
 interface VodCatalogProps {
   categories: XtreamCategory[];
@@ -346,6 +347,21 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                           </button>
                         )}
 
+                        {/* Static Apple build: long-press on the direct file link. */}
+                        <AppleDownloadLink
+                          streamUrl={buildStreamUrl(
+                            serverUrl,
+                            username,
+                            password,
+                            'movie',
+                            stream.stream_id,
+                            stream.container_extension || 'mp4',
+                            false
+                          )}
+                          containerExtension={stream.container_extension}
+                          variant="compact"
+                        />
+
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -412,7 +428,7 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
 
       {/* Movie Details Modal */}
       {activeMovieDetail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/50 animate-in fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center safe-area-overlay bg-black/50 animate-in fade-in">
           <div className="glass border border-glass-edge rounded-3xl max-w-2xl w-full overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
             {/* Header */}
             <div className="p-4 sm:p-5 border-b border-separator flex items-center justify-between">
@@ -500,6 +516,20 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                   <Download className="w-5 h-5" />
                 </button>
               )}
+
+              {/* Static Apple build: long-press on the direct file link. */}
+              <AppleDownloadLink
+                streamUrl={buildStreamUrl(
+                  serverUrl,
+                  username,
+                  password,
+                  'movie',
+                  activeMovieDetail.stream.stream_id,
+                  activeMovieDetail.stream.container_extension || 'mp4',
+                  false
+                )}
+                containerExtension={activeMovieDetail.stream.container_extension}
+              />
 
               <button
                 onClick={() => {

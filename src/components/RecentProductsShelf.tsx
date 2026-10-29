@@ -23,6 +23,7 @@ import { storage } from '../services/storage';
 import { isTvEnvironment, triggerMediaDownload } from '../utils/downloadHelper';
 import { getSecureImageUrl } from '../utils/imageUrl';
 import { STATIC_DEPLOY } from '../utils/deployTarget';
+import { AppleDownloadLink } from './AppleDownloadLink';
 
 interface RecentProductsShelfProps {
   vodStreams: XtreamVodStream[];
@@ -257,6 +258,21 @@ export const RecentProductsShelf: React.FC<RecentProductsShelfProps> = ({
                         <Download className="w-4 h-4" />
                       </button>
                     )}
+
+                    {/* Static Apple build: long-press on the direct file link. */}
+                    <AppleDownloadLink
+                      streamUrl={buildStreamUrl(
+                        serverUrl,
+                        username,
+                        password,
+                        'movie',
+                        movie.stream_id,
+                        movie.container_extension || 'mp4',
+                        false
+                      )}
+                      containerExtension={movie.container_extension}
+                      variant="compact"
+                    />
                   </div>
                 </div>
 

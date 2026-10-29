@@ -29,6 +29,7 @@ import { getSecureImageUrl } from '../utils/imageUrl';
 import { VirtualizedMediaGrid } from './VirtualizedMediaGrid';
 import { ListPositionIndicator } from './ListPositionIndicator';
 import { triggerMediaDownload, isTvEnvironment } from '../utils/downloadHelper';
+import { AppleDownloadLink } from './AppleDownloadLink';
 import { CollapsibleCategoryPanel } from './CollapsibleCategoryPanel';
 import { STATIC_DEPLOY } from '../utils/deployTarget';
 
@@ -402,7 +403,7 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
 
       {/* Episode Selection Modal */}
       {activeSeriesDetail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/50 animate-in fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center safe-area-overlay bg-black/50 animate-in fade-in">
           <div className="glass border border-glass-edge rounded-3xl max-w-4xl w-full overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
             {/* Modal Header */}
             <div className="p-4 sm:p-5 border-b border-separator flex items-center justify-between">
@@ -527,6 +528,21 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                                 <Download className="w-4 h-4" />
                               </button>
                             )}
+
+                            {/* Static Apple build: long-press on the direct file link. */}
+                            <AppleDownloadLink
+                              streamUrl={buildStreamUrl(
+                                serverUrl,
+                                username,
+                                password,
+                                'series',
+                                ep.id,
+                                ep.container_extension || 'mp4',
+                                false
+                              )}
+                              containerExtension={ep.container_extension}
+                              variant="compact"
+                            />
 
                             <button
                               onClick={() =>

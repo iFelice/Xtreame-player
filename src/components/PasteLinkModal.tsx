@@ -19,7 +19,7 @@ export const PasteLinkModal: React.FC<PasteLinkModalProps> = ({
   isLoading = false,
 }) => {
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center safe-area-overlay overflow-y-auto animate-in fade-in duration-200">
       <div className="relative w-full max-w-3xl glass border border-glass-edge rounded-3xl overflow-hidden shadow-2xl my-auto">
         {/* Header */}
         <div className="px-5 py-4 border-b border-separator flex items-center justify-between gap-4">

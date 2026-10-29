@@ -14,7 +14,7 @@ import {
   Film,
   AlertCircle,
   RefreshCw,
-  Cast,
+  PictureInPicture2,
   Download,
   ChevronLeft,
   ChevronRight,
@@ -40,6 +40,7 @@ import { isAppleMobile } from '../utils/appleMobile';
 import { STATIC_DEPLOY } from '../utils/deployTarget';
 import { getPlaybackStreamUrl } from '../utils/streamUrl';
 import { needsVlcOnAppleMobile } from '../utils/vlc';
+import { shouldShowPipButton } from '../utils/pictureInPicture';
 
 interface MediaPlayerProps {
   media: PlayableMediaItem | null;
@@ -100,6 +101,9 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   const canSwitchLiveFormat = Boolean(!appleMobile && media?.type === 'live' && !isPublicMockStream(media.streamUrl));
   const [aspectRatio, setAspectRatio] = useState<'contain' | '16_9' | '4_3' | 'cover' | 'fill'>('contain');
   const [showSettings, setShowSettings] = useState<boolean>(false);
+  // WebKit reports PiP availability per video element, and only after the
+  // element exists, so the button appears once the source is ready.
+  const [showPipButton, setShowPipButton] = useState<boolean>(() => shouldShowPipButton(appleMobile, null));
   const [controlsVisible, setControlsVisible] = useState<boolean>(true);
   const [useProxy, setUseProxy] = useState<boolean>(() => {
     // A Capacitor WebView has no Express server behind capacitor://localhost.
@@ -405,8 +409,19 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   }, [media, getEffectiveUrl, liveFormat, playbackAttempt, clearPlaybackWatchdogs, destroyEngines, appleMobile, staticDeploy, useProxy]);
 
   // Video event handlers
+  const refreshPipAvailability = useCallback(() => {
+    setShowPipButton(shouldShowPipButton(appleMobile, videoRef.current));
+  }, [appleMobile]);
+
+  // The video element exists as soon as a title is selected, so ask it before
+  // any media event arrives (WebKit needs no decoding to answer).
+  useEffect(() => {
+    refreshPipAvailability();
+  }, [refreshPipAvailability, media?.id]);
+
   const handlePlaybackReady = () => {
     hasStartedPlaybackRef.current = true;
+    refreshPipAvailability();
     if (startupTimeoutRef.current) clearTimeout(startupTimeoutRef.current);
     if (bufferingTimeoutRef.current) clearTimeout(bufferingTimeoutRef.current);
     startupTimeoutRef.current = null;
@@ -454,6 +469,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     if (videoRef.current) {
       setDuration(videoRef.current.duration || 0);
     }
+    refreshPipAvailability();
   };
 
   const togglePlay = () => {
@@ -605,10 +621,19 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       };
       if (document.pictureInPictureElement) {
         await document.exitPictureInPicture();
-      } else if (document.pictureInPictureEnabled && video.requestPictureInPicture) {
+        return;
+      }
+      // In the Home Screen web app document.pictureInPictureEnabled stays true
+      // although requestPictureInPicture() is unsupported (WebKit bug 303885);
+      // the WebKit presentation mode is the reliable path on Apple mobile.
+      if (appleMobile && video.webkitSupportsPresentationMode?.('picture-in-picture') && video.webkitSetPresentationMode) {
+        video.webkitSetPresentationMode(
+          video.webkitPresentationMode === 'picture-in-picture' ? 'inline' : 'picture-in-picture',
+        );
+        return;
+      }
+      if (document.pictureInPictureEnabled && video.requestPictureInPicture) {
         await video.requestPictureInPicture();
-      } else if (video.webkitSupportsPresentationMode?.('picture-in-picture')) {
-        video.webkitSetPresentationMode?.(video.webkitPresentationMode === 'picture-in-picture' ? 'inline' : 'picture-in-picture');
       }
     } catch {
       console.error('Picture-in-Picture non disponibile.');
@@ -702,7 +727,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       onMouseMove={showControlsTemporarily}
       className={`transition-all duration-300 ${
         isWindowFullscreen
-          ? 'fixed inset-0 z-[99999] w-screen h-screen bg-black flex items-center justify-center select-none overflow-hidden'
+          ? 'fixed inset-0 z-[99999] w-screen h-screen bg-black flex items-center justify-center select-none overflow-hidden safe-area-screen'
           : 'relative w-full bg-black select-none overflow-hidden rounded-3xl shadow-2xl border border-separator aspect-video max-h-[72vh] flex items-center justify-center group mx-auto'
       }`}
     >
@@ -710,6 +735,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       <video
         ref={videoRef}
         playsInline
+        x-webkit-airplay="allow"
         preload="metadata"
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
@@ -1199,16 +1225,19 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
               </div>
             )}
 
-            {/* PiP Button */}
-            <button
-              onClick={togglePiP}
-              className={`flex items-center justify-center text-label-secondary hover:text-label hover:bg-white/10 rounded-2xl transition cursor-pointer ${
-                isMobile ? 'w-10 h-10 p-0' : 'p-2 sm:p-2.5'
-              }`}
-              title="Picture in Picture (Finestra fluttuante)"
-            >
-              <Cast className="w-5 h-5 sm:w-6 sm:h-6" />
-            </button>
+            {/* PiP Button: on Apple mobile only when the video element can
+                actually enter Picture-in-Picture. */}
+            {showPipButton && (
+              <button
+                onClick={togglePiP}
+                className={`flex items-center justify-center text-label-secondary hover:text-label hover:bg-white/10 rounded-2xl transition cursor-pointer ${
+                  isMobile ? 'w-10 h-10 p-0' : 'p-2 sm:p-2.5'
+                }`}
+                title="Picture in Picture (Finestra fluttuante)"
+              >
+                <PictureInPicture2 className="w-5 h-5 sm:w-6 sm:h-6" />
+              </button>
+            )}
 
             {/* Fullscreen Button */}
             <button
