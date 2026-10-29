@@ -4,16 +4,35 @@ import { Star, Clock, Play, Trash2, Film, Tv, Radio } from 'lucide-react';
 import { PlayableMediaItem } from '../types/xtream';
 import { storage, WatchHistoryItem } from '../services/storage';
 import { getSecureImageUrl } from '../utils/imageUrl';
+import { isTvEnvironment } from '../utils/downloadHelper';
+import { MovieDetailModal } from './MovieDetailModal';
+import { useTouchCardMode } from '../utils/useTouchCardMode';
+import { showsHoverVeil } from '../utils/touchDevice';
 
 interface FavoritesViewProps {
   onPlay: (item: PlayableMediaItem) => void;
   onOpenSeries: (seriesId: string | number) => void;
   accountKey?: string;
+  /** Optional Xtream credentials: they add plot and metadata to the movie sheet. */
+  serverUrl?: string;
+  username?: string;
+  password?: string;
 }
 
-export const FavoritesView: React.FC<FavoritesViewProps> = ({ onPlay, onOpenSeries, accountKey }) => {
+export const FavoritesView: React.FC<FavoritesViewProps> = ({
+  onPlay,
+  onOpenSeries,
+  accountKey,
+  serverUrl,
+  username,
+  password,
+}) => {
   const [favorites, setFavorites] = useState<PlayableMediaItem[]>([]);
   const [history, setHistory] = useState<WatchHistoryItem[]>([]);
+  const [activeMovie, setActiveMovie] = useState<PlayableMediaItem | null>(null);
+  const isTv = isTvEnvironment();
+  // Touch cards (TV excluded) open the movie sheet instead of playing at once.
+  const touchCardMode = useTouchCardMode(isTv);
 
   const loadData = () => {
     setFavorites(storage.getFavorites(accountKey));
@@ -36,6 +55,29 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({ onPlay, onOpenSeri
       setHistory([]);
     }
   };
+
+  const openFavorite = (item: PlayableMediaItem) => {
+    if (item.type === 'series') {
+      onOpenSeries(item.id.replace(/^series_/, ''));
+      return;
+    }
+    if (item.type === 'movie' && touchCardMode) {
+      setActiveMovie(item);
+      return;
+    }
+    // Live channels keep starting with a single tap, also on touch.
+    onPlay(item);
+  };
+
+  const movieDetailTarget = activeMovie
+    ? {
+        id: activeMovie.id.replace(/^movie_/, ''),
+        title: activeMovie.title,
+        poster: activeMovie.poster,
+        containerExtension: activeMovie.containerExtension,
+        streamUrl: activeMovie.streamUrl,
+      }
+    : null;
 
   const formatTime = (secs: number) => {
     if (isNaN(secs) || secs <= 0) return '00:00';
@@ -143,9 +185,7 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({ onPlay, onOpenSeri
             {favorites.map((item) => (
               <div
                 key={item.id}
-                onClick={() => item.type === 'series'
-                  ? onOpenSeries(item.id.replace(/^series_/, ''))
-                  : onPlay(item)}
+                onClick={() => openFavorite(item)}
                 className="group relative bg-surface-0 border border-separator hover:border-favorite/60 rounded-2xl overflow-hidden shadow-lg transition-all cursor-pointer flex flex-col justify-between hover:-translate-y-1"
               >
                 <div className="relative aspect-2/3 bg-surface-0 flex items-center justify-center overflow-hidden">
@@ -171,11 +211,15 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({ onPlay, onOpenSeri
                     <Star className="w-4 h-4 fill-favorite" />
                   </button>
 
+                  {/* Hover veil (desktop/TV only): on touch it is invisible but
+                      would still swallow the tap aimed at the card. */}
+                  {showsHoverVeil(touchCardMode) && (
                   <div className="absolute inset-0 bg-surface-1/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
                     <div className="w-12 h-12 rounded-full bg-accent flex items-center justify-center text-on-accent shadow-xl transform group-hover:scale-110 transition">
                       <Play className="w-6 h-6 ml-0.5 fill-white" />
                     </div>
                   </div>
+                  )}
                 </div>
 
                 <div className="p-3">
@@ -196,6 +240,21 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({ onPlay, onOpenSeri
           </div>
         )}
       </div>
+
+      {/* Shared movie sheet, opened by a tap on a touch device. */}
+      <MovieDetailModal
+        movie={movieDetailTarget}
+        credentials={
+          serverUrl && username && password ? { serverUrl, username, password } : null
+        }
+        accountKey={accountKey}
+        onClose={() => setActiveMovie(null)}
+        onPlay={(movie) => {
+          const item = activeMovie ?? favorites.find((favorite) => favorite.id === `movie_${movie.id}`);
+          setActiveMovie(null);
+          if (item) onPlay(item);
+        }}
+      />
     </div>
   );
 };

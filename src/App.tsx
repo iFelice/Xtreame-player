@@ -17,6 +17,7 @@ import { RecentProductsShelf } from './components/RecentProductsShelf';
 import { SettingsSyncModal } from './components/SettingsSyncModal';
 import { RemoteLoginView } from './components/RemoteLoginView';
 import { MobileSectionBar } from './components/MobileSectionBar';
+import { StandaloneNotice } from './components/StandaloneNotice';
 
 import {
   XtreamParsedUrl,
@@ -419,7 +420,7 @@ export default function App() {
     <div className="min-h-screen bg-surface-0 text-label flex flex-col selection:bg-accent/15 selection:text-accent-strong w-full max-w-full overflow-x-clip">
       <div className="sticky top-0 z-40">
         {safeMode && (
-          <div className="flex items-center justify-center gap-2 border-b border-accent/40 bg-accent px-3 py-1.5 text-xs font-bold tracking-[0.16em] text-on-accent shadow-lg" role="status">
+          <div className="flex items-center justify-center gap-2 border-b border-accent/40 bg-accent safe-area-banner text-xs font-bold tracking-[0.16em] text-on-accent shadow-lg" role="status">
             <span className="h-2 w-2 rounded-full bg-on-accent" aria-hidden="true" />
             MODALITÀ SICURA · MOCK LOCALE
           </div>
@@ -438,7 +439,7 @@ export default function App() {
         />
       </div>
       {downloadFeedback && (
-        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[100] max-w-[90vw] px-5 py-3 rounded-2xl bg-surface-0/95 border border-series/70 text-label shadow-2xl flex items-center gap-3">
+        <div className="fixed top-5 mt-[env(safe-area-inset-top)] left-1/2 -translate-x-1/2 z-[100] max-w-[90vw] px-5 py-3 rounded-2xl bg-surface-0/95 border border-series/70 text-label shadow-2xl flex items-center gap-3">
           {downloadFeedback.status === 'finished' ? (
             <CheckCircle2 className="w-5 h-5 text-accent shrink-0" />
           ) : (
@@ -459,6 +460,9 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className={`flex-1 w-full max-w-[2400px] mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-6 overflow-x-hidden ${showMobileBar ? 'pb-[calc(56px+env(safe-area-inset-bottom)+1.5rem)] md:pb-6' : ''}`}>
+        {/* One-time notice: PiP and downloads need a Safari tab, not the Home Screen app. */}
+        <StandaloneNotice />
+
         {/* Refresh Success Notification Banner */}
         {refreshSuccessMessage && (
           <div className="p-4 rounded-2xl bg-accent/15 border border-accent/40 text-label flex items-center justify-between gap-3 animate-in fade-in shadow-xl">
@@ -740,6 +744,9 @@ export default function App() {
                   setActiveTab('series');
                 }}
                 accountKey={currentAccountKey}
+                serverUrl={serverUrl}
+                username={username}
+                password={password}
               />
             )}
           </div>

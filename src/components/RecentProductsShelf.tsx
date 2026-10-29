@@ -23,6 +23,10 @@ import { storage } from '../services/storage';
 import { isTvEnvironment, triggerMediaDownload } from '../utils/downloadHelper';
 import { getSecureImageUrl } from '../utils/imageUrl';
 import { STATIC_DEPLOY } from '../utils/deployTarget';
+import { AppleDownloadLink } from './AppleDownloadLink';
+import { MovieDetailModal } from './MovieDetailModal';
+import { useTouchCardMode } from '../utils/useTouchCardMode';
+import { showsHoverVeil } from '../utils/touchDevice';
 
 interface RecentProductsShelfProps {
   vodStreams: XtreamVodStream[];
@@ -46,6 +50,9 @@ export const RecentProductsShelf: React.FC<RecentProductsShelfProps> = ({
   onNavigateToTab,
 }) => {
   const isTv = isTvEnvironment();
+  // Touch cards open the movie sheet on a tap instead of playing at once.
+  const touchCardMode = useTouchCardMode(isTv);
+  const [activeMovieDetail, setActiveMovieDetail] = useState<XtreamVodStream | null>(null);
   const [activeType, setActiveType] = useState<'movies' | 'series'>('movies');
   const [displayCount, setDisplayCount] = useState<number>(18);
 
@@ -84,6 +91,28 @@ export const RecentProductsShelf: React.FC<RecentProductsShelfProps> = ({
 
     onPlay(mediaItem);
   };
+
+  const openMovieDetail = (movie: XtreamVodStream) => {
+    setActiveMovieDetail(movie);
+  };
+
+  const movieDetailTarget = activeMovieDetail
+    ? {
+        id: activeMovieDetail.stream_id,
+        title: activeMovieDetail.name,
+        poster: activeMovieDetail.stream_icon,
+        containerExtension: activeMovieDetail.container_extension,
+        streamUrl: buildStreamUrl(
+          serverUrl,
+          username,
+          password,
+          'movie',
+          activeMovieDetail.stream_id,
+          activeMovieDetail.container_extension || 'mp4',
+          false
+        ),
+      }
+    : null;
 
   if (vodStreams.length === 0 && seriesList.length === 0) return null;
 
@@ -151,7 +180,7 @@ export const RecentProductsShelf: React.FC<RecentProductsShelfProps> = ({
             return (
               <div
                 key={movie.stream_id}
-                onClick={() => handlePlayMovie(movie)}
+                onClick={() => (touchCardMode ? openMovieDetail(movie) : handlePlayMovie(movie))}
                 className="group relative bg-surface-0 border border-separator/90 hover:border-accent/60 rounded-xl overflow-hidden shadow-lg transition-all duration-300 hover:-translate-y-1 flex flex-col cursor-pointer"
               >
                 {/* Poster */}
@@ -222,7 +251,27 @@ export const RecentProductsShelf: React.FC<RecentProductsShelfProps> = ({
                     />
                   </button>
 
-                  {/* Hover play & download buttons */}
+                  {/* Static Apple build: long-press on the direct file link.
+                      Kept outside the hover veil, which is not rendered on touch. */}
+                  <div className="absolute bottom-2 right-2 z-10">
+                    <AppleDownloadLink
+                      streamUrl={buildStreamUrl(
+                        serverUrl,
+                        username,
+                        password,
+                        'movie',
+                        movie.stream_id,
+                        movie.container_extension || 'mp4',
+                        false
+                      )}
+                      containerExtension={movie.container_extension}
+                      variant="compact"
+                    />
+                  </div>
+
+                  {/* Hover play & download buttons (desktop/TV only: on touch it
+                      would be invisible but still receive taps). */}
+                  {showsHoverVeil(touchCardMode) && (
                   <div className="absolute inset-0 bg-surface-1/70 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
                     <div className="w-11 h-11 rounded-full bg-accent flex items-center justify-center text-on-accent shadow-xl transform group-hover:scale-110 transition">
                       <Play className="w-5 h-5 ml-0.5 fill-white" />
@@ -257,7 +306,9 @@ export const RecentProductsShelf: React.FC<RecentProductsShelfProps> = ({
                         <Download className="w-4 h-4" />
                       </button>
                     )}
+
                   </div>
+                  )}
                 </div>
 
                 {/* Info */}
@@ -347,13 +398,15 @@ export const RecentProductsShelf: React.FC<RecentProductsShelfProps> = ({
                     />
                   </button>
 
-                  {/* Hover Open Episodes overlay */}
+                  {/* Hover Open Episodes overlay (desktop/TV only). */}
+                  {showsHoverVeil(touchCardMode) && (
                   <div className="absolute inset-0 bg-surface-1/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                     <div className="px-3 py-1.5 rounded-xl bg-series text-on-accent text-xs font-semibold flex items-center gap-1.5 shadow-xl">
                       <Play className="w-3.5 h-3.5 fill-white" />
                       Vedi Episodi
                     </div>
                   </div>
+                  )}
                 </div>
 
                 {/* Info */}
@@ -394,6 +447,17 @@ export const RecentProductsShelf: React.FC<RecentProductsShelfProps> = ({
           <ChevronRight className="w-4 h-4" />
         </button>
       </div>
+
+      {/* Shared movie sheet, opened by a tap on a touch device. */}
+      <MovieDetailModal
+        movie={movieDetailTarget}
+        credentials={{ serverUrl, username, password }}
+        onClose={() => setActiveMovieDetail(null)}
+        onPlay={() => {
+          if (activeMovieDetail) handlePlayMovie(activeMovieDetail);
+          setActiveMovieDetail(null);
+        }}
+      />
     </section>
   );
 };

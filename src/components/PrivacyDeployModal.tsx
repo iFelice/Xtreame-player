@@ -43,7 +43,7 @@ npm run dev
 http://localhost:3000`;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 overflow-y-auto">
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center safe-area-overlay-lg overflow-y-auto">
       <div className="relative w-full max-w-2xl glass border border-glass-edge rounded-3xl overflow-hidden shadow-2xl animate-in fade-in duration-200 my-8">
         {/* Header */}
         <div className="p-6 border-b border-separator flex items-start justify-between gap-4">

@@ -29,6 +29,9 @@ import { getSecureImageUrl } from '../utils/imageUrl';
 import { VirtualizedMediaGrid } from './VirtualizedMediaGrid';
 import { ListPositionIndicator } from './ListPositionIndicator';
 import { triggerMediaDownload, isTvEnvironment } from '../utils/downloadHelper';
+import { AppleDownloadLink } from './AppleDownloadLink';
+import { useTouchCardMode } from '../utils/useTouchCardMode';
+import { showsHoverVeil } from '../utils/touchDevice';
 import { CollapsibleCategoryPanel } from './CollapsibleCategoryPanel';
 import { STATIC_DEPLOY } from '../utils/deployTarget';
 
@@ -62,6 +65,9 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
   const [, refreshFavorites] = useState(0);
   const seriesListRef = useRef<HTMLDivElement | null>(null);
   const isTv = isTvEnvironment();
+  // Touch cards (TV excluded) open the series on a tap and must not render the
+  // hover veil: it is invisible there but would still receive the taps.
+  const touchCardMode = useTouchCardMode(isTv);
 
   // Always default to the first category to avoid freezing with 4,000+ series
   const [selectedCategory, setSelectedCategory] = useState<string>(() => {
@@ -369,13 +375,15 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                         <Star className={`w-4 h-4 ${isFav ? 'fill-favorite text-favorite' : ''}`} />
                       </button>
 
-                      {/* Hover Overlay */}
+                      {/* Hover Overlay (desktop/TV only) */}
+                      {showsHoverVeil(touchCardMode) && (
                       <div className="absolute inset-0 bg-surface-1/75 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col items-center justify-center p-3 gap-2">
                         <span className="px-4 py-2 rounded-xl bg-series hover:brightness-110 text-on-accent text-xs font-bold flex items-center gap-1.5 shadow-lg transform transition hover:scale-105">
                           <Play className="w-4 h-4 fill-white" />
                           Sfoglia Episodi
                         </span>
                       </div>
+                      )}
                     </div>
 
                     {/* Card Title & Info */}
@@ -402,7 +410,7 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
 
       {/* Episode Selection Modal */}
       {activeSeriesDetail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/50 animate-in fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center safe-area-overlay bg-black/50 animate-in fade-in">
           <div className="glass border border-glass-edge rounded-3xl max-w-4xl w-full overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
             {/* Modal Header */}
             <div className="p-4 sm:p-5 border-b border-separator flex items-center justify-between">
@@ -527,6 +535,21 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                                 <Download className="w-4 h-4" />
                               </button>
                             )}
+
+                            {/* Static Apple build: long-press on the direct file link. */}
+                            <AppleDownloadLink
+                              streamUrl={buildStreamUrl(
+                                serverUrl,
+                                username,
+                                password,
+                                'series',
+                                ep.id,
+                                ep.container_extension || 'mp4',
+                                false
+                              )}
+                              containerExtension={ep.container_extension}
+                              variant="compact"
+                            />
 
                             <button
                               onClick={() =>
