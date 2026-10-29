@@ -29,8 +29,6 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
-import androidx.compose.ui.test.swipeLeft
-import androidx.compose.ui.test.swipeRight
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import it.felixvision.mobile.AppContainer
@@ -272,11 +270,12 @@ class PlayerScreenTest {
         }
 
         rule.onNodeWithTag("gesture_surface").performTouchInput {
-            swipeLeft(
-                start = androidx.compose.ui.geometry.Offset(500f, 600f),
-                end = androidx.compose.ui.geometry.Offset(200f, 600f),
-                durationMillis = 100L,
+            down(position = androidx.compose.ui.geometry.Offset(500f, 600f))
+            moveTo(
+                position = androidx.compose.ui.geometry.Offset(200f, 600f),
+                delayMillis = 100L,
             )
+            up()
         }
         rule.onNodeWithText("Next channels: 1").assertIsDisplayed()
     }
@@ -301,11 +300,12 @@ class PlayerScreenTest {
         }
 
         rule.onNodeWithTag("gesture_surface").performTouchInput {
-            swipeRight(
-                start = androidx.compose.ui.geometry.Offset(300f, 600f),
-                end = androidx.compose.ui.geometry.Offset(600f, 600f),
-                durationMillis = 100L,
+            down(position = androidx.compose.ui.geometry.Offset(300f, 600f))
+            moveTo(
+                position = androidx.compose.ui.geometry.Offset(600f, 600f),
+                delayMillis = 100L,
             )
+            up()
         }
         assertTrue(seekedTo.get() > 20_000L)
         rule.onNodeWithText("Position: 20000").assertDoesNotExist()
