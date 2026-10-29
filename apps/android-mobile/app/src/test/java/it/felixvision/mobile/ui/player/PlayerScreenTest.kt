@@ -23,6 +23,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.doubleClick
+import androidx.compose.ui.test.fetchSemanticsNode
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -309,10 +310,16 @@ class PlayerScreenTest {
         }
         assertTrue(seekedTo.get() > 20_000L)
         rule.mainClock.advanceTimeByFrame()
+        val surfaceBounds = rule.onNodeWithTag("gesture_surface").fetchSemanticsNode().boundsInRoot
         rule.onNodeWithTag("gesture_surface").performTouchInput {
-            doubleClick(androidx.compose.ui.geometry.Offset(700f, 600f))
+            doubleClick(
+                androidx.compose.ui.geometry.Offset(
+                    surfaceBounds.width * .85f,
+                    surfaceBounds.height * .5f,
+                ),
+            )
         }
-        rule.mainClock.advanceTimeByFrame()
+        rule.mainClock.advanceTimeBy(500L)
         rule.onNodeWithText("+10 s").assertIsDisplayed()
         rule.mainClock.advanceTimeBy(1_600L)
         rule.onNodeWithText("+10 s").assertDoesNotExist()
