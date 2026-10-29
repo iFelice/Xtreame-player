@@ -25,6 +25,7 @@ import { buildStreamUrl, formatDuration } from '../utils/parseXtreamUrl';
 import { xtreamClient } from '../services/xtreamClient';
 import { storage } from '../services/storage';
 import { sortSeriesList } from '../utils/recentSorting';
+import { buildSearchIndex, filterRankedEntries, hasMinQueryLength } from '../utils/catalogSearch';
 import { getSecureImageUrl } from '../utils/imageUrl';
 import { VirtualizedMediaGrid } from './VirtualizedMediaGrid';
 import { ListPositionIndicator } from './ListPositionIndicator';
@@ -123,8 +124,23 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
     return categories.find((c) => String(c.category_id) === String(selectedCategory));
   }, [categories, selectedCategory]);
 
-  // Filtered and sorted series for selected category only
+  // I nomi normalizzati si calcolano una volta sola per catalogo.
+  const searchIndex = useMemo(() => buildSearchIndex(seriesList, (item) => item.name), [seriesList]);
+
+  /**
+   * Da 2 caratteri in su la ricerca guarda TUTTE le categorie della sezione,
+   * con le stesse regole della ricerca dell'app Android TV. In modalità TV la
+   * navigazione a telecomando resta quella di sempre, categoria per categoria.
+   */
+  const allCategoriesMatches = useMemo(() => {
+    if (isTv) return null;
+    if (!hasMinQueryLength(searchQuery)) return null;
+    return filterRankedEntries(searchIndex, searchQuery);
+  }, [isTv, searchQuery, searchIndex]);
+
+  // Filtered and sorted series: tutte le categorie, oppure la categoria scelta
   const filteredSeries = useMemo(() => {
+    if (allCategoriesMatches) return allCategoriesMatches;
     if (!selectedCategory) return [];
     const matched = seriesList.filter((item) => {
       if (String(item.category_id) !== String(selectedCategory)) return false;
@@ -133,7 +149,7 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
     });
 
     return sortSeriesList(matched, sortBy);
-  }, [seriesList, selectedCategory, searchQuery, sortBy]);
+  }, [allCategoriesMatches, seriesList, selectedCategory, searchQuery, sortBy]);
 
   // Natural list order preserved (all series visible and naturally scrollable)
   const visibleSeries = filteredSeries;
@@ -226,6 +242,11 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                 <Tv className="w-7 h-7 text-series shrink-0" />
                 <span className="truncate">{currentCategory?.category_name || 'Serie TV'}</span>
               </h2>
+              {allCategoriesMatches && (
+                <p data-search-scope="all-categories" className="text-xs font-bold text-series mt-1">
+                  Risultati in tutte le categorie
+                </p>
+              )}
               <ListPositionIndicator
                 scrollRef={seriesListRef}
                 total={filteredSeries.length}
@@ -237,19 +258,23 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
 
             {/* Controls: Sort, Search & Scroll Arrows */}
             <div className="flex flex-wrap items-center gap-3 shrink-0">
-              <div className="flex items-center gap-2 bg-surface-0 border border-separator rounded-2xl px-3 py-2 text-xs sm:text-sm font-semibold">
-                <ArrowDownUp className="w-4 h-4 text-label-secondary shrink-0" />
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as any)}
-                  className="bg-transparent text-label text-xs sm:text-sm font-bold focus:outline-hidden cursor-pointer"
-                >
-                  <option value="recent">🕒 Più Recenti</option>
-                  <option value="rating">⭐ Valutazione</option>
-                  <option value="name">🔤 Titolo (A-Z)</option>
-                  <option value="id">🔢 ID</option>
-                </select>
-              </div>
+              {/* Ordinamento della categoria: con la ricerca su tutte le
+                  categorie vale l'ordine della ricerca (prefisso → contiene). */}
+              {!allCategoriesMatches && (
+                <div className="flex items-center gap-2 bg-surface-0 border border-separator rounded-2xl px-3 py-2 text-xs sm:text-sm font-semibold">
+                  <ArrowDownUp className="w-4 h-4 text-label-secondary shrink-0" />
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as any)}
+                    className="bg-transparent text-label text-xs sm:text-sm font-bold focus:outline-hidden cursor-pointer"
+                  >
+                    <option value="recent">🕒 Più Recenti</option>
+                    <option value="rating">⭐ Valutazione</option>
+                    <option value="name">🔤 Titolo (A-Z)</option>
+                    <option value="id">🔢 ID</option>
+                  </select>
+                </div>
+              )}
 
               <div className="relative flex-1 sm:w-72">
                 <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-label-secondary" />
@@ -257,7 +282,7 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Cerca serie TV in questa categoria..."
+                  placeholder="Cerca serie TV in tutte le categorie..."
                   className="w-full pl-12 pr-4 py-2.5 bg-surface-0 border border-separator-strong/80 rounded-2xl text-xs sm:text-base text-label placeholder-label-tertiary focus:outline-hidden focus:border-series transition shadow-inner font-medium"
                 />
               </div>
@@ -295,7 +320,9 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
             ) : filteredSeries.length === 0 ? (
               <div className="py-20 text-center text-label-secondary bg-surface-0/30 rounded-2xl border border-dashed border-separator">
                 <Tv className="w-14 h-14 mx-auto text-label-tertiary mb-3" />
-                <p className="text-base font-semibold text-label-secondary">Nessuna serie TV trovata in questa categoria</p>
+                <p className="text-base font-semibold text-label-secondary">
+                  {allCategoriesMatches ? 'Nessuna serie TV trovata' : 'Nessuna serie TV trovata in questa categoria'}
+                </p>
                 <p className="text-xs text-label-tertiary mt-1">
                   {searchQuery ? 'Prova a modificare i termini di ricerca' : 'Seleziona un\'altra categoria a sinistra'}
                 </p>

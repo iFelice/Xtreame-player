@@ -43,6 +43,7 @@ const VodCatalog = lazy(() => import('./components/VodCatalog').then((module) =>
 const LiveCatalog = lazy(() => import('./components/LiveCatalog').then((module) => ({ default: module.LiveCatalog })));
 const SeriesCatalog = lazy(() => import('./components/SeriesCatalog').then((module) => ({ default: module.SeriesCatalog })));
 const FavoritesView = lazy(() => import('./components/FavoritesView').then((module) => ({ default: module.FavoritesView })));
+const SearchPage = lazy(() => import('./components/SearchPage').then((module) => ({ default: module.SearchPage })));
 
 export default function App() {
   const isTv = isTvEnvironment();
@@ -59,6 +60,8 @@ export default function App() {
   const [activeMedia, setActiveMedia] = useState<PlayableMediaItem | null>(null);
   const [isPlayerFullscreen, setIsPlayerFullscreen] = useState<boolean>(false);
   const [selectedSeriesForModal, setSelectedSeriesForModal] = useState<string | number | null>(null);
+  // Cerca su tutto il catalogo: vista dedicata, mai in modalità TV.
+  const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
 
   const [isLoadingCatalog, setIsLoadingCatalog] = useState<boolean>(false);
   const [isRefreshingCatalog, setIsRefreshingCatalog] = useState<boolean>(false);
@@ -318,6 +321,12 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // Qualsiasi cambio di sezione chiude la ricerca: si torna alla vista normale.
+  const handleSelectTab = (tab: SectionTab) => {
+    setActiveTab(tab);
+    setIsSearchOpen(false);
+  };
+
   const handleSelectSavedAccount = (account: SavedAccount) => {
     connectToServer(account.serverUrl, account.username, account.password, account.originalLink);
   };
@@ -337,6 +346,7 @@ export default function App() {
     setActiveMedia(null);
     setErrorMessage(null);
     setRefreshSuccessMessage(null);
+    setIsSearchOpen(false);
   };
 
   const handleNextChannel = () => {
@@ -436,6 +446,8 @@ export default function App() {
           onRefreshCatalog={handleRefreshCatalog}
           isRefreshingCatalog={isRefreshingCatalog}
           lastRefreshedAt={lastRefreshedAt}
+          onOpenSearch={isConnected && !isTv ? () => setIsSearchOpen(true) : undefined}
+          isSearchOpen={isSearchOpen}
         />
       </div>
       {downloadFeedback && (
@@ -567,7 +579,7 @@ export default function App() {
               )}
               {/* 1. Live TV */}
               <button
-                onClick={() => setActiveTab('live')}
+                onClick={() => handleSelectTab('live')}
                 className={`flex items-center gap-2.5 px-4 sm:px-5 py-2.5 rounded-2xl text-sm sm:text-base font-bold transition cursor-pointer shadow-md ${
                   activeTab === 'live'
                     ? 'bg-live text-on-accent  scale-105'
@@ -583,7 +595,7 @@ export default function App() {
 
               {/* 2. Film & VOD */}
               <button
-                onClick={() => setActiveTab('movies')}
+                onClick={() => handleSelectTab('movies')}
                 className={`flex items-center gap-2.5 px-4 sm:px-5 py-2.5 rounded-2xl text-sm sm:text-base font-bold transition cursor-pointer shadow-md ${
                   activeTab === 'movies'
                     ? 'bg-accent text-on-accent  scale-105'
@@ -599,7 +611,7 @@ export default function App() {
 
               {/* 3. Serie TV */}
               <button
-                onClick={() => setActiveTab('series')}
+                onClick={() => handleSelectTab('series')}
                 className={`flex items-center gap-2.5 px-4 sm:px-5 py-2.5 rounded-2xl text-sm sm:text-base font-bold transition cursor-pointer shadow-md ${
                   activeTab === 'series'
                     ? 'bg-series text-on-accent  scale-105'
@@ -615,7 +627,7 @@ export default function App() {
 
               {/* 4. Novità & Recenti */}
               <button
-                onClick={() => setActiveTab('recent')}
+                onClick={() => handleSelectTab('recent')}
                 className={`flex items-center gap-2.5 px-4 sm:px-5 py-2.5 rounded-2xl text-sm sm:text-base font-bold transition cursor-pointer shadow-md ${
                   activeTab === 'recent'
                     ? 'bg-fresh text-on-accent scale-105'
@@ -628,7 +640,7 @@ export default function App() {
 
               {/* 5. Preferiti & Continua a Guardare */}
               <button
-                onClick={() => setActiveTab('favorites')}
+                onClick={() => handleSelectTab('favorites')}
                 className={`flex items-center gap-2.5 px-4 sm:px-5 py-2.5 rounded-2xl text-sm sm:text-base font-bold transition cursor-pointer shadow-md ${
                   activeTab === 'favorites'
                     ? 'bg-favorite hover:brightness-110 text-on-accent border-2 border-favorite/80 scale-105'
@@ -672,6 +684,26 @@ export default function App() {
               Caricamento categorie, canali in diretta, film VOD e serie TV per l'account specificato.
             </p>
           </div>
+        ) : isSearchOpen && isConnected ? (
+          /* Cerca su tutto il catalogo: Live, Film e Serie in un'unica vista. */
+          <Suspense fallback={<div className="mt-4 py-16 text-center text-label-secondary">Caricamento ricerca…</div>}>
+            <SearchPage
+              liveStreams={liveStreams}
+              movies={vodStreams}
+              seriesList={seriesList}
+              serverUrl={serverUrl}
+              username={username}
+              password={password}
+              onPlay={handlePlayDirect}
+              onOpenSeries={(series) => {
+                setSelectedSeriesForModal(series.series_id);
+                handleSelectTab('series');
+              }}
+              onClose={() => setIsSearchOpen(false)}
+              activeMediaId={activeMedia?.id}
+              accountKey={currentAccountKey}
+            />
+          </Suspense>
         ) : isConnected ? (
           isTv && showTvHome ? null : (
           <Suspense fallback={<div className="mt-4 py-16 text-center text-label-secondary">Caricamento sezione…</div>}>
@@ -730,9 +762,9 @@ export default function App() {
                 onPlay={handlePlayDirect}
                 onOpenSeries={(series) => {
                   setSelectedSeriesForModal(series.series_id);
-                  setActiveTab('series');
+                  handleSelectTab('series');
                 }}
-                onNavigateToTab={(tab) => setActiveTab(tab)}
+                onNavigateToTab={(tab) => handleSelectTab(tab)}
               />
             )}
 
@@ -741,7 +773,7 @@ export default function App() {
                 onPlay={handlePlayDirect}
                 onOpenSeries={(seriesId) => {
                   setSelectedSeriesForModal(seriesId);
-                  setActiveTab('series');
+                  handleSelectTab('series');
                 }}
                 accountKey={currentAccountKey}
                 serverUrl={serverUrl}
@@ -799,7 +831,7 @@ export default function App() {
       {showMobileBar && (
         <MobileSectionBar
           activeTab={activeTab}
-          onSelect={(tab) => setActiveTab(tab)}
+          onSelect={(tab) => handleSelectTab(tab)}
         />
       )}
     </div>

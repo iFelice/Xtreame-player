@@ -103,6 +103,13 @@ body.tv-mode .glass {
   padding-left: max(1rem, env(safe-area-inset-left, 0px));
 }
 
+/* In-page view under the sticky header (Cerca): only the sides, because the
+   top inset belongs to the header and the bottom one to the section bar. */
+@utility safe-area-page {
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
 /* Full-window surfaces (full screen player): keep content inside the notch and
    the home indicator without changing anything when env() is 0. */
 @utility safe-area-screen {

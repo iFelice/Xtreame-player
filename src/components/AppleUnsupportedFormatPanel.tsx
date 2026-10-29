@@ -2,10 +2,13 @@ import React, { useState } from 'react';
 import { AlertCircle, Copy, ExternalLink, X } from 'lucide-react';
 import { getDirectStreamUrl } from '../utils/streamUrl';
 import { buildVlcUrl } from '../utils/vlc';
+import { AppleDownloadLink } from './AppleDownloadLink';
 
 interface AppleUnsupportedFormatPanelProps {
   streamUrl: string;
   title: string;
+  /** MKV/AVI: in una scheda di Safari il link diretto permette di scaricare. */
+  containerExtension?: string;
   onClose: () => void;
 }
 
@@ -40,6 +43,7 @@ async function copyLink(text: string): Promise<boolean> {
 export const AppleUnsupportedFormatPanel: React.FC<AppleUnsupportedFormatPanelProps> = ({
   streamUrl,
   title,
+  containerExtension,
   onClose,
 }) => {
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'error'>('idle');
@@ -66,6 +70,8 @@ export const AppleUnsupportedFormatPanel: React.FC<AppleUnsupportedFormatPanelPr
               Apri in VLC
             </a>
           )}
+          {/* In una scheda di Safari il link diretto fa comparire «Scarica». */}
+          <AppleDownloadLink streamUrl={streamUrl} containerExtension={containerExtension} />
           <button type="button" onClick={() => void handleCopy()} className="flex items-center gap-2 rounded-xl border border-separator-strong bg-surface-1 px-4 py-3 text-sm font-bold hover:bg-surface-2">
             <Copy className="h-4 w-4" /> Copia link
           </button>

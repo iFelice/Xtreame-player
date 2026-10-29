@@ -717,7 +717,15 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
 
   if (!media) return null;
   if (needsExternalPlayer) {
-    return <AppleUnsupportedFormatPanel key={`${media.type}-${media.id}`} streamUrl={media.streamUrl} title={media.title} onClose={onClose} />;
+    return (
+      <AppleUnsupportedFormatPanel
+        key={`${media.type}-${media.id}`}
+        streamUrl={media.streamUrl}
+        title={media.title}
+        containerExtension={media.containerExtension}
+        onClose={onClose}
+      />
+    );
   }
 
   return (

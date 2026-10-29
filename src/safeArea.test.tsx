@@ -79,7 +79,7 @@ afterEach(() => {
 describe('safe area utilities', () => {
   it('defines inert-by-default utilities in index.css', () => {
     const css = readFileSync(join(import.meta.dirname, 'index.css'), 'utf8');
-    for (const utility of ['safe-area-header', 'safe-area-overlay', 'safe-area-overlay-lg', 'safe-area-screen']) {
+    for (const utility of ['safe-area-header', 'safe-area-overlay', 'safe-area-overlay-lg', 'safe-area-screen', 'safe-area-page']) {
       expect(css).toContain(`@utility ${utility} {`);
     }
     // env() falls back to 0px and max() keeps the previous padding when the

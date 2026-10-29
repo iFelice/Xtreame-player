@@ -5,6 +5,23 @@ import { AppleUnsupportedFormatPanel } from './AppleUnsupportedFormatPanel';
 
 const direct = 'http://server.esempio:8080/movie/demo/demo/123.mkv';
 
+function stubAppleSafari() {
+  vi.stubEnv('MODE', 'static');
+  vi.resetModules();
+  vi.stubGlobal('navigator', {
+    userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)',
+    platform: 'iPhone',
+    maxTouchPoints: 5,
+    clipboard: { writeText: vi.fn(async () => {}) },
+  });
+  vi.stubGlobal('window', {
+    innerWidth: 390,
+    matchMedia: () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }),
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  });
+}
+
 beforeEach(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 });
@@ -36,6 +53,42 @@ describe('unsupported Safari format panel', () => {
     });
     expect(writeText).toHaveBeenCalledWith(direct);
     expect(renderer!.root.findByProps({ role: 'status' }).children.join('')).toBe('Link copiato.');
+    await act(async () => renderer!.unmount());
+  });
+
+  it('offers the direct download link next to VLC in a Safari tab', async () => {
+    stubAppleSafari();
+    const { AppleUnsupportedFormatPanel: Panel } = await import('./AppleUnsupportedFormatPanel');
+    const { APPLE_SAFARI_DOWNLOAD_HINT } = await import('./AppleDownloadLink');
+    const proxy = `/api/proxy/stream?url=${encodeURIComponent(direct)}`;
+    let renderer: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(<Panel streamUrl={proxy} title="Film" containerExtension="mkv" onClose={() => {}} />);
+    });
+
+    const links = renderer!.root.findAllByType('a');
+    // VLC first, then the download link, then the App Store.
+    expect(links[0].props.href).toBe(`vlc://${direct}`);
+    const download = links.find((link) => link.props.href === direct);
+    expect(download).toBeDefined();
+    expect(download!.props.target).toBe('_blank');
+    expect(download!.props.rel).toBe('noopener noreferrer');
+    expect(JSON.stringify(renderer!.toJSON())).toContain(APPLE_SAFARI_DOWNLOAD_HINT);
+    await act(async () => renderer!.unmount());
+  });
+
+  it('keeps the panel without a download link on desktop or in the normal build', async () => {
+    stubAppleSafari();
+    vi.stubGlobal('navigator', { userAgent: 'Macintosh', platform: 'MacIntel', maxTouchPoints: 0, clipboard: { writeText: vi.fn() } });
+    const { AppleUnsupportedFormatPanel: Panel } = await import('./AppleUnsupportedFormatPanel');
+    let renderer: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(<Panel streamUrl={direct} title="Film" containerExtension="avi" onClose={() => {}} />);
+    });
+    expect(renderer!.root.findAllByType('a').map((link) => link.props.href)).toEqual([
+      `vlc://${direct}`,
+      'https://apps.apple.com/app/vlc-media-player/id650377962',
+    ]);
     await act(async () => renderer!.unmount());
   });
 
