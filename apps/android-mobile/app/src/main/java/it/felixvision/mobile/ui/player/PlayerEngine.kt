@@ -53,6 +53,7 @@ data class MobileEpisodeRef(val id: String, val title: String, val extension: St
 
 data class MobilePlayerSession(val server: String, val username: String, val password: String, val formats: List<String>, val source: MobilePlaybackSource, val autoResume: Boolean = false, val serverTimezone: String? = null)
 
+@androidx.media3.common.util.UnstableApi
 data class MobilePlayerState(
     val playing: Boolean = false, val buffering: Boolean = true, val controls: Boolean = true,
     val position: Long = 0, val duration: Long = 0, val error: String? = null,

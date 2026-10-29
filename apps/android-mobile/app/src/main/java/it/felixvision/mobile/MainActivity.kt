@@ -12,6 +12,7 @@ import it.felixvision.mobile.ui.player.PlayerPipRegistry
 import it.felixvision.mobile.ui.player.updatePlayerPip
 import it.felixvision.mobile.ui.theme.FvpTheme
 
+@androidx.media3.common.util.UnstableApi
 class MainActivity : ComponentActivity() {
 
     private val localNetworkPermissionLauncher =
