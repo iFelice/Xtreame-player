@@ -662,11 +662,11 @@ class PlayerEngine(
     }
 
     private fun MobileEpisodeRef.toContinueEpisode(): ContinueEpisode = ContinueEpisode(
-        id = id,
-        season = season,
-        episodeNumber = episodeNumber,
+        episodeId = id,
+        seasonNumber = season,
+        episodeNum = episodeNumber,
         title = title,
-        extension = extension,
+        containerExtension = extension,
     )
 
     private fun syncSourceState() {

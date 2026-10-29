@@ -1,7 +1,6 @@
 package it.felixvision.mobile.ui.player
 
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.weight
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import it.felixvision.tv.data.epg.EpgProgram
