@@ -20,7 +20,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.doubleClick
@@ -297,7 +296,7 @@ class PlayerScreenTest {
         assertTrue(seekedTo.get() > 20_000L)
         rule.onNodeWithText("Position: 20000").assertDoesNotExist()
         rule.onNodeWithTag("gesture_surface").performTouchInput {
-            doubleClick(androidx.compose.ui.geometry.Offset(size.width * .85f, size.height * .5f))
+            doubleClick(androidx.compose.ui.geometry.Offset(700f, 600f))
         }
         rule.onNodeWithText("+10 s").assertIsDisplayed()
         rule.mainClock.advanceTimeBy(1_600L)
