@@ -77,12 +77,22 @@ jobs:
               print('::error::FVP_DEBUG_KEYSTORE_BASE64 non è Base64 valido')
               raise SystemExit(1)
           path = pathlib.Path(sys.argv[1])
-          path.write_bytes(content)
-          path.chmod(0o600)
-          check = subprocess.run(['keytool', '-list', '-keystore', str(path), '-storepass', 'android', '-alias', 'androiddebugkey'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-          if check.returncode:
+          candidate = content
+          valid = False
+          for _ in range(3):
+              path.write_bytes(candidate)
+              path.chmod(0o600)
+              check = subprocess.run(['keytool', '-list', '-keystore', str(path), '-storepass', 'android', '-alias', 'androiddebugkey'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+              if check.returncode == 0:
+                  valid = True
+                  break
+              try:
+                  candidate = base64.b64decode(candidate.strip(), validate=True)
+              except Exception:
+                  break
+          if not valid:
               path.unlink(missing_ok=True)
-              print('::error::Keystore debug non valido: verificare alias androiddebugkey e password android')
+              print('::error::Keystore debug non valido: verificare che il secret contenga il keystore con alias androiddebugkey e password android')
               raise SystemExit(1)
           PY
             echo "FVP_DEBUG_KEYSTORE_PATH=$key" >> "$GITHUB_ENV"
