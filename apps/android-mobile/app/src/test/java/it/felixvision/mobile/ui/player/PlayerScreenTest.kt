@@ -250,8 +250,10 @@ class PlayerScreenTest {
 
         rule.onNodeWithText("Controls visible").assertIsDisplayed()
         rule.onNodeWithTag("gesture_surface").performTouchInput { click() }
+        rule.mainClock.advanceTimeBy(500L)
         rule.onNodeWithText("Controls hidden").assertIsDisplayed()
         rule.onNodeWithTag("gesture_surface").performTouchInput { click() }
+        rule.mainClock.advanceTimeBy(500L)
         rule.onNodeWithText("Controls visible").assertIsDisplayed()
     }
 
@@ -269,7 +271,13 @@ class PlayerScreenTest {
             }
         }
 
-        rule.onNodeWithTag("gesture_surface").performTouchInput { swipeLeft() }
+        rule.onNodeWithTag("gesture_surface").performTouchInput {
+            swipeLeft(
+                start = androidx.compose.ui.geometry.Offset(500f, 600f),
+                end = androidx.compose.ui.geometry.Offset(200f, 600f),
+                durationMillis = 100L,
+            )
+        }
         rule.onNodeWithText("Next channels: 1").assertIsDisplayed()
     }
 
@@ -292,7 +300,13 @@ class PlayerScreenTest {
             }
         }
 
-        rule.onNodeWithTag("gesture_surface").performTouchInput { swipeRight() }
+        rule.onNodeWithTag("gesture_surface").performTouchInput {
+            swipeRight(
+                start = androidx.compose.ui.geometry.Offset(300f, 600f),
+                end = androidx.compose.ui.geometry.Offset(600f, 600f),
+                durationMillis = 100L,
+            )
+        }
         assertTrue(seekedTo.get() > 20_000L)
         rule.onNodeWithText("Position: 20000").assertDoesNotExist()
         rule.onNodeWithTag("gesture_surface").performTouchInput {

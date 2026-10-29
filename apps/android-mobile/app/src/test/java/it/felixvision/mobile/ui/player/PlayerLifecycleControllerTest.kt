@@ -212,7 +212,7 @@ class PlayerLifecycleControllerTest {
             initialSource = source,
             player = player,
             progress = progress,
-            scope = backgroundScope,
+            scope = this,
             nowMillis = nowMillis,
             keyForSource = { source ->
                 when (source) {
