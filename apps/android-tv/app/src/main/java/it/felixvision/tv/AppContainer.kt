@@ -18,6 +18,7 @@ import it.felixvision.tv.data.epg.ChannelScheduleLoader
 import it.felixvision.tv.data.images.FvpImageLoader
 import it.felixvision.tv.data.pairing.PairingClient
 import it.felixvision.tv.data.pairing.PairingCoordinator
+import it.felixvision.tv.data.playback.ChannelVideoFormatStore
 import it.felixvision.tv.data.playback.PlaybackActivityTracker
 import it.felixvision.tv.data.progress.ProgressStore
 import it.felixvision.tv.data.store.CredentialStore
@@ -102,6 +103,11 @@ class AppContainer(
     /** Livello del volume del player (0-15), ripristinato a ogni avvio. */
     val volumeStore: VolumeStore by lazy {
         VolumeStore(context = context)
+    }
+
+    /** Formato dello schermo scelto per ogni canale Live, per server+utente. */
+    val channelVideoFormatStore: ChannelVideoFormatStore by lazy {
+        ChannelVideoFormatStore(context = context)
     }
 
     /** Archivio "Continua a guardare": una voce per film e una per serie. */

@@ -55,6 +55,7 @@ import it.felixvision.tv.data.epg.ChannelScheduleLoader
 import it.felixvision.tv.data.epg.EpgProgram
 import it.felixvision.tv.data.playback.PlaybackFormatting
 import it.felixvision.tv.data.playback.SeekFeedback
+import it.felixvision.tv.data.playback.VideoFormat
 import it.felixvision.tv.data.volume.PlayerVolume
 import it.felixvision.tv.ui.components.ChannelLogoImage
 import it.felixvision.tv.ui.components.ChannelScheduleInfo
@@ -371,6 +372,7 @@ fun PlayerControlsBar(
     onAudio: () -> Unit,
     onSubtitles: () -> Unit,
     onVolume: () -> Unit,
+    onFormat: () -> Unit,
     modifier: Modifier = Modifier,
     audioFormatLabel: String = "",
     ffmpegActive: Boolean = false,
@@ -449,6 +451,12 @@ fun PlayerControlsBar(
                 onClick = onVolume,
                 scale = scale,
                 modifier = Modifier.testTag("player_volume_button"),
+            )
+            FvpPrimaryButton(
+                text = "Formato",
+                onClick = onFormat,
+                scale = scale,
+                modifier = Modifier.testTag("player_format_button"),
             )
         }
     }
@@ -647,6 +655,112 @@ private fun trackColors() = ListItemDefaults.colors(
     focusedContainerColor = FvpColors.Green,
     focusedContentColor = FvpColors.OnGreen,
 )
+
+/**
+ * Pannello del formato dello schermo, sul modello del pannello Audio e
+ * Sottotitoli: quattro voci nell'ordine di [VideoFormat], il formato in vigore
+ * è selezionato e prende il focus all'apertura, OK (o il click) lo applica.
+ */
+@Composable
+fun PlayerFormatPanel(
+    current: VideoFormat,
+    scale: UiScale,
+    onSelect: (VideoFormat) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val currentFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
+        runCatching { currentFocus.requestFocus() }
+    }
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .testTag("player_format_panel"),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth(0.56f)
+                .heightIn(max = scale.dp(480f))
+                .playerOverlay(scale)
+                .padding(scale.dp(18f)),
+            verticalArrangement = Arrangement.spacedBy(scale.dp(8f)),
+        ) {
+            Text(
+                text = "Formato schermo",
+                color = FvpColors.TextPrimary,
+                fontSize = scale.sp(20f),
+                fontWeight = FontWeight.Bold,
+            )
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(scale.dp(6f)),
+                // Ingrandimento e cornice delle voci restano nella lista.
+                contentPadding = PaddingValues(scale.focusSafePadding),
+            ) {
+                itemsIndexed(VideoFormat.entries, key = { _, format -> format.storageKey }) { _, format ->
+                    ListItem(
+                        // La voce in uso è esposta come selezionata, ma i suoi
+                        // colori restano quelli normali: il verde è solo del focus.
+                        selected = format == current,
+                        onClick = { onSelect(format) },
+                        headlineContent = {
+                            Text(
+                                text = (if (format == current) "✓ " else "") + format.label,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(if (format == current) Modifier.focusRequester(currentFocus) else Modifier)
+                            .testTag("player_format_option_${format.storageKey}"),
+                        colors = formatColors(),
+                        scale = ListItemDefaults.scale(focusedScale = 1.03f),
+                        border = ListItemDefaults.border(
+                            focusedBorder = Border(BorderStroke(2.dp, FvpColors.GreenFocus)),
+                        ),
+                        shape = ListItemDefaults.shape(shape = RoundedCornerShape(scale.dp(8f))),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun formatColors() = ListItemDefaults.colors(
+    containerColor = FvpColors.SurfaceElevated,
+    contentColor = FvpColors.TextPrimary,
+    focusedContainerColor = FvpColors.Green,
+    focusedContentColor = FvpColors.OnGreen,
+    selectedContainerColor = FvpColors.SurfaceElevated,
+    selectedContentColor = FvpColors.TextPrimary,
+    focusedSelectedContainerColor = FvpColors.Green,
+    focusedSelectedContentColor = FvpColors.OnGreen,
+)
+
+/**
+ * Etichetta "Formato: <nome>" dei due secondi dopo la scelta: stesso aspetto
+ * dell'etichetta REPLAY, in alto al centro dello schermo. Non è un pannello e
+ * non prende il focus.
+ */
+@Composable
+fun PlayerFormatIndicator(
+    format: VideoFormat,
+    scale: UiScale,
+    modifier: Modifier = Modifier,
+) {
+    Text(
+        text = "Formato: ${format.label}",
+        color = FvpColors.TextPrimary,
+        fontSize = scale.sp(16f),
+        modifier = modifier
+            .playerOverlay(scale)
+            .padding(horizontal = scale.dp(14f), vertical = scale.dp(8f))
+            .testTag("player_format_indicator"),
+    )
+}
 
 /** Errore di riproduzione: messaggio senza URL, Riprova e Indietro. */
 @Composable

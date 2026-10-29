@@ -11,6 +11,7 @@ import it.felixvision.tv.data.catalog.VodStream
 import it.felixvision.tv.data.playback.ChannelNumberOverlay
 import it.felixvision.tv.data.playback.ChannelNumbering
 import it.felixvision.tv.data.playback.SeriesPlayback
+import it.felixvision.tv.data.playback.VideoFormat
 import it.felixvision.tv.data.volume.PlayerVolume
 
 /** Contenuto scelto nella scheda di origine. Non contiene credenziali. */
@@ -135,6 +136,16 @@ data class PlayerUiState(
     val epgUnavailable: Boolean = false,
     val epgExpanded: Long? = null,
     val isReplay: Boolean = false,
+    /** Formato dello schermo in vigore: nel Live è quello del canale in onda. */
+    val videoFormat: VideoFormat = VideoFormat.FIT,
+    /** Vero mentre è aperto il pannello del formato dello schermo. */
+    val formatPanelVisible: Boolean = false,
+    /**
+     * Formato appena scelto, mostrato per 2 secondi dall'etichetta
+     * "Formato: <nome>". Non è un pannello: non entra in [hasModalOverlay] e
+     * non ruba i tasti al player.
+     */
+    val videoFormatIndicator: VideoFormat? = null,
 ) {
     val progressFraction: Float
         get() = if (durationMillis <= 0L) {
@@ -145,6 +156,7 @@ data class PlayerUiState(
 
     val hasModalOverlay: Boolean
         get() = trackPanel != null ||
+            formatPanelVisible ||
             channelListVisible ||
             epgVisible ||
             errorMessage != null ||
