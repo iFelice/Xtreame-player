@@ -158,6 +158,13 @@ jobs:
               name = f"apps/android-mobile/app/src/test/java/it/felixvision/mobile/ui/main/HomeScreenTest.kt"
               print(f"::notice file={name},line=1::test eseguiti: {tot}, falliti: {fail}, errori: {err}, superati: {tot - fail - err}")
           PY
+          # Diagnostica temporanea del blocco Gradle: rimuovere dopo aver acquisito il motivo del run fallito.
+          if [ -f /tmp/fvp-mobile-build.log ] && grep -q 'BUILD FAILED' /tmp/fvp-mobile-build.log; then
+            failure_summary=$(awk '/FAILURE: Build failed with an exception\./ {capture=1} capture {print} /BUILD FAILED/ {exit}' /tmp/fvp-mobile-build.log | tr '\n' ' ' | sed -E 's#https?://[^ ]+#<url-redacted>#g' | cut -c1-1200)
+            if [ -n "$failure_summary" ]; then
+              echo "::error title=Gradle failure::$failure_summary"
+            fi
+          fi
           # 3) errori di lint
           if [ -f apps/android-mobile/app/build/reports/lint-results-debug.txt ]; then
             sed -n -E "s|^$GITHUB_WORKSPACE/([^:]+):([0-9]+) Error: (.*)$|::error file=\1,line=\2::lint: \3|p" apps/android-mobile/app/build/reports/lint-results-debug.txt | head -10
