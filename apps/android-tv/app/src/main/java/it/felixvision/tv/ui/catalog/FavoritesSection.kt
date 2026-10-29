@@ -12,12 +12,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -97,7 +94,6 @@ import it.felixvision.tv.ui.components.rememberRowsBringIntoViewer
 import it.felixvision.tv.ui.detail.FilmDetailOverlay
 import it.felixvision.tv.ui.detail.SeriesDetailOverlay
 import it.felixvision.tv.ui.theme.FvpColors
-import it.felixvision.tv.ui.theme.favoriteRowPadding
 import it.felixvision.tv.ui.theme.rowLogo
 import it.felixvision.tv.ui.theme.rowSpacing
 import it.felixvision.tv.ui.theme.rowText
@@ -110,10 +106,11 @@ import kotlinx.coroutines.launch
 const val MY_CHANNELS_EMPTY_MESSAGE =
     "Aggiungi i canali che guardi di più: tieni premuto OK su un canale in Live"
 
-/** Le due schede in alto di Preferiti: "I miei canali" è aperta per prima. */
+/** Le tre schede in alto di Preferiti: "I miei canali" è aperta per prima. */
 enum class FavoritesTab(val title: String, val testTag: String) {
     MY_CHANNELS("I miei canali", "favorites_tab_my_channels"),
     FILM_SERIES("Film e Serie", "favorites_tab_film_series"),
+    LIVE_CATEGORIES("Categorie Live", "favorites_tab_live_categories"),
 }
 
 /** Programmi in onda/a seguire già caricati per i canali visibili. */
@@ -123,11 +120,13 @@ data class FavoritesSchedule(
 )
 
 /**
- * Preferiti in due schede.
+ * Preferiti in tre schede: "I miei canali", "Film e Serie" e "Categorie Live".
  *
- * "I miei canali" è una lista personale numerata (numero a sinistra, logo,
- * nome, sotto "in onda / a seguire"), con la riga "Categorie Live" esistente
- * sotto l'elenco. "Film e Serie" conserva le righe Film e Serie.
+ * Le schede si cambiano solo con OK: Sinistra/Destra spostano il focus tra le
+ * schede senza cambiarne il contenuto. "I miei canali" è una lista personale
+ * numerata (numero a sinistra, logo, nome, sotto "in onda / a seguire");
+ * "Film e Serie" conserva le righe Film e Serie; "Categorie Live" elenca le
+ * categorie Live preferite.
  */
 @Composable
 fun FavoritesSection(
@@ -221,10 +220,10 @@ fun FavoritesSection(
     val filmSeriesScroll = rememberScrollState()
     val rowsBringIntoView = rememberRowsBringIntoViewer()
 
-    // Ritorno da Live dopo aver aperto una categoria preferita: la scheda
-    // "I miei canali" è quella che contiene la riga Categorie Live.
+    // Ritorno da Live dopo aver aperto una categoria preferita: le categorie
+    // stanno nella scheda "Categorie Live".
     LaunchedEffect(restoreCategoryFavoriteId) {
-        if (restoreCategoryFavoriteId != null) selectedTab = FavoritesTab.MY_CHANNELS
+        if (restoreCategoryFavoriteId != null) selectedTab = FavoritesTab.LIVE_CATEGORIES
     }
 
     Column(modifier = modifier.fillMaxSize()) {
@@ -233,7 +232,15 @@ fun FavoritesSection(
             scale = scale,
             focusRequesters = tabFocusRequesters,
             contentFocusRequester = contentFocusRequester,
-            onSelect = { selectedTab = it },
+            onSelect = { tab ->
+                selectedTab = tab
+                // La scheda scelta può essere appena composta: il focus sul suo
+                // primo elemento si chiede dopo il frame di composizione.
+                tabsScope.launch {
+                    withFrameNanos { }
+                    runCatching { firstFocus.requestFocus() }
+                }
+            },
             onDown = {
                 // La scheda scelta può essere appena composta: il focus sul suo
                 // primo elemento si chiede dopo il frame di composizione.
@@ -252,16 +259,10 @@ fun FavoritesSection(
                     epgUsername = epgUsername,
                     epgPassword = epgPassword,
                     clock = clock,
-                    categoryFavorites = categoryFavorites,
                     scale = scale,
-                    onSelectCategory = onSelectFavorite,
-                    onToggleCategory = onToggleFavorite,
                     onPlayChannel = onPlayMyChannel,
                     onLongPressChannel = onLongPressMyChannel,
                     firstFocus = firstFocus,
-                    contentFocusRequester = contentFocusRequester,
-                    restoreCategoryFavoriteId = restoreCategoryFavoriteId,
-                    onCategoryFocusRestored = onCategoryFocusRestored,
                     focusChannelId = focusMyChannelId,
                     focusChannelTick = focusMyChannelTick,
                     onChannelFocusRestored = onMyChannelFocusRestored,
@@ -273,7 +274,6 @@ fun FavoritesSection(
                     scale = scale,
                     progress = progress,
                     firstFocus = firstFocus,
-                    contentFocusRequester = contentFocusRequester,
                     vodListState = vodListState,
                     seriesListState = seriesListState,
                     vodFocusMap = vodFocusMap,
@@ -289,6 +289,16 @@ fun FavoritesSection(
                         seriesRestore.onOpen(fav.id, series.indexOfFirst { it.id == fav.id })
                         detailFavorite = fav
                     },
+                )
+                FavoritesTab.LIVE_CATEGORIES -> LiveCategoriesTab(
+                    categoryFavorites = categoryFavorites,
+                    scale = scale,
+                    onSelectCategory = onSelectFavorite,
+                    onToggleCategory = onToggleFavorite,
+                    firstFocus = firstFocus,
+                    restoreCategoryFavoriteId = restoreCategoryFavoriteId,
+                    onCategoryFocusRestored = onCategoryFocusRestored,
+                    onTabFocusRequester = tabFocusRequesters[selectedTab.ordinal],
                 )
             }
         }
@@ -365,7 +375,11 @@ fun FavoritesSection(
     }
 }
 
-/** Le due schede in alto: Sinistra/Destra tra loro, Giù al contenuto. */
+/**
+ * Le tre schede in alto: Sinistra/Destra spostano solo il focus tra le schede,
+ * OK seleziona la scheda ed entra nel contenuto, Giù entra nel contenuto solo
+ * se la scheda è già quella selezionata.
+ */
 @Composable
 private fun FavoritesTabsRow(
     selected: FavoritesTab,
@@ -390,28 +404,32 @@ private fun FavoritesTabsRow(
                 modifier = Modifier
                     .testTag(tab.testTag)
                     .focusRequester(focusRequesters[index])
-                    .then(if (index == 0) Modifier.focusRequester(contentFocusRequester) else Modifier)
+                    // Entrando in Preferiti il focus va sulla scheda selezionata,
+                    // mai dentro un elenco: il requester del contenuto sta solo qui.
+                    .then(if (isSelected) Modifier.focusRequester(contentFocusRequester) else Modifier)
                     .onFocusChanged { focusState ->
                         focused = focusState.isFocused
-                        if (focusState.isFocused && !isSelected) onSelect(tab)
                     }
                     .onPreviewKeyEvent { event ->
                         if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                         when (event.key) {
+                            // Sinistra/Destra spostano solo il focus: la scheda
+                            // selezionata e il contenuto sotto non cambiano.
                             Key.DirectionRight -> {
-                                val next = FavoritesTab.entries.getOrNull(index + 1) ?: return@onPreviewKeyEvent false
-                                onSelect(next)
-                                runCatching { focusRequesters[index + 1].requestFocus() }
+                                val next = index + 1
+                                if (next >= FavoritesTab.entries.size) return@onPreviewKeyEvent false
+                                runCatching { focusRequesters[next].requestFocus() }
                                 true
                             }
                             Key.DirectionLeft -> {
                                 if (index == 0) return@onPreviewKeyEvent false
-                                onSelect(FavoritesTab.entries[index - 1])
                                 runCatching { focusRequesters[index - 1].requestFocus() }
                                 true
                             }
                             Key.DirectionDown -> {
-                                onDown()
+                                // Giù entra nel contenuto solo sulla scheda già
+                                // selezionata; altrove il tasto è solo consumato.
+                                if (isSelected) onDown()
                                 true
                             }
                             else -> false
@@ -439,7 +457,7 @@ private fun FavoritesTabsRow(
 
 /**
  * "I miei canali": elenco verticale compatto con numero, logo, nome e riga
- * "in onda / a seguire"; sotto, la riga "Categorie Live" esistente.
+ * "in onda / a seguire".
  *
  * Digitando un numero si usa la numerazione personale: il numero è la
  * posizione nella lista.
@@ -452,16 +470,10 @@ private fun MyChannelsTab(
     epgUsername: String,
     epgPassword: String,
     clock: Clock,
-    categoryFavorites: List<LiveCategoryFavorite>,
     scale: UiScale,
-    onSelectCategory: (FavoriteItem) -> Unit,
-    onToggleCategory: (FavoriteItem) -> Unit,
     onPlayChannel: (MyChannel) -> Unit,
     onLongPressChannel: (MyChannel) -> Unit,
     firstFocus: FocusRequester,
-    contentFocusRequester: FocusRequester,
-    restoreCategoryFavoriteId: String?,
-    onCategoryFocusRestored: () -> Unit,
     focusChannelId: String?,
     focusChannelTick: Int,
     onChannelFocusRestored: () -> Unit,
@@ -540,22 +552,7 @@ private fun MyChannelsTab(
         cancelNumberInput()
     }
 
-    // Ritorno dal player/da una categoria: focus sul canale o sulla categoria.
-    val categoryListState = rememberLazyListState()
-    val categoryFocusMap = remember(categoryFavorites.map { it.favorite.id }) {
-        categoryFavorites.associate { it.favorite.id to FocusRequester() }
-    }
-    LaunchedEffect(restoreCategoryFavoriteId, categoryFocusMap, categoryFavorites) {
-        val id = restoreCategoryFavoriteId ?: return@LaunchedEffect
-        val index = categoryFavorites.indexOfFirst { it.favorite.id == id }
-        if (index >= 0) {
-            categoryListState.scrollToItem(index)
-            withFrameNanos { }
-            runCatching { categoryFocusMap[id]?.requestFocus() }
-        }
-        onCategoryFocusRestored()
-    }
-
+    // Ritorno dal player: focus sul canale.
     LaunchedEffect(focusChannelId, focusChannelTick, channels) {
         val id = focusChannelId ?: return@LaunchedEffect
         val index = channels.indexOfFirst { it.streamId == id }
@@ -688,13 +685,7 @@ private fun MyChannelsTab(
                                 .fillMaxWidth()
                                 .testTag("my_channel_${channel.streamId}")
                                 .then(if (requester != null) Modifier.focusRequester(requester) else Modifier)
-                                .then(
-                                    if (index == 0) {
-                                        Modifier.focusRequester(firstFocus).focusRequester(contentFocusRequester)
-                                    } else {
-                                        Modifier
-                                    },
-                                )
+                                .then(if (index == 0) Modifier.focusRequester(firstFocus) else Modifier)
                                 .onFocusChanged { focusState -> focused = focusState.isFocused }
                                 .onPreviewKeyEvent { event ->
                                     if (event.type != KeyEventType.KeyDown) {
@@ -732,24 +723,6 @@ private fun MyChannelsTab(
                     }
                 }
             }
-
-            if (categoryFavorites.isNotEmpty()) {
-                Column(modifier = Modifier.padding(top = scale.dp(6f))) {
-                    LiveCategoryFavoriteRow(
-                        items = categoryFavorites,
-                        scale = scale,
-                        onSelect = onSelectCategory,
-                        onToggle = onToggleCategory,
-                        firstFocus = if (channels.isEmpty()) firstFocus else remember { FocusRequester() },
-                        contentFocusRequester = contentFocusRequester,
-                        listState = categoryListState,
-                        focusMap = categoryFocusMap,
-                        onRowFocused = {},
-                    )
-                }
-            } else if (channels.isEmpty()) {
-                Spacer(Modifier.height(scale.dp(4f)))
-            }
         }
 
         ChannelNumberIndicator(
@@ -770,7 +743,6 @@ private fun FilmSeriesTab(
     scale: UiScale,
     progress: Map<String, WatchProgress>,
     firstFocus: FocusRequester,
-    contentFocusRequester: FocusRequester,
     vodListState: LazyListState,
     seriesListState: LazyListState,
     vodFocusMap: Map<String, FocusRequester>,
@@ -814,8 +786,6 @@ private fun FilmSeriesTab(
                     onSelect = onOpenVod,
                     onToggle = onToggleFavorite,
                     firstFocus = firstFocus,
-                    contentFocusRequester = contentFocusRequester,
-                    isFirstRow = true,
                     onDetail = onOpenVod,
                     listState = vodListState,
                     focusMap = vodFocusMap,
@@ -833,8 +803,6 @@ private fun FilmSeriesTab(
                     onSelect = onOpenSeries,
                     onToggle = onToggleFavorite,
                     firstFocus = if (vod.isEmpty()) firstFocus else remember { FocusRequester() },
-                    contentFocusRequester = contentFocusRequester,
-                    isFirstRow = vod.isEmpty(),
                     onDetail = onOpenSeries,
                     listState = seriesListState,
                     focusMap = seriesFocusMap,
@@ -854,8 +822,6 @@ private fun FavoriteRow(
     onSelect: (FavoriteItem) -> Unit,
     onToggle: (FavoriteItem) -> Unit,
     firstFocus: FocusRequester,
-    contentFocusRequester: FocusRequester,
-    isFirstRow: Boolean,
     onDetail: ((FavoriteItem) -> Unit)? = null,
     listState: androidx.compose.foundation.lazy.LazyListState,
     focusMap: Map<String, FocusRequester>,
@@ -885,7 +851,7 @@ private fun FavoriteRow(
                     },
                     modifier = Modifier.width(scale.dp(140f)).testTag("favorite_${fav.id}")
                         .focusRequester(itemFr)
-                        .then(if (index == 0 && isFirstRow) Modifier.focusRequester(firstFocus).focusRequester(contentFocusRequester) else if (index == 0) Modifier.focusRequester(firstFocus) else Modifier)
+                        .then(if (index == 0) Modifier.focusRequester(firstFocus) else Modifier)
                         .onFocusChanged { focusState ->
                             focused = focusState.isFocused
                             if (focusState.isFocused) onRowFocused()
@@ -935,66 +901,134 @@ private fun FavoriteRow(
     }
 }
 
+/**
+ * "Categorie Live": elenco verticale compatto delle categorie Live preferite,
+ * stessa spaziatura e larghezza di "I miei canali". OK apre la categoria solo
+ * se è ancora disponibile; la pressione lunga la toglie dai preferiti anche
+ * quando non è più disponibile.
+ */
 @Composable
-private fun LiveCategoryFavoriteRow(
-    items: List<LiveCategoryFavorite>,
+private fun LiveCategoriesTab(
+    categoryFavorites: List<LiveCategoryFavorite>,
     scale: UiScale,
-    onSelect: (FavoriteItem) -> Unit,
-    onToggle: (FavoriteItem) -> Unit,
+    onSelectCategory: (FavoriteItem) -> Unit,
+    onToggleCategory: (FavoriteItem) -> Unit,
     firstFocus: FocusRequester,
-    contentFocusRequester: FocusRequester,
-    listState: androidx.compose.foundation.lazy.LazyListState,
-    focusMap: Map<String, FocusRequester>,
-    onRowFocused: () -> Unit = {},
+    restoreCategoryFavoriteId: String?,
+    onCategoryFocusRestored: () -> Unit,
+    onTabFocusRequester: FocusRequester,
 ) {
-    Column {
-        Text(
-            text = "Categorie Live", color = FvpColors.TextPrimary, fontWeight = FontWeight.Bold,
-            // Il titolo si allinea alla prima card, dentro il contentPadding della riga.
-            modifier = Modifier.padding(start = scale.focusSafePadding, bottom = scale.dp(8f)),
-        )
-        LazyRow(
-            state = listState,
-            horizontalArrangement = Arrangement.spacedBy(scale.dp(12f)),
-            contentPadding = PaddingValues(scale.focusSafePadding),
-            modifier = Modifier.testTag("favorites_row_Categorie Live"),
-        ) {
-            itemsIndexed(items, key = { _, item -> item.favorite.id }) { index, item ->
-                val favorite = item.favorite
-                var focused by remember(favorite.id) { mutableStateOf(false) }
-                // Unavailable cards stay focusable so a long press can still remove them.
-                Card(
-                    onClick = { if (item.available) onSelect(favorite) },
-                    modifier = Modifier.width(scale.dp(220f)).testTag("favorite_${favorite.id}")
-                        .focusRequester(focusMap.getValue(favorite.id))
-                        .then(if (index == 0) Modifier.focusRequester(firstFocus).focusRequester(contentFocusRequester) else Modifier)
-                        .onFocusChanged { focusState ->
-                            focused = focusState.isFocused
-                            if (focusState.isFocused) onRowFocused()
-                        }
-                        .fvpLongPress { onToggle(favorite) },
-                    scale = CardDefaults.scale(focusedScale = 1.04f),
-                    border = CardDefaults.border(focusedBorder = Border(BorderStroke(2.dp, FvpColors.GreenFocus))),
-                    colors = CardDefaults.colors(containerColor = FvpColors.Surface),
-                    shape = CardDefaults.shape(shape = RoundedCornerShape(scale.dp(10f))),
-                ) {
-                    // Riga compatta del canale in Preferiti.
-                    Column(modifier = Modifier.padding(scale.favoriteRowPadding)) {
-                        FocusMarqueeText(
-                            text = favorite.title,
-                            focused = focused,
-                            fontSize = scale.rowText,
-                            color = if (item.available) FvpColors.TextPrimary else FvpColors.TextSecondary,
-                            fontWeight = FontWeight.Medium,
-                        )
-                        Text(
-                            text = item.supportingText, color = FvpColors.TextSecondary,
-                            fontSize = scale.rowText,
-                            modifier = Modifier.padding(top = scale.dp(4f)),
-                        )
-                    }
-                }
+    val listState = rememberLazyListState()
+    val focusMap = remember(categoryFavorites.map { it.favorite.id }) {
+        categoryFavorites.associate { it.favorite.id to FocusRequester() }
+    }
+
+    // Ritorno da Live dopo aver aperto una categoria preferita: focus sulla riga.
+    LaunchedEffect(restoreCategoryFavoriteId, focusMap, categoryFavorites) {
+        val id = restoreCategoryFavoriteId ?: return@LaunchedEffect
+        val index = categoryFavorites.indexOfFirst { it.favorite.id == id }
+        if (index >= 0) {
+            listState.scrollToItem(index)
+            withFrameNanos { }
+            runCatching { focusMap[id]?.requestFocus() }
+        }
+        onCategoryFocusRestored()
+    }
+
+    if (categoryFavorites.isEmpty()) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            Column(modifier = Modifier.fillMaxSize().padding(scale.dp(16f))) {
+                Text(
+                    text = "Nessuna categoria Live nei preferiti",
+                    color = FvpColors.TextPrimary,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.testTag("live_categories_empty"),
+                )
+                Text(
+                    text = "Tieni premuto il tasto OK su una categoria in Live per aggiungerla ai preferiti.",
+                    color = FvpColors.TextSecondary,
+                    modifier = Modifier.padding(top = scale.dp(8f)),
+                )
             }
+        }
+        return
+    }
+
+    LazyColumn(
+        state = listState,
+        verticalArrangement = Arrangement.spacedBy(scale.rowSpacing),
+        contentPadding = PaddingValues(scale.focusSafePadding),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("favorites_live_categories_list"),
+    ) {
+        itemsIndexed(categoryFavorites, key = { _, item -> item.favorite.id }) { index, item ->
+            val favorite = item.favorite
+            val requester = focusMap[favorite.id]
+            var focused by remember(favorite.id) { mutableStateOf(false) }
+            DenseListItem(
+                selected = false,
+                // Le categorie non disponibili restano selezionabili solo con la
+                // pressione lunga: OK non le apre.
+                onClick = { if (item.available) onSelectCategory(favorite) },
+                headlineContent = {
+                    FocusMarqueeText(
+                        text = favorite.title,
+                        focused = focused,
+                        fontSize = scale.rowText,
+                        color = if (item.available) FvpColors.TextPrimary else FvpColors.TextSecondary,
+                        fontWeight = FontWeight.Medium,
+                    )
+                },
+                supportingContent = {
+                    Text(
+                        text = item.supportingText,
+                        color = FvpColors.TextSecondary,
+                        fontSize = scale.rowText,
+                    )
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("favorite_${favorite.id}")
+                    .then(if (requester != null) Modifier.focusRequester(requester) else Modifier)
+                    .then(if (index == 0) Modifier.focusRequester(firstFocus) else Modifier)
+                    .onFocusChanged { focusState -> focused = focusState.isFocused }
+                    .onPreviewKeyEvent { event ->
+                        if (event.type != KeyEventType.KeyDown) {
+                            false
+                        } else when (event.key) {
+                            // A sinistra si torna alle schede.
+                            Key.DirectionLeft -> {
+                                runCatching { onTabFocusRequester.requestFocus() }
+                                true
+                            }
+                            // Dalla prima riga si risale alle schede.
+                            Key.DirectionUp -> {
+                                if (index == 0) {
+                                    runCatching { onTabFocusRequester.requestFocus() }
+                                    true
+                                } else {
+                                    false
+                                }
+                            }
+                            else -> false
+                        }
+                    }
+                    .fvpLongPress { onToggleCategory(favorite) },
+                colors = ListItemDefaults.colors(
+                    containerColor = FvpColors.Surface.copy(alpha = CHANNEL_ROW_ALPHA),
+                    contentColor = FvpColors.TextPrimary,
+                    focusedContainerColor = FvpColors.SurfaceElevated,
+                    focusedContentColor = FvpColors.TextPrimary,
+                    focusedSelectedContainerColor = FvpColors.SurfaceElevated,
+                    focusedSelectedContentColor = FvpColors.TextPrimary,
+                ),
+                scale = ListItemDefaults.scale(focusedScale = 1.02f),
+                border = ListItemDefaults.border(
+                    focusedBorder = Border(BorderStroke(2.dp, FvpColors.GreenFocus)),
+                ),
+                shape = ListItemDefaults.shape(shape = RoundedCornerShape(scale.dp(10f))),
+            )
         }
     }
 }

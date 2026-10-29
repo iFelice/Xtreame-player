@@ -413,6 +413,12 @@ class DpadNavigationTest {
                     DrawerSection.Film -> rule.onNodeWithTag("film_201").assertIsFocused()
                     DrawerSection.Serie -> rule.onNodeWithTag("serie_301").assertIsFocused()
                     DrawerSection.Preferiti -> {
+                        // Entrando in Preferiti il focus va sulla scheda selezionata
+                        // ("I miei canali", aperta per prima), mai dentro un elenco;
+                        // le schede sono tre con "Categorie Live".
+                        rule.onNodeWithTag("favorites_tab_my_channels").assertIsFocused()
+                        rule.onNodeWithTag("favorites_tab_film_series").assertIsDisplayed()
+                        rule.onNodeWithTag("favorites_tab_live_categories").assertIsDisplayed()
                         // "I miei canali" è la scheda aperta per prima: elenco vuoto
                         // finché non si aggiungono canali.
                         rule.onNodeWithText(MY_CHANNELS_EMPTY_MESSAGE).assertIsDisplayed()
@@ -493,10 +499,12 @@ class DpadNavigationTest {
             rule.onNodeWithTag("channel_number_field").performKeyInput { pressKey(Key.Enter) }
             rule.waitForIdle()
             navigateTo(DrawerSection.Preferiti, drawerFocusHandle)
-            // I canali Live non stanno più nei preferiti: schede "I miei canali" e
-            // "Film e Serie". La stella di Live indica "I miei canali".
+            // I canali Live non stanno più nei preferiti: tre schede "I miei
+            // canali", "Film e Serie" e "Categorie Live". La stella di Live
+            // indica "I miei canali".
             rule.onNodeWithTag("favorites_tab_my_channels").assertIsDisplayed()
             rule.onNodeWithTag("favorites_tab_film_series").assertIsDisplayed()
+            rule.onNodeWithTag("favorites_tab_live_categories").assertIsDisplayed()
             rule.onNodeWithTag("my_channel_101").assertIsDisplayed()
             rule.onNodeWithTag("my_channel_number_101").assertIsDisplayed()
             assert(favStore.get("http://server.esempio:8080", "demo").none { it.id == "live_101" })
