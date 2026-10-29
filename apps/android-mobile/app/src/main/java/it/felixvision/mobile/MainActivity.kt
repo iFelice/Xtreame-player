@@ -8,8 +8,11 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import it.felixvision.mobile.ui.FvpApp
+import it.felixvision.mobile.ui.player.PlayerPipRegistry
+import it.felixvision.mobile.ui.player.updatePlayerPip
 import it.felixvision.mobile.ui.theme.FvpTheme
 
+@androidx.media3.common.util.UnstableApi
 class MainActivity : ComponentActivity() {
 
     private val localNetworkPermissionLauncher =
@@ -24,6 +27,31 @@ class MainActivity : ComponentActivity() {
         setContent {
             FvpTheme {
                 FvpApp(container = container)
+            }
+        }
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (Build.VERSION.SDK_INT in 26..30) {
+            val player = PlayerPipRegistry.player
+            if (player?.isPlaying == true) updatePlayerPip(this, player, PlayerPipRegistry.videoView, enter = true, autoEnter = false)
+        }
+    }
+
+    override fun onPictureInPictureModeChanged(
+        isInPictureInPictureMode: Boolean,
+        newConfig: android.content.res.Configuration,
+    ) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        if (isInPictureInPictureMode) {
+            PlayerPipRegistry.markEntered()
+        } else {
+            PlayerPipRegistry.inPip = false
+            window.decorView.post {
+                val resumed = lifecycle.currentState
+                    .isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)
+                if (!resumed) PlayerPipRegistry.notifyClosed()
             }
         }
     }

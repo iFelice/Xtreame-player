@@ -1,6 +1,7 @@
 @file:OptIn(
     kotlinx.coroutines.ExperimentalCoroutinesApi::class,
     androidx.compose.ui.test.ExperimentalTestApi::class,
+    androidx.media3.common.util.UnstableApi::class,
 )
 
 package it.felixvision.mobile.ui.main
@@ -287,6 +288,15 @@ class HomeScreenTest {
                     settingsViewModel = settingsViewModel,
                     channelScheduleLoader = null,
                     imageLoader = container.imageLoader,
+                    playerContent = { _, session, _ ->
+                        val live = session.source as? it.felixvision.mobile.ui.player.MobilePlaybackSource.Live
+                        androidx.compose.foundation.layout.Column {
+                            androidx.compose.material3.Text(
+                                live?.channels?.getOrNull(live.startIndex)?.name.orEmpty(),
+                            )
+                            androidx.compose.material3.Text("IN DIRETTA")
+                        }
+                    },
                 )
             }
         }
@@ -390,17 +400,17 @@ class HomeScreenTest {
         rule.onNodeWithTag("mychannel_drag_101", useUnmergedTree = true).assertDoesNotExist()
     }
 
-    // --- Riproduzione provvisoria ---
+    // --- Apertura del player dalla riga Live ---
 
     @Test
     @Config(sdk = [34], qualifiers = "w1280dp-h800dp-land-mdpi")
-    fun `tocco Riproduci mostra lo snackbar provvisorio`() {
+    fun `tocco sulla riga Live apre il player`() {
         mount()
         rule.onNodeWithTag("rail_item_live").performClick()
         rule.waitForIdle()
         rule.onNodeWithTag("live_row_101").performClick()
         rule.waitForIdle()
-        rule.onNodeWithText("Riproduzione disponibile nel prossimo aggiornamento")
-            .assertIsDisplayed()
+        rule.onNodeWithText("Canale Uno").assertIsDisplayed()
+        rule.onNodeWithText("IN DIRETTA").assertIsDisplayed()
     }
 }

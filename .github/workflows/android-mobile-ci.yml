@@ -23,7 +23,7 @@ concurrency:
   group: android-mobile-ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# Nessun segreto: la build di debug e i test non richiedono credenziali.
+# La firma di debug fissa usa un secret opzionale; test e build funzionano anche senza.
 permissions:
   contents: read
 
@@ -53,11 +53,67 @@ jobs:
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKMANAGER" --licenses > /dev/null || true
 
+      - name: Prepara la chiave di debug fissa
+        shell: bash
+        env:
+          FVP_DEBUG_KEYSTORE_BASE64: ${{ secrets.FVP_DEBUG_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$FVP_DEBUG_KEYSTORE_BASE64" ]]; then
+            key="$RUNNER_TEMP/fvp-debug.keystore"
+            if ! printf '%s' "$FVP_DEBUG_KEYSTORE_BASE64" | base64 --decode > "$key"; then
+              rm -f "$key"
+              echo "::error::Base64 non valido"
+              exit 1
+            fi
+            if ! keytool -list -keystore "$key" -storepass android -alias androiddebugkey > /dev/null; then
+              rm -f "$key"
+              echo "::error::keystore non leggibile con alias androiddebugkey/password android"
+              exit 1
+            fi
+            chmod 600 "$key"
+            keystore_sha256=$(sha256sum "$key" | awk '{print $1}')
+            echo "::notice::SHA-256 keystore debug decodificato: $keystore_sha256"
+            echo "FVP_DEBUG_KEYSTORE_PATH=$key" >> "$GITHUB_ENV"
+          else
+            echo "::warning::Chiave di debug fissa assente: l'APK avrà una firma diversa a ogni run"
+          fi
+
       - name: Test, assembleDebug e lint
         working-directory: apps/android-mobile
         run: |
           set -o pipefail
           ./gradlew testDebugUnitTest assembleDebug lintDebug --console=plain --stacktrace 2>&1 | tee /tmp/fvp-mobile-build.log
+
+      - name: Impronta certificato APK debug
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk="apps/android-mobile/app/build/outputs/apk/debug/app-debug.apk"
+          apksigner=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
+          if [[ ! -f "$apk" ]]; then
+            echo "::error::APK debug non trovato nel percorso atteso"
+            exit 1
+          fi
+          if [[ -z "$apksigner" || ! -x "$apksigner" ]]; then
+            echo "::error::apksigner non trovato nell'Android SDK"
+            exit 1
+          fi
+          cert_output="$RUNNER_TEMP/fvp-apk-certificates.txt"
+          if ! "$apksigner" verify --print-certs "$apk" > "$cert_output" 2>&1; then
+            cat "$cert_output"
+            echo "::error::Verifica della firma APK debug fallita"
+            exit 1
+          fi
+          cat "$cert_output"
+          fingerprint=$(awk -F': ' '/certificate SHA-256 digest:/ {print $NF; exit}' "$cert_output")
+          if [[ -z "$fingerprint" ]]; then
+            echo "::error::Impronta SHA-256 certificato assente dall'output apksigner"
+            exit 1
+          fi
+          echo "Certificato SHA-256 APK debug: $fingerprint"
+          echo "::notice::Certificato SHA-256 APK debug: $fingerprint"
 
       # GitHub mostra al massimo 10 annotazioni per tipo per passo e 50 per job:
       # gli errori principali devono comparire per primi — prima il compilatore,
@@ -125,3 +181,8 @@ jobs:
             apps/android-mobile/app/build/reports/tests
             apps/android-mobile/app/build/reports/lint-results*
           if-no-files-found: ignore
+
+      - name: Rimuovi la chiave di debug temporanea
+        if: always()
+        shell: bash
+        run: rm -f "$RUNNER_TEMP/fvp-debug.keystore"
