@@ -136,24 +136,6 @@ jobs:
           echo "Certificato SHA-256 APK debug: $fingerprint"
           echo "::notice::Certificato SHA-256 APK debug: $fingerprint"
 
-      - name: Diagnostica temporanea del task Gradle fallito
-        if: failure()
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
-          lines = Path('/tmp/fvp-mobile-build.log').read_text(errors='replace').splitlines()
-          patterns = re.compile(r'FAILURE:|What went wrong|Execution failed|Lint found|Issues found|^e: file://|^> Task .* FAILED|^.* Error:|^.* error:')
-          selected = [(i, line) for i, line in enumerate(lines) if patterns.search(line)]
-          for i, line in selected[-5:]:
-              snippets = [f"build-log:{i + 1}: {line[:700]}"]
-              snippets.extend(f"build-log: {following[:700]}" for following in lines[i + 1:min(i + 3, len(lines))] if following.strip())
-              for snippet in snippets:
-                  escaped = snippet.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
-                  print(f"::error title=Gradle failure::{escaped}")
-          PY
-
       # GitHub mostra al massimo 10 annotazioni per tipo per passo e 50 per job:
       # gli errori principali devono comparire per primi — prima il compilatore,
       # poi i test, infine il lint. I log di blob non sono raggiungibili da
@@ -197,25 +179,10 @@ jobs:
               name = f"apps/android-mobile/app/src/test/java/it/felixvision/mobile/ui/main/HomeScreenTest.kt"
               print(f"::notice file={name},line=1::test eseguiti: {tot}, falliti: {fail}, errori: {err}, superati: {tot - fail - err}")
           PY
-          # 3) errori di lint: il report può contenere percorsi assoluti o relativi.
-          python3 - <<'PY'
-          from pathlib import Path
-          import os, re
-          report = Path('apps/android-mobile/app/build/reports/lint-results-debug.txt')
-          if report.exists():
-              root = Path(os.environ['GITHUB_WORKSPACE']).resolve()
-              for line in report.read_text(errors='replace').splitlines():
-                  match = re.match(r'^(.*?):(\d+): Error: (.*)$', line)
-                  if not match:
-                      continue
-                  raw_path, number, message = match.groups()
-                  try:
-                      rel = Path(raw_path).resolve().relative_to(root).as_posix()
-                  except (OSError, ValueError):
-                      rel = raw_path
-                  escaped = message.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
-                  print(f'::error file={rel},line={number}::lint: {escaped}')
-          PY
+          # 3) errori di lint
+          if [ -f apps/android-mobile/app/build/reports/lint-results-debug.txt ]; then
+            sed -n -E "s|^$GITHUB_WORKSPACE/([^:]+):([0-9]+) Error: (.*)$|::error file=\1,line=\2::lint: \3|p" apps/android-mobile/app/build/reports/lint-results-debug.txt | head -10
+          fi
 
       - name: Carica l'APK di debug
         if: always()
