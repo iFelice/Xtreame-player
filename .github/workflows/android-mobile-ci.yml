@@ -62,8 +62,14 @@ jobs:
           if [[ -n "$FVP_DEBUG_KEYSTORE_BASE64" ]]; then
             key="$RUNNER_TEMP/fvp-debug.keystore"
             python3 - "$key" <<'PY'
-          import base64, os, pathlib, sys
-          encoded = ''.join(os.environ['FVP_DEBUG_KEYSTORE_BASE64'].split())
+          import base64, os, pathlib, re, subprocess, sys
+          encoded = os.environ['FVP_DEBUG_KEYSTORE_BASE64'].strip().strip('"').strip("'")
+          if encoded.lower().startswith('base64:'):
+              encoded = encoded.split(':', 1)[1]
+          if encoded.startswith('data:') and ',' in encoded:
+              encoded = encoded.split(',', 1)[1]
+          encoded = re.sub(r'[^A-Za-z0-9+/=_-]', '', encoded).replace('-', '+').replace('_', '/')
+          encoded = encoded.replace('=', '')
           encoded += '=' * (-len(encoded) % 4)
           try:
               content = base64.b64decode(encoded, validate=True)
@@ -73,6 +79,11 @@ jobs:
           path = pathlib.Path(sys.argv[1])
           path.write_bytes(content)
           path.chmod(0o600)
+          check = subprocess.run(['keytool', '-list', '-keystore', str(path), '-storepass', 'android', '-alias', 'androiddebugkey'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+          if check.returncode:
+              path.unlink(missing_ok=True)
+              print('::error::Keystore debug non valido: verificare alias androiddebugkey e password android')
+              raise SystemExit(1)
           PY
             echo "FVP_DEBUG_KEYSTORE_PATH=$key" >> "$GITHUB_ENV"
           else
