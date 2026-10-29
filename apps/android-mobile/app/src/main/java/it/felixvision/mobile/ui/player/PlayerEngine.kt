@@ -83,7 +83,9 @@ class PlayerEngine(private val context: Context, private val container: AppConta
     private var liveIndex = LiveZapping.clamp(when (val source = session.source) { is MobilePlaybackSource.Live -> source.startIndex; is MobilePlaybackSource.Catchup -> source.startIndex; else -> 0 }, liveChannels.size)
     private var nextPromptDismissed = false
     private var postponePlan: PostponePlan? = null
-    private val noisyReceiver = android.content.BroadcastReceiver { _, _ -> pause() }
+    private val noisyReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: android.content.Intent?) { pause() }
+    }
     private val audioFocusListener = AudioManager.OnAudioFocusChangeListener { change -> if (change <= AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) pause() }
 
     private val listener = object : Player.Listener {
