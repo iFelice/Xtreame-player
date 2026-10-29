@@ -61,8 +61,19 @@ jobs:
           set -euo pipefail
           if [[ -n "$FVP_DEBUG_KEYSTORE_BASE64" ]]; then
             key="$RUNNER_TEMP/fvp-debug.keystore"
-            printf '%s' "$FVP_DEBUG_KEYSTORE_BASE64" | base64 --decode > "$key"
-            chmod 600 "$key"
+            python3 - "$key" <<'PY'
+          import base64, os, pathlib, sys
+          encoded = ''.join(os.environ['FVP_DEBUG_KEYSTORE_BASE64'].split())
+          encoded += '=' * (-len(encoded) % 4)
+          try:
+              content = base64.b64decode(encoded, validate=True)
+          except Exception:
+              print('::error::FVP_DEBUG_KEYSTORE_BASE64 non è Base64 valido')
+              raise SystemExit(1)
+          path = pathlib.Path(sys.argv[1])
+          path.write_bytes(content)
+          path.chmod(0o600)
+          PY
             echo "FVP_DEBUG_KEYSTORE_PATH=$key" >> "$GITHUB_ENV"
           else
             echo "::warning::Chiave di debug fissa assente: l'APK avrà una firma diversa a ogni run"
