@@ -6,6 +6,7 @@ import {
   Settings,
   User,
   RefreshCw,
+  Search,
 } from 'lucide-react';
 import { XtreamAuthResponse } from '../types/xtream';
 import { SavedAccount, storage } from '../services/storage';
@@ -22,6 +23,9 @@ interface NavbarProps {
   onRefreshCatalog?: () => void;
   isRefreshingCatalog?: boolean;
   lastRefreshedAt?: number | null;
+  /** Apre la ricerca su tutto il catalogo. Non c'è in modalità TV. */
+  onOpenSearch?: () => void;
+  isSearchOpen?: boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -35,6 +39,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onRefreshCatalog,
   isRefreshingCatalog = false,
   lastRefreshedAt = null,
+  onOpenSearch,
+  isSearchOpen = false,
 }) => {
   const [showMobileAccountMenu, setShowMobileAccountMenu] = useState<boolean>(false);
   const [showDesktopAccountMenu, setShowDesktopAccountMenu] = useState<boolean>(false);
@@ -95,6 +101,19 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div className="flex items-center gap-1.5 shrink-0">
             {isConnected ? (
               <>
+                {/* Cerca: su tutta la sezione catalogo, non in modalità TV */}
+                {onOpenSearch && (
+                  <button
+                    type="button"
+                    aria-label="Cerca"
+                    aria-pressed={isSearchOpen}
+                    title="Cerca in Live, Film e Serie"
+                    onClick={onOpenSearch}
+                    className="w-10 h-10 rounded-2xl bg-surface-0 border border-separator-strong/80 hover:border-accent/60 text-label-secondary hover:text-label transition cursor-pointer shadow-md flex items-center justify-center shrink-0"
+                  >
+                    <Search className="w-5 h-5" />
+                  </button>
+                )}
                 {/* Account */}
                 <div className="shrink-0">
                   <button
@@ -232,7 +251,21 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* Server & Connection Controls */}
         <div className="flex items-center gap-2 sm:gap-3.5 shrink-0">
           {isConnected ? (
-            <div className="flex items-center gap-2 sm:gap-3">
+            <>
+              {/* Cerca: su tutta la sezione catalogo, non in modalità TV */}
+              {onOpenSearch && !isTv && (
+                <button
+                  type="button"
+                  aria-label="Cerca"
+                  aria-pressed={isSearchOpen}
+                  title="Cerca in Live, Film e Serie"
+                  onClick={onOpenSearch}
+                  className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-surface-0 border border-separator-strong/80 hover:border-accent/60 text-label-secondary hover:text-label transition cursor-pointer shadow-md flex items-center justify-center shrink-0"
+                >
+                  <Search className="w-5 h-5 sm:w-6 sm:h-6" />
+                </button>
+              )}
+              <div className="flex items-center gap-2 sm:gap-3">
               {/* Connected Server Badge with dropdown */}
               <div className="relative">
                 <button
@@ -312,7 +345,8 @@ export const Navbar: React.FC<NavbarProps> = ({
               >
                 <LogOut className="w-5 h-5 sm:w-6 sm:h-6" />
               </button>
-            </div>
+              </div>
+            </>
           ) : (
             <div className="flex items-center gap-2">
               <span className="flex items-center gap-2.5 text-sm sm:text-base font-bold text-label-secondary px-4 py-2 rounded-2xl bg-surface-0 border border-separator">

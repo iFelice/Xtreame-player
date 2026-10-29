@@ -3,6 +3,7 @@ import { act, create } from 'react-test-renderer';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const direct = 'http://server.esempio:8080/movie/demo/demo/123.mp4';
+const directMkv = 'http://server.esempio:8080/movie/demo/demo/456.mkv';
 const proxied = `/api/proxy/stream?url=${encodeURIComponent(direct)}`;
 
 function stubDevice(options: { appleMobile: boolean; standalone: boolean }) {
@@ -68,7 +69,42 @@ describe('AppleDownloadLink', () => {
     await act(async () => renderer!.unmount());
   });
 
-  it.each(['mkv', 'avi'])('renders nothing for %s (the VLC panel stays)', async (extension) => {
+  describe('MKV and AVI', () => {
+    it.each(['mkv', 'avi'])('links the direct %s file in a Safari tab', async (extension) => {
+      stubDevice({ appleMobile: true, standalone: false });
+      vi.stubEnv('MODE', 'static');
+      vi.resetModules();
+      const { AppleDownloadLink, APPLE_SAFARI_DOWNLOAD_HINT } = await import('./AppleDownloadLink');
+      let renderer: ReturnType<typeof create>;
+      await act(async () => {
+        renderer = create(<AppleDownloadLink streamUrl={directMkv} containerExtension={extension} />);
+      });
+
+      const anchors = renderer!.root.findAllByType('a');
+      expect(anchors).toHaveLength(1);
+      expect(anchors[0].props.href).toBe(directMkv);
+      expect(anchors[0].props.href).not.toContain('/api/proxy');
+      expect(anchors[0].props.target).toBe('_blank');
+      expect(anchors[0].props.rel).toBe('noopener noreferrer');
+      expect(JSON.stringify(renderer!.toJSON())).toContain(APPLE_SAFARI_DOWNLOAD_HINT);
+      await act(async () => renderer!.unmount());
+    });
+
+    it.each(['mkv', 'avi'])('renders nothing for %s in the Home Screen web app', async (extension) => {
+      stubDevice({ appleMobile: true, standalone: true });
+      vi.stubEnv('MODE', 'static');
+      vi.resetModules();
+      const { AppleDownloadLink } = await import('./AppleDownloadLink');
+      let renderer: ReturnType<typeof create>;
+      await act(async () => {
+        renderer = create(<AppleDownloadLink streamUrl={directMkv} containerExtension={extension} />);
+      });
+      expect(renderer!.toJSON()).toBeNull();
+      await act(async () => renderer!.unmount());
+    });
+  });
+
+  it.each(['ts', '', undefined])('renders nothing for %s (the VLC panel stays)', async (extension) => {
     stubDevice({ appleMobile: true, standalone: false });
     vi.stubEnv('MODE', 'static');
     vi.resetModules();
@@ -90,11 +126,17 @@ describe('AppleDownloadLink', () => {
     vi.stubEnv('MODE', mode);
     vi.resetModules();
     const { AppleDownloadLink } = await import('./AppleDownloadLink');
-    let renderer: ReturnType<typeof create>;
-    await act(async () => {
-      renderer = create(<AppleDownloadLink streamUrl={direct} containerExtension="mp4" />);
-    });
-    expect(renderer!.toJSON()).toBeNull();
-    await act(async () => renderer!.unmount());
+    for (const [streamUrl, extension] of [
+      [direct, 'mp4'],
+      [directMkv, 'mkv'],
+      [directMkv, 'avi'],
+    ] as const) {
+      let renderer: ReturnType<typeof create>;
+      await act(async () => {
+        renderer = create(<AppleDownloadLink streamUrl={streamUrl} containerExtension={extension} />);
+      });
+      expect(renderer!.toJSON()).toBeNull();
+      await act(async () => renderer!.unmount());
+    }
   });
 });

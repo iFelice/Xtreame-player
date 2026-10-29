@@ -20,6 +20,7 @@ import { XtreamCategory, XtreamVodStream, PlayableMediaItem } from '../types/xtr
 import { buildStreamUrl } from '../utils/parseXtreamUrl';
 import { storage } from '../services/storage';
 import { sortVodStreams } from '../utils/recentSorting';
+import { buildSearchIndex, filterRankedEntries, hasMinQueryLength } from '../utils/catalogSearch';
 import { getSecureImageUrl } from '../utils/imageUrl';
 import { VirtualizedMediaGrid } from './VirtualizedMediaGrid';
 import { ListPositionIndicator } from './ListPositionIndicator';
@@ -100,8 +101,25 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
     return categories.find((c) => String(c.category_id) === String(selectedCategory));
   }, [categories, selectedCategory]);
 
-  // Filtered and sorted streams for selected category only
+  // I nomi normalizzati si calcolano una volta sola per catalogo: la ricerca
+  // lavora su decine di migliaia di film senza ri-normalizzare a ogni battito.
+  const searchIndex = useMemo(() => buildSearchIndex(streams, (stream) => stream.name), [streams]);
+
+  /**
+   * Da 2 caratteri in su la ricerca guarda TUTTE le categorie della sezione,
+   * con le stesse regole della ricerca dell'app Android TV (prefisso → contiene
+   * → alfabetico, massimo 50 risultati). La navigazione a telecomando della
+   * modalità TV resta invece quella di sempre, categoria per categoria.
+   */
+  const allCategoriesMatches = useMemo(() => {
+    if (isTv) return null;
+    if (!hasMinQueryLength(searchQuery)) return null;
+    return filterRankedEntries(searchIndex, searchQuery);
+  }, [isTv, searchQuery, searchIndex]);
+
+  // Filtered and sorted streams: tutte le categorie, oppure la categoria scelta
   const filteredStreams = useMemo(() => {
+    if (allCategoriesMatches) return allCategoriesMatches;
     if (!selectedCategory) return [];
     const matched = streams.filter((stream) => {
       if (String(stream.category_id) !== String(selectedCategory)) return false;
@@ -110,7 +128,7 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
     });
 
     return sortVodStreams(matched, sortBy);
-  }, [streams, selectedCategory, searchQuery, sortBy]);
+  }, [allCategoriesMatches, streams, selectedCategory, searchQuery, sortBy]);
 
   // Natural list order preserved (all movies visible and naturally scrollable)
   const visibleStreams = filteredStreams;
@@ -188,6 +206,11 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                 <Film className="w-7 h-7 text-accent-strong shrink-0" />
                 <span className="truncate">{currentCategory?.category_name || 'Film'}</span>
               </h2>
+              {allCategoriesMatches && (
+                <p data-search-scope="all-categories" className="text-xs font-bold text-accent-strong mt-1">
+                  Risultati in tutte le categorie
+                </p>
+              )}
               <ListPositionIndicator
                 scrollRef={moviesListRef}
                 total={filteredStreams.length}
@@ -199,19 +222,23 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
 
             {/* Controls: Sort, Search & Scroll Arrows */}
             <div className="flex flex-wrap items-center gap-3 shrink-0">
-              <div className="flex items-center gap-2 bg-surface-0 border border-separator rounded-2xl px-3 py-2 text-xs sm:text-sm font-semibold">
-                <ArrowDownUp className="w-4 h-4 text-label-secondary shrink-0" />
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as any)}
-                  className="bg-transparent text-label text-xs sm:text-sm font-bold focus:outline-hidden cursor-pointer"
-                >
-                  <option value="recent">🕒 Più Recenti</option>
-                  <option value="rating">⭐ Valutazione</option>
-                  <option value="name">🔤 Titolo (A-Z)</option>
-                  <option value="id">🔢 ID</option>
-                </select>
-              </div>
+              {/* Ordinamento della categoria: con la ricerca su tutte le
+                  categorie vale l'ordine della ricerca (prefisso → contiene). */}
+              {!allCategoriesMatches && (
+                <div className="flex items-center gap-2 bg-surface-0 border border-separator rounded-2xl px-3 py-2 text-xs sm:text-sm font-semibold">
+                  <ArrowDownUp className="w-4 h-4 text-label-secondary shrink-0" />
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as any)}
+                    className="bg-transparent text-label text-xs sm:text-sm font-bold focus:outline-hidden cursor-pointer"
+                  >
+                    <option value="recent">🕒 Più Recenti</option>
+                    <option value="rating">⭐ Valutazione</option>
+                    <option value="name">🔤 Titolo (A-Z)</option>
+                    <option value="id">🔢 ID</option>
+                  </select>
+                </div>
+              )}
 
               <div className="relative flex-1 sm:w-72">
                 <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-label-secondary" />
@@ -219,7 +246,7 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Cerca film in questa categoria..."
+                  placeholder="Cerca film in tutte le categorie..."
                   className="w-full pl-12 pr-4 py-2.5 bg-surface-0 border border-separator-strong/80 rounded-2xl text-xs sm:text-base text-label placeholder-label-tertiary focus:outline-hidden focus:border-accent transition shadow-inner font-medium"
                 />
               </div>
@@ -257,7 +284,9 @@ export const VodCatalog: React.FC<VodCatalogProps> = ({
           ) : filteredStreams.length === 0 ? (
             <div className="py-20 text-center text-label-secondary bg-surface-0/30 rounded-2xl border border-dashed border-separator">
               <Film className="w-14 h-14 mx-auto text-label-tertiary mb-3" />
-              <p className="text-base font-semibold text-label-secondary">Nessun film trovato in questa categoria</p>
+              <p className="text-base font-semibold text-label-secondary">
+                {allCategoriesMatches ? 'Nessun film trovato' : 'Nessun film trovato in questa categoria'}
+              </p>
               <p className="text-xs text-label-tertiary mt-1">
                 {searchQuery ? 'Prova a cercare un altro titolo' : 'Seleziona un\'altra categoria a sinistra'}
               </p>

@@ -51,6 +51,9 @@ describe('Apple mobile player', () => {
     await act(async () => { renderer = create(<MediaPlayer media={movie} onClose={() => {}} />); });
     expect(renderer!.root.findAllByType('video')).toHaveLength(0);
     expect(renderer!.root.findAllByType('a')[0].props.href).toBe(`vlc://${direct}`);
+    // The VLC panel also knows the container: in a Safari tab it offers the
+    // direct download link for MKV/AVI (never a proxy route).
+    expect(renderer!.root.findAllByType('a').map((link) => link.props.href)).toContain(direct);
     const episode = { ...movie, id: 'episode_123', type: 'series' as const, containerExtension: 'avi' };
     await act(async () => { renderer!.update(<MediaPlayer media={episode} onClose={() => {}} />); });
     expect(renderer!.root.findAllByType('video')).toHaveLength(0);

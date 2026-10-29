@@ -46,7 +46,7 @@ npm run build:static
 VITE_PAIRING_RELAY_URL="$URL_DEL_RELAY" npm run build:static
 ```
 
-Il catalogo e gli stream vengono richiesti direttamente al provider (che deve consentire CORS per le API); i download tramite proxy non sono disponibili. L'abbinamento, l'accesso remoto e il login con codice rubrica richiedono il relay configurato in fase di build. Per MKV e AVI su iPhone/iPad l'app propone VLC.
+Il catalogo e gli stream vengono richiesti direttamente al provider (che deve consentire CORS per le API); i download tramite proxy non sono disponibili. L'abbinamento, l'accesso remoto e il login con codice rubrica richiedono il relay configurato in fase di build. Per MKV e AVI su iPhone/iPad l'app propone VLC e, in una scheda di Safari, il link diretto al file: un tocco apre la scelta di Safari, oppure tieni premuto e scegli «Scarica file collegato». Nell'app dalla schermata Home (standalone) il salvataggio passa da VLC, che chiede già «scarica o riproduci».
 
 La pagina deve restare in **HTTP** se gli stream del provider sono HTTP: una pagina HTTPS verrebbe bloccata da Safari per contenuto misto. `dist/.htaccess` imposta il reindirizzamento verso HTTP su Apache con `mod_rewrite`; su altri hosting occorre configurare una regola equivalente e disattivare HTTPS obbligatorio/HSTS. **HTTP non cifra credenziali né stream**: usa solo reti fidate e valuta il rischio prima di esporre il sito.
 
@@ -117,4 +117,5 @@ Visita `http://localhost:3000`.
 - **Parsing intelligente**: incolla link diretti come `http://host/movie/User/Pass/id.mp4`, `series`, `live` o link `get.php`/`player_api.php`.
 - **Riproduzione immediata**: player video con seek, volume, velocità, proporzioni e Picture-in-Picture.
 - **Catalogo completo**: Film VOD, canali Live con loghi, Serie TV divise per stagioni ed episodi.
+- **Ricerca unica**: l'icona lente cerca in tutto il catalogo già scaricato (Live, Film, Serie) da 2 caratteri in su, senza accenti; le caselle di Live, Film e Serie cercano in tutte le categorie della sezione. Le regole sono le stesse dell'app Android TV. La navigazione a telecomando in modalità TV resta quella di sempre.
 - **Bypass CORS/HTTP**: streaming fluido senza blocchi del browser.

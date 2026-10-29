@@ -1,12 +1,18 @@
 import React from 'react';
 import { Download } from 'lucide-react';
 import { isAppleMobile } from '../utils/appleMobile';
-import { decideAppleDownload } from '../utils/appleDownload';
+import { decideAppleDownload, isSafariOnlyAppleContainer } from '../utils/appleDownload';
 import { STATIC_DEPLOY } from '../utils/deployTarget';
 import { isStandaloneWebApp } from '../utils/standaloneWebApp';
 
 export const APPLE_DOWNLOAD_HINT = 'Tieni premuto e scegli «Scarica file collegato»';
+/** MKV/AVI: in Safari un tocco apre la scelta, il long press resta come ripiego. */
+export const APPLE_SAFARI_DOWNLOAD_HINT =
+  'Tocca e scegli «Scarica», oppure tieni premuto → «Scarica file collegato»';
 export const APPLE_STANDALONE_NOTE = 'Per scaricare apri FelixVP in Safari';
+
+const COMPACT_HINT = 'tieni premuto per scaricare';
+const COMPACT_SAFARI_HINT = 'tocca o tieni premuto';
 
 interface AppleDownloadLinkProps {
   streamUrl: string;
@@ -36,6 +42,9 @@ export const AppleDownloadLink: React.FC<AppleDownloadLinkProps> = ({
   if (decision.kind === 'none') return null;
 
   const compact = variant === 'compact';
+  const safariOnlyContainer = isSafariOnlyAppleContainer(containerExtension);
+  const hint = safariOnlyContainer ? APPLE_SAFARI_DOWNLOAD_HINT : APPLE_DOWNLOAD_HINT;
+  const compactHint = safariOnlyContainer ? COMPACT_SAFARI_HINT : COMPACT_HINT;
 
   if (decision.kind === 'standalone-note') {
     return (
@@ -56,7 +65,7 @@ export const AppleDownloadLink: React.FC<AppleDownloadLinkProps> = ({
         href={decision.href}
         target="_blank"
         rel="noopener noreferrer"
-        title={APPLE_DOWNLOAD_HINT}
+        title={hint}
         onClick={(event) => event.stopPropagation()}
         className={`inline-flex items-center gap-1.5 rounded-xl border border-separator-strong bg-surface-1 font-bold text-label transition hover:bg-surface-2 ${
           compact ? 'px-2 py-1 text-[11px]' : 'px-3 py-2 text-sm'
@@ -66,7 +75,7 @@ export const AppleDownloadLink: React.FC<AppleDownloadLinkProps> = ({
         Scarica
       </a>
       <span className={`${compact ? 'text-[10px] leading-tight' : 'text-xs leading-snug'} text-label-secondary`}>
-        {compact ? 'tieni premuto per scaricare' : APPLE_DOWNLOAD_HINT}
+        {compact ? compactHint : hint}
       </span>
     </div>
   );
