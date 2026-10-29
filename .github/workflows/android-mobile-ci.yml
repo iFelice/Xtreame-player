@@ -113,8 +113,26 @@ jobs:
           set -euo pipefail
           apk="apps/android-mobile/app/build/outputs/apk/debug/app-debug.apk"
           apksigner=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
-          fingerprint=$("$apksigner" verify --print-certs "$apk" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -1)
-          test -n "$fingerprint"
+          if [[ ! -f "$apk" ]]; then
+            echo "::error::APK debug non trovato nel percorso atteso"
+            exit 1
+          fi
+          if [[ -z "$apksigner" || ! -x "$apksigner" ]]; then
+            echo "::error::apksigner non trovato nell'Android SDK"
+            exit 1
+          fi
+          cert_output="$RUNNER_TEMP/fvp-apk-certificates.txt"
+          if ! "$apksigner" verify --print-certs "$apk" > "$cert_output" 2>&1; then
+            cat "$cert_output"
+            echo "::error::Verifica della firma APK debug fallita"
+            exit 1
+          fi
+          cat "$cert_output"
+          fingerprint=$(awk -F': ' '/certificate SHA-256 digest:/ {print $NF; exit}' "$cert_output")
+          if [[ -z "$fingerprint" ]]; then
+            echo "::error::Impronta SHA-256 certificato assente dall'output apksigner"
+            exit 1
+          fi
           echo "Certificato SHA-256 APK debug: $fingerprint"
           echo "::notice::Certificato SHA-256 APK debug: $fingerprint"
 
