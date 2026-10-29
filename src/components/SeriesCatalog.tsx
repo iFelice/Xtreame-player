@@ -35,6 +35,9 @@ import { useTouchCardMode } from '../utils/useTouchCardMode';
 import { showsHoverVeil } from '../utils/touchDevice';
 import { CollapsibleCategoryPanel } from './CollapsibleCategoryPanel';
 import { STATIC_DEPLOY } from '../utils/deployTarget';
+import { presentText } from '../utils/seriesInfo';
+import { SeriesInfoBlock } from './SeriesInfoBlock';
+import { ExpandablePlot } from './ExpandablePlot';
 
 interface SeriesCatalogProps {
   categories: XtreamCategory[];
@@ -66,6 +69,16 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
   const [, refreshFavorites] = useState(0);
   const seriesListRef = useRef<HTMLDivElement | null>(null);
   const isTv = isTvEnvironment();
+  const [bodyTvMode, setBodyTvMode] = useState(() => typeof document !== 'undefined' && !!document.body?.classList?.contains('tv-mode'));
+  useEffect(() => {
+    const body = document.body;
+    if (!body || typeof MutationObserver === 'undefined') return;
+    const update = () => setBodyTvMode(body.classList.contains('tv-mode'));
+    update();
+    const observer = new MutationObserver(update);
+    observer.observe(body, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
   // Touch cards (TV excluded) open the series on a tap and must not render the
   // hover veil: it is invisible there but would still receive the taps.
   const touchCardMode = useTouchCardMode(isTv);
@@ -471,132 +484,142 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                   <div className="w-12 h-12 border-4 border-series/20 border-t-series rounded-full animate-spin mb-3"></div>
                   <span className="text-sm font-medium">Caricamento stagioni ed episodi...</span>
                 </div>
-              ) : activeSeriesDetail.info?.episodes && Object.keys(activeSeriesDetail.info.episodes).length > 0 ? (
+              ) : (
                 <>
-                  {/* Season Selection Pills */}
-                  <div>
-                    <h4 className="text-xs sm:text-sm font-bold text-label-secondary mb-3 uppercase tracking-wider">
-                      Stagioni
-                    </h4>
-                    <div className="flex flex-wrap gap-2">
-                      {Object.keys(activeSeriesDetail.info.episodes).map((seasonNum) => (
-                        <button
-                          key={seasonNum}
-                          onClick={() =>
-                            setActiveSeriesDetail((prev) =>
-                              prev ? { ...prev, selectedSeason: seasonNum } : null
-                            )
-                          }
-                          className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition cursor-pointer ${
-                            activeSeriesDetail.selectedSeason === seasonNum
-                              ? 'bg-series text-on-accent shadow-md'
-                              : 'bg-surface-0 hover:bg-surface-1 text-label-secondary border border-separator'
-                          }`}
-                        >
-                          Stagione {seasonNum}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                  {!isTv && !bodyTvMode && activeSeriesDetail.info && (
+                    <SeriesInfoBlock key={activeSeriesDetail.series.series_id} info={activeSeriesDetail.info} series={activeSeriesDetail.series} />
+                  )}
+                  {activeSeriesDetail.info?.episodes && Object.keys(activeSeriesDetail.info.episodes).length > 0 ? (
+                    <>
+                      {/* Season Selection Pills */}
+                      <div>
+                        <h4 className="text-xs sm:text-sm font-bold text-label-secondary mb-3 uppercase tracking-wider">
+                          Stagioni
+                        </h4>
+                        <div className="flex flex-wrap gap-2">
+                          {Object.keys(activeSeriesDetail.info.episodes).map((seasonNum) => (
+                            <button
+                              key={seasonNum}
+                              onClick={() =>
+                                setActiveSeriesDetail((prev) =>
+                                  prev ? { ...prev, selectedSeason: seasonNum } : null
+                                )
+                              }
+                              className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition cursor-pointer ${
+                                activeSeriesDetail.selectedSeason === seasonNum
+                                  ? 'bg-series text-on-accent shadow-md'
+                                  : 'bg-surface-0 hover:bg-surface-1 text-label-secondary border border-separator'
+                              }`}
+                            >
+                              Stagione {seasonNum}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
 
-                  {/* Episodes List for Selected Season */}
-                  <div>
-                    <h4 className="text-xs sm:text-sm font-bold text-label-secondary mb-3 uppercase tracking-wider">
-                      Episodi (Stagione {activeSeriesDetail.selectedSeason})
-                    </h4>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {(
-                        activeSeriesDetail.info.episodes[activeSeriesDetail.selectedSeason] || []
-                      ).map((ep) => (
-                        <div
-                          key={ep.id}
-                          className="flex items-center justify-between p-3.5 rounded-2xl bg-surface-0 border border-separator/80 hover:border-series/40 transition gap-3 shadow-sm"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="text-xs sm:text-sm  font-bold text-series shrink-0">
-                                E{ep.episode_num}
-                              </span>
-                              <h5 className="text-xs sm:text-sm font-bold text-label truncate" title={ep.title}>
-                                {ep.title || `Episodio ${ep.episode_num}`}
-                              </h5>
-                            </div>
-                            {ep.info?.duration_secs && (
-                              <p className="text-xs text-label-secondary ">
-                                {formatDuration(ep.info.duration_secs)}
-                              </p>
-                            )}
-                          </div>
+                      {/* Episodes List for Selected Season */}
+                      <div>
+                        <h4 className="text-xs sm:text-sm font-bold text-label-secondary mb-3 uppercase tracking-wider">
+                          Episodi (Stagione {activeSeriesDetail.selectedSeason})
+                        </h4>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {(
+                            activeSeriesDetail.info.episodes[activeSeriesDetail.selectedSeason] || []
+                          ).map((ep) => (
+                            <div
+                              key={ep.id}
+                              className="flex items-center justify-between p-3.5 rounded-2xl bg-surface-0 border border-separator/80 hover:border-series/40 transition gap-3 shadow-sm"
+                            >
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-xs sm:text-sm  font-bold text-series shrink-0">
+                                    E{ep.episode_num}
+                                  </span>
+                                  <h5 className="text-xs sm:text-sm font-bold text-label truncate" title={ep.title}>
+                                    {ep.title || `Episodio ${ep.episode_num}`}
+                                  </h5>
+                                </div>
+                                {!isTv && !bodyTvMode && presentText(ep.info?.plot) && (
+                                  <ExpandablePlot text={presentText(ep.info?.plot)!} lines={2} />
+                                )}
+                                {ep.info?.duration_secs && (
+                                  <p className="text-xs text-label-secondary ">
+                                    {formatDuration(ep.info.duration_secs)}
+                                  </p>
+                                )}
+                              </div>
 
-                          <div className="flex items-center gap-2 shrink-0">
-                            {!STATIC_DEPLOY && !isTv && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  e.preventDefault();
-                                  const ext = ep.container_extension || 'mp4';
-                                  const streamUrl = buildStreamUrl(
+                              <div className="flex items-center gap-2 shrink-0">
+                                {!STATIC_DEPLOY && !isTv && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      e.preventDefault();
+                                      const ext = ep.container_extension || 'mp4';
+                                      const streamUrl = buildStreamUrl(
+                                        serverUrl,
+                                        username,
+                                        password,
+                                        'series',
+                                        ep.id,
+                                        ext,
+                                        false
+                                      );
+                                      const title = `${activeSeriesDetail.series.name} - S${activeSeriesDetail.selectedSeason}E${ep.episode_num} - ${ep.title || 'Episodio'}`;
+                                      triggerMediaDownload(
+                                        streamUrl,
+                                        title,
+                                        'episode',
+                                        ep.info?.movie_image || activeSeriesDetail.series.cover,
+                                        ext,
+                                        accountKey
+                                      );
+                                    }}
+                                    title="Scarica nella cartella locale dell’app"
+                                    aria-label="Scarica episodio"
+                                    className="p-2 rounded-xl bg-surface-1 hover:bg-surface-2 text-series hover:text-label transition cursor-pointer"
+                                  >
+                                    <Download className="w-4 h-4" />
+                                  </button>
+                                )}
+
+                                {/* Static Apple build: long-press on the direct file link. */}
+                                <AppleDownloadLink
+                                  streamUrl={buildStreamUrl(
                                     serverUrl,
                                     username,
                                     password,
                                     'series',
                                     ep.id,
-                                    ext,
+                                    ep.container_extension || 'mp4',
                                     false
-                                  );
-                                  const title = `${activeSeriesDetail.series.name} - S${activeSeriesDetail.selectedSeason}E${ep.episode_num} - ${ep.title || 'Episodio'}`;
-                                  triggerMediaDownload(
-                                    streamUrl,
-                                    title,
-                                    'episode',
-                                    ep.info?.movie_image || activeSeriesDetail.series.cover,
-                                    ext,
-                                    accountKey
-                                  );
-                                }}
-                                title="Scarica nella cartella locale dell’app"
-                                aria-label="Scarica episodio"
-                                className="p-2 rounded-xl bg-surface-1 hover:bg-surface-2 text-series hover:text-label transition cursor-pointer"
-                              >
-                                <Download className="w-4 h-4" />
-                              </button>
-                            )}
+                                  )}
+                                  containerExtension={ep.container_extension}
+                                  variant="compact"
+                                />
 
-                            {/* Static Apple build: long-press on the direct file link. */}
-                            <AppleDownloadLink
-                              streamUrl={buildStreamUrl(
-                                serverUrl,
-                                username,
-                                password,
-                                'series',
-                                ep.id,
-                                ep.container_extension || 'mp4',
-                                false
-                              )}
-                              containerExtension={ep.container_extension}
-                              variant="compact"
-                            />
-
-                            <button
-                              onClick={() =>
-                                handlePlayEpisode(ep, activeSeriesDetail.selectedSeason)
-                              }
-                              className="px-3.5 py-1.5 rounded-xl bg-series hover:brightness-110 text-on-accent text-xs sm:text-sm font-bold flex items-center gap-1.5 transition shrink-0 cursor-pointer shadow-md"
-                            >
-                              <Play className="w-3.5 h-3.5 fill-white" />
-                              Guarda
-                            </button>
-                          </div>
+                                <button
+                                  onClick={() =>
+                                    handlePlayEpisode(ep, activeSeriesDetail.selectedSeason)
+                                  }
+                                  className="px-3.5 py-1.5 rounded-xl bg-series hover:brightness-110 text-on-accent text-xs sm:text-sm font-bold flex items-center gap-1.5 transition shrink-0 cursor-pointer shadow-md"
+                                >
+                                  <Play className="w-3.5 h-3.5 fill-white" />
+                                  Guarda
+                                </button>
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                      ))}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="py-12 text-center text-label-secondary text-sm">
+                      Nessun episodio disponibile per questa serie.
                     </div>
-                  </div>
+                  )}
                 </>
-              ) : (
-                <div className="py-12 text-center text-label-secondary text-sm">
-                  Nessun episodio disponibile per questa serie.
-                </div>
               )}
             </div>
           </div>
