@@ -17,11 +17,8 @@ import it.felixvision.tv.data.playback.VideoFormat
  */
 object VideoFormatLayout {
 
-    /** Per quanto resta visibile l'etichetta "Formato: <nome>" dopo la scelta. */
-    const val INDICATOR_MILLIS = 2_000L
-
     /**
-     * Modalità di ridimensionamento di `PlayerView`: "Adatta" lascia tutto il
+     * Modalità di ridimensionamento di `PlayerView`: "Originale" lascia tutto il
      * video nello schermo, "Zoom" riempie tagliando i bordi, i due rapporti
      * fissi riempiono il riquadro con le proporzioni imposte dal riquadro
      * stesso (vedi [aspectRatioFor]).
@@ -36,7 +33,7 @@ object VideoFormatLayout {
 
     /**
      * Rapporto d'aspetto del riquadro del video, `null` quando il riquadro
-     * occupa tutto lo schermo ("Adatta" e "Zoom").
+     * occupa tutto lo schermo ("Originale" e "Zoom").
      */
     fun aspectRatioFor(format: VideoFormat): Float? = when (format) {
         VideoFormat.FIT,

@@ -11,7 +11,7 @@ import org.junit.Test
 class VideoFormatTest {
 
     @Test
-    fun `quattro voci nell ordine Adatta Zoom sedici noni e quattro terzi`() {
+    fun `quattro voci nell ordine Originale Zoom sedici noni e quattro terzi`() {
         assertEquals(
             listOf(
                 VideoFormat.FIT,
@@ -25,7 +25,7 @@ class VideoFormatTest {
 
     @Test
     fun `etichetta di ogni voce`() {
-        assertEquals("Adatta", VideoFormat.FIT.label)
+        assertEquals("Originale", VideoFormat.FIT.label)
         assertEquals("Zoom", VideoFormat.ZOOM.label)
         assertEquals("16:9", VideoFormat.RATIO_16_9.label)
         assertEquals("4:3", VideoFormat.RATIO_4_3.label)
@@ -49,7 +49,7 @@ class VideoFormatTest {
 
     @Test
     fun `dall archivio un valore sconosciuto o nullo non da alcun formato`() {
-        // Nessuna eccezione: chi non si riconosce riparte da "Adatta".
+        // Nessuna eccezione: chi non si riconosce riparte da "Originale".
         assertNull(VideoFormat.fromStorage("boh"))
         assertNull(VideoFormat.fromStorage(""))
         assertNull(VideoFormat.fromStorage(null))

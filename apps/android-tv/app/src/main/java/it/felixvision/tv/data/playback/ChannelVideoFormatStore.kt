@@ -26,13 +26,13 @@ internal data class ChannelVideoFormatsPayload(val formats: Map<String, String> 
 /**
  * Formato dello schermo per canale Live, salvato in DataStore come "I miei
  * canali": una sola voce per server+utente, con dentro i canali che hanno un
- * formato diverso da "Adatta".
+ * formato diverso da "Originale".
  *
  * Solo le librerie già usate in `data/` (DataStore Preferences,
  * kotlinx.serialization, coroutines): il modulo `apps/android-mobile` compila
  * questa cartella e non dichiara Media3.
  *
- * "Adatta" è il predefinito e non si salva mai: la voce del canale viene
+ * "Originale" è il predefinito e non si salva mai: la voce del canale viene
  * rimossa, così l'archivio resta piccolo e un canale senza voce parte
  * dall'inquadratura intera. Film e serie non passano di qui: il formato vale
  * per la riproduzione in corso e si perde alla chiusura.
@@ -62,14 +62,14 @@ class ChannelVideoFormatStore(
     /**
      * Formato scelto per ogni canale di questo account. Le voci con una chiave
      * sconosciuta (per esempio di una versione diversa) si scartano: per quel
-     * canale vale "Adatta".
+     * canale vale "Originale".
      */
     suspend fun getAll(server: String, username: String): Map<String, VideoFormat> =
         withContext(io) { decode(readRaw(server, username)) }
 
     /**
      * Ricorda il formato di un canale. Con [VideoFormat.FIT] la voce si
-     * rimuove: "Adatta" è il predefinito e non ha senso occupare l'archivio.
+     * rimuove: "Originale" è il predefinito e non ha senso occupare l'archivio.
      */
     suspend fun save(
         server: String,

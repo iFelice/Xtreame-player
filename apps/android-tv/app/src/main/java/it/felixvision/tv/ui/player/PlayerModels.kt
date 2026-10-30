@@ -140,12 +140,6 @@ data class PlayerUiState(
     val videoFormat: VideoFormat = VideoFormat.FIT,
     /** Vero mentre è aperto il pannello del formato dello schermo. */
     val formatPanelVisible: Boolean = false,
-    /**
-     * Formato appena scelto, mostrato per 2 secondi dall'etichetta
-     * "Formato: <nome>". Non è un pannello: non entra in [hasModalOverlay] e
-     * non ruba i tasti al player.
-     */
-    val videoFormatIndicator: VideoFormat? = null,
 ) {
     val progressFraction: Float
         get() = if (durationMillis <= 0L) {

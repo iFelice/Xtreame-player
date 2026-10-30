@@ -52,9 +52,4 @@ class VideoFormatLayoutTest {
             0.0001f,
         )
     }
-
-    @Test
-    fun `l etichetta del formato dura due secondi`() {
-        assertEquals(2_000L, VideoFormatLayout.INDICATOR_MILLIS)
-    }
 }

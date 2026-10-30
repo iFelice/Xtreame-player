@@ -557,6 +557,7 @@ private fun MyChannelsTab(
         val id = focusChannelId ?: return@LaunchedEffect
         val index = channels.indexOfFirst { it.streamId == id }
         if (index < 0) {
+            runCatching { onTabFocusRequester.requestFocus() }
             onChannelFocusRestored()
             return@LaunchedEffect
         }

@@ -5,6 +5,7 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import it.felixvision.tv.data.playback.VideoFormat
@@ -20,8 +21,8 @@ import org.robolectric.annotation.Config
 /**
  * Pannello del formato dello schermo: le quattro voci nell'ordine di
  * [VideoFormat], il formato in vigore che prende il focus all'apertura e OK su
- * una voce che riporta la scelta. Un solo `setContent` per test e pulsanti
- * tv-material attivati con l'azione di click.
+ * una voce che riporta la scelta senza chiudere il pannello. Un solo `setContent`
+ * per test e pulsanti tv-material attivati con l'azione di click.
  */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [34], qualifiers = "w1920dp-h1080dp-land-television-mdpi")
@@ -47,6 +48,8 @@ class PlayerFormatPanelTest {
         }
         rule.waitForIdle()
 
+        rule.onNodeWithText("Formato").assertExists()
+
         // Le quattro voci, con il tag fatto sulla chiave del formato.
         VideoFormat.entries.forEach { format ->
             rule.onNodeWithTag("player_format_option_${format.storageKey}").assertExists()
@@ -56,10 +59,11 @@ class PlayerFormatPanelTest {
         rule.onNodeWithTag("player_format_option_zoom").assertIsFocused()
         assertNull(chosen)
 
-        // OK su "4:3": la scelta esce dal pannello.
+        // OK su "4:3": la scelta arriva al chiamante e il pannello resta aperto.
         rule.onNodeWithTag("player_format_option_4_3")
             .performSemanticsAction(SemanticsActions.OnClick)
         rule.waitForIdle()
         assertEquals(VideoFormat.RATIO_4_3, chosen)
+        rule.onNodeWithTag("player_format_panel").assertExists()
     }
 }

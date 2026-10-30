@@ -857,7 +857,6 @@ fun FvpMainScreen(
     }
 
     playerSession?.let { session ->
-        val isLive = session.source is PlaybackSource.Live
         PlayerScreen(
             container = container,
             session = session,
@@ -865,13 +864,20 @@ fun FvpMainScreen(
             onExit = { info ->
                 playerSession = null
                 playerReturnTick += 1
-                if (isLive) {
-                    returnLiveChannelId = info.lastLiveChannelId
-                    liveCategoryEntry = null
-                    restoreCategoryFavoriteId = null
-                    selectedTab = DrawerSection.Live
-                } else {
-                    returnEpisodeId = info.lastEpisodeId
+                when (playerReturnTarget(session.source)) {
+                    PlayerReturnTarget.LIVE -> {
+                        returnLiveChannelId = info.lastLiveChannelId
+                        liveCategoryEntry = null
+                        restoreCategoryFavoriteId = null
+                        selectedTab = DrawerSection.Live
+                    }
+                    PlayerReturnTarget.MY_CHANNELS -> {
+                        info.lastLiveChannelId?.let {
+                            myChannelFocusId = it
+                            myChannelFocusTick += 1
+                        }
+                    }
+                    PlayerReturnTarget.NONE -> returnEpisodeId = info.lastEpisodeId
                 }
             },
         )

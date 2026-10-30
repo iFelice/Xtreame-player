@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -37,12 +39,19 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Border
+import androidx.tv.material3.Button
+import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.DenseListItem
 import androidx.tv.material3.ListItem
 import androidx.tv.material3.ListItemDefaults
@@ -85,12 +94,16 @@ const val PLAYER_CHANNEL_ROW_REST_ALPHA = 0.9f
  * Unico aspetto degli elementi del player che stanno sopra il video: fondo
  * [FvpColors.PlayerOverlay], angoli [it.felixvision.tv.ui.theme.FvpDimens.SURFACE_CORNER_BASE]
  * e bordo sottile [FvpColors.GlassBorder], gli stessi della lista canali Live.
- * Pannello del volume, banner, lista canali, barra comandi, pannello tracce,
+ * Il pannello del formato può fornire un fondo alternativo, mantenendo gli
+ * stessi angoli e bordo. Pannello del volume, banner, lista canali, barra comandi, pannello tracce,
  * prossimo episodio, Riprendi, etichetta dei salti ed errori passano tutti da qui.
  */
-internal fun Modifier.playerOverlay(scale: UiScale): Modifier = this
+internal fun Modifier.playerOverlay(
+    scale: UiScale,
+    backgroundColor: Color = FvpColors.PlayerOverlay,
+): Modifier = this
     .clip(RoundedCornerShape(scale.surfaceCorner))
-    .background(FvpColors.PlayerOverlay)
+    .background(backgroundColor)
     .border(
         width = scale.glassBorder,
         color = FvpColors.GlassBorder,
@@ -363,12 +376,47 @@ fun PlayerChannelListOverlay(
     }
 }
 
+/** Pulsante compatto della barra comandi del player. */
+@Composable
+private fun PlayerBarButton(
+    text: String,
+    onClick: () -> Unit,
+    scale: UiScale,
+    modifier: Modifier = Modifier,
+) {
+    val shape = RoundedCornerShape(scale.dp(18f))
+    Button(
+        onClick = onClick,
+        modifier = modifier,
+        scale = ButtonDefaults.scale(focusedScale = 1.05f),
+        colors = ButtonDefaults.colors(
+            containerColor = Color.Transparent,
+            contentColor = FvpColors.TextPrimary,
+            focusedContainerColor = FvpColors.Green,
+            focusedContentColor = FvpColors.OnGreen,
+            pressedContainerColor = FvpColors.Green,
+            pressedContentColor = FvpColors.OnGreen,
+        ),
+        border = ButtonDefaults.border(
+            border = Border(BorderStroke(scale.dp(1f), FvpColors.GlassBorder), shape = shape),
+            focusedBorder = Border(BorderStroke(scale.dp(2f), FvpColors.GreenFocus), shape = shape),
+            pressedBorder = Border(BorderStroke(scale.dp(2f), FvpColors.GreenFocus), shape = shape),
+        ),
+        contentPadding = PaddingValues(horizontal = scale.dp(14f), vertical = scale.dp(6f)),
+    ) {
+        Text(text = text, fontSize = scale.sp(14f), fontWeight = FontWeight.SemiBold)
+    }
+}
+
 /** Barra film/episodi: titolo, tempi, avanzamento e pulsanti tracce. */
 @Composable
 fun PlayerControlsBar(
     state: PlayerUiState,
     scale: UiScale,
     audioFocusRequester: FocusRequester,
+    progressFocusRequester: FocusRequester,
+    onTogglePlay: () -> Unit,
+    onSeek: (Int) -> Unit,
     onAudio: () -> Unit,
     onSubtitles: () -> Unit,
     onVolume: () -> Unit,
@@ -377,6 +425,7 @@ fun PlayerControlsBar(
     audioFormatLabel: String = "",
     ffmpegActive: Boolean = false,
 ) {
+    var progressFocused by remember { mutableStateOf(false) }
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -394,10 +443,38 @@ fun PlayerControlsBar(
             overflow = TextOverflow.Ellipsis,
         )
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(scale.dp(3f))
+                .then(
+                    if (progressFocused) Modifier.border(
+                        BorderStroke(scale.dp(2f), FvpColors.GreenFocus),
+                        RoundedCornerShape(scale.dp(8f)),
+                    ) else Modifier
+                )
+                .focusRequester(progressFocusRequester)
+                .onFocusChanged { progressFocused = it.isFocused }
+                .onPreviewKeyEvent { event ->
+                    if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                    when (event.key) {
+                        Key.DirectionCenter, Key.Enter -> { onTogglePlay(); true }
+                        Key.DirectionLeft -> { onSeek(-1); true }
+                        Key.DirectionRight -> { onSeek(1); true }
+                        Key.DirectionDown -> { audioFocusRequester.requestFocus(); true }
+                        Key.DirectionUp -> true
+                        else -> false
+                    }
+                }
+                .focusable()
+                .testTag("player_progress"),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(scale.dp(10f)),
         ) {
+            Text(
+                text = if (state.isPlaying) "▶" else "❚❚",
+                color = FvpColors.TextPrimary,
+                modifier = Modifier.testTag("player_play_state"),
+            )
             Text(
                 text = PlaybackFormatting.formatTime(state.positionMillis),
                 color = FvpColors.TextSecondary,
@@ -429,8 +506,16 @@ fun PlayerControlsBar(
             scale = scale,
             modifier = Modifier.testTag("player_audio_format"),
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(scale.dp(12f))) {
-            FvpPrimaryButton(
+        Row(
+            modifier = Modifier.onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionUp) {
+                    progressFocusRequester.requestFocus()
+                    true
+                } else false
+            },
+            horizontalArrangement = Arrangement.spacedBy(scale.dp(12f)),
+        ) {
+            PlayerBarButton(
                 text = "Audio",
                 onClick = onAudio,
                 scale = scale,
@@ -438,7 +523,7 @@ fun PlayerControlsBar(
                     .focusRequester(audioFocusRequester)
                     .testTag("player_audio_button"),
             )
-            FvpPrimaryButton(
+            PlayerBarButton(
                 text = "Sottotitoli",
                 onClick = onSubtitles,
                 scale = scale,
@@ -446,13 +531,13 @@ fun PlayerControlsBar(
             )
             // Volume del nostro player: si apre anche con la freccia Giù a
             // barra chiusa.
-            FvpPrimaryButton(
+            PlayerBarButton(
                 text = "Volume ${state.volumeLevel}",
                 onClick = onVolume,
                 scale = scale,
                 modifier = Modifier.testTag("player_volume_button"),
             )
-            FvpPrimaryButton(
+            PlayerBarButton(
                 text = "Formato",
                 onClick = onFormat,
                 scale = scale,
@@ -681,48 +766,39 @@ fun PlayerFormatPanel(
     ) {
         Column(
             modifier = Modifier
-                .fillMaxWidth(0.56f)
-                .heightIn(max = scale.dp(480f))
-                .playerOverlay(scale)
+                .width(IntrinsicSize.Max)
+                .playerOverlay(scale, FvpColors.PlayerPanelLight)
                 .padding(scale.dp(18f)),
             verticalArrangement = Arrangement.spacedBy(scale.dp(8f)),
         ) {
             Text(
-                text = "Formato schermo",
+                text = "Formato",
                 color = FvpColors.TextPrimary,
                 fontSize = scale.sp(20f),
                 fontWeight = FontWeight.Bold,
             )
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(scale.dp(6f)),
-                // Ingrandimento e cornice delle voci restano nella lista.
-                contentPadding = PaddingValues(scale.focusSafePadding),
-            ) {
-                itemsIndexed(VideoFormat.entries, key = { _, format -> format.storageKey }) { _, format ->
-                    ListItem(
-                        // La voce in uso è esposta come selezionata, ma i suoi
-                        // colori restano quelli normali: il verde è solo del focus.
-                        selected = format == current,
-                        onClick = { onSelect(format) },
-                        headlineContent = {
-                            Text(
-                                text = (if (format == current) "✓ " else "") + format.label,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .then(if (format == current) Modifier.focusRequester(currentFocus) else Modifier)
-                            .testTag("player_format_option_${format.storageKey}"),
-                        colors = formatColors(),
-                        scale = ListItemDefaults.scale(focusedScale = 1.03f),
-                        border = ListItemDefaults.border(
-                            focusedBorder = Border(BorderStroke(2.dp, FvpColors.GreenFocus)),
-                        ),
-                        shape = ListItemDefaults.shape(shape = RoundedCornerShape(scale.dp(8f))),
-                    )
-                }
+            VideoFormat.entries.forEach { format ->
+                ListItem(
+                    selected = format == current,
+                    onClick = { onSelect(format) },
+                    headlineContent = {
+                        Text(
+                            text = (if (format == current) "✓ " else "") + format.label,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(if (format == current) Modifier.focusRequester(currentFocus) else Modifier)
+                        .testTag("player_format_option_${format.storageKey}"),
+                    colors = formatColors(),
+                    scale = ListItemDefaults.scale(focusedScale = 1.03f),
+                    border = ListItemDefaults.border(
+                        focusedBorder = Border(BorderStroke(2.dp, FvpColors.GreenFocus)),
+                    ),
+                    shape = ListItemDefaults.shape(shape = RoundedCornerShape(scale.dp(8f))),
+                )
             }
         }
     }
@@ -730,37 +806,15 @@ fun PlayerFormatPanel(
 
 @Composable
 private fun formatColors() = ListItemDefaults.colors(
-    containerColor = FvpColors.SurfaceElevated,
+    containerColor = FvpColors.SurfaceElevated.copy(alpha = PLAYER_CHANNEL_ROW_REST_ALPHA),
     contentColor = FvpColors.TextPrimary,
-    focusedContainerColor = FvpColors.Green,
-    focusedContentColor = FvpColors.OnGreen,
-    selectedContainerColor = FvpColors.SurfaceElevated,
+    focusedContainerColor = FvpColors.SurfaceElevated,
+    focusedContentColor = FvpColors.TextPrimary,
+    selectedContainerColor = FvpColors.SurfaceElevated.copy(alpha = PLAYER_CHANNEL_ROW_REST_ALPHA),
     selectedContentColor = FvpColors.TextPrimary,
-    focusedSelectedContainerColor = FvpColors.Green,
-    focusedSelectedContentColor = FvpColors.OnGreen,
+    focusedSelectedContainerColor = FvpColors.SurfaceElevated,
+    focusedSelectedContentColor = FvpColors.TextPrimary,
 )
-
-/**
- * Etichetta "Formato: <nome>" dei due secondi dopo la scelta: stesso aspetto
- * dell'etichetta REPLAY, in alto al centro dello schermo. Non è un pannello e
- * non prende il focus.
- */
-@Composable
-fun PlayerFormatIndicator(
-    format: VideoFormat,
-    scale: UiScale,
-    modifier: Modifier = Modifier,
-) {
-    Text(
-        text = "Formato: ${format.label}",
-        color = FvpColors.TextPrimary,
-        fontSize = scale.sp(16f),
-        modifier = modifier
-            .playerOverlay(scale)
-            .padding(horizontal = scale.dp(14f), vertical = scale.dp(8f))
-            .testTag("player_format_indicator"),
-    )
-}
 
 /** Errore di riproduzione: messaggio senza URL, Riprova e Indietro. */
 @Composable
