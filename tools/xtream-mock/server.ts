@@ -245,18 +245,20 @@ app.get('/player_api.php', async (req, res) => {
       info: {
         name: 'Serie di collaudo',
         cover: `${base}/assets/poster/301.svg`,
-        plot: 'Serie locale di prova, senza account o contenuti privati.',
+        plot: 'Serie locale di prova, senza account o contenuti privati. Un gruppo di amici esplora un mondo immaginario e affronta ogni giorno nuove sfide. Tra incontri sorprendenti e piccoli misteri, ogni episodio porta una nuova avventura da condividere.',
+        cast: 'Anna Demo, Luca Esempio',
+        director: 'Giulia Demo',
         genre: 'Test',
         releaseDate: '2026-10-01',
         rating: '9.0',
       },
       episodes: {
         '1': [
-          { id: '401', episode_num: 1, title: 'Episodio funzionante', container_extension: 'm3u8', info: { duration: '00:09:56', movie_image: `${base}/assets/poster/301.svg` } },
-          { id: '402', episode_num: 2, title: 'Episodio lento', container_extension: 'm3u8', info: { duration: '00:09:56', movie_image: `${base}/assets/poster/202.svg` } },
+          { id: '401', episode_num: 1, title: 'Episodio funzionante', container_extension: 'm3u8', info: { duration: '00:09:56', movie_image: `${base}/assets/poster/301.svg`, plot: 'Gli amici iniziano una nuova avventura e scoprono un mistero inatteso. Insieme esplorano il quartiere, incontrano nuovi personaggi e cercano indizi per risolvere il loro primo caso dimostrativo.' } },
+          { id: '402', episode_num: 2, title: 'Episodio lento', container_extension: 'm3u8', info: { duration: '00:09:56', movie_image: `${base}/assets/poster/202.svg`, plot: 'Una sorpresa mette alla prova la pazienza del gruppo.' } },
         ],
         '2': [
-          { id: '403', episode_num: 1, title: 'Episodio non disponibile', container_extension: 'm3u8', info: { duration: '00:09:56', movie_image: `${base}/assets/poster/203.svg` } },
+          { id: '403', episode_num: 1, title: 'Episodio non disponibile', container_extension: 'm3u8', info: { duration: '00:09:56', movie_image: `${base}/assets/poster/203.svg`, plot: 'Il gruppo affronta un imprevisto durante la sua prossima avventura.' } },
         ],
       },
     });
