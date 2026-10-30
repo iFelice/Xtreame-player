@@ -20,6 +20,7 @@ import it.felixvision.mobile.ui.main.HomeScreen
  * La schermata provvisoria del PR1 ([ui.access.AccountScreen]) è stata
  * sostituita da [HomeScreen] nel PR2.
  */
+@androidx.media3.common.util.UnstableApi
 @Composable
 fun FvpApp(container: AppContainer) {
     val factory = remember(container) {

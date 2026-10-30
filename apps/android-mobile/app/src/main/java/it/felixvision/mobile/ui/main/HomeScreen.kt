@@ -17,6 +17,8 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,6 +51,9 @@ import it.felixvision.mobile.ui.detail.SeriesDetailScreen
 import it.felixvision.mobile.ui.settings.SettingsScreen
 import it.felixvision.mobile.ui.settings.SettingsViewModel
 import it.felixvision.mobile.ui.theme.FvpColors
+import it.felixvision.mobile.ui.player.MobilePlayerSession
+import it.felixvision.mobile.ui.player.PlayerScreen
+import it.felixvision.mobile.ui.player.createMobilePlayerSession
 import it.felixvision.tv.data.epg.ChannelScheduleLoader
 
 /**
@@ -69,6 +74,7 @@ import it.felixvision.tv.data.epg.ChannelScheduleLoader
  * I ViewModel hanno costruttori iniettabili per i test; qui vengono creati
  * con l'[AppContainer] e la tupla server/utente della sessione.
  */
+@androidx.media3.common.util.UnstableApi
 @Composable
 fun HomeScreen(
     container: AppContainer,
@@ -111,6 +117,10 @@ fun HomeScreen(
             }
         },
     ),
+    playerContent: @Composable (AppContainer, MobilePlayerSession, () -> Unit) -> Unit =
+        { playerContainer, session, onExit ->
+            PlayerScreen(container = playerContainer, session = session, onExit = onExit)
+        },
 ) {
     val catalogState by catalogViewModel.ui.collectAsStateWithLifecycle()
     val section by catalogViewModel.selectedSection.collectAsStateWithLifecycle()
@@ -118,6 +128,8 @@ fun HomeScreen(
     val actionTarget by catalogViewModel.actionTarget.collectAsStateWithLifecycle()
     val positionDialog by catalogViewModel.positionDialog.collectAsStateWithLifecycle()
     val notice by catalogViewModel.notice.collectAsStateWithLifecycle()
+    val playRequest by catalogViewModel.playRequest.collectAsStateWithLifecycle()
+    var playerSession by remember { mutableStateOf<MobilePlayerSession?>(null) }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
@@ -145,11 +157,27 @@ fun HomeScreen(
         }
     }
 
+    LaunchedEffect(playRequest, catalogState.catalog) {
+        val request = playRequest ?: return@LaunchedEffect
+        val catalog = catalogState.catalog ?: return@LaunchedEffect
+        val resolved = runCatching {
+            createMobilePlayerSession(request, catalog, container, summary, password, catalogViewModel)
+        }.getOrNull()
+        if (resolved != null) playerSession = resolved
+        else snackbarHostState.showSnackbar("Contenuto non disponibile per la riproduzione")
+        catalogViewModel.consumePlayRequest(request)
+    }
+
     // Apertura delle Impostazioni: rilettura account + etichetta server.
     LaunchedEffect(section) {
         if (section == AppSection.IMPOSTAZIONI) {
             settingsViewModel.onSettingsVisible()
         }
+    }
+
+    if (playerSession != null) {
+        playerContent(container, playerSession!!) { playerSession = null }
+        return
     }
 
     // Tasto Indietro gestito dal ViewModel (ordine del KDoc della classe).

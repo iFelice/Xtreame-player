@@ -134,7 +134,11 @@ fun LiveGuideScreen(
                             nowMillis = nowMillis,
                             onCatchupPlay = {
                                 viewModel.onPlayRequest(
-                                    PlayTarget.CatchupProgram(channel.streamId, program.title),
+                                    PlayTarget.CatchupProgram(
+                                        streamId = channel.streamId,
+                                        programStartSeconds = program.start,
+                                        programTitle = program.title,
+                                    ),
                                 )
                             },
                         )

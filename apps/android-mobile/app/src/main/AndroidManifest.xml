@@ -16,7 +16,7 @@
       App per tablet con interfaccia touch: nessuna feature leanback, nessun
       banner e launcher con la sola categoria LAUNCHER. Nessuna autorizzazione
       per l'installazione di pacchetti e nessun attributo picture-in-picture
-      in questo PR (aggiornamento in-app e PiP arrivano dopo).
+      in questo PR (l'aggiornamento in-app arriva nel PR4).
     -->
     <application
         android:name=".FvpApplication"
@@ -28,11 +28,15 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.FelixVP">
 
+        <receiver android:name=".ui.player.PlayerPipAction" android:exported="false" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
-            android:launchMode="singleTask">
+            android:launchMode="singleTask"
+            android:supportsPictureInPicture="true"
+            android:configChanges="orientation|screenLayout|screenSize|smallestScreenSize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

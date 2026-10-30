@@ -31,7 +31,19 @@ if (!hasReleaseSigning) {
     )
 }
 
+// Chiave di debug stabile (fornita dal CI solo quando è configurata).
+val debugKeystorePath = System.getenv("FVP_DEBUG_KEYSTORE_PATH")?.takeIf { it.isNotBlank() }
+
 android {
+    if (debugKeystorePath != null) {
+        signingConfigs.getByName("debug") {
+            storeFile = file(debugKeystorePath)
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     if (hasReleaseSigning) {
         signingConfigs {
             create("release") {

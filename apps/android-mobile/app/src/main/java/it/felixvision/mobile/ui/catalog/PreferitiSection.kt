@@ -266,7 +266,7 @@ fun PreferitiSection(
                             workingList.addAll(myChannels)
                         },
                         onPlay = {
-                            viewModel.onPlayRequest(PlayTarget.LiveChannel(channel.streamId))
+                            viewModel.onPlayRequest(PlayTarget.LiveChannel(channel.streamId, fromMyChannels = true))
                         },
                         onLongPress = {
                             viewModel.openActions(ActionTarget.MyChannelEntry(channel))

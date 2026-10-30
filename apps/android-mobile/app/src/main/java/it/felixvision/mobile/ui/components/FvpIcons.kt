@@ -184,4 +184,54 @@ object FvpIcons {
                 "-1.41l-2.34,-2.34c-0.39,-0.39 -1.02,-0.39 -1.41,0l-1.83,1.83 3.75,3.75 1.83,-1.83z",
         )
     }
+    /** Pausa media. */
+    val Pause: ImageVector by lazy {
+        icon("Pause", "M6,5h4v14H6zM14,5h4v14h-4z")
+    }
+
+    /** Avanzamento temporale. */
+    val Avanti10: ImageVector by lazy {
+        icon("Avanti10", "M12,5V1l5,5 -5,5V7c-2.76,0 -5,2.24 -5,5s2.24,5 5,5 5,-2.24 5,-5h2c0,3.87 -3.13,7 -7,7s-7,-3.13 -7,-7 3.13,-7 7,-7z")
+    }
+
+    /** Indietro nel tempo. */
+    val Indietro10: ImageVector by lazy {
+        icon("Indietro10", "M12,5V1L7,6l5,5V7c2.76,0 5,2.24 5,5s-2.24,5 -5,5 -5,-2.24 -5,-5H5c0,3.87 3.13,7 7,7s7,-3.13 7,-7 -3.13,-7 -7,-7z")
+    }
+
+    /** Volume. */
+    val Volume: ImageVector by lazy {
+        icon("Volume", "M3,9v6h4l5,5V4L7,9H3zM16.5,12c0,-1.77 -1.02,-3.29 -2.5,-4.03v8.05c1.48,-0.73 2.5,-2.25 2.5,-4.02zM14,3.23v2.06c2.89,0.86 5,3.54 5,6.71s-2.11,5.85 -5,6.71v2.06c4.01,-0.91 7,-4.49 7,-8.77s-2.99,-7.86 -7,-8.77z")
+    }
+
+    /** Luminosità. */
+    val Luminosita: ImageVector by lazy {
+        icon("Luminosita", "M12,7a5,5 0,1 0,0 10a5,5 0,1 0,0 -10zM11,1h2v4h-2zM11,19h2v4h-2zM1,11h4v2H1zM19,11h4v2h-4zM3.5,4.9l1.4,-1.4 2.8,2.8 -1.4,1.4zM16.3,17.7l1.4,-1.4 2.8,2.8 -1.4,1.4zM16.3,6.3l2.8,-2.8 1.4,1.4 -2.8,2.8zM3.5,19.1l2.8,-2.8 1.4,1.4 -2.8,2.8z")
+    }
+
+    /** Selezione tracce. */
+    val Tracce: ImageVector by lazy {
+        icon("Tracce", "M3,5h18v2H3zM3,11h12v2H3zM3,17h8v2H3zM17,10v10l5,-5z")
+    }
+
+    /** Adatta o riempi il video. */
+    val Adatta: ImageVector by lazy {
+        icon("Adatta", "M3,3h7v2H5v5H3zM14,3h7v7h-2V5h-5zM3,14h2v5h5v2H3zM19,14h2v7h-7v-2h5z")
+    }
+
+    /** Picture in picture. */
+    val PictureInPicture: ImageVector by lazy {
+        icon("PictureInPicture", "M3,5h18v14H3zM13,12h6v5h-6zM5,7v10h6v2H3V5h18v5h-2V7z")
+    }
+
+    /** Canale precedente. */
+    val CanalePrecedente: ImageVector by lazy {
+        icon("CanalePrecedente", "M6,5h2v14H6zM19,5v14L9,12z")
+    }
+
+    /** Canale successivo. */
+    val CanaleSuccessivo: ImageVector by lazy {
+        icon("CanaleSuccessivo", "M16,5h2v14h-2zM5,5v14l10,-7z")
+    }
+
 }
