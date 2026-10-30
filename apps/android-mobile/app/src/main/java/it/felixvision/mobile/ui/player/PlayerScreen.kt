@@ -71,6 +71,10 @@ fun PlayerScreen(
     var guideLoading by remember { mutableStateOf(false) }
     var movieInfo by remember { mutableStateOf<VodInfoResponse?>(null) }
     val density = LocalDensity.current.density
+    // Volume e luminosità reali, iniettati nello strato dei gesti: la
+    // luminosità viene ripristinata all'uscita dal player.
+    val volumeControl = rememberVolumeControl(context)
+    val brightnessControl = rememberBrightnessControl(context, activity?.window)
 
     LaunchedEffect(engine) {
         engine.start()
@@ -134,7 +138,7 @@ fun PlayerScreen(
             lifecycleOwner.lifecycle.removeObserver(observer)
             engine.close()
             activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            activity?.window?.applyBrightness(PlayerLayoutRules.restoredBrightness())
+            brightnessControl.restore()
         }
     }
     DisposableEffect(activity) {
@@ -195,6 +199,8 @@ fun PlayerScreen(
                 density = density,
                 context = context,
                 activity = activity,
+                volumeControl = volumeControl,
+                brightnessControl = brightnessControl,
                 onToggleControls = { engine.setControls(!engine.state.controls) },
                 onSeekBy = engine::seekBy,
                 onSeekTo = engine::seekTo,
@@ -668,8 +674,4 @@ private fun android.content.Context.findActivity(): Activity? = when (this) {
     is Activity -> this
     is android.content.ContextWrapper -> baseContext.findActivity()
     else -> null
-}
-
-private fun android.view.Window.applyBrightness(value: Float) {
-    attributes = attributes.apply { screenBrightness = value }
 }
