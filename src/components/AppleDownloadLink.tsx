@@ -14,11 +14,21 @@ export const APPLE_STANDALONE_NOTE = 'Per scaricare apri FelixVP in Safari';
 const COMPACT_HINT = 'tieni premuto per scaricare';
 const COMPACT_SAFARI_HINT = 'tocca o tieni premuto';
 
+/**
+ * In the `stacked` variant the hint must never widen the episode actions
+ * column: it wraps instead, below the "Guarda" button width (5rem = 80px, the
+ * button is never narrower), and stays right aligned under the link.
+ */
+const STACKED_HINT_CLASS = 'max-w-[5rem] text-right';
+
 interface AppleDownloadLinkProps {
   streamUrl: string;
   containerExtension?: string;
-  /** `compact` fits the badges of a poster card and the episode rows. */
-  variant?: 'full' | 'compact';
+  /**
+   * `compact` fits the badges of a poster card; `stacked` is the vertical
+   * variant of the episode row, right aligned under the "Guarda" button.
+   */
+  variant?: 'full' | 'compact' | 'stacked';
   className?: string;
 }
 
@@ -41,7 +51,8 @@ export const AppleDownloadLink: React.FC<AppleDownloadLinkProps> = ({
 
   if (decision.kind === 'none') return null;
 
-  const compact = variant === 'compact';
+  const compact = variant !== 'full';
+  const stacked = variant === 'stacked';
   const safariOnlyContainer = isSafariOnlyAppleContainer(containerExtension);
   const hint = safariOnlyContainer ? APPLE_SAFARI_DOWNLOAD_HINT : APPLE_DOWNLOAD_HINT;
   const compactHint = safariOnlyContainer ? COMPACT_SAFARI_HINT : COMPACT_HINT;
@@ -52,7 +63,9 @@ export const AppleDownloadLink: React.FC<AppleDownloadLinkProps> = ({
         data-apple-download="standalone-note"
         title={APPLE_STANDALONE_NOTE}
         onClick={(event) => event.stopPropagation()}
-        className={`${compact ? 'text-[10px] leading-tight' : 'text-xs leading-snug'} text-label-secondary ${className}`}
+        className={`${compact ? 'text-[10px] leading-tight' : 'text-xs leading-snug'} text-label-secondary ${
+          stacked ? STACKED_HINT_CLASS : ''
+        } ${className}`}
       >
         {compact ? 'Scarica solo in Safari' : APPLE_STANDALONE_NOTE}
       </p>
@@ -60,7 +73,10 @@ export const AppleDownloadLink: React.FC<AppleDownloadLinkProps> = ({
   }
 
   return (
-    <div data-apple-download="direct-link" className={`flex flex-col items-start gap-1 ${className}`}>
+    <div
+      data-apple-download="direct-link"
+      className={`flex flex-col gap-1 ${stacked ? 'items-end' : 'items-start'} ${className}`}
+    >
       <a
         href={decision.href}
         target="_blank"
@@ -74,7 +90,11 @@ export const AppleDownloadLink: React.FC<AppleDownloadLinkProps> = ({
         <Download className={compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
         Scarica
       </a>
-      <span className={`${compact ? 'text-[10px] leading-tight' : 'text-xs leading-snug'} text-label-secondary`}>
+      <span
+        className={`${compact ? 'text-[10px] leading-tight' : 'text-xs leading-snug'} text-label-secondary ${
+          stacked ? STACKED_HINT_CLASS : ''
+        }`}
+      >
         {compact ? compactHint : hint}
       </span>
     </div>
