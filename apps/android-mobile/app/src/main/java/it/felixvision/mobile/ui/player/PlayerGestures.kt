@@ -2,7 +2,6 @@ package it.felixvision.mobile.ui.player
 
 import android.app.Activity
 import android.content.Context
-import android.media.AudioManager
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -91,6 +90,8 @@ fun Modifier.playerGestureLayer(
     density: Float,
     context: Context,
     activity: Activity?,
+    volumeControl: VolumeControl = rememberVolumeControl(context),
+    brightnessControl: BrightnessControl = rememberBrightnessControl(context, activity?.window),
     onToggleControls: () -> Unit,
     onSeekBy: (Int) -> Unit,
     onSeekTo: (Long) -> Unit,
@@ -107,8 +108,8 @@ fun Modifier.playerGestureLayer(
             playbackType = playbackType,
             positionMillis = { currentPosition.value },
             duration = duration,
-            context = context,
-            activity = activity,
+            volumeControl = volumeControl,
+            brightnessControl = brightnessControl,
             enabled = enabled,
             feedback = feedback,
             densityScale = density,
@@ -162,8 +163,8 @@ private suspend fun PointerInputScope.detectPlayerGestures(
     playbackType: MobilePlaybackType,
     positionMillis: () -> Long,
     duration: Long,
-    context: Context,
-    activity: Activity?,
+    volumeControl: VolumeControl,
+    brightnessControl: BrightnessControl,
     enabled: Boolean,
     feedback: PlayerGestureFeedback,
     densityScale: Float,
@@ -180,11 +181,9 @@ private suspend fun PointerInputScope.detectPlayerGestures(
         val start = firstDown.position
         val startTime = clockMillis()
         val startPosition = positionMillis()
-        val startBrightness = activity?.window?.attributes?.screenBrightness
-            ?.takeIf { it >= 0f } ?: .5f
-        val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        val maxVolume = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
-        val startVolume = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
+        val startBrightness = brightnessControl.current
+        val maxVolume = volumeControl.max
+        val startVolume = volumeControl.current
         var totalDelta = Offset.Zero
         var lastAction = TouchGestureRules.Action.IGNORE
         var hadMultiplePointers = false
@@ -243,14 +242,14 @@ private suspend fun PointerInputScope.detectPlayerGestures(
                                 heightPx = size.height.toFloat(),
                                 invert = true,
                             ).coerceAtLeast(.02f)
-                            activity?.window?.applyBrightness(value)
+                            brightnessControl.set(value)
                             feedback.showBrightness(value)
                         }
                         TouchGestureRules.Action.VOLUME -> {
                             val level = (
                                 startVolume - totalDelta.y / size.height * maxVolume
                                 ).toInt().coerceIn(0, maxVolume)
-                            audio.setStreamVolume(AudioManager.STREAM_MUSIC, level, 0)
+                            volumeControl.set(level)
                             feedback.showVolume(level.toFloat() / maxVolume)
                         }
                         else -> Unit
@@ -305,6 +304,3 @@ private fun PointerEvent.consumePressedChanges() {
     changes.filter { it.pressed }.forEach(PointerInputChange::consume)
 }
 
-private fun android.view.Window.applyBrightness(value: Float) {
-    attributes = attributes.apply { screenBrightness = value }
-}

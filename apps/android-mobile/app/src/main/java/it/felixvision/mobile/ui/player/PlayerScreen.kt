@@ -286,7 +286,7 @@ fun PlayerScreen(
 
 @androidx.media3.common.util.UnstableApi
 @Composable
-private fun BoxScope.ControlsOverlay(
+internal fun BoxScope.ControlsOverlay(
     state: MobilePlayerState,
     guidePrograms: List<EpgProgram>,
     fit: Boolean,
