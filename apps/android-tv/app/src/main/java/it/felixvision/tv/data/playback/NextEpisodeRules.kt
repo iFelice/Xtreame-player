@@ -39,6 +39,24 @@ object NextEpisodeRules {
     /** Tre minuti prima della fine. */
     const val PROMPT_BEFORE_END_MILLIS = 180_000L
 
+    /** Il conto alla rovescia parte negli ultimi due minuti. */
+    const val COUNTDOWN_BEFORE_END_MILLIS = 120_000L
+
+    /** Inizio del conto: il riquadro è già apparso, ma il conto non anticipa il prompt. */
+    fun countdownStartMillis(durationMillis: Long): Long? {
+        if (durationMillis <= 0L) return null
+        return maxOf(
+            promptAtMillis(durationMillis)!!,
+            durationMillis - COUNTDOWN_BEFORE_END_MILLIS,
+        ).coerceAtLeast(0L)
+    }
+
+    /** Formatta i secondi come m:ss, senza valori negativi. */
+    fun formatCountdown(seconds: Int): String {
+        val safeSeconds = seconds.coerceAtLeast(0)
+        return "${safeSeconds / 60}:${(safeSeconds % 60).toString().padStart(2, '0')}"
+    }
+
     /** Sotto i 10 minuti si usa la percentuale finale invece dei 3 minuti. */
     const val SHORT_EPISODE_MILLIS = 600_000L
 

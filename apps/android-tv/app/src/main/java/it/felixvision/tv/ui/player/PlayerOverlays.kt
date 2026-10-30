@@ -62,6 +62,7 @@ import it.felixvision.tv.core.SystemClock
 import it.felixvision.tv.data.catalog.LiveStream
 import it.felixvision.tv.data.epg.ChannelScheduleLoader
 import it.felixvision.tv.data.epg.EpgProgram
+import it.felixvision.tv.data.playback.NextEpisodeRules
 import it.felixvision.tv.data.playback.PlaybackFormatting
 import it.felixvision.tv.data.playback.SeekFeedback
 import it.felixvision.tv.data.playback.VideoFormat
@@ -915,12 +916,7 @@ fun PlayerResumePrompt(
     }
 }
 
-/**
- * Prossimo episodio: proposta 3 minuti prima della fine. Dopo "Posticipa" torna
- * con gli stessi pulsanti, oppure con il conto alla rovescia negli ultimi 15
- * secondi se al rinvio mancava meno di un minuto e un quarto. Il focus è su
- * "Guarda ora".
- */
+/** Riquadro compatto "Prossimo episodio", con il focus iniziale su "Guarda ora". */
 @Composable
 fun PlayerNextEpisodePrompt(
     prompt: NextEpisodePrompt,
@@ -936,37 +932,37 @@ fun PlayerNextEpisodePrompt(
         modifier = Modifier
             .fillMaxSize()
             .testTag("player_next_dialog"),
-        contentAlignment = Alignment.BottomCenter,
+        contentAlignment = Alignment.BottomEnd,
     ) {
         Column(
             modifier = Modifier
                 .padding(scale.dp(28f))
-                .fillMaxWidth(0.66f)
-                .playerOverlay(scale)
-                .padding(scale.dp(20f)),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(scale.dp(10f)),
+                .widthIn(max = scale.dp(340f))
+                .playerOverlay(scale, FvpColors.PlayerPanelLight)
+                .padding(scale.dp(14f)),
+            horizontalAlignment = Alignment.Start,
+            verticalArrangement = Arrangement.spacedBy(scale.dp(8f)),
         ) {
             Text(
                 text = if (countdown != null) {
-                    "Prossimo episodio tra $countdown s"
+                    "Prossimo episodio tra ${NextEpisodeRules.formatCountdown(countdown)}"
                 } else {
                     "Prossimo episodio"
                 },
                 color = FvpColors.TextPrimary,
-                fontSize = scale.sp(18f),
-                fontWeight = FontWeight.Bold,
+                fontSize = scale.sp(15f),
+                fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.testTag("player_next_title"),
             )
             Text(
                 text = prompt.title,
                 color = FvpColors.TextSecondary,
-                fontSize = scale.sp(15f),
+                fontSize = scale.sp(13f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(scale.dp(14f))) {
-                FvpPrimaryButton(
+            Row(horizontalArrangement = Arrangement.spacedBy(scale.dp(8f))) {
+                PlayerBarButton(
                     text = "Guarda ora",
                     onClick = onWatchNow,
                     scale = scale,
@@ -974,15 +970,13 @@ fun PlayerNextEpisodePrompt(
                         .focusRequester(watchFocus)
                         .testTag("player_next_watch"),
                 )
-                if (prompt.canPostpone) {
-                    FvpSecondaryButton(
-                        text = "Posticipa",
-                        onClick = onPostpone,
-                        scale = scale,
-                        modifier = Modifier.testTag("player_next_postpone"),
-                    )
-                }
-                FvpSecondaryButton(
+                PlayerBarButton(
+                    text = "Posticipa",
+                    onClick = onPostpone,
+                    scale = scale,
+                    modifier = Modifier.testTag("player_next_postpone"),
+                )
+                PlayerBarButton(
                     text = "Annulla",
                     onClick = onCancel,
                     scale = scale,
@@ -990,6 +984,24 @@ fun PlayerNextEpisodePrompt(
                 )
             }
         }
+    }
+}
+
+/** Etichetta non focalizzabile mostrata dopo aver ridotto il riquadro. */
+@Composable
+fun PlayerNextEpisodeLabel(prompt: NextEpisodePrompt, scale: UiScale) {
+    val countdown = prompt.countdownSeconds ?: return
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomEnd) {
+        Text(
+            text = "Prossimo episodio tra ${NextEpisodeRules.formatCountdown(countdown)}",
+            color = FvpColors.TextPrimary,
+            fontSize = scale.sp(13f),
+            modifier = Modifier
+                .padding(scale.dp(28f))
+                .playerOverlay(scale, FvpColors.PlayerPanelLight)
+                .padding(horizontal = scale.dp(10f), vertical = scale.dp(6f))
+                .testTag("player_next_label"),
+        )
     }
 }
 

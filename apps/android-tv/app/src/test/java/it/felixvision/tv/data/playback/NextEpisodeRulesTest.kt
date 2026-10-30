@@ -35,6 +35,29 @@ class NextEpisodeRulesTest {
     }
 
     @Test
+    fun `conto alla rovescia parte al massimo tra prompt e ultimi due minuti`() {
+        assertEquals(
+            43L * 60L * 1_000L,
+            NextEpisodeRules.countdownStartMillis(fortyFiveMinutes),
+        )
+
+        val eightMinutes = 8L * 60L * 1_000L
+        assertEquals(
+            NextEpisodeRules.promptAtMillis(eightMinutes),
+            NextEpisodeRules.countdownStartMillis(eightMinutes),
+        )
+        assertNull(NextEpisodeRules.countdownStartMillis(0L))
+    }
+
+    @Test
+    fun `conto alla rovescia viene formattato in minuti e secondi`() {
+        assertEquals("1:59", NextEpisodeRules.formatCountdown(119))
+        assertEquals("1:00", NextEpisodeRules.formatCountdown(60))
+        assertEquals("0:05", NextEpisodeRules.formatCountdown(5))
+        assertEquals("0:00", NextEpisodeRules.formatCountdown(-3))
+    }
+
+    @Test
     fun `durata sconosciuta non mostra nulla`() {
         assertNull(NextEpisodeRules.promptAtMillis(0L))
         assertNull(NextEpisodeRules.promptAtMillis(-5_000L))

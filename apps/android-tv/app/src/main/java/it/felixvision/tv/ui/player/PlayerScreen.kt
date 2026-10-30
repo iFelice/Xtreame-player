@@ -282,7 +282,10 @@ fun PlayerScreen(
                 engine.startFromBeginning()
                 rootFocus.requestFocus()
             }
-            state.nextEpisode != null -> engine.cancelNextEpisode()
+            state.nextEpisode != null && !state.nextEpisode.minimized -> {
+                engine.minimizeNextEpisode()
+                rootFocus.requestFocus()
+            }
             state.errorMessage != null -> if (state.isReplay) engine.returnToLive() else engine.requestExit()
             state.controlsVisible -> {
                 engine.hideControls()
@@ -462,10 +465,10 @@ fun PlayerScreen(
                 }
             }
 
-            // Dopo il riquadro del prossimo episodio (anche a fine countdown)
-            // il focus torna alla radice, così i tasti tornano al player.
-            LaunchedEffect(state.nextEpisode != null) {
-                if (state.nextEpisode == null && !state.hasModalOverlay) {
+            // Alla chiusura o riduzione del riquadro il focus torna al player.
+            val nextEpisodePromptVisible = state.nextEpisode != null && !state.nextEpisode.minimized
+            LaunchedEffect(nextEpisodePromptVisible) {
+                if (!nextEpisodePromptVisible && !state.hasModalOverlay) {
                     withFrameNanos { }
                     rootFocus.requestFocus()
                 }
@@ -689,16 +692,26 @@ fun PlayerScreen(
             }
 
             state.nextEpisode?.let { prompt ->
-                PlayerNextEpisodePrompt(
-                    prompt = prompt,
-                    scale = scale,
-                    onWatchNow = {
-                        engine.playNextEpisode()
-                        rootFocus.requestFocus()
-                    },
-                    onPostpone = { engine.postponeNextEpisode() },
-                    onCancel = { engine.cancelNextEpisode() },
-                )
+                if (prompt.minimized) {
+                    if (!state.hasModalOverlay) PlayerNextEpisodeLabel(prompt = prompt, scale = scale)
+                } else {
+                    PlayerNextEpisodePrompt(
+                        prompt = prompt,
+                        scale = scale,
+                        onWatchNow = {
+                            engine.playNextEpisode()
+                            rootFocus.requestFocus()
+                        },
+                        onPostpone = {
+                            engine.postponeNextEpisode()
+                            rootFocus.requestFocus()
+                        },
+                        onCancel = {
+                            engine.cancelNextEpisode()
+                            rootFocus.requestFocus()
+                        },
+                    )
+                }
             }
         }
     }
