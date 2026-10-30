@@ -7,6 +7,7 @@ import org.junit.Test
 /**
  * Scala dell'interfaccia: funzione pura, senza composizione né dispositivo.
  *
+ * Ogni atteso è `min(widthDp / 960, heightDp / 600).coerceIn(0.75, 2.0) × sizeFactor`.
  * La regola che conta è l'ordine: il limite di progetto (0,75–2,0) si applica
  * prima del moltiplicatore della dimensione interfaccia. Invertendoli,
  * "Compatta" su un 960×540 verrebbe riportata al minimo 0,75 invece di 0,72.
@@ -36,12 +37,24 @@ class UiScaleFactorTest {
     }
 
     @Test
-    fun `1920x1080 arriva al massimo di progetto`() {
-        // min(2, 1.8) = 1.8 → 2.0 (massimo).
-        assertFactor(2.0f, uiScaleFactor(widthDp = 1920f, heightDp = 1080f, sizeFactor = 1.0f))
-        // Il massimo resta applicato prima del moltiplicatore: "Compatta" su
-        // 1080p vale 1.6, non 2.0.
-        assertFactor(1.6f, uiScaleFactor(widthDp = 1920f, heightDp = 1080f, sizeFactor = 0.8f))
+    fun `1920x1080 e limitato dall altezza`() {
+        // min(1920 / 960, 1080 / 600) = min(2.0, 1.8) = 1.8: limita l'altezza,
+        // il massimo 2.0 non viene raggiunto.
+        assertFactor(1.8f, uiScaleFactor(widthDp = 1920f, heightDp = 1080f, sizeFactor = 1.0f))
+        // Con "Media": 1.8 × 0.9 = 1.62.
+        assertFactor(1.62f, uiScaleFactor(widthDp = 1920f, heightDp = 1080f, sizeFactor = 0.9f))
+        // Il limite resta applicato prima del moltiplicatore: "Compatta" vale
+        // 1.8 × 0.8 = 1.44, non 1.6.
+        assertFactor(1.44f, uiScaleFactor(widthDp = 1920f, heightDp = 1080f, sizeFactor = 0.8f))
+    }
+
+    @Test
+    fun `2400x1500 arriva al massimo di progetto`() {
+        // min(2400 / 960, 1500 / 600) = min(2.5, 2.5) = 2.5 → 2.0 (massimo).
+        assertFactor(2.0f, uiScaleFactor(widthDp = 2400f, heightDp = 1500f, sizeFactor = 1.0f))
+        // Con "Compatta": 2.0 × 0.8 = 1.6, il moltiplicatore si applica dopo
+        // il limite, quindi non viene riportato al massimo.
+        assertFactor(1.6f, uiScaleFactor(widthDp = 2400f, heightDp = 1500f, sizeFactor = 0.8f))
     }
 
     @Test

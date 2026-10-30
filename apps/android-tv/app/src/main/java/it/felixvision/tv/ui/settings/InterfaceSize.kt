@@ -4,12 +4,14 @@ package it.felixvision.tv.ui.settings
  * Dimensione dell'interfaccia sulle TV da 50" in su.
  *
  * Il valore in [factor] è un moltiplicatore applicato *dopo* i limiti della
- * scala di progetto (vedi `uiScaleFactor`): su un 1080p la scala vale 2,0
- * (il massimo) e "Media" la porta a 1,8; su un 720p vale 1,0 e la porta a 0,9.
+ * scala di progetto (vedi `uiScaleFactor`). Una TV 1080p espone di norma
+ * 960×540 dp (densità xhdpi): la scala di progetto vale min(960 / 960,
+ * 540 / 600) = 0,9, quindi "Media" la porta a 0,81 e "Compatta" a 0,72.
  * Applicarlo prima dei limiti riporterebbe "Compatta" al minimo 0,75 e la
  * scelta non avrebbe effetto.
  *
- * Il predefinito è [COMPACT]: è la dimensione con cui l'app è pensata oggi.
+ * Il predefinito è [COMPACT]: è la dimensione più leggera, pensata per TV da
+ * 50 pollici in su.
  */
 enum class InterfaceSize(val storageKey: String, val label: String, val factor: Float) {
 

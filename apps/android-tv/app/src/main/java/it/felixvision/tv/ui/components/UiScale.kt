@@ -44,9 +44,10 @@ const val DESIGN_HEIGHT_DP = 600f
  * Scala dell'interfaccia per uno spazio reale di [widthDp]×[heightDp] e una
  * dimensione dell'interfaccia [sizeFactor] (1 = progetto, 0,8 = Compatta).
  *
- * Il moltiplicatore si applica **dopo** `coerceIn`: su una TV 1080p la scala di
- * progetto vale già 1,8 (2,0 × 0,9) e "Compatta" deve poter scendere sotto il
- * minimo del progetto (0,75). Applicandolo prima, il limite riporterebbe
+ * Il moltiplicatore si applica **dopo** `coerceIn`. Una TV 1080p espone di
+ * norma 960×540 dp (densità xhdpi): la scala di progetto vale quindi
+ * min(960 / 960, 540 / 600) = 0,9, "Media" la porta a 0,81 e "Compatta" a 0,72.
+ * Senza applicare il moltiplicatore dopo il limite, il minimo 0,75 riporterebbe
  * "Compatta" a 0,75 e la scelta non si vedrebbe.
  *
  * Funzione pura, così si può verificare senza comporre nulla.
