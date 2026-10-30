@@ -132,7 +132,7 @@ class PlayerEngine(
 
     /**
      * Formato dello schermo salvato per ogni canale Live di questo account:
-     * chi manca dalla mappa parte da "Adatta". Caricato una volta all'avvio,
+     * chi manca dalla mappa parte da "Originale". Caricato una volta all'avvio,
      * tiene la scelta del canale per tutta la sessione e anche in replay.
      */
     private var channelFormats: Map<String, VideoFormat> = emptyMap()
@@ -140,12 +140,9 @@ class PlayerEngine(
     /**
      * Formato scelto in questa riproduzione quando la sorgente non è il Live
      * (film, serie ed episodi): non si salva e ogni riproduzione riparte da
-     * "Adatta".
+     * "Originale".
      */
     private var sessionFormat: VideoFormat = VideoFormat.FIT
-
-    /** Etichetta "Formato: <nome>" dei 2 secondi dopo la scelta. */
-    private var formatIndicatorJob: Job? = null
 
     /**
      * Stato del riquadro "Prossimo episodio" per l'episodio in corso:
@@ -286,7 +283,6 @@ class PlayerEngine(
         bannerJob?.cancel()
         channelNumberJob?.cancel()
         volumeJob?.cancel()
-        formatIndicatorJob?.cancel()
         destroyPlayer()
         container.playbackActivity.setActive(false)
         scope.cancel()
@@ -298,7 +294,6 @@ class PlayerEngine(
         bannerJob?.cancel()
         channelNumberJob?.cancel()
         volumeJob?.cancel()
-        formatIndicatorJob?.cancel()
         val exitInfo = PlayerExitInfo(
             lastLiveChannelId = currentLiveChannel()?.streamId,
             lastEpisodeId = currentEpisode()?.episode?.id,
@@ -964,7 +959,7 @@ class PlayerEngine(
 
     /**
      * Apre il pannello del formato. A differenza di [openTrackPanel] funziona
-     * anche sul Live senza replay: "Adatta", "Zoom", "16:9" e "4:3" riguardano
+     * anche sul Live senza replay: "Originale", "Zoom", "16:9" e "4:3" riguardano
      * qualunque cosa sia in onda.
      */
     fun openFormatPanel() {
@@ -980,19 +975,14 @@ class PlayerEngine(
     }
 
     /**
-     * Applica il formato scelto e lo mostra per [VideoFormatLayout.INDICATOR_MILLIS]
-     * con l'etichetta "Formato: <nome>".
+     * Applica e salva il formato scelto mantenendo aperto il pannello.
      *
      * Nel Live la scelta è ricordata per il canale in onda (anche in replay:
-     * il canale è lo stesso) e finisce in DataStore; scegliendo "Adatta" la
+     * il canale è lo stesso) e finisce in DataStore; scegliendo "Originale" la
      * voce si cancella. In film e serie vale per questa riproduzione soltanto.
      */
     fun selectVideoFormat(format: VideoFormat) {
-        state = state.copy(
-            videoFormat = format,
-            formatPanelVisible = false,
-            videoFormatIndicator = format,
-        )
+        state = state.copy(videoFormat = format)
         val streamId = if (isLiveSource) currentLiveChannel()?.streamId else null
         if (streamId != null) {
             channelFormats = if (format == VideoFormat.FIT) {
@@ -1012,16 +1002,6 @@ class PlayerEngine(
             }
         } else {
             sessionFormat = format
-        }
-        scheduleFormatIndicatorHide()
-    }
-
-    private fun scheduleFormatIndicatorHide() {
-        formatIndicatorJob?.cancel()
-        formatIndicatorJob = scope.launch {
-            delay(VideoFormatLayout.INDICATOR_MILLIS)
-            state = state.copy(videoFormatIndicator = null)
-            formatIndicatorJob = null
         }
     }
 

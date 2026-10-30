@@ -12,7 +12,7 @@ import org.robolectric.annotation.Config
 
 /**
  * Archivio del formato dello schermo per canale Live: una voce per
- * server+utente, come "I miei canali". "Adatta" è il predefinito e non occupa
+ * server+utente, come "I miei canali". "Originale" è il predefinito e non occupa
  * l'archivio, quindi salvarlo equivale a dimenticare il canale.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -52,16 +52,16 @@ class ChannelVideoFormatStoreTest {
     }
 
     @Test
-    fun `Adatta non si salva e toglie la voce del canale`() = runTest {
+    fun `Originale non si salva e toglie la voce del canale`() = runTest {
         val store = store()
-        // "Adatta" su un archivio vuoto: nessuna voce nasce.
+        // "Originale" su un archivio vuoto: nessuna voce nasce.
         store.save(server, username, "101", VideoFormat.FIT)
         assertTrue(store.getAll(server, username).isEmpty())
 
         store.save(server, username, "101", VideoFormat.ZOOM)
         assertEquals(mapOf("101" to VideoFormat.ZOOM), store.getAll(server, username))
 
-        // Tornando ad "Adatta" la voce sparisce.
+        // Tornando ad "Originale" la voce sparisce.
         store.save(server, username, "101", VideoFormat.FIT)
         assertTrue(store.getAll(server, username).isEmpty())
     }

@@ -35,6 +35,9 @@ object FvpColors {
      */
     val PlayerOverlay = Surface.copy(alpha = 0.78f)
 
+    /** Fondo più leggero del pannello di scelta formato sul video. */
+    val PlayerPanelLight = Surface.copy(alpha = 0.55f)
+
     /**
      * Pallino di notifica "aggiornamento disponibile" (menu laterale e riga
      * della versione nelle Impostazioni): arancio pieno su un bordo sottile del

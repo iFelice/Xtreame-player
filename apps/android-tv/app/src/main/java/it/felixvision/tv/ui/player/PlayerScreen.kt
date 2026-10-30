@@ -93,6 +93,7 @@ fun PlayerScreen(
     val state = engine.state
     val rootFocus = remember { FocusRequester() }
     val audioFocus = remember { FocusRequester() }
+    val progressFocus = remember { FocusRequester() }
     var rootFocused by remember { mutableStateOf(false) }
     var keyTick by remember { mutableStateOf(0) }
     var seekDirection by remember { mutableStateOf(0) }
@@ -387,8 +388,15 @@ fun PlayerScreen(
                                         // livello, non il canale.
                                         state.volumePanelVisible -> engine.changeVolume(1)
                                         session.source is PlaybackSource.Live && !state.isReplay -> engine.onUp()
-                                        // La barra appare senza mettere in pausa.
-                                        else -> engine.showControls()
+                                        // La barra appare senza mettere in pausa; il focus
+                                        // entra sulla barra di avanzamento dopo il frame.
+                                        else -> {
+                                            engine.showControls()
+                                            playerScope.launch {
+                                                withFrameNanos { }
+                                                runCatching { progressFocus.requestFocus() }
+                                            }
+                                        }
                                     }
                                     true
                                 }
@@ -532,6 +540,9 @@ fun PlayerScreen(
                     state = state,
                     scale = scale,
                     audioFocusRequester = audioFocus,
+                    progressFocusRequester = progressFocus,
+                    onTogglePlay = { engine.togglePlayPause() },
+                    onSeek = { direction -> handleSeek(direction) },
                     onAudio = { engine.openTrackPanel(TrackPanelType.AUDIO) },
                     onSubtitles = { engine.openTrackPanel(TrackPanelType.SUBTITLES) },
                     onVolume = { engine.openVolumePanel() },
@@ -606,18 +617,6 @@ fun PlayerScreen(
                 )
             }
 
-            state.videoFormatIndicator?.let { format ->
-                if (!state.hasModalOverlay) {
-                    PlayerFormatIndicator(
-                        format = format,
-                        scale = scale,
-                        modifier = Modifier
-                            .align(Alignment.TopCenter)
-                            .padding(scale.dp(28f)),
-                    )
-                }
-            }
-
             if (state.volumePanelVisible && !state.hasModalOverlay) {
                 PlayerVolumePanel(
                     level = state.volumeLevel,
@@ -634,7 +633,6 @@ fun PlayerScreen(
                     scale = scale,
                     onSelect = { format ->
                         engine.selectVideoFormat(format)
-                        rootFocus.requestFocus()
                     },
                 )
             }
