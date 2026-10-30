@@ -79,6 +79,19 @@ fun rememberPlayerGestureFeedback(): PlayerGestureFeedback = remember {
     PlayerGestureFeedback()
 }
 
+/**
+ * Strati di gesti del player: trascinamento (cambio canale, spostamento nel
+ * tempo, volume a destra, luminosità a sinistra) e tocchi (comandi on/off,
+ * doppio tocco ±10 s).
+ *
+ * Le chiavi del [pointerInput] sono SOLO i valori che giustificano un riavvio
+ * del riconoscitore, cioè il tipo di riproduzione e l'abilitazione: tutto il
+ * resto (durata, posizione, densità, controlli di sistema, richiamate) si
+ * legge tramite [rememberUpdatedState]. Con la durata tra le chiavi il
+ * riconoscitore veniva riavviato a ogni `refresh()` (ogni 500 ms) e il
+ * trascinamento in corso veniva perso: il volume e la luminosità non
+ * rispondevano mai, perché il gesto verticale dura più di un aggiornamento.
+ */
 @Composable
 fun Modifier.playerGestureLayer(
     playbackType: MobilePlaybackType,
@@ -100,30 +113,37 @@ fun Modifier.playerGestureLayer(
     onZoomMode: (TouchGestureRules.ZoomMode) -> Unit,
     gestureClockMillis: () -> Long = { android.os.SystemClock.elapsedRealtime() },
 ): Modifier {
-    val currentPosition = rememberUpdatedState(position)
-    val currentGestureClock = rememberUpdatedState(gestureClockMillis)
-    val seekBurst = remember(playbackType, sourceKey) { SeekBurst() }
-    return pointerInput(playbackType, sourceKey, duration, enabled) {
-        detectPlayerGestures(
+    val inputs = rememberUpdatedState(
+        PlayerGestureInputs(
             playbackType = playbackType,
-            positionMillis = { currentPosition.value },
             duration = duration,
+            position = position,
+            density = density,
             volumeControl = volumeControl,
             brightnessControl = brightnessControl,
-            enabled = enabled,
-            feedback = feedback,
-            densityScale = density,
-            clockMillis = { currentGestureClock.value() },
+            clockMillis = gestureClockMillis,
             onSeekTo = onSeekTo,
             onNextChannel = onNextChannel,
             onPreviousChannel = onPreviousChannel,
             onZoomMode = onZoomMode,
-            seekBurst = seekBurst,
+            feedback = feedback,
+        ),
+    )
+    val seekBurst = remember(playbackType, sourceKey) { SeekBurst() }
+    val currentSeekBurst = rememberUpdatedState(seekBurst)
+    val currentToggleControls = rememberUpdatedState(onToggleControls)
+    val currentSeekBy = rememberUpdatedState(onSeekBy)
+
+    return pointerInput(playbackType, enabled) {
+        detectPlayerGestures(
+            playbackType = playbackType,
+            enabled = enabled,
+            inputs = { inputs.value },
         )
     }.pointerInput(playbackType, enabled) {
         if (!enabled) return@pointerInput
         detectTapGestures(
-            onTap = { onToggleControls() },
+            onTap = { currentToggleControls.value() },
             onDoubleTap = { point ->
                 val direction = when {
                     point.x < size.width / 3f -> -1
@@ -131,14 +151,36 @@ fun Modifier.playerGestureLayer(
                     else -> 0
                 }
                 if (playbackType.supportsSeeking && direction != 0) {
-                    val next = seekBurst.record(direction, currentGestureClock.value())
-                    onSeekBy(direction * 10)
+                    val next = currentSeekBurst.value.record(
+                        direction,
+                        inputs.value.clockMillis(),
+                    )
+                    currentSeekBy.value(direction * 10)
                     feedback.showSeek("${if (direction < 0) "−" else "+"}$next s")
                 }
             },
         )
     }
 }
+
+/**
+ * Valori letti al momento dell'evento: il riconoscitore non viene riavviato
+ * quando cambiano, quindi ogni gesto usa sempre lo stato più recente.
+ */
+private class PlayerGestureInputs(
+    val playbackType: MobilePlaybackType,
+    val duration: Long,
+    val position: Long,
+    val density: Float,
+    val volumeControl: VolumeControl,
+    val brightnessControl: BrightnessControl,
+    val clockMillis: () -> Long,
+    val onSeekTo: (Long) -> Unit,
+    val onNextChannel: () -> Unit,
+    val onPreviousChannel: () -> Unit,
+    val onZoomMode: (TouchGestureRules.ZoomMode) -> Unit,
+    val feedback: PlayerGestureFeedback,
+)
 
 private class SeekBurst {
     private var seconds = 0
@@ -159,33 +201,29 @@ private class SeekBurst {
     }
 }
 
+/** Variazione minima di luminosità che vale una chiamata a [BrightnessControl.set]. */
+private const val BRIGHTNESS_EPSILON = .005f
+
 private suspend fun PointerInputScope.detectPlayerGestures(
     playbackType: MobilePlaybackType,
-    positionMillis: () -> Long,
-    duration: Long,
-    volumeControl: VolumeControl,
-    brightnessControl: BrightnessControl,
     enabled: Boolean,
-    feedback: PlayerGestureFeedback,
-    densityScale: Float,
-    clockMillis: () -> Long,
-    seekBurst: SeekBurst,
-    onSeekTo: (Long) -> Unit,
-    onNextChannel: () -> Unit,
-    onPreviousChannel: () -> Unit,
-    onZoomMode: (TouchGestureRules.ZoomMode) -> Unit,
+    inputs: () -> PlayerGestureInputs,
 ) {
     if (!enabled) return
     awaitEachGesture {
         val firstDown = awaitFirstDown(requireUnconsumed = false)
         val start = firstDown.position
-        val startTime = clockMillis()
-        val startPosition = positionMillis()
-        val startBrightness = brightnessControl.current
-        val maxVolume = volumeControl.max
-        val startVolume = volumeControl.current
+        val startTime = inputs().clockMillis()
+        val startPosition = inputs().position
+        val thresholdPx = TouchGestureRules.MIN_DRAG_DP * inputs().density
         var totalDelta = Offset.Zero
-        var lastAction = TouchGestureRules.Action.IGNORE
+        var mode: TouchGestureRules.DragMode? = null
+        var thresholdDelta = Offset.Zero
+        var maxVolume = 1
+        var startVolume = 0
+        var appliedVolume = 0
+        var startBrightness = .5f
+        var appliedBrightness = Float.NaN
         var hadMultiplePointers = false
         var accumulatedZoom = 1f
         var zoomModeChanged = false
@@ -199,11 +237,11 @@ private suspend fun PointerInputScope.detectPlayerGestures(
                 hadMultiplePointers = true
                 accumulatedZoom *= event.zoomFactor()
                 if (!zoomModeChanged) {
-                    val mode = TouchGestureRules.zoomModeForAccumulatedScale(accumulatedZoom)
-                    if (mode != null) {
+                    val zoom = TouchGestureRules.zoomModeForAccumulatedScale(accumulatedZoom)
+                    if (zoom != null) {
                         zoomModeChanged = true
-                        zoomNotice = if (mode == TouchGestureRules.ZoomMode.FILL) "Riempi" else "Adatta"
-                        onZoomMode(mode)
+                        zoomNotice = if (zoom == TouchGestureRules.ZoomMode.FILL) "Riempi" else "Adatta"
+                        inputs().onZoomMode(zoom)
                     }
                 }
                 event.consumePressedChanges()
@@ -213,52 +251,78 @@ private suspend fun PointerInputScope.detectPlayerGestures(
             val change = event.changes.firstOrNull { it.id == firstDown.id }
             if (change != null && change.pressed) {
                 totalDelta = change.position - start
-                val elapsed = (clockMillis() - startTime).coerceAtLeast(1L)
-                lastAction = TouchGestureRules.classify(
-                    widthPx = size.width.toFloat(),
-                    heightPx = size.height.toFloat(),
-                    density = densityScale,
-                    startX = start.x,
-                    startY = start.y,
-                    deltaX = totalDelta.x,
-                    deltaY = totalDelta.y,
-                    elapsedMillis = elapsed,
-                    playbackType = playbackType,
-                    pointerCount = if (hadMultiplePointers) 2 else 1,
-                )
+                val current = inputs()
                 if (!hadMultiplePointers) {
-                    when (lastAction) {
-                        TouchGestureRules.Action.SCRUB -> {
-                            val effectiveDuration = duration.coerceAtLeast(60_000L)
+                    // La classificazione avviene una sola volta, alla soglia:
+                    // da lì in poi il gesto non cambia natura fino al rilascio.
+                    if (mode == null &&
+                        (abs(totalDelta.x) >= thresholdPx || abs(totalDelta.y) >= thresholdPx)
+                    ) {
+                        mode = TouchGestureRules.dragMode(
+                            widthPx = size.width.toFloat(),
+                            heightPx = size.height.toFloat(),
+                            density = current.density,
+                            startX = start.x,
+                            startY = start.y,
+                            deltaX = totalDelta.x,
+                            deltaY = totalDelta.y,
+                            playbackType = playbackType,
+                        )
+                        thresholdDelta = totalDelta
+                        when (mode) {
+                            TouchGestureRules.DragMode.VOLUME -> {
+                                maxVolume = current.volumeControl.max
+                                startVolume = current.volumeControl.current
+                                appliedVolume = startVolume
+                            }
+                            TouchGestureRules.DragMode.BRIGHTNESS -> {
+                                startBrightness = current.brightnessControl.current
+                                appliedBrightness = startBrightness
+                            }
+                            else -> Unit
+                        }
+                    }
+
+                    when (mode) {
+                        TouchGestureRules.DragMode.SCRUB -> {
+                            val effectiveDuration = current.duration.coerceAtLeast(60_000L)
                             val offset = totalDelta.x / size.width * effectiveDuration
                             previewPosition = (startPosition + offset.toLong())
                                 .coerceIn(0L, effectiveDuration)
-                            feedback.showScrub(previewPosition!!)
+                            current.feedback.showScrub(previewPosition!!)
                         }
-                        TouchGestureRules.Action.BRIGHTNESS -> {
-                            val value = TouchGestureRules.dragScaleValue(
+                        TouchGestureRules.DragMode.BRIGHTNESS -> {
+                            // Il tratto percorso prima della soglia non conta:
+                            // l'indicatore parte dal valore iniziale.
+                            val value = TouchGestureRules.verticalDragValue(
                                 initialValue = startBrightness,
                                 totalDeltaY = totalDelta.y,
+                                thresholdDeltaY = thresholdDelta.y,
                                 heightPx = size.height.toFloat(),
-                                invert = true,
                             ).coerceAtLeast(.02f)
-                            brightnessControl.set(value)
-                            feedback.showBrightness(value)
+                            if (appliedBrightness.isNaN() || abs(value - appliedBrightness) > BRIGHTNESS_EPSILON) {
+                                appliedBrightness = value
+                                current.brightnessControl.set(value)
+                                current.feedback.showBrightness(value)
+                            }
                         }
-                        TouchGestureRules.Action.VOLUME -> {
-                            val level = (
-                                startVolume - totalDelta.y / size.height * maxVolume
-                                ).toInt().coerceIn(0, maxVolume)
-                            volumeControl.set(level)
-                            feedback.showVolume(level.toFloat() / maxVolume)
+                        TouchGestureRules.DragMode.VOLUME -> {
+                            val level = TouchGestureRules.volumeLevel(
+                                startLevel = startVolume,
+                                maxLevel = maxVolume,
+                                totalDeltaY = totalDelta.y,
+                                thresholdDeltaY = thresholdDelta.y,
+                                heightPx = size.height.toFloat(),
+                            )
+                            if (level != appliedVolume) {
+                                appliedVolume = level
+                                current.volumeControl.set(level)
+                                current.feedback.showVolume(level.toFloat() / maxVolume)
+                            }
                         }
                         else -> Unit
                     }
-                    if (abs(totalDelta.x) >= TouchGestureRules.MIN_DRAG_DP * densityScale ||
-                        abs(totalDelta.y) >= TouchGestureRules.MIN_DRAG_DP * densityScale
-                    ) {
-                        change.consume()
-                    }
+                    if (mode != null) change.consume()
                 }
             }
 
@@ -266,21 +330,35 @@ private suspend fun PointerInputScope.detectPlayerGestures(
         }
 
         if (hadMultiplePointers) {
-            if (zoomNotice != null) feedback.showZoom(zoomNotice!!)
-            feedback.gestureFinished()
+            if (zoomNotice != null) inputs().feedback.showZoom(zoomNotice!!)
+            inputs().feedback.gestureFinished()
             return@awaitEachGesture
         }
 
-        when (lastAction) {
-            TouchGestureRules.Action.SCRUB -> previewPosition?.let(onSeekTo)
-            TouchGestureRules.Action.CHANNEL_NEXT -> onNextChannel()
-            TouchGestureRules.Action.CHANNEL_PREVIOUS -> onPreviousChannel()
-            TouchGestureRules.Action.VOLUME,
-            TouchGestureRules.Action.BRIGHTNESS,
-            -> feedback.gestureFinished()
+        val finished = inputs()
+        when (mode) {
+            TouchGestureRules.DragMode.SCRUB -> previewPosition?.let(finished.onSeekTo)
+            TouchGestureRules.DragMode.CHANNEL -> {
+                val action = TouchGestureRules.channelAction(
+                    widthPx = size.width.toFloat(),
+                    deltaX = totalDelta.x,
+                    elapsedMillis = (finished.clockMillis() - startTime).coerceAtLeast(1L),
+                    density = finished.density,
+                )
+                when (action) {
+                    TouchGestureRules.Action.CHANNEL_NEXT -> finished.onNextChannel()
+                    TouchGestureRules.Action.CHANNEL_PREVIOUS -> finished.onPreviousChannel()
+                    else -> Unit
+                }
+            }
             else -> Unit
         }
-        if (previewPosition != null) feedback.gestureFinished()
+        if (mode == TouchGestureRules.DragMode.VOLUME ||
+            mode == TouchGestureRules.DragMode.BRIGHTNESS ||
+            previewPosition != null
+        ) {
+            finished.feedback.gestureFinished()
+        }
     }
 }
 
@@ -303,4 +381,3 @@ private fun PointerEvent.zoomFactor(): Float {
 private fun PointerEvent.consumePressedChanges() {
     changes.filter { it.pressed }.forEach(PointerInputChange::consume)
 }
-

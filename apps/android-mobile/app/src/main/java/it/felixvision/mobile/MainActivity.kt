@@ -4,7 +4,9 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import it.felixvision.mobile.ui.FvpApp
@@ -20,6 +22,15 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Da targetSdk 37 la visualizzazione edge-to-edge è obbligatoria:
+        // il sistema ignora window.setDecorFitsSystemWindows(true). Qui si
+        // dichiara l'edge-to-edge e si scelgono icone chiare su fondo scuro,
+        // così le barre restano leggibili; i margini li applica la UI con
+        // WindowInsets (barre laterali/in basso, intestazione, contenuto).
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+        )
         ensureLocalNetworkPermission()
 
         val container = (application as FvpApplication).container

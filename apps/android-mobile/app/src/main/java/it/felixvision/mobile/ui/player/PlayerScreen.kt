@@ -12,8 +12,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -244,7 +248,9 @@ fun PlayerScreen(
                         image = FvpIcons.Live,
                         description = "Torna alla diretta",
                         onClick = engine::returnToLive,
-                        modifier = Modifier.align(Alignment.BottomCenter),
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .windowInsetsPadding(WindowInsets.safeDrawing),
                     )
                 }
             }
@@ -304,7 +310,10 @@ internal fun BoxScope.ControlsOverlay(
     Column(
         modifier = Modifier
             .align(Alignment.TopCenter)
-            .fillMaxWidth(),
+            .fillMaxWidth()
+            // Comandi dentro l'area sicura: fuori dal ritaglio della fotocamera
+            // e dalle barre di sistema quando ricompaiono con lo scorrimento.
+            .windowInsetsPadding(WindowInsets.safeDrawing),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         PlayerControls(
@@ -381,7 +390,14 @@ private fun PortraitPlayerLayout(
     onEnterFullScreen: () -> Unit,
     onExit: () -> Unit,
 ) {
-    Column(Modifier.fillMaxSize().background(Color.Black)) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            // In verticale le barre restano visibili: il video comincia sotto
+            // la barra di stato, senza finirci sotto.
+            .windowInsetsPadding(WindowInsets.statusBars),
+    ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -628,7 +644,6 @@ private fun ConfigureImmersiveWindow(
             androidx.core.view.WindowCompat.getInsetsController(window, it)
         }
         if (immersive) {
-            window?.let { androidx.core.view.WindowCompat.setDecorFitsSystemWindows(it, false) }
             controller?.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
             controller?.systemBarsBehavior =
                 androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
@@ -641,11 +656,9 @@ private fun ConfigureImmersiveWindow(
                 }
             }
         } else {
-            window?.let { androidx.core.view.WindowCompat.setDecorFitsSystemWindows(it, true) }
             controller?.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
         }
         onDispose {
-            window?.let { androidx.core.view.WindowCompat.setDecorFitsSystemWindows(it, true) }
             controller?.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
         }
     }

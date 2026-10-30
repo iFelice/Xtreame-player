@@ -1,9 +1,11 @@
 package it.felixvision.mobile.ui.main
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -22,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import it.felixvision.mobile.ui.catalog.BackAction
@@ -29,10 +32,21 @@ import it.felixvision.mobile.ui.components.FvpIcons
 import it.felixvision.mobile.ui.theme.FvpColors
 
 /**
+ * Larghezza della barra laterale: le etichette stanno su una riga sola anche
+ * per la voce più lunga, con l'icona in colonna al centro.
+ */
+private val RAIL_WIDTH = 100.dp
+
+/**
  * Chrome di navigazione dell'app tablet: barra laterale con le 8 sezioni
  * (finestra orizzontale larga), barra in basso con le 5 principali e
  * intestazione compatta con Cerca/Impostazioni. Le sezioni usano i colori di
  * FvpColors condivisi con la TV.
+ *
+ * Tutte le voci hanno la stessa larghezza (quella della barra) e sono
+ * centrate: icona e etichetta restano in colonna. L'etichetta usa
+ * [AppSection.railLabel] su una sola riga; la descrizione accessibile è
+ * [AppSection.title].
  */
 @Composable
 fun HomeNavigationRail(
@@ -42,10 +56,16 @@ fun HomeNavigationRail(
 ) {
     NavigationRail(
         containerColor = FvpColors.Surface,
-        modifier = modifier.testTag("home_rail"),
+        // Gli insets li applica HomeScreen (systemBars + displayCutout sui lati
+        // scoperti dalla barra): qui non vanno raddoppiati.
+        windowInsets = WindowInsets(0, 0, 0, 0),
+        modifier = modifier.width(RAIL_WIDTH).testTag("home_rail"),
     ) {
         Column(
-            modifier = Modifier.verticalScroll(rememberScrollState()),
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             AppSection.entries.forEach { section ->
@@ -62,17 +82,23 @@ fun HomeNavigationRail(
                     },
                     label = {
                         Text(
-                            text = section.title,
-                            fontSize = 12.sp,
+                            text = section.railLabel,
+                            fontSize = 11.sp,
                             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
                             color = if (selected) section.accent else FvpColors.Inactive,
+                            maxLines = 1,
+                            softWrap = false,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth(),
                         )
                     },
                     alwaysShowLabel = true,
                     colors = NavigationRailItemDefaults.colors(
                         indicatorColor = section.accent.copy(alpha = 0.16f),
                     ),
-                    modifier = Modifier.testTag("rail_item_${section.stateKey}"),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("rail_item_${section.stateKey}"),
                 )
             }
         }
@@ -142,6 +168,9 @@ fun HomeBottomBar(
 ) {
     NavigationBar(
         containerColor = FvpColors.Surface,
+        // La barra gestisce da sé lo spazio della barra di navigazione; gli
+        // altri lati restano al contenuto.
+        windowInsets = WindowInsets(0, 0, 0, 0),
         modifier = modifier.testTag("home_bottom_bar"),
     ) {
         AppSection.bottomBarSections.forEach { section ->

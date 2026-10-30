@@ -7,13 +7,20 @@
 package it.felixvision.mobile.ui.main
 
 import androidx.activity.ComponentActivity
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import it.felixvision.mobile.AppContainer
@@ -51,7 +58,10 @@ import it.felixvision.tv.data.xtream.LoginResult
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlin.math.abs
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -323,6 +333,59 @@ class HomeScreenTest {
             "rail_item_impostazioni",
         ).forEach { rule.onNodeWithTag(it).assertIsDisplayed() }
         assertEquals(8, AppSection.entries.size)
+    }
+
+    /**
+     * Barra laterale: tutte le voci hanno lo stesso centro orizzontale e la
+     * stessa larghezza (icone in colonna), e nessuna etichetta va a capo o
+     * viene troncata. L'etichetta della sezione "Continua a guardare" è
+     * "Continua"; titolo della pagina e descrizione accessibile non cambiano.
+     */
+    @Test
+    @Config(sdk = [34], qualifiers = "w1280dp-h800dp-land-mdpi")
+    fun `w1280dp-h800dp-land - voci della barra laterale centrate e senza troncamenti`() {
+        mount()
+
+        val bounds = AppSection.entries.map { section ->
+            section to rule.onNodeWithTag("rail_item_${section.stateKey}").getUnclippedBoundsInRoot()
+        }
+        assertEquals(8, bounds.size)
+        val firstCenter = (bounds.first().second.left + bounds.first().second.right) / 2f
+        val firstWidth = bounds.first().second.right - bounds.first().second.left
+        bounds.forEach { (section, rect) ->
+            val center = (rect.left + rect.right) / 2f
+            assertTrue(
+                "${section.name}: centro $center diverso da $firstCenter",
+                abs((center - firstCenter).value) <= 1f,
+            )
+            val width = rect.right - rect.left
+            assertTrue(
+                "${section.name}: larghezza $width diversa da $firstWidth",
+                abs((width - firstWidth).value) <= 1f,
+            )
+        }
+
+        AppSection.entries.forEach { section ->
+            val layouts = mutableListOf<TextLayoutResult>()
+            val label = rule.onNode(
+                hasText(section.railLabel) and
+                    hasAnyAncestor(hasTestTag("rail_item_${section.stateKey}")),
+                useUnmergedTree = true,
+            )
+            label.fetchSemanticsNode()
+                .config[SemanticsActions.GetTextLayoutResult]
+                .action
+                ?.invoke(layouts)
+            val layout = layouts.singleOrNull()
+            assertTrue("${section.name}: etichetta non trovata", layout != null)
+            assertEquals("${section.name}: etichetta su più righe", 1, layout!!.lineCount)
+            assertFalse("${section.name}: etichetta troncata", layout.hasVisualOverflow)
+        }
+
+        // "Continua" nella barra, ma la sezione resta "Continua a guardare".
+        assertEquals("Continua", AppSection.CONTINUA.railLabel)
+        assertEquals("Continua a guardare", AppSection.CONTINUA.title)
+        rule.onNodeWithContentDescription("Continua a guardare").assertIsDisplayed()
     }
 
     @Test

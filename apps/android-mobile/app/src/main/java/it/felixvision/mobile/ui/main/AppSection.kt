@@ -22,9 +22,21 @@ enum class AppSection(
     val icon: ImageVector,
     /** Chiave stabile usata anche per lo stato di sezione conservato. */
     val stateKey: String,
+    /**
+     * Etichetta breve della barra laterale: la barra è stretta e le voci
+     * devono stare su una sola riga. Il [title] resta quello della pagina e
+     * della descrizione accessibile.
+     */
+    val railLabel: String = title,
 ) {
     NOVITA("Novità", FvpColors.NovitaActive, FvpIcons.Novita, "novita"),
-    CONTINUA("Continua a guardare", FvpColors.ContinuaActive, FvpIcons.Continua, "continua"),
+    CONTINUA(
+        title = "Continua a guardare",
+        accent = FvpColors.ContinuaActive,
+        icon = FvpIcons.Continua,
+        stateKey = "continua",
+        railLabel = "Continua",
+    ),
     LIVE("Live", FvpColors.LiveActive, FvpIcons.Live, "live"),
     FILM("Film", FvpColors.FilmActive, FvpIcons.Film, "film"),
     SERIE("Serie", FvpColors.SerieActive, FvpIcons.Serie, "serie"),
