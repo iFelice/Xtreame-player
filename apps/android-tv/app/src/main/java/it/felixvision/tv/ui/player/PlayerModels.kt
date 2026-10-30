@@ -89,14 +89,14 @@ data class ChannelBanner(
 )
 
 /**
- * Proposta del prossimo episodio. `countdownSeconds` è `null` finché il
- * riquadro è solo una proposta (3 minuti prima della fine); dopo "Posticipa"
- * arriva il conto alla rovescia degli ultimi 15 secondi.
+ * Proposta del prossimo episodio. `countdownSeconds` resta `null` finché
+ * non inizia il conto alla rovescia degli ultimi due minuti.
  */
 data class NextEpisodePrompt(
     val title: String,
     val countdownSeconds: Int? = null,
     val canPostpone: Boolean = true,
+    val minimized: Boolean = false,
 )
 
 data class PlayerUiState(
@@ -155,5 +155,5 @@ data class PlayerUiState(
             epgVisible ||
             errorMessage != null ||
             resumePositionMillis != null ||
-            nextEpisode != null
+            (nextEpisode != null && !nextEpisode.minimized)
 }
