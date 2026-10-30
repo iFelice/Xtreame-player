@@ -44,6 +44,7 @@ import it.felixvision.tv.data.catalog.CatalogSectionStatus
 import it.felixvision.tv.ui.access.AccessViewModel
 import it.felixvision.tv.ui.access.PairingPanel
 import it.felixvision.tv.ui.components.FvpCheckboxButton
+import it.felixvision.tv.ui.components.FvpCompactButton
 import it.felixvision.tv.ui.components.FvpPrimaryButton
 import it.felixvision.tv.ui.components.FvpSecondaryButton
 import it.felixvision.tv.ui.components.FvpStatusText
@@ -72,6 +73,9 @@ fun SettingsScreen(
     onRefreshCatalog: () -> Unit = {},
 ) {
     val state by viewModel.ui.collectAsState()
+    // Dimensione dell'interfaccia: il valore vive nello store dell'app (lo usa
+    // anche FvpApp), qui si osserva e si cambia.
+    val interfaceSize by viewModel.interfaceSize.collectAsState()
     var showCatalogDialog by remember { mutableStateOf(false) }
     val catalogCloseFocus = remember { FocusRequester() }
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -108,6 +112,8 @@ fun SettingsScreen(
         scale = scale,
         modifier = modifier,
         contentFocusRequester = contentFocusRequester,
+        interfaceSize = interfaceSize,
+        onInterfaceSizeSelected = { viewModel.onInterfaceSizeSelected(it) },
         catalogRefreshing = catalogRefreshing,
         catalogLastUpdateMillis = catalogLastUpdateMillis,
         // La finestra di avanzamento si apre qui: il contenuto resta senza stato.
@@ -279,6 +285,23 @@ const val SETTINGS_EXIT_LABEL = "Esci dall'account"
 const val SETTINGS_EXIT_CLEAR_DATA_LABEL = "Cancella anche preferiti e cronologia"
 const val SETTINGS_EXIT_CLEAR_DATA_TAG = "settings_exit_clear_data"
 
+/** Riquadro "Aspetto": dimensione dell'interfaccia sulle TV da 50" in su. */
+const val SETTINGS_APPEARANCE_TITLE = "Aspetto"
+const val SETTINGS_APPEARANCE_SECTION_TAG = "settings_appearance_section"
+
+/** Etichetta della riga che raccoglie i pulsanti della dimensione interfaccia. */
+const val SETTINGS_INTERFACE_SIZE_LABEL = "Dimensione interfaccia"
+
+/** Prefisso del pulsante della dimensione attiva. */
+const val INTERFACE_SIZE_ACTIVE_PREFIX = "✓ "
+
+/** Tag di test del pulsante di [size] nel riquadro Aspetto. */
+fun interfaceSizeTag(size: InterfaceSize): String = "settings_interface_size_${size.storageKey}"
+
+/** Etichetta del pulsante: il nome della dimensione, con "✓ " se è quella attiva. */
+fun interfaceSizeButtonLabel(size: InterfaceSize, active: InterfaceSize): String =
+    if (size == active) INTERFACE_SIZE_ACTIVE_PREFIX + size.label else size.label
+
 /** Testi e tag del controllo aggiornamenti dell'app. */
 const val UPDATE_STATUS_CHECKING = "Controllo aggiornamenti…"
 const val UPDATE_STATUS_UP_TO_DATE = "App aggiornata"
@@ -294,13 +317,14 @@ fun updateAvailableLabel(version: String): String = "Disponibile la versione $ve
 
 /** Righe della schermata che ricevono il focus, per il bringIntoView. */
 private const val SETTINGS_ROW_ACCOUNT = 0
-private const val SETTINGS_ROW_APP = 1
-private const val SETTINGS_ROW_ACTIONS = 2
-private const val SETTINGS_ROW_PAIRING = 3
+private const val SETTINGS_ROW_APPEARANCE = 1
+private const val SETTINGS_ROW_APP = 2
+private const val SETTINGS_ROW_ACTIONS = 3
+private const val SETTINGS_ROW_PAIRING = 4
 
 /**
  * Contenuto della schermata Impostazioni, senza ViewModel: così i riquadri
- * Account e App si possono comporre e provare senza rete né archivi.
+ * Account, Aspetto e App si possono comporre e provare senza rete né archivi.
  *
  * Il contenuto scorre in verticale: con le righe compatte e i margini del focus
  * non tutto sta in una schermata, e senza lo scorrimento gli ultimi pulsanti
@@ -312,6 +336,9 @@ internal fun SettingsContent(
     scale: UiScale,
     modifier: Modifier = Modifier,
     contentFocusRequester: FocusRequester? = null,
+    /** Dimensione dell'interfaccia attiva, evidenziata con "✓ ". */
+    interfaceSize: InterfaceSize = InterfaceSize.COMPACT,
+    onInterfaceSizeSelected: (InterfaceSize) -> Unit = {},
     catalogRefreshing: Boolean = false,
     catalogLastUpdateMillis: Long? = null,
     onRefreshCatalog: () -> Unit = {},
@@ -379,6 +406,45 @@ internal fun SettingsContent(
                     .padding(top = scale.settingsRowSpacing)
                     .testTag(SETTINGS_EXIT_TAG),
             )
+        }
+
+        // Riquadro Aspetto subito dopo Account: dimensione dell'interfaccia.
+        // La scelta si applica all'istante (OK la salva e la usa FvpApp) e il
+        // focus resta sul pulsante premuto, così si può cambiare ancora.
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .rowInView(SETTINGS_ROW_APPEARANCE)
+                .clip(RoundedCornerShape(scale.dp(14f)))
+                .background(FvpColors.Surface)
+                .padding(scale.settingsSectionPadding)
+                .testTag(SETTINGS_APPEARANCE_SECTION_TAG),
+            verticalArrangement = Arrangement.spacedBy(scale.settingsRowSpacing),
+        ) {
+            Text(
+                text = SETTINGS_APPEARANCE_TITLE,
+                color = FvpColors.TextPrimary,
+                fontSize = scale.sp(16f),
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = SETTINGS_INTERFACE_SIZE_LABEL,
+                color = FvpColors.TextSecondary,
+                fontSize = scale.settingsRowText,
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(scale.dp(8f)),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                InterfaceSize.entries.forEach { size ->
+                    FvpCompactButton(
+                        text = interfaceSizeButtonLabel(size = size, active = interfaceSize),
+                        onClick = { onInterfaceSizeSelected(size) },
+                        scale = scale,
+                        modifier = Modifier.testTag(interfaceSizeTag(size)),
+                    )
+                }
+            }
         }
 
         // Riquadro App subito sotto Account: versione installata e aggiornamenti.

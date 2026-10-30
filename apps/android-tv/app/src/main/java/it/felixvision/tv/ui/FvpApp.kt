@@ -43,8 +43,11 @@ fun FvpApp(container: AppContainer) {
     val viewModel: AccessViewModel = viewModel(factory = factory)
     val state by viewModel.ui.collectAsStateWithLifecycle()
     val sessionCounter = remember { SessionCounter() }
+    // Dimensione dell'interfaccia (Compatta/Media/Grande): letta già al primo
+    // fotogramma dallo store sincrono, poi aggiornata dalle Impostazioni.
+    val interfaceSize by container.interfaceSizeStore.size.collectAsStateWithLifecycle()
 
-    FvpScreen { scale ->
+    FvpScreen(sizeFactor = interfaceSize.factor) { scale ->
         when (val screen = state.screen) {
             Screen.Booting -> BootingScreen(scale = scale)
 

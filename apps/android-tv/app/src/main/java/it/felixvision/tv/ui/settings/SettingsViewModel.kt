@@ -126,6 +126,12 @@ class SettingsViewModel(
     )
     val ui: StateFlow<SettingsUiState> = _ui.asStateFlow()
 
+    /**
+     * Dimensione dell'interfaccia scelta. Vive nello store dell'app (la usa
+     * anche FvpApp), così la scelta si vede subito in tutte le schermate.
+     */
+    val interfaceSize: StateFlow<InterfaceSize> = container.interfaceSizeStore.size
+
     private var pairingJob: Job? = null
     private var pairingVisible = false
     private var accountReadJob: Job? = null
@@ -210,6 +216,11 @@ class SettingsViewModel(
             }
             if (mapped == currentStatus) current else current.copy(updateStatus = mapped)
         }
+    }
+
+    /** Applica e salva la dimensione dell'interfaccia scelta nel riquadro Aspetto. */
+    fun onInterfaceSizeSelected(size: InterfaceSize) {
+        container.interfaceSizeStore.set(size)
     }
 
     fun onSettingsVisible() {

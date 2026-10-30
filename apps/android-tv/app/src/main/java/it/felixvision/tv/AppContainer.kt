@@ -33,6 +33,7 @@ import it.felixvision.tv.data.update.UpdateInstaller
 import it.felixvision.tv.data.update.isDebugVersion
 import it.felixvision.tv.data.volume.VolumeStore
 import it.felixvision.tv.data.xtream.XtreamClient
+import it.felixvision.tv.ui.settings.InterfaceSizeStore
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -103,6 +104,15 @@ class AppContainer(
     /** Livello del volume del player (0-15), ripristinato a ogni avvio. */
     val volumeStore: VolumeStore by lazy {
         VolumeStore(context = context)
+    }
+
+    /**
+     * Dimensione dell'interfaccia scelta nelle Impostazioni (predefinita
+     * "Compatta"). Letta in modo sincrono all'avvio, così il primo fotogramma
+     * ha già la misura giusta.
+     */
+    val interfaceSizeStore: InterfaceSizeStore by lazy {
+        InterfaceSizeStore(context)
     }
 
     /** Formato dello schermo scelto per ogni canale Live, per server+utente. */
