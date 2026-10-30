@@ -40,16 +40,39 @@ val UiScale.focusSafePadding: Dp get() = dp(FOCUS_SAFE_PADDING_BASE)
 const val DESIGN_WIDTH_DP = 960f
 const val DESIGN_HEIGHT_DP = 600f
 
+/**
+ * Scala dell'interfaccia per uno spazio reale di [widthDp]×[heightDp] e una
+ * dimensione dell'interfaccia [sizeFactor] (1 = progetto, 0,8 = Compatta).
+ *
+ * Il moltiplicatore si applica **dopo** `coerceIn`. Una TV 1080p espone di
+ * norma 960×540 dp (densità xhdpi): la scala di progetto vale quindi
+ * min(960 / 960, 540 / 600) = 0,9, "Media" la porta a 0,81 e "Compatta" a 0,72.
+ * Senza applicare il moltiplicatore dopo il limite, il minimo 0,75 riporterebbe
+ * "Compatta" a 0,75 e la scelta non si vedrebbe.
+ *
+ * Funzione pura, così si può verificare senza comporre nulla.
+ */
+fun uiScaleFactor(widthDp: Float, heightDp: Float, sizeFactor: Float): Float {
+    val design = min(widthDp / DESIGN_WIDTH_DP, heightDp / DESIGN_HEIGHT_DP)
+        .coerceIn(MIN_SCALE, MAX_SCALE)
+    return design * sizeFactor
+}
+
+/**
+ * Tela di progetto dell'app: tutto passa da qui. Con [sizeFactor] la TV applica
+ * la dimensione scelta nelle Impostazioni (predefinita "Compatta").
+ */
 @Composable
-fun FvpScreen(content: @Composable (UiScale) -> Unit) {
+fun FvpScreen(
+    sizeFactor: Float = 1f,
+    content: @Composable (UiScale) -> Unit,
+) {
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .background(FvpColors.Background),
     ) {
-        val factor = min(maxWidth.value / DESIGN_WIDTH_DP, maxHeight.value / DESIGN_HEIGHT_DP)
-            .coerceIn(MIN_SCALE, MAX_SCALE)
-        content(UiScale(factor))
+        content(UiScale(uiScaleFactor(maxWidth.value, maxHeight.value, sizeFactor)))
     }
 }
 

@@ -44,6 +44,7 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
@@ -465,7 +466,135 @@ private fun FieldContainer(
     }
 }
 
-/** Pulsante principale: a riposo grigio scuro, solo con focus verde pieno. */
+/**
+ * Misure e colori dell'unico pulsante compatto ([FvpCompactButton]): stanno qui
+ * una volta sola, così le verifiche automatiche controllano i valori veri e non
+ * una copia.
+ */
+object FvpCompactButtonStyle {
+
+    /** Fondo a riposo: trasparente, sotto si vede il riquadro o il video. */
+    val restContainer: Color = Color.Transparent
+
+    /** Testo a riposo. */
+    val restContent: Color = FvpColors.TextPrimary
+
+    /** Fondo con il focus: verde pieno. */
+    val focusContainer: Color = FvpColors.Green
+
+    /** Testo con il focus: scuro, leggibile sul verde. */
+    val focusContent: Color = FvpColors.OnGreen
+
+    /** Fondo da disabilitato: trasparente come a riposo. */
+    val disabledContainer: Color = Color.Transparent
+
+    /** Testo da disabilitato: colore secondario. */
+    val disabledContent: Color = FvpColors.TextSecondary
+
+    /** Bordo a riposo: la linea sottile dei contenitori a vetro. */
+    val restBorderColor: Color = FvpColors.GlassBorder
+
+    /** Bordo con il focus. */
+    val focusBorderColor: Color = FvpColors.GreenFocus
+
+    /** Spessore del bordo a riposo, in unità di progetto. */
+    const val REST_BORDER_BASE = 1f
+
+    /** Spessore del bordo con il focus, in unità di progetto. */
+    const val FOCUS_BORDER_BASE = 2f
+
+    /** Raggio degli angoli, in unità di progetto. */
+    const val CORNER_BASE = 18f
+
+    /** Ingrandimento con il focus. */
+    const val FOCUSED_SCALE = 1.05f
+
+    /** Testo, in unità di progetto. */
+    const val TEXT_BASE = 14f
+
+    /** Margine orizzontale interno, in unità di progetto. */
+    const val HORIZONTAL_PADDING_BASE = 14f
+
+    /** Margine verticale interno, in unità di progetto. */
+    const val VERTICAL_PADDING_BASE = 6f
+
+    /** Peso del testo del pulsante primario. */
+    val PRIMARY_WEIGHT: FontWeight = FontWeight.SemiBold
+
+    /** Peso del testo del pulsante secondario: unica differenza dal primario. */
+    val SECONDARY_WEIGHT: FontWeight = FontWeight.Medium
+}
+
+/**
+ * Unico stile di pulsante compatto dell'app (barra comandi del player, riquadro
+ * "Prossimo episodio", controlli delle Impostazioni e, tramite
+ * [FvpPrimaryButton] e [FvpSecondaryButton], tutti gli altri pulsanti).
+ *
+ * A riposo il fondo è trasparente con un bordo sottile [FvpColors.GlassBorder];
+ * con il focus diventa verde pieno con il bordo [FvpColors.GreenFocus] e un
+ * leggero ingrandimento. Il peso del testo distingue il primario
+ * ([FontWeight.SemiBold]) dal secondario ([FontWeight.Medium]).
+ *
+ * @param fontWeight peso del testo: l'unica differenza tra primario e secondario.
+ */
+@Composable
+fun FvpCompactButton(
+    text: String,
+    onClick: () -> Unit,
+    scale: UiScale,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    fontWeight: FontWeight = FvpCompactButtonStyle.PRIMARY_WEIGHT,
+) {
+    val shape = RoundedCornerShape(scale.dp(FvpCompactButtonStyle.CORNER_BASE))
+    val restBorder = Border(
+        border = BorderStroke(
+            width = scale.dp(FvpCompactButtonStyle.REST_BORDER_BASE),
+            color = FvpCompactButtonStyle.restBorderColor,
+        ),
+        shape = shape,
+    )
+    val focusBorder = Border(
+        border = BorderStroke(
+            width = scale.dp(FvpCompactButtonStyle.FOCUS_BORDER_BASE),
+            color = FvpCompactButtonStyle.focusBorderColor,
+        ),
+        shape = shape,
+    )
+    Button(
+        onClick = onClick,
+        modifier = modifier,
+        enabled = enabled,
+        scale = ButtonDefaults.scale(focusedScale = FvpCompactButtonStyle.FOCUSED_SCALE),
+        colors = ButtonDefaults.colors(
+            containerColor = FvpCompactButtonStyle.restContainer,
+            contentColor = FvpCompactButtonStyle.restContent,
+            focusedContainerColor = FvpCompactButtonStyle.focusContainer,
+            focusedContentColor = FvpCompactButtonStyle.focusContent,
+            pressedContainerColor = FvpCompactButtonStyle.focusContainer,
+            pressedContentColor = FvpCompactButtonStyle.focusContent,
+            disabledContainerColor = FvpCompactButtonStyle.disabledContainer,
+            disabledContentColor = FvpCompactButtonStyle.disabledContent,
+        ),
+        border = ButtonDefaults.border(
+            border = restBorder,
+            focusedBorder = focusBorder,
+            pressedBorder = focusBorder,
+        ),
+        contentPadding = PaddingValues(
+            horizontal = scale.dp(FvpCompactButtonStyle.HORIZONTAL_PADDING_BASE),
+            vertical = scale.dp(FvpCompactButtonStyle.VERTICAL_PADDING_BASE),
+        ),
+    ) {
+        Text(
+            text = text,
+            fontSize = scale.sp(FvpCompactButtonStyle.TEXT_BASE),
+            fontWeight = fontWeight,
+        )
+    }
+}
+
+/** Pulsante principale: fondo trasparente a riposo, verde con il focus, testo SemiBold. */
 @Composable
 fun FvpPrimaryButton(
     text: String,
@@ -474,39 +603,17 @@ fun FvpPrimaryButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
 ) {
-    Button(
+    FvpCompactButton(
+        text = text,
         onClick = onClick,
+        scale = scale,
         modifier = modifier,
         enabled = enabled,
-        scale = ButtonDefaults.scale(focusedScale = 1.05f),
-        colors = ButtonDefaults.colors(
-            containerColor = FvpColors.SurfaceElevated,
-            contentColor = FvpColors.TextPrimary,
-            focusedContainerColor = FvpColors.Green,
-            focusedContentColor = FvpColors.OnGreen,
-            pressedContainerColor = FvpColors.Green,
-            pressedContentColor = FvpColors.OnGreen,
-            disabledContainerColor = FvpColors.SurfaceElevated,
-            disabledContentColor = FvpColors.TextSecondary,
-        ),
-        border = ButtonDefaults.border(
-            border = Border.None,
-            focusedBorder = Border(
-                border = BorderStroke(scale.dp(3f), FvpColors.GreenFocus),
-                inset = scale.dp(3f),
-                shape = RoundedCornerShape(scale.dp(26f)),
-            ),
-        ),
-        contentPadding = PaddingValues(
-            horizontal = scale.dp(26f),
-            vertical = scale.dp(14f),
-        ),
-    ) {
-        Text(text = text, fontSize = scale.sp(18f), fontWeight = FontWeight.SemiBold)
-    }
+        fontWeight = FvpCompactButtonStyle.PRIMARY_WEIGHT,
+    )
 }
 
-/** Pulsante secondario: stessi colori, peso testo diverso. */
+/** Pulsante secondario: lo stesso stile del primario, testo Medium. */
 @Composable
 fun FvpSecondaryButton(
     text: String,
@@ -515,28 +622,14 @@ fun FvpSecondaryButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
 ) {
-    Button(
+    FvpCompactButton(
+        text = text,
         onClick = onClick,
+        scale = scale,
         modifier = modifier,
         enabled = enabled,
-        scale = ButtonDefaults.scale(focusedScale = 1.05f),
-        colors = ButtonDefaults.colors(
-            containerColor = FvpColors.SurfaceElevated,
-            contentColor = FvpColors.TextPrimary,
-            focusedContainerColor = FvpColors.Green,
-            focusedContentColor = FvpColors.OnGreen,
-            pressedContainerColor = FvpColors.Green,
-            pressedContentColor = FvpColors.OnGreen,
-            disabledContainerColor = FvpColors.Surface,
-            disabledContentColor = FvpColors.TextSecondary,
-        ),
-        contentPadding = PaddingValues(
-            horizontal = scale.dp(20f),
-            vertical = scale.dp(14f),
-        ),
-    ) {
-        Text(text = text, fontSize = scale.sp(16f), fontWeight = FontWeight.Medium)
-    }
+        fontWeight = FvpCompactButtonStyle.SECONDARY_WEIGHT,
+    )
 }
 
 /** Casella di spunta per telecomando: raggiungibile con le frecce, OK la attiva/disattiva. */

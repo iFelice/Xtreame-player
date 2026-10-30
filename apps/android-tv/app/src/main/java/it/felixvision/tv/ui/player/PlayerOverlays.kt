@@ -50,8 +50,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Border
-import androidx.tv.material3.Button
-import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.DenseListItem
 import androidx.tv.material3.ListItem
 import androidx.tv.material3.ListItemDefaults
@@ -70,6 +68,7 @@ import it.felixvision.tv.data.volume.PlayerVolume
 import it.felixvision.tv.ui.components.ChannelLogoImage
 import it.felixvision.tv.ui.components.ChannelScheduleInfo
 import it.felixvision.tv.ui.components.FocusMarqueeText
+import it.felixvision.tv.ui.components.FvpCompactButton
 import it.felixvision.tv.ui.components.FvpPrimaryButton
 import it.felixvision.tv.ui.components.FvpSecondaryButton
 import it.felixvision.tv.ui.components.UiScale
@@ -88,8 +87,12 @@ import it.felixvision.tv.ui.theme.volumeIcon
 import it.felixvision.tv.ui.theme.volumeLevelText
 import it.felixvision.tv.ui.theme.volumeTickHeight
 
-/** Opacità delle righe a riposo della lista canali del player: 10% di trasparenza. */
-const val PLAYER_CHANNEL_ROW_REST_ALPHA = 0.9f
+/**
+ * Opacità delle righe a riposo della lista canali del player: 25% di
+ * trasparenza, così il video resta visibile dietro la lista. Con il focus la
+ * riga torna piena.
+ */
+const val PLAYER_CHANNEL_ROW_REST_ALPHA = 0.75f
 
 /**
  * Unico aspetto degli elementi del player che stanno sopra il video: fondo
@@ -377,38 +380,6 @@ fun PlayerChannelListOverlay(
     }
 }
 
-/** Pulsante compatto della barra comandi del player. */
-@Composable
-private fun PlayerBarButton(
-    text: String,
-    onClick: () -> Unit,
-    scale: UiScale,
-    modifier: Modifier = Modifier,
-) {
-    val shape = RoundedCornerShape(scale.dp(18f))
-    Button(
-        onClick = onClick,
-        modifier = modifier,
-        scale = ButtonDefaults.scale(focusedScale = 1.05f),
-        colors = ButtonDefaults.colors(
-            containerColor = Color.Transparent,
-            contentColor = FvpColors.TextPrimary,
-            focusedContainerColor = FvpColors.Green,
-            focusedContentColor = FvpColors.OnGreen,
-            pressedContainerColor = FvpColors.Green,
-            pressedContentColor = FvpColors.OnGreen,
-        ),
-        border = ButtonDefaults.border(
-            border = Border(BorderStroke(scale.dp(1f), FvpColors.GlassBorder), shape = shape),
-            focusedBorder = Border(BorderStroke(scale.dp(2f), FvpColors.GreenFocus), shape = shape),
-            pressedBorder = Border(BorderStroke(scale.dp(2f), FvpColors.GreenFocus), shape = shape),
-        ),
-        contentPadding = PaddingValues(horizontal = scale.dp(14f), vertical = scale.dp(6f)),
-    ) {
-        Text(text = text, fontSize = scale.sp(14f), fontWeight = FontWeight.SemiBold)
-    }
-}
-
 /** Barra film/episodi: titolo, tempi, avanzamento e pulsanti tracce. */
 @Composable
 fun PlayerControlsBar(
@@ -516,7 +487,7 @@ fun PlayerControlsBar(
             },
             horizontalArrangement = Arrangement.spacedBy(scale.dp(12f)),
         ) {
-            PlayerBarButton(
+            FvpCompactButton(
                 text = "Audio",
                 onClick = onAudio,
                 scale = scale,
@@ -524,7 +495,7 @@ fun PlayerControlsBar(
                     .focusRequester(audioFocusRequester)
                     .testTag("player_audio_button"),
             )
-            PlayerBarButton(
+            FvpCompactButton(
                 text = "Sottotitoli",
                 onClick = onSubtitles,
                 scale = scale,
@@ -532,13 +503,13 @@ fun PlayerControlsBar(
             )
             // Volume del nostro player: si apre anche con la freccia Giù a
             // barra chiusa.
-            PlayerBarButton(
+            FvpCompactButton(
                 text = "Volume ${state.volumeLevel}",
                 onClick = onVolume,
                 scale = scale,
                 modifier = Modifier.testTag("player_volume_button"),
             )
-            PlayerBarButton(
+            FvpCompactButton(
                 text = "Formato",
                 onClick = onFormat,
                 scale = scale,
@@ -962,7 +933,7 @@ fun PlayerNextEpisodePrompt(
                 overflow = TextOverflow.Ellipsis,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(scale.dp(8f))) {
-                PlayerBarButton(
+                FvpCompactButton(
                     text = "Guarda ora",
                     onClick = onWatchNow,
                     scale = scale,
@@ -970,13 +941,13 @@ fun PlayerNextEpisodePrompt(
                         .focusRequester(watchFocus)
                         .testTag("player_next_watch"),
                 )
-                PlayerBarButton(
+                FvpCompactButton(
                     text = "Posticipa",
                     onClick = onPostpone,
                     scale = scale,
                     modifier = Modifier.testTag("player_next_postpone"),
                 )
-                PlayerBarButton(
+                FvpCompactButton(
                     text = "Annulla",
                     onClick = onCancel,
                     scale = scale,

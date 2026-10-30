@@ -27,13 +27,15 @@ object FvpColors {
     /**
      * Unico fondo degli elementi del player sopra il video (pannello del volume,
      * banner del canale, lista canali, barra comandi, pannello tracce, prossimo
-     * episodio, Riprendi, etichetta dei salti, errori): [Surface] al 78%.
+     * episodio, Riprendi, etichetta dei salti, errori): [Surface] al 60%.
      *
      * Il valore nasce dal pannello del volume preso come riferimento (0,85),
-     * ridotto di 0,07: 0,85 − 0,07 = 0,78. Sta qui una volta sola, così ogni
+     * ridotto di 0,25: 0,85 − 0,25 = 0,60. Resta un fondo leggibile ma lascia
+     * passare il video molto più di prima (era 0,78): sulle TV da 50" in su i
+     * riquadri non coprono più l'inquadratura. Sta qui una volta sola, così ogni
      * elemento sopra il video ha esattamente lo stesso fondo.
      */
-    val PlayerOverlay = Surface.copy(alpha = 0.78f)
+    val PlayerOverlay = Surface.copy(alpha = 0.60f)
 
     /** Fondo più leggero del pannello di scelta formato sul video. */
     val PlayerPanelLight = Surface.copy(alpha = 0.55f)
