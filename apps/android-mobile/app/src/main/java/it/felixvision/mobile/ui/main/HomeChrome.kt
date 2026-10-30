@@ -23,6 +23,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -98,7 +100,11 @@ fun HomeNavigationRail(
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .testTag("rail_item_${section.stateKey}"),
+                        .testTag("rail_item_${section.stateKey}")
+                        // Il nome accessibile resta quello completo
+                        // ("Continua a guardare"): media3/Material azzerano
+                        // la descrizione dell'icona quando c'è l'etichetta.
+                        .semantics { contentDescription = section.title },
                 )
             }
         }

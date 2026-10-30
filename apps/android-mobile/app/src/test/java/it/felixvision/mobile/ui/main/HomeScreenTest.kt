@@ -11,11 +11,11 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.longClick
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -382,10 +382,14 @@ class HomeScreenTest {
             assertFalse("${section.name}: etichetta troncata", layout.hasVisualOverflow)
         }
 
-        // "Continua" nella barra, ma la sezione resta "Continua a guardare".
+        // "Continua" nella barra, ma il nome accessibile della voce e il
+        // titolo della sezione restano "Continua a guardare".
         assertEquals("Continua", AppSection.CONTINUA.railLabel)
         assertEquals("Continua a guardare", AppSection.CONTINUA.title)
-        rule.onNodeWithContentDescription("Continua a guardare").assertIsDisplayed()
+        rule.onNode(
+            hasTestTag("rail_item_continua") and
+                hasContentDescription("Continua a guardare"),
+        ).assertExists()
     }
 
     @Test
