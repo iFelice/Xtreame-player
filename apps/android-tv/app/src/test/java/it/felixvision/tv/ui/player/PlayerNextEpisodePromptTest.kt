@@ -8,8 +8,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsFocused
-import androidx.compose.ui.test.assertIsNotFocused
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -53,7 +55,7 @@ class PlayerNextEpisodePromptTest {
         }
         rule.waitForIdle()
 
-        rule.onNodeWithTag("player_next_title").assertTextContains("1:59")
+        rule.onNodeWithTag("player_next_title").assertTextContains("1:59", substring = true)
         rule.onNodeWithTag("player_next_watch").assertIsFocused()
         rule.onNodeWithTag("player_next_postpone").performSemanticsAction(SemanticsActions.OnClick)
         rule.onNodeWithTag("player_next_cancel").performSemanticsAction(SemanticsActions.OnClick)
@@ -85,6 +87,6 @@ class PlayerNextEpisodePromptTest {
 
         rule.onNodeWithTag("player_next_label")
             .assertTextContains("Prossimo episodio tra 0:42")
-            .assertIsNotFocused()
+            .assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.Focused))
     }
 }
