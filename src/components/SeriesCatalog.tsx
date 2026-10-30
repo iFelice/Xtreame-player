@@ -525,92 +525,127 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           {(
                             activeSeriesDetail.info.episodes[activeSeriesDetail.selectedSeason] || []
-                          ).map((ep) => (
-                            <div
-                              key={ep.id}
-                              className="flex items-center justify-between p-3.5 rounded-2xl bg-surface-0 border border-separator/80 hover:border-series/40 transition gap-3 shadow-sm"
-                            >
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <span className="text-xs sm:text-sm  font-bold text-series shrink-0">
-                                    E{ep.episode_num}
-                                  </span>
-                                  <h5 className="text-xs sm:text-sm font-bold text-label truncate" title={ep.title}>
-                                    {ep.title || `Episodio ${ep.episode_num}`}
-                                  </h5>
-                                </div>
-                                {!isTv && !bodyTvMode && presentText(ep.info?.plot) && (
-                                  <ExpandablePlot text={presentText(ep.info?.plot)!} lines={2} />
-                                )}
-                                {ep.info?.duration_secs && (
-                                  <p className="text-xs text-label-secondary ">
-                                    {formatDuration(ep.info.duration_secs)}
-                                  </p>
-                                )}
-                              </div>
+                          ).map((ep) => {
+                            // TV keeps the horizontal actions so the focus order
+                            // does not change; everywhere else they are stacked
+                            // under the "Guarda" button and right aligned, to
+                            // leave the plot the whole remaining width.
+                            const tvLayout = isTv || bodyTvMode;
 
-                              <div className="flex items-center gap-2 shrink-0">
-                                {!STATIC_DEPLOY && !isTv && (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      e.preventDefault();
-                                      const ext = ep.container_extension || 'mp4';
-                                      const streamUrl = buildStreamUrl(
-                                        serverUrl,
-                                        username,
-                                        password,
-                                        'series',
-                                        ep.id,
-                                        ext,
-                                        false
-                                      );
-                                      const title = `${activeSeriesDetail.series.name} - S${activeSeriesDetail.selectedSeason}E${ep.episode_num} - ${ep.title || 'Episodio'}`;
-                                      triggerMediaDownload(
-                                        streamUrl,
-                                        title,
-                                        'episode',
-                                        ep.info?.movie_image || activeSeriesDetail.series.cover,
-                                        ext,
-                                        accountKey
-                                      );
-                                    }}
-                                    title="Scarica nella cartella locale dell’app"
-                                    aria-label="Scarica episodio"
-                                    className="p-2 rounded-xl bg-surface-1 hover:bg-surface-2 text-series hover:text-label transition cursor-pointer"
-                                  >
-                                    <Download className="w-4 h-4" />
-                                  </button>
-                                )}
+                            const playButton = (
+                              <button
+                                onClick={() =>
+                                  handlePlayEpisode(ep, activeSeriesDetail.selectedSeason)
+                                }
+                                className="px-3.5 py-1.5 rounded-xl bg-series hover:brightness-110 text-on-accent text-xs sm:text-sm font-bold flex items-center gap-1.5 transition shrink-0 cursor-pointer shadow-md"
+                              >
+                                <Play className="w-3.5 h-3.5 fill-white" />
+                                Guarda
+                              </button>
+                            );
 
-                                {/* Static Apple build: long-press on the direct file link. */}
-                                <AppleDownloadLink
-                                  streamUrl={buildStreamUrl(
+                            const appleDownload = (
+                              /* Static Apple build: long-press on the direct file link. */
+                              <AppleDownloadLink
+                                streamUrl={buildStreamUrl(
+                                  serverUrl,
+                                  username,
+                                  password,
+                                  'series',
+                                  ep.id,
+                                  ep.container_extension || 'mp4',
+                                  false
+                                )}
+                                containerExtension={ep.container_extension}
+                                variant={tvLayout ? 'compact' : 'stacked'}
+                              />
+                            );
+
+                            const downloadButton = !STATIC_DEPLOY && !isTv && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  const ext = ep.container_extension || 'mp4';
+                                  const streamUrl = buildStreamUrl(
                                     serverUrl,
                                     username,
                                     password,
                                     'series',
                                     ep.id,
-                                    ep.container_extension || 'mp4',
+                                    ext,
                                     false
-                                  )}
-                                  containerExtension={ep.container_extension}
-                                  variant="compact"
-                                />
+                                  );
+                                  const title = `${activeSeriesDetail.series.name} - S${activeSeriesDetail.selectedSeason}E${ep.episode_num} - ${ep.title || 'Episodio'}`;
+                                  triggerMediaDownload(
+                                    streamUrl,
+                                    title,
+                                    'episode',
+                                    ep.info?.movie_image || activeSeriesDetail.series.cover,
+                                    ext,
+                                    accountKey
+                                  );
+                                }}
+                                title="Scarica nella cartella locale dell’app"
+                                aria-label="Scarica episodio"
+                                className="p-2 rounded-xl bg-surface-1 hover:bg-surface-2 text-series hover:text-label transition cursor-pointer"
+                              >
+                                <Download className="w-4 h-4" />
+                              </button>
+                            );
 
-                                <button
-                                  onClick={() =>
-                                    handlePlayEpisode(ep, activeSeriesDetail.selectedSeason)
+                            return (
+                              <div
+                                key={ep.id}
+                                className={`flex ${
+                                  tvLayout ? 'items-center' : 'items-start'
+                                } justify-between p-3.5 rounded-2xl bg-surface-0 border border-separator/80 hover:border-series/40 transition gap-3 shadow-sm`}
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <span className="text-xs sm:text-sm  font-bold text-series shrink-0">
+                                      E{ep.episode_num}
+                                    </span>
+                                    <h5 className="text-xs sm:text-sm font-bold text-label truncate" title={ep.title}>
+                                      {ep.title || `Episodio ${ep.episode_num}`}
+                                    </h5>
+                                  </div>
+                                  {!isTv && !bodyTvMode && presentText(ep.info?.plot) && (
+                                    <ExpandablePlot text={presentText(ep.info?.plot)!} lines={2} />
+                                  )}
+                                  {ep.info?.duration_secs && (
+                                    <p className="text-xs text-label-secondary ">
+                                      {formatDuration(ep.info.duration_secs)}
+                                    </p>
+                                  )}
+                                </div>
+
+                                <div
+                                  data-episode-actions={tvLayout ? 'inline' : 'stacked'}
+                                  className={
+                                    tvLayout
+                                      ? 'flex items-center gap-2 shrink-0'
+                                      : 'flex flex-col items-end gap-1.5 shrink-0'
                                   }
-                                  className="px-3.5 py-1.5 rounded-xl bg-series hover:brightness-110 text-on-accent text-xs sm:text-sm font-bold flex items-center gap-1.5 transition shrink-0 cursor-pointer shadow-md"
                                 >
-                                  <Play className="w-3.5 h-3.5 fill-white" />
-                                  Guarda
-                                </button>
+                                  {tvLayout ? (
+                                    <>
+                                      {downloadButton}
+                                      {appleDownload}
+                                      {playButton}
+                                    </>
+                                  ) : (
+                                    <>
+                                      {playButton}
+                                      {appleDownload}
+                                      {downloadButton}
+                                    </>
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
                     </>
