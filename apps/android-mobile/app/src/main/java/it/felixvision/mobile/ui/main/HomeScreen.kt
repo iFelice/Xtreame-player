@@ -213,16 +213,14 @@ fun HomeScreen(
             // La barra laterale prende systemBars e displayCutout su start,
             // top e bottom; l'intestazione e il contenuto prendono safeDrawing
             // sui lati non coperti dalla barra laterale o da quella in basso.
-            val railInsets = remember {
-                WindowInsets.systemBars.only(
-                    WindowInsetsSides.Start + WindowInsetsSides.Top + WindowInsetsSides.Bottom,
-                )
-            }
-            val cutoutInsets = remember {
-                WindowInsets.displayCutout.only(
-                    WindowInsetsSides.Start + WindowInsetsSides.Top + WindowInsetsSides.Bottom,
-                )
-            }
+            // I getter di WindowInsets sono @Composable: si leggono qui, non
+            // dentro un remember.
+            val railInsets = WindowInsets.systemBars.only(
+                WindowInsetsSides.Start + WindowInsetsSides.Top + WindowInsetsSides.Bottom,
+            )
+            val cutoutInsets = WindowInsets.displayCutout.only(
+                WindowInsetsSides.Start + WindowInsetsSides.Top + WindowInsetsSides.Bottom,
+            )
             val contentInsets = WindowInsets.safeDrawing.only(
                 if (wideLayout) {
                     WindowInsetsSides.Top + WindowInsetsSides.End + WindowInsetsSides.Bottom
