@@ -1,6 +1,13 @@
 package it.felixvision.tv.ui.player
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.background
@@ -42,6 +49,10 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.Stroke
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -994,6 +1005,97 @@ fun PlayerNextEpisodeLabel(prompt: NextEpisodePrompt, scale: UiScale) {
                 .playerOverlay(scale, FvpColors.PlayerPanelLight)
                 .padding(horizontal = scale.dp(10f), vertical = scale.dp(6f))
                 .testTag("player_next_label"),
+        )
+    }
+}
+
+/**
+ * Valori dell'indicatore di caricamento del player: ritardo prima di
+ * comparire, durata del giro, ampiezza dell'arco, e la condizione per cui
+ * l'indicatore è richiesto (unica fonte per [PlayerScreen]).
+ */
+object PlayerBufferingIndicatorDefaults {
+
+    /** L'indicatore compare solo se il caricamento dura più di questo tempo. */
+    const val SHOW_DELAY_MILLIS = 300L
+
+    /** Durata di un giro completo dell'arco, in millisecondi. */
+    const val ROTATION_DURATION_MILLIS = 900
+
+    /** Ampiezza dell'arco verde, in gradi. */
+    const val ARC_SWEEP_DEGREES = 90f
+
+    /**
+     * L'indicatore è richiesto durante il caricamento, e mai sopra a un
+     * errore (l'overlay dell'errore parla da sé) o a un pannello modale
+     * aperto.
+     */
+    fun isRequested(
+        isBuffering: Boolean,
+        hasError: Boolean,
+        hasModalOverlay: Boolean,
+    ): Boolean = isBuffering && !hasError && !hasModalOverlay
+}
+
+/**
+ * Anello sottile che gira, al posto della scritta "Caricamento…": una traccia
+ * circolare completa a bassissima opacità e, sopra, un arco
+ * [FvpColors.Green] di [PlayerBufferingIndicatorDefaults.ARC_SWEEP_DEGREES]°
+ * che ruota a velocità costante (un giro ogni
+ * [PlayerBufferingIndicatorDefaults.ROTATION_DURATION_MILLIS] ms). Nessun
+ * testo e nessuno sfondo: il video resta visibile dietro.
+ */
+@Composable
+fun PlayerBufferingIndicator(
+    scale: UiScale,
+    modifier: Modifier = Modifier,
+) {
+    val transition = rememberInfiniteTransition(label = "player_buffering")
+    val rotation by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = PlayerBufferingIndicatorDefaults.ROTATION_DURATION_MILLIS,
+                easing = LinearEasing,
+            ),
+            // A fine giro riparte da zero, senza inversioni.
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "player_buffering_rotation",
+    )
+    val strokeWidth = scale.dp(3f)
+    Canvas(
+        modifier = modifier
+            .size(scale.dp(40f))
+            .testTag("player_buffering"),
+    ) {
+        val stroke = strokeWidth.toPx()
+        val inset = stroke / 2f
+        // L'anello resta dentro i bordi della tela, pennello compreso.
+        val arcSize = Size(
+            (size.width - stroke).coerceAtLeast(0f),
+            (size.height - stroke).coerceAtLeast(0f),
+        )
+        val arcTopLeft = Offset(inset, inset)
+        val arcStyle = Stroke(width = stroke, cap = StrokeCap.Round)
+        drawArc(
+            color = FvpColors.TextPrimary.copy(alpha = 0.18f),
+            startAngle = 0f,
+            sweepAngle = 360f,
+            useCenter = false,
+            topLeft = arcTopLeft,
+            size = arcSize,
+            style = arcStyle,
+        )
+        drawArc(
+            color = FvpColors.Green,
+            startAngle = rotation,
+            sweepAngle = PlayerBufferingIndicatorDefaults.ARC_SWEEP_DEGREES,
+            useCenter = false,
+            topLeft = arcTopLeft,
+            size = arcSize,
+            style = arcStyle,
         )
     }
 }
