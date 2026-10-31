@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicSecureTextField
 import androidx.compose.foundation.text.BasicTextField
@@ -46,6 +47,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -503,8 +505,11 @@ object FvpCompactButtonStyle {
     /** Spessore del bordo con il focus, in unità di progetto. */
     const val FOCUS_BORDER_BASE = 2f
 
-    /** Raggio degli angoli, in unità di progetto. */
-    const val CORNER_BASE = 18f
+    /**
+     * Unica forma del pulsante, condivisa da fondo e bordi: su un rettangolo
+     * [CircleShape] dà la pillola con gli estremi semicircolari.
+     */
+    val shape: Shape = CircleShape
 
     /** Ingrandimento con il focus. */
     const val FOCUSED_SCALE = 1.05f
@@ -546,7 +551,7 @@ fun FvpCompactButton(
     enabled: Boolean = true,
     fontWeight: FontWeight = FvpCompactButtonStyle.PRIMARY_WEIGHT,
 ) {
-    val shape = RoundedCornerShape(scale.dp(FvpCompactButtonStyle.CORNER_BASE))
+    val shape = FvpCompactButtonStyle.shape
     val restBorder = Border(
         border = BorderStroke(
             width = scale.dp(FvpCompactButtonStyle.REST_BORDER_BASE),
@@ -566,6 +571,13 @@ fun FvpCompactButton(
         modifier = modifier,
         enabled = enabled,
         scale = ButtonDefaults.scale(focusedScale = FvpCompactButtonStyle.FOCUSED_SCALE),
+        shape = ButtonDefaults.shape(
+            shape = shape,
+            focusedShape = shape,
+            pressedShape = shape,
+            disabledShape = shape,
+            focusedDisabledShape = shape,
+        ),
         colors = ButtonDefaults.colors(
             containerColor = FvpCompactButtonStyle.restContainer,
             contentColor = FvpCompactButtonStyle.restContent,
@@ -643,11 +655,22 @@ fun FvpCheckboxButton(
     enabled: Boolean = true,
 ) {
     val boxShape = RoundedCornerShape(scale.dp(5f))
+    // Fondo e bordo con il focus devono avere la stessa forma, altrimenti la
+    // cornice verde non segue il contorno ai lati. Su un rettangolo CircleShape
+    // dà la pillola con gli estremi semicircolari.
+    val shape = CircleShape
     Button(
         onClick = { onCheckedChange(!checked) },
         modifier = modifier,
         enabled = enabled,
         scale = ButtonDefaults.scale(focusedScale = 1.03f),
+        shape = ButtonDefaults.shape(
+            shape = shape,
+            focusedShape = shape,
+            pressedShape = shape,
+            disabledShape = shape,
+            focusedDisabledShape = shape,
+        ),
         colors = ButtonDefaults.colors(
             containerColor = FvpColors.SurfaceElevated,
             contentColor = FvpColors.TextPrimary,
@@ -663,7 +686,7 @@ fun FvpCheckboxButton(
             focusedBorder = Border(
                 border = BorderStroke(scale.dp(2.5f), FvpColors.GreenFocus),
                 inset = scale.dp(2f),
-                shape = RoundedCornerShape(scale.dp(26f)),
+                shape = shape,
             ),
         ),
         contentPadding = PaddingValues(
