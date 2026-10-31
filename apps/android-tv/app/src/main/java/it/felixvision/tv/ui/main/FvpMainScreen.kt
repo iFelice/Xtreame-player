@@ -785,6 +785,9 @@ fun FvpMainScreen(
                                     catalogRefreshing = catalogState.isRefreshing,
                                     catalogLastUpdateMillis = catalogState.lastUpdateMillis,
                                     onRefreshCatalog = { catalogViewModel.refreshManual() },
+                                    // Catalogo per la pagina "Contenuti protetti":
+                                    // categorie e contenuti da nascondere.
+                                    catalog = catalog,
                                 )
                             }
                         } else {

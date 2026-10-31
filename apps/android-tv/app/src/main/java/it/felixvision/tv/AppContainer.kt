@@ -18,6 +18,8 @@ import it.felixvision.tv.data.epg.ChannelScheduleLoader
 import it.felixvision.tv.data.images.FvpImageLoader
 import it.felixvision.tv.data.pairing.PairingClient
 import it.felixvision.tv.data.pairing.PairingCoordinator
+import it.felixvision.tv.data.protection.ProtectedContentStore
+import it.felixvision.tv.data.protection.ProtectedSession
 import it.felixvision.tv.data.playback.ChannelVideoFormatStore
 import it.felixvision.tv.data.playback.PlaybackActivityTracker
 import it.felixvision.tv.data.progress.ProgressStore
@@ -99,6 +101,19 @@ class AppContainer(
 
     val progressStore: ProgressStore by lazy {
         ProgressStore(context = context, json = json, clock = clock)
+    }
+
+    /** Contenuti per adulti: PIN (solo hash) ed elenchi nascosti, per server+utente. */
+    val protectedContentStore: ProtectedContentStore by lazy {
+        ProtectedContentStore(context = context)
+    }
+
+    /**
+     * Visibilità dei contenuti protetti: solo in memoria, spenta a ogni avvio.
+     * In questa fase comanda soltanto la pagina "Contenuti protetti".
+     */
+    val protectedSession: ProtectedSession by lazy {
+        ProtectedSession(clock = clock)
     }
 
     /** Livello del volume del player (0-15), ripristinato a ogni avvio. */
