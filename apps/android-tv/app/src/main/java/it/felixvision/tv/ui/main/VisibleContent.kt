@@ -17,6 +17,11 @@ import it.felixvision.tv.data.protection.ProtectedFilter
  * liste si può verificare nei test senza comporre l'intera schermata: con
  * [unlocked] vero, o senza nulla di nascosto, restituisce le stesse istanze
  * ricevute.
+ *
+ * [pending] è vero quando la sessione è bloccata e l'archivio dei contenuti
+ * protetti dell'account corrente non è ancora stato letto: in quel caso non si
+ * mostra niente, perché finché non si sa cosa è nascosto qualunque contenuto
+ * potrebbe esserlo.
  */
 data class VisibleContent(
     val catalog: Catalog?,
@@ -25,6 +30,7 @@ data class VisibleContent(
     val favorites: List<FavoriteItem>,
     val continueEntries: List<ContinueEntry>,
     val myChannels: List<MyChannel>,
+    val pending: Boolean = false,
 )
 
 fun visibleContent(
@@ -34,7 +40,7 @@ fun visibleContent(
     favorites: List<FavoriteItem>,
     continueEntries: List<ContinueEntry>,
     myChannels: List<MyChannel>,
-    data: ProtectedContentData,
+    data: ProtectedContentData?,
     unlocked: Boolean,
 ): VisibleContent {
     if (unlocked) {
@@ -45,6 +51,20 @@ fun visibleContent(
             favorites = favorites,
             continueEntries = continueEntries,
             myChannels = myChannels,
+        )
+    }
+    if (data == null) {
+        // Sessione bloccata e archivio non ancora letto (primo avvio, cambio
+        // account, ricarica dopo una modifica): nessun contenuto finché non si
+        // sa cosa è nascosto.
+        return VisibleContent(
+            catalog = null,
+            recentFilms = emptyList(),
+            recentSeries = emptyList(),
+            favorites = emptyList(),
+            continueEntries = emptyList(),
+            myChannels = emptyList(),
+            pending = true,
         )
     }
     val visibleCatalog = catalog?.let { ProtectedFilter.filterCatalog(it, data) }

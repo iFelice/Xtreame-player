@@ -294,15 +294,26 @@ fun FvpMainScreen(
 
     // Contenuti protetti: la sessione dice se mostrarli (in memoria, spenta a
     // ogni avvio), l'archivio dice cosa è nascosto per server+utente.
+    // `null` = archivio dell'account corrente non ancora letto: finché la
+    // sessione è bloccata non si mostra nulla (né altro account né dati vecchi).
     val unlocked by container.protectedSession.unlocked.collectAsState()
     val protectedRevision by container.protectedContentStore.revision.collectAsState()
-    val protectedData by produceState<ProtectedContentData>(
-        initialValue = ProtectedContentData(),
+    val protectedData by produceState<ProtectedContentData?>(
+        initialValue = null,
         protectedRevision,
         currentServer,
         currentUsername,
     ) {
-        value = container.protectedContentStore.get(currentServer, currentUsername)
+        value = null
+        // Cancellazione (cambio account o revisione) rilanciata: un vecchio
+        // produttore non deve scrivere "niente di nascosto" al posto del nuovo.
+        value = try {
+            container.protectedContentStore.get(currentServer, currentUsername)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            ProtectedContentData()
+        }
     }
 
     // Tutte le liste visibili della schermata: con la sessione bloccata (o con
@@ -694,7 +705,12 @@ fun FvpMainScreen(
                     else -> {
                         // Catalogo visibile: tutto ciò che non è protetto.
                         val catalog: Catalog? = visibleCatalog
-                        if (catalog != null) {
+                        if (visible.pending) {
+                            // Sessione bloccata e contenuti protetti dell'account
+                            // corrente non ancora letti: nessuna sezione e nessun
+                            // "Catalogo vuoto", lo stesso vuoto dell'attesa del
+                            // primo catalogo. Il menu laterale resta.
+                        } else if (catalog != null) {
                             when (selectedTab) {
                                 DrawerSection.Novita -> NovitaSection(
                                     recentFilms = visibleRecentFilms,

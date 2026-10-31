@@ -13,7 +13,9 @@ import it.felixvision.tv.data.protection.HiddenItem
 import it.felixvision.tv.data.protection.ProtectedContentData
 import it.felixvision.tv.data.protection.ProtectedKind
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -93,6 +95,7 @@ class VisibleContentTest {
         assertSame(favorites, visible.favorites)
         assertSame(continueEntries, visible.continueEntries)
         assertSame(myChannels, visible.myChannels)
+        assertFalse(visible.pending)
     }
 
     @Test
@@ -123,6 +126,7 @@ class VisibleContentTest {
         // Canale 101: la categoria "001" è nascosta e la si ricava dal catalogo
         // completo, non da quello già filtrato.
         assertEquals(listOf("102"), visible.myChannels.map { it.streamId })
+        assertFalse(visible.pending)
     }
 
     @Test
@@ -138,6 +142,54 @@ class VisibleContentTest {
             unlocked = false,
         )
 
+        assertSame(catalog, visible.catalog)
+        assertSame(recentFilms, visible.recentFilms)
+        assertSame(recentSeries, visible.recentSeries)
+        assertSame(favorites, visible.favorites)
+        assertSame(continueEntries, visible.continueEntries)
+        assertSame(myChannels, visible.myChannels)
+    }
+
+    @Test
+    fun `sessione bloccata con archivio non letto non mostra nulla`() {
+        // L'archivio dei contenuti protetti dell'account corrente non è ancora
+        // stato letto: finché la sessione è bloccata non si mostra niente.
+        val visible = visibleContent(
+            catalog = catalog,
+            recentFilms = recentFilms,
+            recentSeries = recentSeries,
+            favorites = favorites,
+            continueEntries = continueEntries,
+            myChannels = myChannels,
+            data = null,
+            unlocked = false,
+        )
+
+        assertTrue(visible.pending)
+        assertEquals(null, visible.catalog)
+        assertTrue(visible.recentFilms.isEmpty())
+        assertTrue(visible.recentSeries.isEmpty())
+        assertTrue(visible.favorites.isEmpty())
+        assertTrue(visible.continueEntries.isEmpty())
+        assertTrue(visible.myChannels.isEmpty())
+    }
+
+    @Test
+    fun `sessione sbloccata con archivio non letto mostra tutto`() {
+        // Con la sessione sbloccata i contenuti protetti si possono vedere, non
+        // serve aspettare l'archivio.
+        val visible = visibleContent(
+            catalog = catalog,
+            recentFilms = recentFilms,
+            recentSeries = recentSeries,
+            favorites = favorites,
+            continueEntries = continueEntries,
+            myChannels = myChannels,
+            data = null,
+            unlocked = true,
+        )
+
+        assertFalse(visible.pending)
         assertSame(catalog, visible.catalog)
         assertSame(recentFilms, visible.recentFilms)
         assertSame(recentSeries, visible.recentSeries)
@@ -164,5 +216,6 @@ class VisibleContentTest {
         // Senza catalogo la categoria dei canali non si ricava: sparisce solo
         // chi è nascosto singolarmente (qui nessuno).
         assertEquals(listOf("101", "102"), visible.myChannels.map { it.streamId })
+        assertFalse(visible.pending)
     }
 }
