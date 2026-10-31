@@ -638,6 +638,18 @@ fun FvpMainScreen(
                                     onPlayEntry = { entry -> openContinueEntry(entry) },
                                     onRemoveEntry = { entry -> hideContinueEntry(entry) },
                                     refocusTick = playerReturnTick,
+                                    catalogViewModel = catalogViewModel,
+                                    favorites = allFavorites,
+                                    onToggleFavorite = { toggleFavorite(it) },
+                                    onPlayVod = { film -> playMovie(film) },
+                                    onPlayEpisode = { _, playback -> playEpisode(playback) },
+                                    onSetEpisodeWatched = { episode, watched, duration ->
+                                        setEpisodeWatched(episode, watched, duration)
+                                    },
+                                    onToggleWatched = { film, watched, duration ->
+                                        setMovieWatched(film, watched, duration)
+                                    },
+                                    focusEpisodeId = returnEpisodeId,
                                     contentFocusRequester = contentFocusRequester,
                                     modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
                                 )
