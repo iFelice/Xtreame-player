@@ -33,6 +33,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Border
@@ -510,7 +511,9 @@ private fun ProtectedVerifyPage(
 
 /**
  * PIN DIMENTICATO: la password del provider (mai mostrata né scritta nei log)
- * permette di scegliere un nuovo PIN conservando gli elenchi nascosti.
+ * permette di scegliere un nuovo PIN conservando gli elenchi nascosti. Un solo
+ * campo, con le stesse convenzioni del login: tastiera aperta da OK, "Fine"
+ * che la chiude, focus iniziale sul campo.
  */
 @Composable
 private fun ProtectedForgotPage(
@@ -522,11 +525,10 @@ private fun ProtectedForgotPage(
     onPasswordAccepted: () -> Unit,
 ) {
     val passwordState = rememberTextFieldState()
-    val confirmState = rememberTextFieldState()
-    val submitFocus = remember { FocusRequester() }
+    val passwordFieldFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) {
         withFrameNanos { }
-        runCatching { submitFocus.requestFocus() }
+        runCatching { passwordFieldFocus.requestFocus() }
     }
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -546,18 +548,14 @@ private fun ProtectedForgotPage(
         FvpPasswordField(
             label = "Password del provider",
             state = passwordState,
-            placeholder = "",
+            placeholder = "Password",
             visible = false,
             scale = scale,
-            modifier = Modifier.testTag("forgot_password_field"),
-        )
-        FvpPasswordField(
-            label = "Conferma",
-            state = confirmState,
-            placeholder = "",
-            visible = false,
-            scale = scale,
-            modifier = Modifier.testTag("forgot_confirm_field"),
+            focusRequester = passwordFieldFocus,
+            // "Fine" chiude la tastiera e lascia il focus sulla password.
+            imeAction = ImeAction.Done,
+            openKeyboardOnOk = true,
+            fieldTag = "forgot_password_field",
         )
         if (errorMessage != null) {
             Text(
@@ -571,8 +569,7 @@ private fun ProtectedForgotPage(
             text = "Conferma",
             onClick = {
                 val password = passwordState.text.toString()
-                val confirmation = confirmState.text.toString()
-                if (password.isBlank() || password != confirmation) {
+                if (password.isBlank()) {
                     onError("Password errata")
                 } else {
                     scope.launch {
@@ -586,9 +583,7 @@ private fun ProtectedForgotPage(
                 }
             },
             scale = scale,
-            modifier = Modifier
-                .focusRequester(submitFocus)
-                .testTag("forgot_submit"),
+            modifier = Modifier.testTag("forgot_submit"),
         )
     }
 }
@@ -819,13 +814,22 @@ private fun ProtectionRow(
 /** Id e nome di un contenuto nascondibile, nell'ordine del catalogo. */
 internal class ProtectableItem(val itemId: String, val name: String)
 
+/**
+ * Categorie del tipo scelto senza doppioni: un `category_id` ripetuto dal
+ * provider resterebbe una chiave duplicata nella LazyColumn e la farrebbe
+ * crashare. Vale la prima comparsa, l'ordine del catalogo è conservato.
+ */
 internal fun categoriesForKind(catalog: Catalog?, kind: ProtectedKind): List<Category> =
     when (kind) {
         ProtectedKind.LIVE -> catalog?.liveCategories
         ProtectedKind.VOD -> catalog?.vodCategories
         ProtectedKind.SERIES -> catalog?.seriesCategories
-    }.orEmpty()
+    }.orEmpty().distinctBy { it.categoryId }
 
+/**
+ * Contenuti di una categoria nell'ordine del catalogo, senza doppioni sul
+ * loro id (stesso motivo della lista categorie: chiavi lazy uniche).
+ */
 internal fun itemsForCategory(
     catalog: Catalog?,
     kind: ProtectedKind,
@@ -840,4 +844,4 @@ internal fun itemsForCategory(
     ProtectedKind.SERIES -> catalog?.series.orEmpty()
         .filter { it.categoryId == categoryId }
         .map { ProtectableItem(itemId = it.seriesId, name = it.name) }
-}
+}.distinctBy { it.itemId }

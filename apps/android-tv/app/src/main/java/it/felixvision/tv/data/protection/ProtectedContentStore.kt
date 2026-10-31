@@ -74,13 +74,18 @@ class ProtectedContentStore(
             )
         }
 
-    /** Vero solo se il PIN coincide con l'hash salvato per l'account. */
-    suspend fun verifyPin(server: String, username: String, pin: String): Boolean {
-        val data = withContext(io) { read(server, username) }
-        val hash = data.pinHash ?: return false
-        val salt = data.pinSalt ?: return false
-        return PinHasher.verify(pin = pin, hash = hash, salt = salt, iterations = data.pinIterations)
-    }
+    /**
+     * Vero solo se il PIN coincide con l'hash salvato per l'account. Lettura e
+     * derivazione PBKDF2 girano su [io]: la verifica non deve bloccare il
+     * thread dell'interfaccia.
+     */
+    suspend fun verifyPin(server: String, username: String, pin: String): Boolean =
+        withContext(io) {
+            val data = read(server, username)
+            val hash = data.pinHash ?: return@withContext false
+            val salt = data.pinSalt ?: return@withContext false
+            PinHasher.verify(pin = pin, hash = hash, salt = salt, iterations = data.pinIterations)
+        }
 
     suspend fun toggleCategory(
         server: String,
