@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -22,6 +23,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -109,6 +111,11 @@ internal enum class CreateOrigin { Initial, Change, ForgotBackToVerify, ForgotBa
  * Entrare nella pagina non sblocca i contenuti. Indietro torna al livello
  * precedente e dalla radice alle Impostazioni ([onExit]). PIN e password non
  * sono mai mostrati né scritti nei log.
+ *
+ * Nel flusso "Aggiungi" l'ultima voce aperta resta memorizzata per tutta la
+ * durata della schermata: tornando indietro da una categoria, l'elenco delle
+ * categorie riparte da quella riga (scorrimento compreso) e la scelta del tipo
+ * dal tipo usato, invece che dall'inizio.
  */
 @Composable
 fun ProtectedContentScreen(
@@ -136,6 +143,18 @@ fun ProtectedContentScreen(
     var firstPin by remember { mutableStateOf<String?>(null) }
     var pinError by remember { mutableStateOf<String?>(null) }
     var createOrigin by remember { mutableStateOf(CreateOrigin.Initial) }
+
+    // Ultima voce aperta nel flusso "Aggiungi", conservata per tutta la durata
+    // della schermata: tornando indietro da una categoria si riparte dal tipo
+    // scelto e da quella riga, non dall'inizio dell'elenco.
+    var lastKind by remember { mutableStateOf<ProtectedKind?>(null) }
+    // Per ogni tipo, l'ultima categoria aperta e lo scorrimento della sua lista.
+    // Le mappe sono di stato: il focus e la posizione letti in composizione
+    // seguono l'aggiornamento.
+    val lastCategoryByKind = remember { mutableStateMapOf<ProtectedKind, String>() }
+    val categoryListStates = remember {
+        mutableStateMapOf<ProtectedKind, LazyListState>()
+    }
 
     // La pagina iniziale dipende dall'archivio: senza PIN si crea, con PIN e
     // sessione bloccata si verifica, altrimenti si apre la pagina principale.
@@ -294,8 +313,10 @@ fun ProtectedContentScreen(
 
             ProtectedPage.AddKind -> ProtectedAddKindPage(
                 scale = scale,
+                restoreKind = lastKind,
                 onSelectKind = { kind ->
                     pinError = null
+                    lastKind = kind
                     stack.add(ProtectedPage.AddCategories(kind))
                 },
             )
@@ -305,7 +326,10 @@ fun ProtectedContentScreen(
                 data = data ?: ProtectedContentData(),
                 kind = page.kind,
                 scale = scale,
+                restoreCategoryId = lastCategoryByKind[page.kind],
+                listState = categoryListStates.getOrPut(page.kind) { LazyListState() },
                 onOpenCategory = { categoryId, categoryName ->
+                    lastCategoryByKind[page.kind] = categoryId
                     stack.add(ProtectedPage.AddItems(page.kind, categoryId, categoryName))
                 },
             )
@@ -588,16 +612,26 @@ private fun ProtectedForgotPage(
     }
 }
 
-/** AGGIUNGI · scelta del tipo di catalogo (Live, Film, Serie). */
+/**
+ * AGGIUNGI · scelta del tipo di catalogo (Live, Film, Serie).
+ *
+ * [restoreKind] è il tipo scelto l'ultima volta: al ritorno da un elenco il
+ * focus va su quella riga, altrimenti sulla prima. Ogni riga ha il proprio
+ * [FocusRequester], creato una volta per tipo con [remember].
+ */
 @Composable
 private fun ProtectedAddKindPage(
     scale: UiScale,
+    restoreKind: ProtectedKind?,
     onSelectKind: (ProtectedKind) -> Unit,
 ) {
-    val firstFocus = remember { FocusRequester() }
-    LaunchedEffect(Unit) {
+    val kindFocuses = remember {
+        ProtectedKind.entries.associateWith { FocusRequester() }
+    }
+    val focusTarget = restoreKind ?: ProtectedKind.entries.first()
+    LaunchedEffect(focusTarget) {
         withFrameNanos { }
-        runCatching { firstFocus.requestFocus() }
+        runCatching { kindFocuses[focusTarget]?.requestFocus() }
     }
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -609,33 +643,55 @@ private fun ProtectedAddKindPage(
             fontSize = scale.sp(18f),
             fontWeight = FontWeight.Bold,
         )
-        ProtectedKind.entries.forEachIndexed { index, kind ->
+        ProtectedKind.entries.forEach { kind ->
+            val kindFocus = kindFocuses[kind]
             ProtectionRow(
                 headline = protectedKindLabel(kind),
                 onClick = { onSelectKind(kind) },
                 scale = scale,
                 modifier = Modifier
-                    .then(if (index == 0) Modifier.focusRequester(firstFocus) else Modifier)
+                    .then(if (kindFocus != null) Modifier.focusRequester(kindFocus) else Modifier)
                     .testTag("protected_kind_${kind.storageKey}"),
             )
         }
     }
 }
 
-/** AGGIUNGI · categorie del tipo scelto, con "nascosta" o "N nascosti" a destra. */
+/**
+ * AGGIUNGI · categorie del tipo scelto, con "nascosta" o "N nascosti" a destra.
+ *
+ * [restoreCategoryId] è la categoria aperta l'ultima volta e [listState] lo
+ * scorrimento conservato per il tipo: all'apertura la lista torna sulla riga
+ * e il focus va lì; se la categoria non è più nel catalogo si riparte dalla
+ * prima riga. Ogni riga ha il proprio [FocusRequester], creato per categoria
+ * con [remember] sulla lista corrente.
+ */
 @Composable
-private fun ProtectedAddCategoriesPage(
+internal fun ProtectedAddCategoriesPage(
     catalog: Catalog?,
     data: ProtectedContentData,
     kind: ProtectedKind,
     scale: UiScale,
+    restoreCategoryId: String?,
+    listState: LazyListState,
     onOpenCategory: (categoryId: String, categoryName: String) -> Unit,
 ) {
     val categories = categoriesForKind(catalog, kind)
-    val firstFocus = remember { FocusRequester() }
-    LaunchedEffect(kind) {
+    val categoryFocuses = remember(categories) {
+        categories.associate { it.categoryId to FocusRequester() }
+    }
+    val restoreIndex = categories.indexOfFirst { it.categoryId == restoreCategoryId }
+    val restoreAvailable = restoreIndex >= 0
+    val focusTarget = if (restoreAvailable) restoreCategoryId else categories.firstOrNull()?.categoryId
+    LaunchedEffect(focusTarget, categories, restoreAvailable) {
+        if (focusTarget == null) return@LaunchedEffect
+        // Riga di partenza: quella aperta l'ultima volta se è ancora nel
+        // catalogo, altrimenti la cima dell'elenco come all'apertura. Lo
+        // scorrimento viene prima del focus: senza, una riga lontana non
+        // sarebbe composta e il focus non potrebbe andarci.
+        listState.scrollToItem(if (restoreAvailable) restoreIndex else 0)
         withFrameNanos { }
-        runCatching { firstFocus.requestFocus() }
+        runCatching { categoryFocuses[focusTarget]?.requestFocus() }
     }
     Column(
         modifier = Modifier.fillMaxSize(),
@@ -656,6 +712,7 @@ private fun ProtectedAddCategoriesPage(
             )
         } else {
             LazyColumn(
+                state = listState,
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
@@ -665,11 +722,12 @@ private fun ProtectedAddCategoriesPage(
                 itemsIndexed(
                     categories,
                     key = { _, category -> "cat_${category.categoryId}" },
-                ) { index, category ->
+                ) { _, category ->
                     val categoryId = category.categoryId
                     val categoryName = category.categoryName ?: "Senza nome"
                     val hidden = ProtectedContentRules.isCategoryHidden(data, kind, categoryId)
                     val hiddenItems = ProtectedContentRules.hiddenCountInCategory(data, kind, categoryId)
+                    val categoryFocus = categoryFocuses[categoryId]
                     ProtectionRow(
                         headline = categoryName,
                         trailing = when {
@@ -680,7 +738,13 @@ private fun ProtectedAddCategoriesPage(
                         onClick = { onOpenCategory(categoryId, categoryName) },
                         scale = scale,
                         modifier = Modifier
-                            .then(if (index == 0) Modifier.focusRequester(firstFocus) else Modifier)
+                            .then(
+                                if (categoryFocus != null) {
+                                    Modifier.focusRequester(categoryFocus)
+                                } else {
+                                    Modifier
+                                },
+                            )
                             .testTag("protected_catrow_${kind.storageKey}_$categoryId"),
                     )
                 }
