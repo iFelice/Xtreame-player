@@ -14,7 +14,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -27,13 +26,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
-import androidx.compose.ui.test.assertIsNotFocused
-import androidx.compose.ui.test.isFocused
+import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.onRoot
-import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.printToLog
 import androidx.compose.ui.test.printToString
@@ -57,6 +53,7 @@ import it.felixvision.tv.ui.catalog.MY_CHANNELS_EMPTY_MESSAGE
 import it.felixvision.tv.ui.catalog.FilmSection
 import it.felixvision.tv.ui.catalog.LiveSection
 import it.felixvision.tv.ui.catalog.MyChannelDialog
+import it.felixvision.tv.ui.catalog.NOVITA_CATEGORY_ID
 import it.felixvision.tv.ui.catalog.NovitaSection
 import it.felixvision.tv.ui.catalog.SerieSection
 import it.felixvision.tv.ui.components.FvpPrimaryButton
@@ -101,8 +98,8 @@ class DpadNavigationTest {
 
     private fun dumpTree(testName: String) {
         try {
-            rule.onRoot(useUnmergedTree = true).printToLog("DPAD")
-            val str = rule.onRoot(useUnmergedTree = true).printToString()
+            rule.onNode(isRoot(), useUnmergedTree = true).printToLog("DPAD")
+            val str = rule.onNode(isRoot(), useUnmergedTree = true).printToString()
             val f = java.io.File("build/dpad-tree-${testName}.txt")
             f.parentFile?.mkdirs()
             f.writeText(str)
@@ -230,6 +227,7 @@ class DpadNavigationTest {
                         FilmSection(
                             categories = fakeCategories("vod"),
                             streams = fakeVodStreams(),
+                            recentStreams = fakeVodStreams(),
                             scale = scale,
                             onLongPressFilm = { vod ->
                                 val fav = FavoriteItem(id = "vod_${vod.streamId}", type = "vod", title = vod.name, poster = vod.streamIcon, categoryId = vod.categoryId)
@@ -245,6 +243,7 @@ class DpadNavigationTest {
                         SerieSection(
                             categories = fakeCategories("series"),
                             series = fakeSeries(),
+                            recentSeries = fakeSeries(),
                             scale = scale,
                             onLongPressSerie = { serie ->
                                 val fav = FavoriteItem(id = "series_${serie.seriesId}", type = "series", title = serie.name, poster = serie.cover, categoryId = serie.categoryId)
@@ -636,11 +635,11 @@ class DpadNavigationTest {
             rule.onNodeWithTag("film_201").assertIsFocused()
             // focus nella griglia -> colonna ridotta
             rule.onNodeWithTag("film_category_column_collapsed").assertIsDisplayed()
-            rule.onNodeWithTag("film_grid_6").assertIsDisplayed()
-            // freccia sinistra dal primo elemento -> focus categoria attiva e colonna piena
+            rule.onNodeWithTag("film_grid_5").assertIsDisplayed()
+            // Freccia sinistra: la categoria iniziale è ora Novità, non vod1.
             rule.onNodeWithTag("film_201").performKeyInput { pressKey(Key.DirectionLeft) }
             rule.waitForIdle()
-            rule.onNodeWithTag("film_category_vod1").assertIsFocused()
+            rule.onNodeWithTag("film_category_$NOVITA_CATEGORY_ID").assertIsFocused()
             rule.onNodeWithTag("film_category_column_expanded").assertIsDisplayed()
             rule.onNodeWithTag("film_grid_5").assertIsDisplayed()
         } catch (e: AssertionError) {

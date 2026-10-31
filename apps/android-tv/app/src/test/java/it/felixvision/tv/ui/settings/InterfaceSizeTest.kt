@@ -13,8 +13,8 @@ class InterfaceSizeTest {
 
     @Test
     fun `fattori ed etichette`() {
-        assertEquals(0.8f, InterfaceSize.COMPACT.factor, 0.0001f)
-        assertEquals(0.9f, InterfaceSize.MEDIUM.factor, 0.0001f)
+        assertEquals(0.70f, InterfaceSize.COMPACT.factor, 0.0001f)
+        assertEquals(0.85f, InterfaceSize.MEDIUM.factor, 0.0001f)
         assertEquals(1.0f, InterfaceSize.LARGE.factor, 0.0001f)
 
         assertEquals("Compatta", InterfaceSize.COMPACT.label)

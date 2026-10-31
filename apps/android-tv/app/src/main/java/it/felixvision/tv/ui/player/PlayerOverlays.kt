@@ -6,6 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.focusable
@@ -23,6 +25,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -367,6 +370,8 @@ fun PlayerChannelListOverlay(
                             contentColor = FvpColors.TextPrimary,
                             focusedContainerColor = FvpColors.SurfaceElevated,
                             focusedContentColor = FvpColors.TextPrimary,
+                            focusedSelectedContainerColor = FvpColors.SurfaceElevated,
+                            focusedSelectedContentColor = FvpColors.TextPrimary,
                         ),
                         scale = ListItemDefaults.scale(focusedScale = 1.03f),
                         border = ListItemDefaults.border(
@@ -418,12 +423,6 @@ fun PlayerControlsBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(scale.dp(3f))
-                .then(
-                    if (progressFocused) Modifier.border(
-                        BorderStroke(scale.dp(2f), FvpColors.GreenFocus),
-                        RoundedCornerShape(scale.dp(8f)),
-                    ) else Modifier
-                )
                 .focusRequester(progressFocusRequester)
                 .onFocusChanged { progressFocused = it.isFocused }
                 .onPreviewKeyEvent { event ->
@@ -452,19 +451,40 @@ fun PlayerControlsBar(
                 color = FvpColors.TextSecondary,
                 fontSize = scale.sp(14f),
             )
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(scale.dp(4f))
-                    .clip(RoundedCornerShape(scale.dp(2f)))
-                    .background(FvpColors.SurfaceElevated),
+            val knobDiameter = scale.dp(14f)
+            val barHeight = scale.dp(if (progressFocused) 8f else 4f)
+            val fraction = state.progressFraction
+            BoxWithConstraints(
+                modifier = Modifier.weight(1f).height(knobDiameter),
+                contentAlignment = Alignment.CenterStart,
             ) {
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth(state.progressFraction)
-                        .height(scale.dp(4f))
-                        .background(FvpColors.Green),
-                )
+                        .fillMaxWidth()
+                        .height(barHeight)
+                        .clip(RoundedCornerShape(barHeight / 2f))
+                        .background(FvpColors.SurfaceElevated)
+                        .testTag("player_progress_track"),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(fraction)
+                            .fillMaxHeight()
+                            .background(FvpColors.Green),
+                    )
+                }
+                if (progressFocused) {
+                    // Il pallino resta interamente entro la barra anche agli estremi.
+                    val knobX = (maxWidth * fraction - knobDiameter / 2f)
+                        .coerceIn(0.dp, (maxWidth - knobDiameter).coerceAtLeast(0.dp))
+                    Box(
+                        modifier = Modifier
+                            .offset(x = knobX)
+                            .size(knobDiameter)
+                            .background(FvpColors.Green, CircleShape)
+                            .testTag("player_progress_knob"),
+                    )
+                }
             }
             Text(
                 text = PlaybackFormatting.formatTime(state.durationMillis),
@@ -711,6 +731,8 @@ private fun trackColors() = ListItemDefaults.colors(
     contentColor = FvpColors.TextPrimary,
     focusedContainerColor = FvpColors.Green,
     focusedContentColor = FvpColors.OnGreen,
+    focusedSelectedContainerColor = FvpColors.Green,
+    focusedSelectedContentColor = FvpColors.OnGreen,
 )
 
 /**

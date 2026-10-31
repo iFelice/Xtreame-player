@@ -317,10 +317,9 @@ fun updateAvailableLabel(version: String): String = "Disponibile la versione $ve
 
 /** Righe della schermata che ricevono il focus, per il bringIntoView. */
 private const val SETTINGS_ROW_ACCOUNT = 0
-private const val SETTINGS_ROW_APPEARANCE = 1
-private const val SETTINGS_ROW_APP = 2
-private const val SETTINGS_ROW_ACTIONS = 3
-private const val SETTINGS_ROW_PAIRING = 4
+private const val SETTINGS_ROW_APP = 1
+private const val SETTINGS_ROW_ACTIONS = 2
+private const val SETTINGS_ROW_PAIRING = 3
 
 /**
  * Contenuto della schermata Impostazioni, senza ViewModel: così i riquadri
@@ -410,11 +409,12 @@ internal fun SettingsContent(
 
         // Riquadro Aspetto subito dopo Account: dimensione dell'interfaccia.
         // La scelta si applica all'istante (OK la salva e la usa FvpApp) e il
-        // focus resta sul pulsante premuto, così si può cambiare ancora.
+        // focus resta sul pulsante premuto, così si può cambiare ancora. È il
+        // focus a portare in vista i pulsanti: non richiedere anche la vista
+        // dell'intero riquadro, per evitare richieste di scorrimento concorrenti.
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .rowInView(SETTINGS_ROW_APPEARANCE)
                 .clip(RoundedCornerShape(scale.dp(14f)))
                 .background(FvpColors.Surface)
                 .padding(scale.settingsSectionPadding)
