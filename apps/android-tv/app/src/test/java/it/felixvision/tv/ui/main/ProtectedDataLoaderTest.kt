@@ -49,7 +49,8 @@ class ProtectedDataLoaderTest {
         // Un solo host: né le scritture né il cambio account ricreano setContent.
         rule.setContent {
             val data by rememberProtectedData(store, server.value, username.value)
-            SideEffect { observed.add(data) }
+            val current = data
+            SideEffect { observed.add(current) }
         }
         rule.waitUntil(timeoutMillis = 5_000L) {
             testScheduler.runCurrent()
