@@ -45,7 +45,8 @@ class ButtonColorsTest {
         assertEquals(2f, FvpCompactButtonStyle.FOCUS_BORDER_BASE, 0.0001f)
 
         assertEquals(1.05f, FvpCompactButtonStyle.FOCUSED_SCALE, 0.0001f)
-        assertEquals(18f, FvpCompactButtonStyle.CORNER_BASE, 0.0001f)
+        // La forma non è più un raggio: è una sola per fondo e bordi, vedi
+        // CompactButtonShapeTest.
         assertEquals(14f, FvpCompactButtonStyle.TEXT_BASE, 0.0001f)
         assertEquals(14f, FvpCompactButtonStyle.HORIZONTAL_PADDING_BASE, 0.0001f)
         assertEquals(6f, FvpCompactButtonStyle.VERTICAL_PADDING_BASE, 0.0001f)
