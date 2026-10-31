@@ -65,12 +65,12 @@ sealed interface AppUpdateStatus {
     ) : AppUpdateStatus
 }
 
-/** Riga del riquadro "Contenuti protetti" delle Impostazioni: PIN e hiding count. */
-data class ProtectedSummary(val hasPin: Boolean = false, val hiddenCount: Int = 0)
+/** Riga del riquadro "Contenuti protetti" delle Impostazioni: stato del PIN. */
+data class ProtectedSummary(val hasPin: Boolean = false)
 
 /** Testo del riquadro "Contenuti protetti" in Impostazioni. */
 fun protectedSettingsLine(summary: ProtectedSummary): String =
-    if (summary.hasPin) "PIN impostato · ${summary.hiddenCount} elementi nascosti" else "PIN non impostato"
+    if (summary.hasPin) "PIN impostato" else "PIN non impostato"
 
 data class SettingsUiState(
     val username: String = "",
@@ -161,7 +161,6 @@ class SettingsViewModel(
                 ?: return@launch
             _protectedSummary.value = ProtectedSummary(
                 hasPin = data.hasPin,
-                hiddenCount = data.hiddenCount,
             )
         }
     }

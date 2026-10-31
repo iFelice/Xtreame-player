@@ -8,10 +8,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performSemanticsAction
@@ -246,7 +248,7 @@ class SettingsUpdateAndExitTest {
     }
 
     @Test
-    fun `pallino arancio accanto alla versione disponibile e assente con app aggiornata`() {
+    fun `versione disponibile e app aggiornata senza pallino nelle impostazioni`() {
         val release = ReleaseInfo(
             version = "1.0.3",
             downloadUrl = "https://github.com/iFelice/felixvp-releases/releases/download/1.0.3/FelixVP.apk",
@@ -270,17 +272,15 @@ class SettingsUpdateAndExitTest {
         }
         rule.waitForIdle()
 
-        // Versione installata 1.0.2, disponibile 1.0.3: testo e pallino arancio.
-        rule.onNodeWithText("Disponibile la versione 1.0.3").assertIsDisplayed()
-        val badge = rule.onNodeWithTag(SETTINGS_UPDATE_BADGE_TAG, useUnmergedTree = true)
-        badge.assertIsDisplayed()
-        assertFalse(SemanticsActions.OnClick in badge.fetchSemanticsNode().config)
+        // Il testo della versione resta, il pallino appartiene solo al menu laterale.
+        rule.onNodeWithText("Disponibile la versione 1.0.3").assertExists()
+        rule.onAllNodesWithTag("settings_update_badge", useUnmergedTree = true).assertCountEquals(0)
 
-        // App aggiornata: il pallino sparisce insieme al testo della versione.
+        // Anche con l'app aggiornata non ci sono pallini nelle Impostazioni.
         uiState = uiState.copy(updateStatus = AppUpdateStatus.UpToDate)
         rule.waitForIdle()
         rule.onNodeWithText("App aggiornata").assertIsDisplayed()
-        rule.onNodeWithTag(SETTINGS_UPDATE_BADGE_TAG, useUnmergedTree = true).assertDoesNotExist()
+        rule.onAllNodesWithTag("settings_update_badge", useUnmergedTree = true).assertCountEquals(0)
     }
 
     @Test
