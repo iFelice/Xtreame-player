@@ -26,6 +26,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -80,10 +81,11 @@ fun FilmSection(
     onToggleWatched: (VodStream, Boolean, Long) -> Unit = { _, _, _ -> },
     refocusTick: Int = 0,
     modifier: Modifier = Modifier,
+    recentStreams: List<VodStream> = emptyList(),
 ) {
-    var selectedCategoryId by remember { mutableStateOf(categories.firstOrNull()?.categoryId) }
-    var debouncedCategoryId by remember { mutableStateOf(selectedCategoryId) }
-    var focusedCategoryId by remember { mutableStateOf(selectedCategoryId) }
+    val displayCategories = remember(categories) { withNovitaCategory(categories) }
+    var debouncedCategoryId by remember { mutableStateOf(NOVITA_CATEGORY_ID) }
+    var focusedCategoryId by remember { mutableStateOf(NOVITA_CATEGORY_ID) }
     var detailFilm by remember { mutableStateOf<VodStream?>(null) }
     var detailInfo by remember { mutableStateOf<VodInfoResponse?>(null) }
     var detailIsLoading by remember { mutableStateOf(false) }
@@ -94,7 +96,6 @@ fun FilmSection(
     LaunchedEffect(focusedCategoryId) {
         delay(300L)
         debouncedCategoryId = focusedCategoryId
-        selectedCategoryId = focusedCategoryId
     }
 
     LaunchedEffect(detailFilm?.streamId, retryKey) {
@@ -132,15 +133,37 @@ fun FilmSection(
 
     val categoryListState = rememberLazyListState()
     val gridState = rememberLazyGridState()
-    val categoryFocusRequesters = remember(categories) {
-        categories.associate { it.categoryId to FocusRequester() }
+    val categoryFocusRequesters = remember(displayCategories) {
+        displayCategories.associate { it.categoryId to FocusRequester() }
     }
     val gridFirstFocus = remember { FocusRequester() }
 
     val columns = 5
 
-    val filtered = remember(streams, debouncedCategoryId) {
-        if (debouncedCategoryId == null) emptyList() else streams.filter { it.categoryId == debouncedCategoryId }
+    val filtered = remember(streams, recentStreams, debouncedCategoryId) {
+        filmsForCategory(debouncedCategoryId, streams, recentStreams)
+    }
+    // Se la griglia è vuota, il telecomando deve poter entrare nelle categorie
+    // e scegliere un'altra voce, invece di cercare una card che non esiste.
+    val columnFocusRequesters = remember(categoryFocusRequesters, filtered.isEmpty(), focusedCategoryId, contentFocusRequester) {
+        if (filtered.isEmpty()) categoryFocusRequesters + (focusedCategoryId to contentFocusRequester)
+        else categoryFocusRequesters
+    }
+    LaunchedEffect(filtered.isEmpty()) {
+        if (filtered.isEmpty()) categoryExpanded = true
+    }
+    // Le voci compattate non sono focusable: prima riapri la colonna, poi
+    // richiedi il focus alla voce attiva dopo la sua ricomposizione.
+    var pendingCategoryFocus by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(pendingCategoryFocus, displayCategories, columnFocusRequesters) {
+        val categoryId = pendingCategoryFocus ?: return@LaunchedEffect
+        val index = displayCategories.indexOfFirst { it.categoryId == categoryId }
+        if (index >= 0) {
+            categoryListState.scrollToItem(index)
+            withFrameNanos { }
+            columnFocusRequesters[categoryId]?.requestFocus()
+        }
+        pendingCategoryFocus = null
     }
     val itemFocusRequesters = remember(filtered) {
         filtered.associate { it.streamId to FocusRequester() }
@@ -158,22 +181,18 @@ fun FilmSection(
     // L'indicatore di posizione (contatore e barra) sta sopra, sul bordo destro.
     Box(modifier = modifier.fillMaxSize()) {
     Row(modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(scale.dp(12f))) {
-        if (categories.isEmpty()) {
-            EmptyState(title = "Nessuna categoria", description = "Il server non ha restituito categorie.", scale = scale, modifier = Modifier.weight(0.3f))
-        } else {
-            CollapsingCategoryColumn(
-                categories = categories,
-                debouncedCategoryId = debouncedCategoryId,
-                scale = scale,
-                expanded = categoryExpanded,
-                onExpandedChange = { categoryExpanded = it },
-                focusedCategoryId = focusedCategoryId,
-                onFocusedCategoryId = { focusedCategoryId = it },
-                listState = categoryListState,
-                focusRequesters = categoryFocusRequesters,
-                testTagPrefix = "film"
-            )
-        }
+        CollapsingCategoryColumn(
+            categories = displayCategories,
+            debouncedCategoryId = debouncedCategoryId,
+            scale = scale,
+            expanded = categoryExpanded,
+            onExpandedChange = { categoryExpanded = it },
+            focusedCategoryId = focusedCategoryId,
+            onFocusedCategoryId = { focusedCategoryId = it },
+            listState = categoryListState,
+            focusRequesters = columnFocusRequesters,
+            testTagPrefix = "film",
+        )
 
         Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
             if (filtered.isEmpty()) {
@@ -213,9 +232,8 @@ fun FilmSection(
                                 }
                                 .onPreviewKeyEvent { event ->
                                     if (event.key == Key.DirectionLeft && isLeftEdge) {
-                                        val active = debouncedCategoryId ?: categories.firstOrNull()?.categoryId
-                                        active?.let { categoryFocusRequesters[it]?.requestFocus() }
                                         categoryExpanded = true
+                                        pendingCategoryFocus = debouncedCategoryId
                                         true
                                     } else false
                                 }

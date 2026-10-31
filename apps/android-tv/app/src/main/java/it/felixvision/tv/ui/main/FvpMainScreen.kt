@@ -667,6 +667,7 @@ fun FvpMainScreen(
                                 DrawerSection.Film -> FilmSection(
                                     categories = catalog.vodCategories,
                                     streams = catalog.vodStreams,
+                                    recentStreams = catalogState.recentFilms,
                                     scale = scale,
                                     onLongPressFilm = { vod ->
                                         val fav = FavoriteItem(id = "vod_${vod.streamId}", type = "vod", title = vod.name, poster = vod.streamIcon, categoryId = vod.categoryId)
@@ -686,6 +687,7 @@ fun FvpMainScreen(
                                 DrawerSection.Serie -> SerieSection(
                                     categories = catalog.seriesCategories,
                                     series = catalog.series,
+                                    recentSeries = catalogState.recentSeries,
                                     scale = scale,
                                     onLongPressSerie = { serie ->
                                         val fav = FavoriteItem(id = "series_${serie.seriesId}", type = "series", title = serie.name, poster = serie.cover, categoryId = serie.categoryId)

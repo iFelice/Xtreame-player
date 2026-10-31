@@ -6,7 +6,7 @@ package it.felixvision.tv.ui.settings
  * Il valore in [factor] è un moltiplicatore applicato *dopo* i limiti della
  * scala di progetto (vedi `uiScaleFactor`). Una TV 1080p espone di norma
  * 960×540 dp (densità xhdpi): la scala di progetto vale min(960 / 960,
- * 540 / 600) = 0,9, quindi "Media" la porta a 0,81 e "Compatta" a 0,72.
+ * 540 / 600) = 0,9, quindi "Media" la porta a 0,765 e "Compatta" a 0,63.
  * Applicarlo prima dei limiti riporterebbe "Compatta" al minimo 0,75 e la
  * scelta non avrebbe effetto.
  *
@@ -15,11 +15,11 @@ package it.felixvision.tv.ui.settings
  */
 enum class InterfaceSize(val storageKey: String, val label: String, val factor: Float) {
 
-    /** 80% della scala di progetto: la più compatta, predefinita. */
-    COMPACT("compact", "Compatta", 0.8f),
+    /** 70% della scala di progetto: la più compatta, predefinita. */
+    COMPACT("compact", "Compatta", 0.70f),
 
-    /** 90% della scala di progetto. */
-    MEDIUM("medium", "Media", 0.9f),
+    /** 85% della scala di progetto. */
+    MEDIUM("medium", "Media", 0.85f),
 
     /** 100% della scala di progetto: la più grande. */
     LARGE("large", "Grande", 1.0f),

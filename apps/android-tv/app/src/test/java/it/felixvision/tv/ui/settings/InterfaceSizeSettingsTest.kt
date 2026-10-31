@@ -1,17 +1,28 @@
 package it.felixvision.tv.ui.settings
 
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertTextEquals
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.theme.FvpTheme
@@ -83,6 +94,48 @@ class InterfaceSizeSettingsTest {
 
         assertTrue("il riquadro Aspetto non sta sotto Account", appearance.top >= accountEnd.bottom - 1f)
         assertTrue("il riquadro Aspetto non sta sopra App", appearance.bottom <= appSection.top + 1f)
+    }
+
+    @Test
+    fun `il riquadro Aspetto resta fermo con il focus su Media e Grande`() {
+        val contentFocus = FocusRequester()
+        rule.setContent {
+            FvpTheme {
+                // Un'altezza ridotta obbliga la pagina a scorrere quando si
+                // risale da Aggiorna catalogo al riquadro Aspetto.
+                Box(Modifier.width(960.dp).height(240.dp)) {
+                    SettingsContent(state = settingsState(), scale = scale, contentFocusRequester = contentFocus)
+                }
+            }
+        }
+        rule.waitForIdle()
+        rule.runOnIdle { contentFocus.requestFocus() }
+        rule.waitForIdle()
+
+        rule.onNodeWithTag("settings_refresh").performKeyInput { pressKey(Key.DirectionUp) }
+        rule.onNodeWithTag("settings_interface_size_compact").assertIsFocused()
+        rule.onNodeWithTag("settings_interface_size_compact").performKeyInput { pressKey(Key.DirectionRight) }
+        rule.onNodeWithTag("settings_interface_size_medium").assertIsFocused()
+        rule.waitForIdle()
+
+        rule.mainClock.autoAdvance = false
+        try {
+            fun assertAppearanceStaysStill() {
+                val tops = List(10) {
+                    rule.mainClock.advanceTimeBy(100)
+                    rule.waitForIdle()
+                    rule.onNodeWithTag(SETTINGS_APPEARANCE_SECTION_TAG).getUnclippedBoundsInRoot().top.value
+                }
+                assertTrue("Il riquadro Aspetto si muove: $tops", tops.maxOrNull()!! - tops.minOrNull()!! <= 0.5f)
+            }
+
+            assertAppearanceStaysStill()
+            rule.onNodeWithTag("settings_interface_size_medium").performKeyInput { pressKey(Key.DirectionRight) }
+            rule.onNodeWithTag("settings_interface_size_large").assertIsFocused()
+            assertAppearanceStaysStill()
+        } finally {
+            rule.mainClock.autoAdvance = true
+        }
     }
 
     @Test
