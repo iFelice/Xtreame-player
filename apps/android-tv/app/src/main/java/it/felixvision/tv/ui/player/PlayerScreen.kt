@@ -129,7 +129,12 @@ fun PlayerScreen(
     }
     LaunchedEffect(personalNumbering, myChannels) {
         if (!personalNumbering) return@LaunchedEffect
-        val ordered = MyChannelPlayback.streams(myChannels, liveChannelMetadata.values.toList())
+        // Solo i canali che la schermata principale ha passato come visibili:
+        // la lista salvata può contenere canali nascosti (contenuti protetti),
+        // che non devono rientrare nello zapping né nella numerazione.
+        val visibleIds = liveSource?.channels?.map { it.streamId }?.toSet().orEmpty()
+        val current = if (visibleIds.isEmpty()) myChannels else myChannels.filter { it.streamId in visibleIds }
+        val ordered = MyChannelPlayback.streams(current, liveChannelMetadata.values.toList())
         if (ordered.isEmpty()) return@LaunchedEffect
         engine.updatePersonalChannels(ordered)
     }
