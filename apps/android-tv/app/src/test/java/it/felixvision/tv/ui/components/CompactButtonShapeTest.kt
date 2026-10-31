@@ -27,8 +27,8 @@ class CompactButtonShapeTest {
 
     @Test
     fun `lo stile espone una sola forma a pillola`() {
+        // CircleShape è una costante (non un tipo): il confronto è per valore.
         assertEquals(CircleShape, FvpCompactButtonStyle.shape)
-        assertTrue(FvpCompactButtonStyle.shape is CircleShape)
     }
 
     @Test
