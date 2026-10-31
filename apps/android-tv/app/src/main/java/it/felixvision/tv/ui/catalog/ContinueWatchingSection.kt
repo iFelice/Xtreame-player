@@ -31,6 +31,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -336,6 +341,16 @@ fun ContinueWatchingSection(
             Box(
                 modifier = Modifier
                     .ignoreHeldOkUntilReleased()
+                    // Indietro si intercetta qui, sulla radice del Dialog: il
+                    // KeyDown è consumato e il menu chiude al KeyUp, così il
+                    // rilascio non arriva alla sezione sotto. BackHandler resta
+                    // come ripiego.
+                    .onPreviewKeyEvent { event ->
+                        if (event.key == Key.Back) {
+                            if (event.type == KeyEventType.KeyUp) menuEntry = null
+                            true
+                        } else false
+                    }
                     .fillMaxSize()
                     .background(FvpColors.Background.copy(alpha = 0.85f))
                     .padding(scale.dp(32f)),
