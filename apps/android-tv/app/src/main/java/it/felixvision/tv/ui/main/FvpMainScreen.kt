@@ -1,6 +1,10 @@
 package it.felixvision.tv.ui.main
 
 import android.app.Activity
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -13,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableIntStateOf
@@ -31,6 +36,10 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
@@ -54,6 +63,7 @@ import it.felixvision.tv.data.playback.buildEpisodeQueue
 import it.felixvision.tv.data.playback.indexOfEpisode
 import it.felixvision.tv.data.progress.ProgressKeys
 import it.felixvision.tv.data.progress.WatchProgress
+import it.felixvision.tv.data.protection.ProtectedContentData
 import it.felixvision.tv.data.update.UpdateCheckState
 import it.felixvision.tv.ui.access.AccessViewModel
 import it.felixvision.tv.ui.catalog.CatalogViewModel
@@ -218,7 +228,36 @@ fun FvpMainScreen(
     ) {
         value = container.myChannelsStore.getChannels(currentServer, currentUsername)
     }
-    val myChannelIds = remember(myChannels) { myChannels.map { it.streamId }.toSet() }
+
+    // Standby (ACTION_SCREEN_OFF) e passaggio in secondo piano (ON_STOP)
+    // ribloccano la sessione: nessun contenuto protetto resta visibile.
+    DisposableEffect(context, container) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(receiverContext: Context?, intent: Intent?) {
+                if (intent?.action == Intent.ACTION_SCREEN_OFF) container.protectedSession.lock()
+            }
+        }
+        val registered = runCatching {
+            ContextCompat.registerReceiver(
+                context,
+                receiver,
+                IntentFilter(Intent.ACTION_SCREEN_OFF),
+                ContextCompat.RECEIVER_NOT_EXPORTED,
+            )
+        }.isSuccess
+        onDispose {
+            if (registered) runCatching { context.unregisterReceiver(receiver) }
+        }
+    }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, container) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) container.protectedSession.lock()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     // Alla prima apertura dell'account i vecchi preferiti "live" si tolgono
     // dall'archivio preferiti: non vengono migrati in "I miei canali".
@@ -251,6 +290,61 @@ fun FvpMainScreen(
         currentUsername,
     ) {
         value = container.continueWatchingStore.getAll(currentServer, currentUsername)
+    }
+
+    // Contenuti protetti: la sessione dice se mostrarli (in memoria, spenta a
+    // ogni avvio), l'archivio dice cosa è nascosto per server+utente.
+    val unlocked by container.protectedSession.unlocked.collectAsState()
+    val protectedRevision by container.protectedContentStore.revision.collectAsState()
+    val protectedData by produceState<ProtectedContentData>(
+        initialValue = ProtectedContentData(),
+        protectedRevision,
+        currentServer,
+        currentUsername,
+    ) {
+        value = container.protectedContentStore.get(currentServer, currentUsername)
+    }
+
+    // Tutte le liste visibili della schermata: con la sessione bloccata (o con
+    // qualcosa di nascosto) categorie e contenuti protetti spariscono ovunque,
+    // zapping e tasti numerici del player compresi.
+    val visible = remember(
+        catalogState.catalog,
+        catalogState.recentFilms,
+        catalogState.recentSeries,
+        allFavorites,
+        continueEntries,
+        myChannels,
+        protectedData,
+        unlocked,
+    ) {
+        visibleContent(
+            catalog = catalogState.catalog,
+            recentFilms = catalogState.recentFilms,
+            recentSeries = catalogState.recentSeries,
+            favorites = allFavorites,
+            continueEntries = continueEntries,
+            myChannels = myChannels,
+            data = protectedData,
+            unlocked = unlocked,
+        )
+    }
+    val visibleCatalog = visible.catalog
+    val visibleRecentFilms = visible.recentFilms
+    val visibleRecentSeries = visible.recentSeries
+    val visibleFavorites = visible.favorites
+    val visibleContinueEntries = visible.continueEntries
+    val visibleMyChannels = visible.myChannels
+    val visibleMyChannelIds = remember(visibleMyChannels) { visibleMyChannels.map { it.streamId }.toSet() }
+
+    // Riblocco dalla pagina delle Impostazioni con un player aperto: il player
+    // si chiude subito (stessa uscita dell'OK/Indietro, con ripristino del
+    // focus nella sezione) e le liste tornano filtrate.
+    LaunchedEffect(unlocked) {
+        if (!unlocked && playerSession != null) {
+            playerSession = null
+            playerReturnTick += 1
+        }
     }
 
     // Aggiornamenti dell'app: stato condiviso con le Impostazioni (una sola
@@ -326,7 +420,7 @@ fun FvpMainScreen(
     )
 
     fun playLive(channel: LiveStream) {
-        val catalog = catalogState.catalog
+        val catalog = visibleCatalog
         val allStreams = catalog?.liveStreams.orEmpty()
         val categories = catalog?.liveCategories.orEmpty()
         // Zapping nella categoria di partenza; il player riceve anche tutti i
@@ -353,8 +447,8 @@ fun FvpMainScreen(
      * della lista (circolare) e numerazione personale dei tasti numerici.
      */
     fun playMyChannel(channel: MyChannel) {
-        val catalog = catalogState.catalog
-        val ordered = MyChannelPlayback.streams(myChannels, catalog?.liveStreams.orEmpty())
+        val catalog = visibleCatalog
+        val ordered = MyChannelPlayback.streams(visibleMyChannels, catalog?.liveStreams.orEmpty())
             .ifEmpty { listOf(LiveStream(streamId = channel.streamId, name = channel.name, streamIcon = channel.logo)) }
         val index = ordered.indexOfFirst { it.streamId == channel.streamId }.coerceAtLeast(0)
         playerSession = newPlayerSession(
@@ -424,7 +518,7 @@ fun FvpMainScreen(
         // Da Preferiti/Novità/Continua a guardare la card può non avere
         // l'estensione del contenitore: se il catalogo è disponibile si usa la
         // voce completa.
-        val resolved = catalogState.catalog
+        val resolved = visibleCatalog
             ?.vodStreams
             ?.firstOrNull { it.streamId == film.streamId }
             ?: film
@@ -502,7 +596,7 @@ fun FvpMainScreen(
     fun openContinueEntry(entry: ContinueEntry) {
         if (entry.isMovie) {
             val streamId = entry.streamId ?: return
-            val fromCatalog = catalogState.catalog?.vodStreams?.firstOrNull { it.streamId == streamId }
+            val fromCatalog = visibleCatalog?.vodStreams?.firstOrNull { it.streamId == streamId }
             val film = fromCatalog ?: VodStream(
                 streamId = streamId,
                 name = entry.title,
@@ -570,7 +664,7 @@ fun FvpMainScreen(
     }
 
     // La scheda serie legge da qui la stagione dell'episodio da continuare.
-    CompositionLocalProvider(LocalContinueEntries provides continueEntries) {
+    CompositionLocalProvider(LocalContinueEntries provides visibleContinueEntries) {
     FvpNavigationDrawer(
         selected = selectedTab,
         onSelect = {
@@ -598,12 +692,13 @@ fun FvpMainScreen(
                         ErrorState(message = catalogState.errorMessage!!, scale = scale, onRetry = { catalogViewModel.retry() }, modifier = Modifier.align(Alignment.Center))
                     }
                     else -> {
-                        val catalog: Catalog? = catalogState.catalog
+                        // Catalogo visibile: tutto ciò che non è protetto.
+                        val catalog: Catalog? = visibleCatalog
                         if (catalog != null) {
                             when (selectedTab) {
                                 DrawerSection.Novita -> NovitaSection(
-                                    recentFilms = catalogState.recentFilms,
-                                    recentSeries = catalogState.recentSeries,
+                                    recentFilms = visibleRecentFilms,
+                                    recentSeries = visibleRecentSeries,
                                     scale = scale,
                                     onLongPressFilm = { vod ->
                                         val fav = FavoriteItem(id = "vod_${vod.streamId}", type = "vod", title = vod.name, poster = vod.streamIcon, categoryId = vod.categoryId)
@@ -621,7 +716,7 @@ fun FvpMainScreen(
                                     onToggleWatched = { film, watched, duration ->
                                         setMovieWatched(film, watched, duration)
                                     },
-                                    favorites = allFavorites,
+                                    favorites = visibleFavorites,
                                     catalogViewModel = catalogViewModel,
                                     contentFocusRequester = contentFocusRequester,
                                     progress = watchProgress,
@@ -630,7 +725,7 @@ fun FvpMainScreen(
                                     modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
                                 )
                                 DrawerSection.ContinuaAGuardare -> ContinueWatchingSection(
-                                    entries = continueEntries,
+                                    entries = visibleContinueEntries,
                                     scale = scale,
                                     progress = watchProgress,
                                     loadingKey = continueLoadingKey,
@@ -639,7 +734,7 @@ fun FvpMainScreen(
                                     onRemoveEntry = { entry -> hideContinueEntry(entry) },
                                     refocusTick = playerReturnTick,
                                     catalogViewModel = catalogViewModel,
-                                    favorites = allFavorites,
+                                    favorites = visibleFavorites,
                                     onToggleFavorite = { toggleFavorite(it) },
                                     onPlayVod = { film -> playMovie(film) },
                                     onPlayEpisode = { _, playback -> playEpisode(playback) },
@@ -663,8 +758,8 @@ fun FvpMainScreen(
                                     scale = scale,
                                     onSelectChannel = { stream -> playLive(stream) },
                                     onLongPressChannel = { stream -> openMyChannelDialog(stream) },
-                                    favorites = allFavorites,
-                                    myChannelIds = myChannelIds,
+                                    favorites = visibleFavorites,
+                                    myChannelIds = visibleMyChannelIds,
                                     epgClient = container.channelScheduleLoader,
                                     epgServer = currentServer,
                                     epgUsername = currentUsername,
@@ -679,14 +774,14 @@ fun FvpMainScreen(
                                 DrawerSection.Film -> FilmSection(
                                     categories = catalog.vodCategories,
                                     streams = catalog.vodStreams,
-                                    recentStreams = catalogState.recentFilms,
+                                    recentStreams = visibleRecentFilms,
                                     scale = scale,
                                     onLongPressFilm = { vod ->
                                         val fav = FavoriteItem(id = "vod_${vod.streamId}", type = "vod", title = vod.name, poster = vod.streamIcon, categoryId = vod.categoryId)
                                         toggleFavorite(fav)
                                     },
                                     onPlayFilm = { film -> playMovie(film) },
-                                    favorites = allFavorites,
+                                    favorites = visibleFavorites,
                                     catalogViewModel = catalogViewModel,
                                     progress = watchProgress,
                                     onToggleWatched = { film, watched, duration ->
@@ -699,7 +794,7 @@ fun FvpMainScreen(
                                 DrawerSection.Serie -> SerieSection(
                                     categories = catalog.seriesCategories,
                                     series = catalog.series,
-                                    recentSeries = catalogState.recentSeries,
+                                    recentSeries = visibleRecentSeries,
                                     scale = scale,
                                     onLongPressSerie = { serie ->
                                         val fav = FavoriteItem(id = "series_${serie.seriesId}", type = "series", title = serie.name, poster = serie.cover, categoryId = serie.categoryId)
@@ -709,7 +804,7 @@ fun FvpMainScreen(
                                     onSetEpisodeWatched = { episode, watched, duration ->
                                         setEpisodeWatched(episode, watched, duration)
                                     },
-                                    favorites = allFavorites,
+                                    favorites = visibleFavorites,
                                     catalogViewModel = catalogViewModel,
                                     contentFocusRequester = contentFocusRequester,
                                     progress = watchProgress,
@@ -719,7 +814,7 @@ fun FvpMainScreen(
                                 )
                                 DrawerSection.Preferiti -> {
                                     FavoritesSection(
-                                        favorites = allFavorites,
+                                        favorites = visibleFavorites,
                                         liveCategories = catalog.liveCategories,
                                         liveStreams = catalog.liveStreams,
                                         restoreCategoryFavoriteId = restoreCategoryFavoriteId,
@@ -749,7 +844,7 @@ fun FvpMainScreen(
                                         focusEpisodeId = returnEpisodeId,
                                         catalogViewModel = catalogViewModel,
                                         contentFocusRequester = contentFocusRequester,
-                                        myChannels = myChannels,
+                                        myChannels = visibleMyChannels,
                                         epgClient = container.channelScheduleLoader,
                                         epgServer = currentServer,
                                         epgUsername = currentUsername,
@@ -769,7 +864,7 @@ fun FvpMainScreen(
                                     queryState = searchQueryState,
                                     catalog = catalog,
                                     scale = scale,
-                                    favorites = allFavorites,
+                                    favorites = visibleFavorites,
                                     progress = watchProgress,
                                     catalogViewModel = catalogViewModel,
                                     onPlayLive = { stream -> playLive(stream) },
@@ -777,7 +872,7 @@ fun FvpMainScreen(
                                     onPlayEpisode = { _, playback -> playEpisode(playback) },
                                     onToggleFavorite = { favorite -> toggleFavorite(favorite) },
                                     onLongPressLive = { stream -> openMyChannelDialog(stream) },
-                                    myChannelIds = myChannelIds,
+                                    myChannelIds = visibleMyChannelIds,
                                     onSetEpisodeWatched = { episode, watched, duration ->
                                         setEpisodeWatched(episode, watched, duration)
                                     },
@@ -799,7 +894,7 @@ fun FvpMainScreen(
                                     onRefreshCatalog = { catalogViewModel.refreshManual() },
                                     // Catalogo per la pagina "Contenuti protetti":
                                     // categorie e contenuti da nascondere.
-                                    catalog = catalog,
+                                    catalog = catalogState.catalog,
                                 )
                             }
                         } else {
@@ -905,7 +1000,7 @@ fun FvpMainScreen(
     myChannelEdit?.let { channel ->
         MyChannelDialog(
             channel = channel,
-            channels = myChannels,
+            channels = visibleMyChannels,
             scale = scale,
             onInsertAt = { position -> confirmMyChannelPosition(channel, position) },
             onMoveUp = { moveMyChannel(channel, up = true) },
