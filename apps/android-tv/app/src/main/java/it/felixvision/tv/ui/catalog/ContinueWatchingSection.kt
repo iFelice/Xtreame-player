@@ -1,5 +1,6 @@
 package it.felixvision.tv.ui.catalog
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -30,27 +31,47 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.tv.material3.Border
 import androidx.tv.material3.Card
 import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.Text
+import it.felixvision.tv.data.catalog.Episode
+import it.felixvision.tv.data.catalog.SeriesInfoResponse
+import it.felixvision.tv.data.catalog.SeriesItem
+import it.felixvision.tv.data.catalog.VodInfoResponse
+import it.felixvision.tv.data.catalog.VodStream
 import it.felixvision.tv.data.continuewatching.ContinueEntry
+import it.felixvision.tv.data.favorites.FavoriteItem
+import it.felixvision.tv.data.playback.SeriesPlayback
 import it.felixvision.tv.data.progress.ProgressKeys
 import it.felixvision.tv.data.progress.WatchProgress
 import it.felixvision.tv.ui.components.CatalogPosterImage
 import it.felixvision.tv.ui.components.EmptyState
+import it.felixvision.tv.ui.components.FvpCompactButton
 import it.felixvision.tv.ui.components.FocusMarqueeText
 import it.felixvision.tv.ui.components.PositionIndicator
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.components.gridPosition
+import it.felixvision.tv.ui.components.ignoreHeldOkUntilReleased
 import it.felixvision.tv.ui.components.WatchProgressLine
 import it.felixvision.tv.ui.components.focusSafePadding
 import it.felixvision.tv.ui.components.fvpLongPress
+import it.felixvision.tv.ui.detail.FilmDetailOverlay
+import it.felixvision.tv.ui.detail.SeriesDetailOverlay
 import it.felixvision.tv.ui.theme.FvpColors
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 
 /**
@@ -58,9 +79,10 @@ import kotlinx.coroutines.delay
  * copertine 2:3 e titolo sotto. Per i film la barra verde dell'avanzamento
  * esistente; per le serie la riga "S2 E5" e la barra dell'episodio da riprendere.
  *
- * OK avvia subito il player dal punto salvato (senza finestra "Riprendi"),
- * la pressione lunga toglie la voce dall'archivio — in questa sezione non
- * aggiunge ai preferiti.
+ * OK avvia subito il player dal punto salvato (senza finestra "Riprendi"); la
+ * pressione lunga apre un menu con "Apri scheda" (il dettaglio del film o della
+ * serie, come nei Preferiti) e "Rimuovi da Continua a guardare" — in questa
+ * sezione non aggiunge ai preferiti.
  */
 @Composable
 fun ContinueWatchingSection(
@@ -72,6 +94,14 @@ fun ContinueWatchingSection(
     onPlayEntry: (ContinueEntry) -> Unit = {},
     onRemoveEntry: (ContinueEntry) -> Unit = {},
     refocusTick: Int = 0,
+    catalogViewModel: CatalogViewModel? = null,
+    favorites: List<FavoriteItem> = emptyList(),
+    onToggleFavorite: (FavoriteItem) -> Unit = {},
+    onPlayVod: (VodStream) -> Unit = {},
+    onPlayEpisode: (Episode, SeriesPlayback) -> Unit = { _, _ -> },
+    onSetEpisodeWatched: (Episode, Boolean, Long) -> Unit = { _, _, _ -> },
+    onToggleWatched: (VodStream, Boolean, Long) -> Unit = { _, _, _ -> },
+    focusEpisodeId: String? = null,
     contentFocusRequester: FocusRequester = remember { FocusRequester() },
     modifier: Modifier = Modifier,
 ) {
@@ -84,6 +114,61 @@ fun ContinueWatchingSection(
     }
     var lastOpenedKey by remember { mutableStateOf<String?>(null) }
     var handledTick by remember { mutableIntStateOf(refocusTick) }
+
+    // Voce con il menu della pressione lunga aperto e dettaglio aperto.
+    var menuEntry by remember { mutableStateOf<ContinueEntry?>(null) }
+    var detailEntry by remember { mutableStateOf<ContinueEntry?>(null) }
+    var detailVodInfo by remember { mutableStateOf<VodInfoResponse?>(null) }
+    var detailSeriesInfo by remember { mutableStateOf<SeriesInfoResponse?>(null) }
+    var detailIsLoading by remember { mutableStateOf(false) }
+    var detailError by remember { mutableStateOf<String?>(null) }
+    var retryKey by remember { mutableIntStateOf(0) }
+    // Voce su cui riportare il focus quando il dettaglio si chiude.
+    var detailRefocusKey by remember { mutableStateOf<String?>(null) }
+
+    // Caricamento della scheda, stesso schema di FavoritesSection.
+    LaunchedEffect(detailEntry?.key, retryKey) {
+        val entry = detailEntry
+        if (entry == null || catalogViewModel == null) {
+            detailVodInfo = null
+            detailSeriesInfo = null
+            detailIsLoading = false
+            detailError = null
+            return@LaunchedEffect
+        }
+        detailIsLoading = true
+        detailError = null
+        detailVodInfo = null
+        detailSeriesInfo = null
+        try {
+            if (entry.isSeries) {
+                val info = catalogViewModel.loadSeriesInfo(
+                    entry.seriesId ?: entry.key.removePrefix("series_"),
+                )
+                if (info == null) detailError = "Informazioni non disponibili" else detailSeriesInfo = info
+            } else {
+                val info = catalogViewModel.loadVodInfo(
+                    entry.streamId ?: entry.key.removePrefix("vod_"),
+                )
+                if (info == null) detailError = "Informazioni non disponibili" else detailVodInfo = info
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            detailError = "Informazioni non disponibili"
+        } finally {
+            detailIsLoading = false
+        }
+    }
+
+    // Chiuso il dettaglio ("Indietro"): il focus torna sulla voce di partenza.
+    LaunchedEffect(detailRefocusKey) {
+        val key = detailRefocusKey ?: return@LaunchedEffect
+        detailRefocusKey = null
+        delay(80L)
+        withFrameNanos { }
+        runCatching { itemFocusRequesters[key]?.requestFocus() }
+    }
 
     // Ritorno dal player: focus sulla voce appena aperta, oppure sulla prima se
     // nel frattempo è uscita dall'archivio (per esempio perché vista).
@@ -164,7 +249,7 @@ fun ContinueWatchingSection(
                                     focused = focusState.isFocused
                                     if (focusState.isFocused) focusedItemIndex = index
                                 }
-                                .fvpLongPress { onRemoveEntry(entry) },
+                                .fvpLongPress { menuEntry = entry },
                             scale = CardDefaults.scale(focusedScale = 1.04f),
                             border = CardDefaults.border(
                                 focusedBorder = Border(BorderStroke(2.dp, FvpColors.GreenFocus)),
@@ -240,6 +325,171 @@ fun ContinueWatchingSection(
                 totalItems = entries.size,
             ),
             scale = scale,
+        )
+    }
+
+    // Menu della pressione lunga, sul modello del menu del player: velo di
+    // sfondo, riquadro con il titolo della voce e due pulsanti. Indietro
+    // chiude senza fare nulla; il menu si apre con OK ancora premuto e il
+    // rilascio non deve attivare "Apri scheda".
+    menuEntry?.let { entry ->
+        Dialog(
+            onDismissRequest = { menuEntry = null },
+            properties = DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            BackHandler { menuEntry = null }
+            Box(
+                modifier = Modifier
+                    .ignoreHeldOkUntilReleased()
+                    // Indietro si intercetta qui, sulla radice del Dialog: il
+                    // KeyDown è consumato e il menu chiude al KeyUp, così il
+                    // rilascio non arriva alla sezione sotto. BackHandler resta
+                    // come ripiego.
+                    .onPreviewKeyEvent { event ->
+                        if (event.key == Key.Back) {
+                            if (event.type == KeyEventType.KeyUp) menuEntry = null
+                            true
+                        } else false
+                    }
+                    .fillMaxSize()
+                    .background(FvpColors.Background.copy(alpha = 0.85f))
+                    .padding(scale.dp(32f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                ContinueMenuContent(
+                    entry = entry,
+                    scale = scale,
+                    onOpenDetail = {
+                        menuEntry = null
+                        detailEntry = entry
+                    },
+                    onRemove = {
+                        menuEntry = null
+                        onRemoveEntry(entry)
+                    },
+                )
+            }
+        }
+    }
+
+    // "Apri scheda": dettaglio dentro la sezione, come nei Preferiti.
+    detailEntry?.let { entry ->
+        val isFavorite = favorites.any { it.id == entry.key }
+        val favorite = FavoriteItem(
+            id = entry.key,
+            type = if (entry.isSeries) FavoriteItem.SERIES else FavoriteItem.VOD,
+            title = entry.title,
+            poster = entry.poster,
+            categoryId = entry.categoryId,
+        )
+        val dismissDetail: () -> Unit = {
+            detailEntry = null
+            detailRefocusKey = entry.key
+        }
+        if (entry.isSeries) {
+            val seriesItem = SeriesItem(
+                seriesId = entry.seriesId ?: entry.key.removePrefix("series_"),
+                name = entry.title,
+                cover = entry.poster,
+                categoryId = entry.categoryId,
+            )
+            Box(modifier = Modifier.fillMaxSize().testTag("continue_series_detail_root")) {
+                SeriesDetailOverlay(
+                    serie = seriesItem,
+                    info = detailSeriesInfo,
+                    isLoading = detailIsLoading,
+                    error = detailError,
+                    scale = scale,
+                    isFavorite = isFavorite,
+                    contentFocusRequester = contentFocusRequester,
+                    onDismiss = dismissDetail,
+                    onToggleFavorite = { onToggleFavorite(favorite) },
+                    onPlayEpisode = onPlayEpisode,
+                    onRetry = { retryKey++ },
+                    onSetEpisodeWatched = onSetEpisodeWatched,
+                    refocusTick = refocusTick,
+                    focusEpisodeId = entry.episodeId ?: focusEpisodeId,
+                    progress = progress,
+                )
+            }
+        } else {
+            val vodStream = VodStream(
+                streamId = entry.streamId ?: entry.key.removePrefix("vod_"),
+                name = entry.title,
+                streamIcon = entry.poster,
+                categoryId = entry.categoryId,
+            )
+            Box(modifier = Modifier.fillMaxSize().testTag("continue_film_detail_root")) {
+                FilmDetailOverlay(
+                    film = vodStream,
+                    info = detailVodInfo,
+                    isLoading = detailIsLoading,
+                    error = detailError,
+                    scale = scale,
+                    isFavorite = isFavorite,
+                    contentFocusRequester = contentFocusRequester,
+                    onDismiss = dismissDetail,
+                    onPlay = { onPlayVod(vodStream) },
+                    onToggleFavorite = { onToggleFavorite(favorite) },
+                    onRetry = { retryKey++ },
+                    isWatched = progress[ProgressKeys.movie(vodStream.streamId)]?.isWatched == true,
+                    onToggleWatched = { durationMillis ->
+                        onToggleWatched(
+                            vodStream,
+                            progress[ProgressKeys.movie(vodStream.streamId)]?.isWatched != true,
+                            durationMillis,
+                        )
+                    },
+                    refocusTick = refocusTick,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Riquadro del menu: titolo della voce e i due pulsanti, "Apri scheda" per
+ * primo con il focus iniziale. Stesso stile del menu del player.
+ */
+@Composable
+private fun ContinueMenuContent(
+    entry: ContinueEntry,
+    scale: UiScale,
+    onOpenDetail: () -> Unit,
+    onRemove: () -> Unit,
+) {
+    val openFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
+        runCatching { openFocus.requestFocus() }
+    }
+    Column(
+        modifier = Modifier
+            .background(FvpColors.Surface, shape = RoundedCornerShape(scale.dp(12f)))
+            .padding(scale.dp(20f))
+            .testTag("continue_menu"),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(scale.dp(10f)),
+    ) {
+        Text(
+            text = entry.title,
+            color = FvpColors.TextPrimary,
+            fontSize = scale.sp(20f),
+            fontWeight = FontWeight.Bold,
+        )
+        FvpCompactButton(
+            text = "Apri scheda",
+            onClick = onOpenDetail,
+            scale = scale,
+            modifier = Modifier
+                .focusRequester(openFocus)
+                .testTag("continue_menu_open"),
+        )
+        FvpCompactButton(
+            text = "Rimuovi da Continua a guardare",
+            onClick = onRemove,
+            scale = scale,
+            modifier = Modifier.testTag("continue_menu_remove"),
         )
     }
 }

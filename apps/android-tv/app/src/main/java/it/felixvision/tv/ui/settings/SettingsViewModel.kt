@@ -9,7 +9,10 @@ import it.felixvision.tv.data.pairing.PairingCoordinator
 import it.felixvision.tv.data.pairing.PairingPanelState
 import it.felixvision.tv.data.pairing.PairingStep
 import it.felixvision.tv.data.pairing.RemoteCredentials
+import it.felixvision.tv.data.protection.ProtectedContentStore
+import it.felixvision.tv.data.protection.ProtectedSession
 import it.felixvision.tv.data.store.CredentialStore
+import it.felixvision.tv.core.Clock
 import it.felixvision.tv.data.store.StoredCredentials
 import it.felixvision.tv.data.store.serverLabel
 import it.felixvision.tv.data.update.ApkDownloadResult
@@ -62,6 +65,13 @@ sealed interface AppUpdateStatus {
     ) : AppUpdateStatus
 }
 
+/** Riga del riquadro "Contenuti protetti" delle Impostazioni: PIN e hiding count. */
+data class ProtectedSummary(val hasPin: Boolean = false, val hiddenCount: Int = 0)
+
+/** Testo del riquadro "Contenuti protetti" in Impostazioni. */
+fun protectedSettingsLine(summary: ProtectedSummary): String =
+    if (summary.hasPin) "PIN impostato · ${summary.hiddenCount} elementi nascosti" else "PIN non impostato"
+
 data class SettingsUiState(
     val username: String = "",
     val serverHost: String = "",
@@ -91,8 +101,8 @@ data class SettingsUiState(
 
 class SettingsViewModel(
     private val container: AppContainer,
-    private val server: String,
-    private val username: String,
+    val server: String,
+    val username: String,
     private val password: String,
     private val expiresAtEpochSeconds: Long?,
     private val status: String,
@@ -100,7 +110,7 @@ class SettingsViewModel(
     private val activeConnections: Int?,
     private val onCredentialsReplaced: (String, String, String) -> Unit,
     private val onSignOut: () -> Unit,
-    private val credentialStore: CredentialStore = container.credentialStore,
+    val credentialStore: CredentialStore = container.credentialStore,
     private val updateClient: UpdateClient = container.updateClient,
     private val updateInstaller: UpdateInstaller = container.updateInstaller,
     private val currentVersionName: String = BuildConfig.VERSION_NAME,
@@ -132,6 +142,30 @@ class SettingsViewModel(
      */
     val interfaceSize: StateFlow<InterfaceSize> = container.interfaceSizeStore.size
 
+    /**
+     * Archivio PIN + elenchi nascosti e stato di sessione usati dalla pagina
+     * "Contenuti protetti"; la password del provider serve al recupero PIN.
+     */
+    val protectedContentStore: ProtectedContentStore get() = container.protectedContentStore
+    val protectedSession: ProtectedSession get() = container.protectedSession
+    val clock: Clock get() = container.clock
+
+    /** Riepilogo per la riga del riquadro "Contenuti protetti". */
+    private val _protectedSummary = MutableStateFlow(ProtectedSummary())
+    val protectedSummary: StateFlow<ProtectedSummary> = _protectedSummary.asStateFlow()
+
+    /** Rilegge l'archivio protected e aggiorna la riga del riquadro. */
+    fun refreshProtectedSummary() {
+        viewModelScope.launch {
+            val data = runCatching { container.protectedContentStore.get(server, username) }.getOrNull()
+                ?: return@launch
+            _protectedSummary.value = ProtectedSummary(
+                hasPin = data.hasPin,
+                hiddenCount = data.hiddenCount,
+            )
+        }
+    }
+
     private var pairingJob: Job? = null
     private var pairingVisible = false
     private var accountReadJob: Job? = null
@@ -156,6 +190,12 @@ class SettingsViewModel(
             }
         }
         refreshServerLabel()
+        refreshProtectedSummary()
+        // L'archivio dei contenuti protetti notifica ogni scrittura con la sua
+        // revisione: il riquadro in Impostazioni si aggiorna da solo.
+        viewModelScope.launch {
+            container.protectedContentStore.revision.collect { refreshProtectedSummary() }
+        }
         // Carica last update da cache catalogo
         viewModelScope.launch {
             val last = container.catalogCache.lastUpdateMillis(server, username)
@@ -225,6 +265,7 @@ class SettingsViewModel(
 
     fun onSettingsVisible() {
         refreshServerLabel()
+        refreshProtectedSummary()
         refreshAccountInfo()
         recheckInstallPermission()
         checkForUpdates()

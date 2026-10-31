@@ -38,6 +38,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.tv.material3.Text
+import it.felixvision.tv.data.catalog.Catalog
 import it.felixvision.tv.data.catalog.CatalogRefresh
 import it.felixvision.tv.data.catalog.CatalogSectionProgress
 import it.felixvision.tv.data.catalog.CatalogSectionStatus
@@ -51,6 +52,7 @@ import it.felixvision.tv.ui.components.FvpStatusText
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.components.UpdateBadge
 import it.felixvision.tv.ui.components.rememberRowsBringIntoViewer
+import it.felixvision.tv.ui.settings.protection.ProtectedContentScreen
 import it.felixvision.tv.ui.theme.FvpColors
 import it.felixvision.tv.ui.theme.settingsBlockSpacing
 import it.felixvision.tv.ui.theme.settingsRowSpacing
@@ -71,6 +73,8 @@ fun SettingsScreen(
     catalogRefreshing: Boolean = false,
     catalogLastUpdateMillis: Long? = null,
     onRefreshCatalog: () -> Unit = {},
+    /** Catalogo del server, per la scelta dei contenuti da nascondere. */
+    catalog: Catalog? = null,
 ) {
     val state by viewModel.ui.collectAsState()
     // Dimensione dell'interfaccia: il valore vive nello store dell'app (lo usa
@@ -79,6 +83,20 @@ fun SettingsScreen(
     var showCatalogDialog by remember { mutableStateOf(false) }
     val catalogCloseFocus = remember { FocusRequester() }
     val lifecycleOwner = LocalLifecycleOwner.current
+
+    // Pagina "Contenuti protetti": mentre è aperta sostituisce il contenuto
+    // delle Impostazioni; al rientro il focus torna sul pulsante "Gestisci".
+    val protectedSummary by viewModel.protectedSummary.collectAsState()
+    var showProtectedScreen by remember { mutableStateOf(false) }
+    val protectedManageFocus = remember { FocusRequester() }
+    var wasProtectedOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(showProtectedScreen) {
+        if (wasProtectedOpen && !showProtectedScreen) {
+            withFrameNanos { }
+            runCatching { protectedManageFocus.requestFocus() }
+        }
+        wasProtectedOpen = showProtectedScreen
+    }
 
     LaunchedEffect(viewModel) {
         viewModel.onSettingsVisible()
@@ -107,24 +125,42 @@ fun SettingsScreen(
         viewModel.cancelUpdateDownload()
     }
 
-    SettingsContent(
-        state = state,
-        scale = scale,
-        modifier = modifier,
-        contentFocusRequester = contentFocusRequester,
-        interfaceSize = interfaceSize,
-        onInterfaceSizeSelected = { viewModel.onInterfaceSizeSelected(it) },
-        catalogRefreshing = catalogRefreshing,
-        catalogLastUpdateMillis = catalogLastUpdateMillis,
-        // La finestra di avanzamento si apre qui: il contenuto resta senza stato.
-        onRefreshCatalog = {
-            showCatalogDialog = true
-            onRefreshCatalog()
-        },
-        onUpdateClicked = { viewModel.onUpdateClicked() },
-        onExitClicked = { viewModel.onExitClicked() },
-        onRenewCode = { viewModel.onRenewCode() },
-    )
+    if (showProtectedScreen) {
+        ProtectedContentScreen(
+            store = viewModel.protectedContentStore,
+            session = viewModel.protectedSession,
+            credentialStore = viewModel.credentialStore,
+            clock = viewModel.clock,
+            server = viewModel.server,
+            username = viewModel.username,
+            catalog = catalog,
+            scale = scale,
+            modifier = modifier,
+            onExit = { showProtectedScreen = false },
+        )
+    } else {
+        SettingsContent(
+            state = state,
+            scale = scale,
+            modifier = modifier,
+            contentFocusRequester = contentFocusRequester,
+            interfaceSize = interfaceSize,
+            onInterfaceSizeSelected = { viewModel.onInterfaceSizeSelected(it) },
+            catalogRefreshing = catalogRefreshing,
+            catalogLastUpdateMillis = catalogLastUpdateMillis,
+            // La finestra di avanzamento si apre qui: il contenuto resta senza stato.
+            onRefreshCatalog = {
+                showCatalogDialog = true
+                onRefreshCatalog()
+            },
+            onUpdateClicked = { viewModel.onUpdateClicked() },
+            onExitClicked = { viewModel.onExitClicked() },
+            onRenewCode = { viewModel.onRenewCode() },
+            protectedSummary = protectedSummary,
+            onOpenProtected = { showProtectedScreen = true },
+            protectedManageFocus = protectedManageFocus,
+        )
+    }
 
     if (showCatalogDialog) {
         LaunchedEffect(catalogRefreshing) {
@@ -289,6 +325,13 @@ const val SETTINGS_EXIT_CLEAR_DATA_TAG = "settings_exit_clear_data"
 const val SETTINGS_APPEARANCE_TITLE = "Aspetto"
 const val SETTINGS_APPEARANCE_SECTION_TAG = "settings_appearance_section"
 
+/** Riquadro "Contenuti protetti": PIN ed elenco nascosti per l'account. */
+const val SETTINGS_PROTECTED_TITLE = "Contenuti protetti"
+const val SETTINGS_PROTECTED_SECTION_TAG = "settings_protected_section"
+const val SETTINGS_PROTECTED_SUMMARY_TAG = "settings_protected_summary"
+const val SETTINGS_PROTECTED_MANAGE_LABEL = "Gestisci"
+const val SETTINGS_PROTECTED_OPEN_TAG = "settings_protected_open"
+
 /** Etichetta della riga che raccoglie i pulsanti della dimensione interfaccia. */
 const val SETTINGS_INTERFACE_SIZE_LABEL = "Dimensione interfaccia"
 
@@ -344,6 +387,11 @@ internal fun SettingsContent(
     onUpdateClicked: () -> Unit = {},
     onExitClicked: () -> Unit = {},
     onRenewCode: () -> Unit = {},
+    /** PIN impostato/sì-no e numero di elementi nascosti per la riga del riquadro. */
+    protectedSummary: ProtectedSummary = ProtectedSummary(),
+    onOpenProtected: () -> Unit = {},
+    /** Focus da riportare sul pulsante "Gestisci" al rientro dalla schermata. */
+    protectedManageFocus: FocusRequester? = null,
 ) {
     // Come in Novità: il contenuto scorre in verticale e la riga che riceve il
     // focus viene portata interamente in vista, così anche gli ultimi pulsanti
@@ -445,6 +493,47 @@ internal fun SettingsContent(
                     )
                 }
             }
+        }
+
+        // Riquadro "Contenuti protetti" subito dopo Aspetto, stesso stile: una
+        // riga di riepilogo e il pulsante che apre la schermata di gestione.
+        // Come per Aspetto, il focus dei pulsanti porta in vista le righe: qui
+        // non serve rowInView sul riquadro.
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(scale.dp(14f)))
+                .background(FvpColors.Surface)
+                .padding(scale.settingsSectionPadding)
+                .testTag(SETTINGS_PROTECTED_SECTION_TAG),
+            verticalArrangement = Arrangement.spacedBy(scale.settingsRowSpacing),
+        ) {
+            Text(
+                text = SETTINGS_PROTECTED_TITLE,
+                color = FvpColors.TextPrimary,
+                fontSize = scale.sp(16f),
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = protectedSettingsLine(protectedSummary),
+                color = FvpColors.TextSecondary,
+                fontSize = scale.settingsRowText,
+                modifier = Modifier.testTag(SETTINGS_PROTECTED_SUMMARY_TAG),
+            )
+            FvpCompactButton(
+                text = SETTINGS_PROTECTED_MANAGE_LABEL,
+                onClick = onOpenProtected,
+                scale = scale,
+                modifier = Modifier
+                    .then(
+                        if (protectedManageFocus != null) {
+                            Modifier.focusRequester(protectedManageFocus)
+                        } else {
+                            Modifier
+                        },
+                    )
+                    .testTag(SETTINGS_PROTECTED_OPEN_TAG),
+            )
         }
 
         // Riquadro App subito sotto Account: versione installata e aggiornamenti.

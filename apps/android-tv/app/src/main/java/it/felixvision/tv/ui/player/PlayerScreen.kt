@@ -528,13 +528,26 @@ fun PlayerScreen(
                 )
             }
 
-            if (state.isBuffering && state.errorMessage == null && !state.hasModalOverlay) {
-                Text(
-                    text = "Caricamento…",
-                    color = FvpColors.TextSecondary,
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .testTag("player_buffering"),
+            // Indicatore di caricamento: appare solo se il buffering dura più
+            // di SHOW_DELAY_MILLIS, così un avvio rapido non mostra nulla.
+            val bufferingRequested = PlayerBufferingIndicatorDefaults.isRequested(
+                isBuffering = state.isBuffering,
+                hasError = state.errorMessage != null,
+                hasModalOverlay = state.hasModalOverlay,
+            )
+            var showBuffering by remember { mutableStateOf(false) }
+            LaunchedEffect(bufferingRequested) {
+                if (bufferingRequested) {
+                    delay(PlayerBufferingIndicatorDefaults.SHOW_DELAY_MILLIS)
+                    showBuffering = true
+                } else {
+                    showBuffering = false
+                }
+            }
+            if (bufferingRequested && showBuffering) {
+                PlayerBufferingIndicator(
+                    scale = scale,
+                    modifier = Modifier.align(Alignment.Center),
                 )
             }
 

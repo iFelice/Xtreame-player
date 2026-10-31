@@ -141,8 +141,8 @@ fun FvpTextField(
 
 /**
  * Variante per la password: può essere oscurata oppure mostrata in chiaro.
- * [imeAction] è l'azione del tasto della tastiera; [openKeyboardOnOk] e
- * [fieldTag] funzionano come in [FvpTextField].
+ * [imeAction] è l'azione del tasto della tastiera; [openKeyboardOnOk],
+ * [fieldTag] e [focusRequester] funzionano come in [FvpTextField].
  */
 @Composable
 fun FvpPasswordField(
@@ -152,6 +152,7 @@ fun FvpPasswordField(
     visible: Boolean,
     scale: UiScale,
     modifier: Modifier = Modifier,
+    focusRequester: FocusRequester? = null,
     enabled: Boolean = true,
     imeAction: ImeAction = ImeAction.Unspecified,
     openKeyboardOnOk: Boolean = false,
@@ -163,7 +164,7 @@ fun FvpPasswordField(
         EditableFieldContainer(
             scale = scale,
             enabled = enabled,
-            focusRequester = null,
+            focusRequester = focusRequester,
             openKeyboardOnOk = openKeyboardOnOk,
             nextFieldOnKeyboardAction = imeAction == ImeAction.Next,
             fieldTag = fieldTag,
