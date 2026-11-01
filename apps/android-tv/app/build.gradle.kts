@@ -73,6 +73,9 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // Richiesto dalla libreria WireGuard (java.time, stream): stessa
+        // configurazione dell'app WireGuard ufficiale.
+        isCoreLibraryDesugaringEnabled = true
     }
 
     buildTypes {
@@ -144,6 +147,12 @@ dependencies {
     implementation(libs.media3.exoplayer.hls)
     implementation(libs.media3.ui)
     implementation(libs.media3.ffmpeg.decoder)
+
+    // VPN di FelixVP: tunnel WireGuard (GoBackend con wireguard-go). Nel tunnel
+    // passa solo il traffico di questa app. Il manifest della libreria dichiara
+    // già il proprio VpnService.
+    implementation(libs.wireguard.tunnel)
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
 
     testImplementation(libs.junit)
     testImplementation(libs.okhttp.mockwebserver)

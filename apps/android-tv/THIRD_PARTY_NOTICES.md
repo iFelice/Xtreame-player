@@ -54,10 +54,19 @@ Le icone sono rese a runtime tramite `Icon(painter = painterResource(R.drawable.
 - **Utilizzo:** ripiego software per l'audio che il dispositivo non decodifica (AC3/EAC3/DTS), caricato per riflessione da `DefaultRenderersFactory` con `EXTENSION_RENDERER_MODE_ON`; non contiene decodificatori video.
 - **Nota:** l'inclusione di un componente GPL-3.0 nell'APK comporta gli obblighi della licenza per la distribuzione dell'app.
 
+## WireGuard tunnel (wireguard-android)
+
+- **Origine:** https://git.zx2c4.com/wireguard-android (mirror https://github.com/WireGuard/wireguard-android)
+- **Artefatto:** `com.wireguard.android:tunnel:1.0.20260102` (Maven Central)
+- **Licenza:** Apache License 2.0
+- **Include:** wireguard-go (licenza MIT), compilato nella libreria nativa `libwg-go.so`
+- **Utilizzo:** tunnel VPN di FelixVP (`vpn/VpnController.kt` con `GoBackend`): nel tunnel passa solo il traffico dell'app.
+- **Modifiche:** nessuna, la libreria è usata così com'è.
+
 ## Sora (font)
 
-- **Origine:** https://github.com/sora-xor/sora-font
+- **Origine:** google/fonts (`ofl/sora`, https://github.com/google/fonts/tree/main/ofl/sora), progetto https://github.com/sora-xor/sora-font
 - **File:** `app/src/main/res/font/sora_medium.ttf` (Sora peso 500, istanza statica)
 - **Licenza:** SIL Open Font License 1.1, testo completo in `app/src/main/assets/licenses/Sora-OFL.txt`
 - **Utilizzo:** solo ora e data del menu laterale (`ui/navigation/DrawerClock.kt`); il resto dell'app resta con il font di sistema.
-- **Modifiche:** nessuna, il file è incluso così com'è.
+- **Modifiche:** istanza statica peso 500 ricavata dal font variabile con fontTools, nomi interni aggiornati in Sora Medium; Sora non ha Reserved Font Name.

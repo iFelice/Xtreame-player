@@ -37,9 +37,9 @@ const val DRAWER_CLOCK_DATE_TAG = "drawer_clock_date"
 const val MILLIS_PER_MINUTE = 60_000L
 
 /**
- * Font dell'orologio: Sora peso 500 (file statico in `res/font`), la stessa
- * famiglia usata dal marchio. Vale solo per ora e data del menu laterale: il
- * resto dell'app resta con il font di sistema.
+ * Font dell'orologio: Sora peso 500 (file statico in `res/font`). Vale solo
+ * per ora e data del menu laterale: il resto dell'app resta con il font di
+ * sistema.
  */
 private val DrawerClockFont: FontFamily =
     FontFamily(Font(R.font.sora_medium, FontWeight.Medium))

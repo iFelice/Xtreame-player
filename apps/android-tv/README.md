@@ -163,6 +163,7 @@ app/src/main/java/it/felixvision/tv/
 ├── data/playback/             URL Xtream, redazione credenziali, coda episodi, zapping
 ├── data/progress/             archivio avanzamento e regole 30 s / 90% (DataStore)
 ├── data/images/               ImageLoader Coil 3 con client dedicato (max 4, 200 MB)
+├── vpn/                       VPN WireGuard: canale cifrato col telefono, relay, parser, archivio, controller
 └── ui/                        tema, controlli TV, QR, cataloghi, player e impostazioni
 ```
 
@@ -325,6 +326,31 @@ server Xtream raggiunti con indirizzo privato non risponderebbero.
   campo di ricerca con tastiera di sistema e risultati per tipo), senza riuso di codice,
   stringhe, layout o risorse.
 
+### VPN WireGuard (solo traffico di FelixVP)
+
+- **Libreria**: `com.wireguard.android:tunnel` (Apache-2.0, vedi `THIRD_PARTY_NOTICES.md`),
+  solo nell'app TV; il codice VPN sta in `vpn/` e mai in `data/` o `core/`, compilati
+  anche dall'app mobile. Il tunnel ammette **solo il pacchetto di FelixVP**
+  (`IncludedApplications`): le altre app della TV restano fuori, qualunque cosa dica il
+  file `.conf`.
+- **Configurazione dal telefono**: Impostazioni → VPN → "Configura" apre una sessione sul
+  relay (`POST /api/vpn/create`) e mostra QR, codice a 6 cifre e tempo residuo. Il QR
+  porta alla pagina `/vpn` con la chiave AES-256 nel frammento `#k=` (il browser non la
+  manda mai al server): il telefono cifra il file `.conf` (AES-GCM, dati associati
+  `felixvp-vpn-v1:<codice>`) e il relay vede solo dati cifrati. La TV controlla
+  `GET /api/vpn/status/{codice}` ogni 2 secondi con `Bearer <pollToken>`, decifra,
+  verifica il file e azzera la chiave.
+- **Archivio**: configurazione cifrata con una chiave dell'Android Keystore
+  (`fvp_vpn_config_key`) nelle preferenze `fvp_vpn`, con l'interruttore e il nome del
+  server; il testo in chiaro non va mai su disco né nei log.
+- **Accensione**: "Accendi" chiede il consenso di Android solo la prima volta (o se un'altra
+  VPN l'ha revocato); se viene negato la VPN resta spenta. Se entro 10 secondi non arriva
+  l'handshake il tunnel si chiude e FelixVP prosegue senza VPN con un avviso in basso;
+  l'interruttore resta acceso e si riprova al prossimo avvio. All'avvio dell'app la VPN
+  riparte solo se l'interruttore è acceso e il permesso c'è già: non chiede mai nulla e
+  non scavalca un'altra VPN. Dopo ogni cambio le connessioni aperte si chiudono, così le
+  richieste seguono il nuovo percorso.
+
 ---
 
 ## 6. Test
@@ -365,6 +391,12 @@ simulato e implementazioni finte per cifrario e preferenze:
 | `ContinueWatchingStoreTest` | archivio DataStore vuoto, film salvato e riletto, nessuna scrittura sotto 30 s, rimozione al 90%, avanzamento al prossimo episodio, rimozione all'ultimo episodio, nascosta e di nuovo visibile, separazione per account, "Segna come visto" |
 | `DrawerSectionsOrderTest` | ordine delle otto voci del menu, etichette delle nuove voci, icone distinte (senza simulazione D-pad) |
 | `FocusMarqueeTextTest` | titoli con ellissi e fermi senza focus, marquee su una sola riga, nessuno scorrimento su più righe (Robolectric, senza D-pad) |
+| `VpnTransferCryptoTest` | vettore della pagina `/vpn` decifrato, codice diverso e byte alterato rifiutati, IV di 12 byte, limite di 8192 byte, URL del QR, chiave nuova a ogni sessione |
+| `VpnConfigParserTest` | file di esempio valido con nome del server dal commento o dall'Endpoint, applicazioni del file sostituite dal solo pacchetto dell'app, file senza `[Peer]` o con chiave non valida rifiutati con il messaggio generico |
+| `VpnStoreTest` | cifrario finto: configurazione salvata e riletta, nessun testo in chiaro nelle preferenze, interruttore, cancellazione, configurazione non più decifrabile |
+| `VpnRelayClientTest` | create, troppe sessioni, codice non valido, waiting con `Bearer`, ready con IV e testo cifrato, 404 come scaduta |
+| `VpnControllerTest` | backend finto (mai il GoBackend nativo): permesso da chiedere all'avvio, connessione con handshake, chiusura senza handshake con avviso, Spegni anche durante la connessione, Rimuovi, nuova configurazione con riavvio, tunnel chiuso dal sistema |
+| `VpnSettingsSectionTest` | riquadro VPN con stato finto: solo "Configura" senza configurazione, "Connessa · server" con tre pulsanti, Accendi/Spegni, callback dei pulsanti, riga di stato |
 
 ---
 
