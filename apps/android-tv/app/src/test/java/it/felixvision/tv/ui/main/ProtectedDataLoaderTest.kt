@@ -92,10 +92,12 @@ class ProtectedDataLoaderTest {
         // L'IO resta sospeso sul dispatcher di test finché il null del nuovo
         // account è osservato: anche una lettura veloce non può nasconderlo.
         rule.waitUntil(timeoutMillis = 5_000L) {
+            rule.waitForIdle()
             observed.drop(beforeAccountSwitch).any { it == null }
         }
         rule.waitUntil(timeoutMillis = 5_000L) {
             testScheduler.runCurrent()
+            rule.waitForIdle()
             observed.lastOrNull() != null
         }
         // L'altro account è vuoto, non eredita categoria e contenuto del primo.
