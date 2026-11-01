@@ -11,8 +11,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.sp
+import androidx.tv.material3.LocalTextStyle
 import androidx.tv.material3.Text
+import it.felixvision.tv.R
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.theme.FvpColors
 import java.time.Instant
@@ -29,6 +35,32 @@ const val DRAWER_CLOCK_DATE_TAG = "drawer_clock_date"
 
 /** Millisecondi in un minuto: l'orologio si aggiorna allo scatto del minuto. */
 const val MILLIS_PER_MINUTE = 60_000L
+
+/**
+ * Font dell'orologio: Sora peso 500 (file statico in `res/font`), la stessa
+ * famiglia usata dal marchio. Vale solo per ora e data del menu laterale: il
+ * resto dell'app resta con il font di sistema.
+ */
+private val DrawerClockFont: FontFamily =
+    FontFamily(Font(R.font.sora_medium, FontWeight.Medium))
+
+/**
+ * Aumento dell'ora e della data del menu laterale, in unità di progetto.
+ *
+ * Si aggiunge **dopo** `UiScale.sp`: la soglia minima di [UiScale.sp] (base 13)
+ * annullerebbe un semplice aumento della base, perché per i testi piccoli
+ * restituirebbe comunque la dimensione di progetto. Con l'addendo successivo
+ * l'ingrandimento si vede anche in "Compatta".
+ */
+internal const val DRAWER_CLOCK_EXTRA = 3f
+
+/** Dimensione dell'ora del menu laterale (base 13) nella scala [scale]. */
+internal fun drawerClockTimeSize(scale: UiScale): TextUnit =
+    (scale.sp(13f).value + DRAWER_CLOCK_EXTRA * scale.designFactor).sp
+
+/** Dimensione della data del menu laterale (base 11) nella scala [scale]. */
+internal fun drawerClockDateSize(scale: UiScale): TextUnit =
+    (scale.sp(11f).value + DRAWER_CLOCK_EXTRA * scale.designFactor).sp
 
 /**
  * Formattazione dell'ora e della data del menu laterale, in italiano.
@@ -85,6 +117,11 @@ fun DrawerClock(
         }
     }
 
+    // `tnum`: cifre a larghezza fissa, così al cambio dei minuti l'ora non si
+    // sposta. Non è un parametro di `Text` in tv-material, quindi si passa
+    // dallo stile del testo, derivato da quello corrente (nulla d'altro cambia).
+    val clockTextStyle = LocalTextStyle.current.copy(fontFeatureSettings = "tnum")
+
     Column(
         modifier = modifier.testTag(DRAWER_CLOCK_TAG),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -93,19 +130,24 @@ fun DrawerClock(
         Text(
             text = DrawerClockFormatting.timeText(nowMillis),
             color = FvpColors.TextSecondary,
-            fontSize = scale.sp(13f),
+            fontSize = drawerClockTimeSize(scale),
+            fontFamily = DrawerClockFont,
             fontWeight = FontWeight.Medium,
             maxLines = 1,
             softWrap = false,
+            style = clockTextStyle,
         )
         if (expanded) {
             Text(
                 text = DrawerClockFormatting.dateText(nowMillis),
                 color = FvpColors.TextSecondary,
-                fontSize = scale.sp(11f),
+                fontSize = drawerClockDateSize(scale),
+                fontFamily = DrawerClockFont,
+                fontWeight = FontWeight.Medium,
                 maxLines = 1,
                 softWrap = false,
                 modifier = Modifier.testTag(DRAWER_CLOCK_DATE_TAG),
+                style = clockTextStyle,
             )
         }
     }
