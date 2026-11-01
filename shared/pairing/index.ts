@@ -11,6 +11,12 @@ export const MAX_RUBRICA_REQUESTS_PER_MINUTE = 20;
 
 export const PIN_LENGTH = 6;
 export const POLL_TOKEN_BYTES = 32;
+export const VPN_KEY_BYTES = 32;
+export const VPN_IV_BYTES = 12;
+export const VPN_MAX_PLAINTEXT_BYTES = 8192;
+export const VPN_MAX_CIPHERTEXT_BYTES = VPN_MAX_PLAINTEXT_BYTES + 16;
+export const VPN_MIN_CIPHERTEXT_BYTES = 17;
+export const VPN_AAD_PREFIX = 'felixvp-vpn-v1:';
 export const MAX_SERVER_LENGTH = 2048;
 export const MAX_USERNAME_LENGTH = 512;
 export const MAX_PASSWORD_LENGTH = 512;
@@ -74,6 +80,35 @@ export function encodeBase64Url(bytes: Uint8Array): string {
     binary += String.fromCharCode(bytes[i]);
   }
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+/**
+ * Decodes an unpadded base64url string. Characters outside the base64url
+ * alphabet and impossible encoded lengths are rejected instead of tolerated.
+ */
+export function decodeBase64Url(value: string): Uint8Array {
+  if (
+    typeof value !== 'string' ||
+    !/^[A-Za-z0-9_-]*$/.test(value) ||
+    value.length % 4 === 1
+  ) {
+    throw new Error('Invalid base64url');
+  }
+
+  const base64 = value.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+  let binary: string;
+  try {
+    binary = atob(padded);
+  } catch {
+    throw new Error('Invalid base64url');
+  }
+
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
 }
 
 /**

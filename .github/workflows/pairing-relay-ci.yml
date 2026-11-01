@@ -1,0 +1,35 @@
+name: Pairing relay CI
+
+on:
+  pull_request:
+    paths:
+      - "services/pairing-relay/**"
+      - "shared/**"
+  push:
+    branches:
+      - main
+    paths:
+      - "services/pairing-relay/**"
+      - "shared/**"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-26.04
+    defaults:
+      run:
+        working-directory: services/pairing-relay
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: services/pairing-relay/package-lock.json
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
