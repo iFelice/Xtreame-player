@@ -50,7 +50,6 @@ import it.felixvision.tv.ui.components.FvpPrimaryButton
 import it.felixvision.tv.ui.components.FvpSecondaryButton
 import it.felixvision.tv.ui.components.FvpStatusText
 import it.felixvision.tv.ui.components.UiScale
-import it.felixvision.tv.ui.components.UpdateBadge
 import it.felixvision.tv.ui.components.rememberRowsBringIntoViewer
 import it.felixvision.tv.ui.settings.protection.ProtectedContentScreen
 import it.felixvision.tv.ui.theme.FvpColors
@@ -353,9 +352,6 @@ const val SETTINGS_UPDATE_BUTTON_LABEL = "Aggiorna"
 const val SETTINGS_UPDATE_BUTTON_TAG = "settings_update_button"
 const val SETTINGS_UPDATE_STATUS_TAG = "settings_update_status"
 
-/** Tag di test del pallino arancio accanto alla versione disponibile. */
-const val SETTINGS_UPDATE_BADGE_TAG = "settings_update_badge"
-
 fun updateAvailableLabel(version: String): String = "Disponibile la versione $version"
 
 /** Righe della schermata che ricevono il focus, per il bringIntoView. */
@@ -387,7 +383,7 @@ internal fun SettingsContent(
     onUpdateClicked: () -> Unit = {},
     onExitClicked: () -> Unit = {},
     onRenewCode: () -> Unit = {},
-    /** PIN impostato/sì-no e numero di elementi nascosti per la riga del riquadro. */
+    /** Stato del PIN per la riga del riquadro. */
     protectedSummary: ProtectedSummary = ProtectedSummary(),
     onOpenProtected: () -> Unit = {},
     /** Focus da riportare sul pulsante "Gestisci" al rientro dalla schermata. */
@@ -613,21 +609,13 @@ internal fun SettingsContent(
                 }
 
                 is AppUpdateStatus.Available -> {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = updateAvailableLabel(update.release.version),
-                            color = FvpColors.Green,
-                            fontSize = scale.settingsRowText,
-                            fontWeight = FontWeight.Medium,
-                            modifier = Modifier.testTag(SETTINGS_UPDATE_STATUS_TAG),
-                        )
-                        // Lo stesso pallino arancio del menu, accanto al testo.
-                        UpdateBadge(
-                            scale = scale,
-                            tag = SETTINGS_UPDATE_BADGE_TAG,
-                            modifier = Modifier.padding(start = scale.dp(8f)),
-                        )
-                    }
+                    Text(
+                        text = updateAvailableLabel(update.release.version),
+                        color = FvpColors.Green,
+                        fontSize = scale.settingsRowText,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.testTag(SETTINGS_UPDATE_STATUS_TAG),
+                    )
                     update.noticeMessage?.let { notice ->
                         Text(
                             text = notice,

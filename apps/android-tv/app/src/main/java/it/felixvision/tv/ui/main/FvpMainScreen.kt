@@ -63,7 +63,6 @@ import it.felixvision.tv.data.playback.buildEpisodeQueue
 import it.felixvision.tv.data.playback.indexOfEpisode
 import it.felixvision.tv.data.progress.ProgressKeys
 import it.felixvision.tv.data.progress.WatchProgress
-import it.felixvision.tv.data.protection.ProtectedContentData
 import it.felixvision.tv.data.update.UpdateCheckState
 import it.felixvision.tv.ui.access.AccessViewModel
 import it.felixvision.tv.ui.catalog.CatalogViewModel
@@ -297,24 +296,11 @@ fun FvpMainScreen(
     // `null` = archivio dell'account corrente non ancora letto: finché la
     // sessione è bloccata non si mostra nulla (né altro account né dati vecchi).
     val unlocked by container.protectedSession.unlocked.collectAsState()
-    val protectedRevision by container.protectedContentStore.revision.collectAsState()
-    val protectedData by produceState<ProtectedContentData?>(
-        initialValue = null,
-        protectedRevision,
-        currentServer,
-        currentUsername,
-    ) {
-        value = null
-        // Cancellazione (cambio account o revisione) rilanciata: un vecchio
-        // produttore non deve scrivere "niente di nascosto" al posto del nuovo.
-        value = try {
-            container.protectedContentStore.get(currentServer, currentUsername)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (_: Exception) {
-            ProtectedContentData()
-        }
-    }
+    val protectedData by rememberProtectedData(
+        store = container.protectedContentStore,
+        server = currentServer,
+        username = currentUsername,
+    )
 
     // Tutte le liste visibili della schermata: con la sessione bloccata (o con
     // qualcosa di nascosto) categorie e contenuti protetti spariscono ovunque,
