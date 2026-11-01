@@ -119,3 +119,4 @@ Visita `http://localhost:3000`.
 - **Catalogo completo**: Film VOD, canali Live con loghi, Serie TV divise per stagioni ed episodi.
 - **Ricerca unica**: l'icona lente cerca in tutto il catalogo già scaricato (Live, Film, Serie) da 2 caratteri in su, senza accenti; le caselle di Live, Film e Serie cercano in tutte le categorie della sezione. Le regole sono le stesse dell'app Android TV. La navigazione a telecomando in modalità TV resta quella di sempre.
 - **Bypass CORS/HTTP**: streaming fluido senza blocchi del browser.
+- 
