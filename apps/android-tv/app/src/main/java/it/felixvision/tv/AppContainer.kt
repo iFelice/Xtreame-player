@@ -1,6 +1,7 @@
 package it.felixvision.tv
 
 import android.content.Context
+import com.wireguard.android.backend.GoBackend
 import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.emptyPreferences
@@ -36,6 +37,10 @@ import it.felixvision.tv.data.update.isDebugVersion
 import it.felixvision.tv.data.volume.VolumeStore
 import it.felixvision.tv.data.xtream.XtreamClient
 import it.felixvision.tv.ui.settings.InterfaceSizeStore
+import it.felixvision.tv.vpn.KeystoreVpnConfigCipher
+import it.felixvision.tv.vpn.VpnController
+import it.felixvision.tv.vpn.VpnRelayClient
+import it.felixvision.tv.vpn.VpnStore
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -146,6 +151,33 @@ class AppContainer(
             baseUrl = BuildConfig.PAIRING_RELAY_URL,
             json = json,
             clock = clock,
+        )
+    }
+
+    /** Trasferimento della configurazione VPN dal telefono, sul canale cifrato del relay. */
+    val vpnRelayClient: VpnRelayClient by lazy {
+        VpnRelayClient(
+            http = httpClient,
+            baseUrl = BuildConfig.PAIRING_RELAY_URL,
+            json = json,
+        )
+    }
+
+    /**
+     * VPN WireGuard di FelixVP: un solo controller per processo, creato al
+     * primo uso. Il backend WireGuard (libreria nativa) nasce solo al primo
+     * avvio del tunnel, mai alla costruzione.
+     */
+    val vpnController: VpnController by lazy {
+        VpnController(
+            context = context,
+            store = VpnStore(context = context, cipher = KeystoreVpnConfigCipher()),
+            httpClient = httpClient,
+            imageHttpClient = imageHttpClient,
+            scope = applicationScope,
+            clock = clock,
+            backendFactory = { GoBackend(context.applicationContext) },
+            relayBaseUrl = BuildConfig.PAIRING_RELAY_URL,
         )
     }
 
