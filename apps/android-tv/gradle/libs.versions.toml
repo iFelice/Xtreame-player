@@ -29,6 +29,10 @@ kotlinxCoroutines = "1.11.0"
 zxing = "3.5.4"
 coil3 = "3.1.0"
 
+# VPN di FelixVP (solo app TV): tunnel WireGuard con wireguard-go.
+wireguardTunnel = "1.0.20260102"
+desugarJdkLibs = "2.1.5"
+
 junit = "4.13.2"
 robolectric = "4.13"
 androidxTestCore = "1.6.1"
@@ -67,6 +71,10 @@ zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
 
 coil3-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil3" }
 coil3-network-okhttp = { module = "io.coil-kt.coil3:coil-network-okhttp", version.ref = "coil3" }
+
+# VPN di FelixVP: solo app TV (`implementation`), mai nei moduli condivisi.
+wireguard-tunnel = { module = "com.wireguard.android:tunnel", version.ref = "wireguardTunnel" }
+desugar-jdk-libs = { module = "com.android.tools:desugar_jdk_libs", version.ref = "desugarJdkLibs" }
 
 junit = { module = "junit:junit", version.ref = "junit" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
