@@ -9,7 +9,10 @@ import com.wireguard.android.backend.Tunnel
 import com.wireguard.config.Config
 import com.wireguard.crypto.Key
 import it.felixvision.tv.core.Clock
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -18,6 +21,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -29,7 +33,12 @@ import org.robolectric.annotation.Config as RobolectricConfig
 /**
  * Controller della VPN con un backend WireGuard finto: il vero GoBackend
  * (libreria nativa) non viene mai creato nei test. Tempo virtuale di
- * `runTest`; lo scope del controller è il `backgroundScope` del test.
+ * `runTest`.
+ *
+ * Lo scope del controller usa lo scheduler del test ma non è figlio del
+ * TestScope: `runTest` non aspetta la raccolta degli avvisi (che non finisce
+ * mai) e `advanceUntilIdle` esegue anche il lavoro del controller, cosa che
+ * con il `backgroundScope` non avviene. Lo scope si chiude in [tearDown].
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
@@ -39,6 +48,13 @@ class VpnControllerTest {
     private val context: Context get() = ApplicationProvider.getApplicationContext()
 
     private var backendsCreated = 0
+
+    private lateinit var controllerScope: CoroutineScope
+
+    @After
+    fun tearDown() {
+        if (::controllerScope.isInitialized) controllerScope.cancel()
+    }
 
     private class FakeCipher : VpnConfigCipher {
         override fun encrypt(plaintext: ByteArray): ByteArray =
@@ -90,7 +106,9 @@ class VpnControllerTest {
         store = store,
         httpClient = OkHttpClient(),
         imageHttpClient = OkHttpClient(),
-        scope = backgroundScope,
+        scope = CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler)).also {
+            controllerScope = it
+        },
         clock = Clock { testScheduler.currentTime },
         backendFactory = {
             backendsCreated++
@@ -106,7 +124,7 @@ class VpnControllerTest {
 
     private fun TestScope.collectMessages(controller: VpnController): List<String> {
         val messages = mutableListOf<String>()
-        backgroundScope.launch { controller.messages.collect { messages += it } }
+        controllerScope.launch { controller.messages.collect { messages += it } }
         runCurrent()
         return messages
     }
