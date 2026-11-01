@@ -108,6 +108,24 @@ tasks.withType<Test>().configureEach {
         exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
         showStackTraces = true
     }
+    // Diagnostica temporanea per la CI: ogni test fallito diventa un'annotazione di GitHub.
+    if (System.getenv("GITHUB_ACTIONS") == "true") {
+        addTestListener(object : TestListener {
+            override fun beforeSuite(suite: TestDescriptor) = Unit
+
+            override fun afterSuite(suite: TestDescriptor, result: TestResult) = Unit
+
+            override fun beforeTest(testDescriptor: TestDescriptor) = Unit
+
+            override fun afterTest(testDescriptor: TestDescriptor, result: TestResult) {
+                if (result.resultType != TestResult.ResultType.FAILURE) return
+                val reason = result.exceptions.joinToString(" || ") { error ->
+                    error.toString() + " @ " + error.stackTrace.take(6).joinToString(" < ")
+                }.replace("%", "%25").replace("\r", "").replace("\n", " | ").take(1500)
+                println("::error title=${testDescriptor.className}::${testDescriptor.name}: $reason")
+            }
+        })
+    }
 }
 
 dependencies {
