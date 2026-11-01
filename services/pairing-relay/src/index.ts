@@ -538,6 +538,21 @@ export class PairingHub {
       return jsonResponse({ error: 'INVALID_CREDENTIALS' }, 400);
     }
 
+    const currentLimitRows = this.sql
+      .exec<{
+        failed_count: number;
+        window_started_at: number;
+        blocked_until: number;
+      }>(
+        'SELECT failed_count, window_started_at, blocked_until FROM ip_submit_limits WHERE ip = ?',
+        ip,
+      )
+      .toArray();
+    const currentLimitRow = currentLimitRows[0];
+    if (currentLimitRow && Number(currentLimitRow.blocked_until) > timestamp) {
+      return jsonResponse({ error: 'TOO_MANY_ATTEMPTS' }, 429);
+    }
+
     const code = typeof body.code === 'string' ? body.code.trim() : '';
     const sessionRows = isValidPin(code)
       ? this.sql
@@ -556,7 +571,7 @@ export class PairingHub {
     const session = sessionRows[0];
 
     if (!session) {
-      this.recordFailedPinAttempt(ip, timestamp, limitRow);
+      this.recordFailedPinAttempt(ip, timestamp, currentLimitRow);
       return jsonResponse({ error: 'SESSION_NOT_FOUND' }, 404);
     }
     if (session.ciphertext !== null) {
