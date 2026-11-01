@@ -1,6 +1,10 @@
 package it.felixvision.tv.ui.settings
 
+import android.app.Activity
+import android.content.ActivityNotFoundException
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,6 +33,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -38,6 +43,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.tv.material3.Text
+import it.felixvision.tv.BuildConfig
 import it.felixvision.tv.data.catalog.Catalog
 import it.felixvision.tv.data.catalog.CatalogRefresh
 import it.felixvision.tv.data.catalog.CatalogSectionProgress
@@ -52,11 +58,13 @@ import it.felixvision.tv.ui.components.FvpStatusText
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.components.rememberRowsBringIntoViewer
 import it.felixvision.tv.ui.settings.protection.ProtectedContentScreen
+import it.felixvision.tv.ui.settings.vpn.VpnSetupScreen
 import it.felixvision.tv.ui.theme.FvpColors
 import it.felixvision.tv.ui.theme.settingsBlockSpacing
 import it.felixvision.tv.ui.theme.settingsRowSpacing
 import it.felixvision.tv.ui.theme.settingsRowText
 import it.felixvision.tv.ui.theme.settingsSectionPadding
+import it.felixvision.tv.vpn.VpnState
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -96,6 +104,59 @@ fun SettingsScreen(
         }
         wasProtectedOpen = showProtectedScreen
     }
+
+    // Riquadro "VPN": lo stato arriva dal controller dell'app. La pagina di
+    // configurazione sostituisce il contenuto come "Contenuti protetti" e al
+    // rientro il focus torna su "Configura"/"Cambia configurazione".
+    val vpnController = viewModel.vpnController
+    val vpnState by vpnController.state.collectAsState()
+    var showVpnSetup by remember { mutableStateOf(false) }
+    val vpnConfigureFocus = remember { FocusRequester() }
+    var wasVpnSetupOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(showVpnSetup) {
+        if (wasVpnSetupOpen && !showVpnSetup) {
+            withFrameNanos { }
+            runCatching { vpnConfigureFocus.requestFocus() }
+        }
+        wasVpnSetupOpen = showVpnSetup
+    }
+    // Dopo "Rimuovi" spariscono "Spegni" e "Rimuovi": il focus va su "Configura".
+    var vpnFocusAfterRemove by remember { mutableStateOf(false) }
+    LaunchedEffect(vpnState, vpnFocusAfterRemove) {
+        if (vpnFocusAfterRemove && vpnState == VpnState.NoConfig) {
+            withFrameNanos { }
+            runCatching { vpnConfigureFocus.requestFocus() }
+            vpnFocusAfterRemove = false
+        }
+    }
+    // Consenso di Android alla prima accensione (o dopo che un'altra VPN l'ha
+    // revocato): se l'utente rifiuta la VPN resta spenta.
+    val vpnPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            vpnController.enable()
+        } else {
+            vpnController.postMessage(VPN_PERMISSION_DENIED_MESSAGE)
+        }
+    }
+    val onVpnToggle: () -> Unit = {
+        if (vpnState == VpnState.Off) {
+            val permission = vpnController.permissionIntent()
+            if (permission == null) {
+                vpnController.enable()
+            } else {
+                try {
+                    vpnPermissionLauncher.launch(permission)
+                } catch (error: ActivityNotFoundException) {
+                    vpnController.postMessage(VPN_PERMISSION_DENIED_MESSAGE)
+                }
+            }
+        } else {
+            vpnController.disable()
+        }
+    }
+    val packageName = LocalContext.current.packageName
 
     LaunchedEffect(viewModel) {
         viewModel.onSettingsVisible()
@@ -137,6 +198,21 @@ fun SettingsScreen(
             modifier = modifier,
             onExit = { showProtectedScreen = false },
         )
+    } else if (showVpnSetup) {
+        VpnSetupScreen(
+            relay = viewModel.vpnRelayClient,
+            clock = viewModel.clock,
+            relayBaseUrl = BuildConfig.PAIRING_RELAY_URL,
+            packageName = packageName,
+            scale = scale,
+            saveConfig = { text, serverName -> vpnController.saveConfig(text, serverName) },
+            onSaved = { serverName ->
+                vpnController.postMessage("$VPN_SAVED_MESSAGE_PREFIX$serverName")
+                showVpnSetup = false
+            },
+            modifier = modifier,
+            onExit = { showVpnSetup = false },
+        )
     } else {
         SettingsContent(
             state = state,
@@ -158,6 +234,14 @@ fun SettingsScreen(
             protectedSummary = protectedSummary,
             onOpenProtected = { showProtectedScreen = true },
             protectedManageFocus = protectedManageFocus,
+            vpnState = vpnState,
+            onVpnToggle = onVpnToggle,
+            onVpnConfigure = { showVpnSetup = true },
+            onVpnRemove = {
+                vpnFocusAfterRemove = true
+                vpnController.removeConfig()
+            },
+            vpnConfigureFocus = vpnConfigureFocus,
         )
     }
 
@@ -388,6 +472,13 @@ internal fun SettingsContent(
     onOpenProtected: () -> Unit = {},
     /** Focus da riportare sul pulsante "Gestisci" al rientro dalla schermata. */
     protectedManageFocus: FocusRequester? = null,
+    /** Stato della VPN per il riquadro "VPN". */
+    vpnState: VpnState = VpnState.NoConfig,
+    onVpnToggle: () -> Unit = {},
+    onVpnConfigure: () -> Unit = {},
+    onVpnRemove: () -> Unit = {},
+    /** Focus da riportare su "Configura" al rientro dalla pagina della VPN. */
+    vpnConfigureFocus: FocusRequester? = null,
 ) {
     // Come in Novità: il contenuto scorre in verticale e la riga che riceve il
     // focus viene portata interamente in vista, così anche gli ultimi pulsanti
@@ -531,6 +622,16 @@ internal fun SettingsContent(
                     .testTag(SETTINGS_PROTECTED_OPEN_TAG),
             )
         }
+
+        // Riquadro "VPN" subito dopo "Contenuti protetti", stesso stile.
+        VpnSettingsSection(
+            state = vpnState,
+            scale = scale,
+            onToggle = onVpnToggle,
+            onConfigure = onVpnConfigure,
+            onRemove = onVpnRemove,
+            configureFocus = vpnConfigureFocus,
+        )
 
         // Riquadro App subito sotto Account: versione installata e aggiornamenti.
         Column(

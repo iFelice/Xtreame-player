@@ -30,6 +30,8 @@ import it.felixvision.tv.data.xtream.LoginResult
 import it.felixvision.tv.data.xtream.ServerAddress
 import it.felixvision.tv.data.xtream.ServerInput
 import it.felixvision.tv.ui.access.statusLabel
+import it.felixvision.tv.vpn.VpnController
+import it.felixvision.tv.vpn.VpnRelayApi
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -149,6 +151,13 @@ class SettingsViewModel(
     val protectedContentStore: ProtectedContentStore get() = container.protectedContentStore
     val protectedSession: ProtectedSession get() = container.protectedSession
     val clock: Clock get() = container.clock
+
+    /**
+     * VPN di FelixVP per il riquadro e la pagina di configurazione. Getter:
+     * costruire il ViewModel non crea il controller.
+     */
+    val vpnController: VpnController get() = container.vpnController
+    val vpnRelayClient: VpnRelayApi get() = container.vpnRelayClient
 
     /** Riepilogo per la riga del riquadro "Contenuti protetti". */
     private val _protectedSummary = MutableStateFlow(ProtectedSummary())

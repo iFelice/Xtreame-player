@@ -14,7 +14,10 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -94,6 +97,10 @@ class VpnController(
     /** Creato al primo avvio del tunnel; letto e scritto solo dentro [operations]. */
     private var backend: Backend? = null
 
+    /** Avvio in corso o in coda: "Spegni" e "Rimuovi" lo annullano subito. */
+    @Volatile
+    private var startJob: Job? = null
+
     private val tunnel: Tunnel = object : Tunnel {
         override fun getName(): String = TUNNEL_NAME
 
@@ -128,11 +135,15 @@ class VpnController(
 
     /** Avvia il tunnel con la configurazione salvata, se il permesso c'è già. */
     fun start() {
-        launchOperation { startLocked() }
+        startJob = launchOperation { startLocked() }
     }
 
-    /** Ferma il tunnel senza cambiare l'interruttore salvato. */
+    /**
+     * Ferma il tunnel senza cambiare l'interruttore salvato. Un avvio ancora
+     * in attesa dell'handshake viene annullato.
+     */
     fun stop() {
+        cancelStart()
         launchOperation { stopLocked() }
     }
 
@@ -141,7 +152,7 @@ class VpnController(
      * configurazione. Non chiede mai il permesso e non scavalca un'altra VPN.
      */
     fun startIfEnabled() {
-        launchOperation { startIfEnabledLocked() }
+        startJob = launchOperation { startIfEnabledLocked() }
     }
 
     /** "Accendi" dalle Impostazioni, con il permesso già concesso. */
@@ -158,6 +169,7 @@ class VpnController(
 
     /** "Rimuovi": tunnel fermo, configurazione cancellata, interruttore spento. */
     fun removeConfig() {
+        cancelStart()
         launchOperation { removeLocked() }
     }
 
@@ -178,7 +190,7 @@ class VpnController(
             }
         }
         if (saved) {
-            launchOperation { applySavedConfigLocked() }
+            startJob = launchOperation { applySavedConfigLocked() }
         }
         return saved
     }
@@ -195,7 +207,7 @@ class VpnController(
         }
     }
 
-    private fun launchOperation(block: suspend () -> Unit) {
+    private fun launchOperation(block: suspend () -> Unit): Job =
         // UNDISPATCHED: la richiesta del lucchetto parte subito, nell'ordine
         // delle chiamate (il Mutex è equo), poi il lavoro passa su [io].
         scope.launch(start = CoroutineStart.UNDISPATCHED) {
@@ -203,6 +215,10 @@ class VpnController(
                 withContext(io) { block() }
             }
         }
+
+    private fun cancelStart() {
+        startJob?.cancel()
+        startJob = null
     }
 
     private suspend fun startIfEnabledLocked() {
@@ -251,6 +267,8 @@ class VpnController(
         AppLog.info("VPN: avvio del tunnel")
         val connected = try {
             val activeBackend = obtainBackend()
+            // Annullato nel frattempo ("Spegni"): il tunnel non si accende.
+            currentCoroutineContext().ensureActive()
             activeBackend.setState(tunnel, Tunnel.State.UP, parsed.config)
             evictConnections()
             waitForHandshake(activeBackend)

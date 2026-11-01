@@ -113,9 +113,12 @@ class InterfaceSizeSettingsTest {
         rule.waitForIdle()
 
         rule.onNodeWithTag("settings_refresh").performKeyInput { pressKey(Key.DirectionUp) }
-        // Tra "Aggiorna catalogo" e Aspetto sta il riquadro "Contenuti
-        // protetti": il primo Su porta sul suo pulsante "Gestisci", il secondo
-        // sulla riga delle dimensioni.
+        // Tra "Aggiorna catalogo" e Aspetto stanno i riquadri "VPN" e
+        // "Contenuti protetti": il primo Su porta su "Configura" (senza
+        // configurazione è l'unico pulsante della VPN), il secondo su
+        // "Gestisci", il terzo sulla riga delle dimensioni.
+        rule.onNodeWithTag(SETTINGS_VPN_CONFIGURE_TAG).assertIsFocused()
+        rule.onNodeWithTag(SETTINGS_VPN_CONFIGURE_TAG).performKeyInput { pressKey(Key.DirectionUp) }
         rule.onNodeWithTag(SETTINGS_PROTECTED_OPEN_TAG).assertIsFocused()
         rule.onNodeWithTag(SETTINGS_PROTECTED_OPEN_TAG).performKeyInput { pressKey(Key.DirectionUp) }
         rule.onNodeWithTag("settings_interface_size_compact").assertIsFocused()
