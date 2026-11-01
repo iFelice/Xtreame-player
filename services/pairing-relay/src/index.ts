@@ -2,6 +2,7 @@ import {
   buildRubricaIndex,
   constantTimeEqual,
   createVersionedPayload,
+  decodeBase64Url,
   generatePin,
   generatePollToken,
   hashToken,
@@ -20,10 +21,13 @@ import {
   RUBRICA_WINDOW_MS,
   SUBMIT_BLOCK_MS,
   SUBMIT_WINDOW_MS,
+  VPN_IV_BYTES,
+  VPN_MAX_CIPHERTEXT_BYTES,
+  VPN_MIN_CIPHERTEXT_BYTES,
   type RubricaEntry,
 } from '../../../shared/pairing/index.ts';
 import rubricaData from '../rubrica.json';
-import { renderSubmissionPage } from './page.ts';
+import { renderSubmissionPage, renderVpnPage } from './page.ts';
 
 export const DEFAULT_RUBRICA_ENTRIES: ReadonlyArray<RubricaEntry> = rubricaData as RubricaEntry[];
 export const DEFAULT_RUBRICA_INDEX: ReadonlyMap<string, string> = buildRubricaIndex(
@@ -72,6 +76,8 @@ export interface PairingHubOptions {
   createPollToken?: () => string;
   rubricaIndex?: ReadonlyMap<string, string>;
 }
+
+const MAX_VPN_REQUEST_BYTES = 32 * 1024;
 
 function jsonResponse(body: unknown, status = 200, extraHeaders?: HeadersInit): Response {
   const headers = new Headers(extraHeaders);
@@ -126,7 +132,7 @@ export function evaluateCors(request: Request, allowedOriginsRaw: string | undef
     };
   }
 
-  // Allow the built-in HTML page served on GET / of the same Worker origin
+  // Allow the built-in HTML pages served on GET / and GET /vpn of the same Worker origin
   // when a browser sends Sec-Fetch-Site: same-origin.
   const requestOrigin = new URL(request.url).origin.replace(/\/+$/, '');
   if (
@@ -185,6 +191,17 @@ export class PairingHub {
       )
     `);
     this.sql.exec(`
+      CREATE TABLE IF NOT EXISTS vpn_sessions (
+        code TEXT PRIMARY KEY,
+        ip TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        poll_token_hash TEXT NOT NULL,
+        iv TEXT,
+        ciphertext TEXT,
+        failed_attempts INTEGER NOT NULL DEFAULT 0
+      )
+    `);
+    this.sql.exec(`
       CREATE TABLE IF NOT EXISTS ip_submit_limits (
         ip TEXT PRIMARY KEY,
         failed_count INTEGER NOT NULL DEFAULT 0,
@@ -208,6 +225,11 @@ export class PairingHub {
       REMOTE_SESSION_TTL_MS,
     );
     this.sql.exec(
+      'DELETE FROM vpn_sessions WHERE ? - created_at >= ?',
+      timestamp,
+      REMOTE_SESSION_TTL_MS,
+    );
+    this.sql.exec(
       'DELETE FROM ip_submit_limits WHERE blocked_until <= ? AND ? - window_started_at >= ?',
       timestamp,
       timestamp,
@@ -221,12 +243,17 @@ export class PairingHub {
   }
 
   private async scheduleNextAlarm(): Promise<void> {
-    const rows = this.sql
+    const pairRows = this.sql
       .exec<{ oldest: number | null }>('SELECT MIN(created_at) AS oldest FROM sessions')
       .toArray();
-    const oldest = rows[0]?.oldest;
-    if (typeof oldest === 'number' && Number.isFinite(oldest)) {
-      await this.ctx.storage.setAlarm(oldest + REMOTE_SESSION_TTL_MS);
+    const vpnRows = this.sql
+      .exec<{ oldest: number | null }>('SELECT MIN(created_at) AS oldest FROM vpn_sessions')
+      .toArray();
+    const oldestCandidates = [pairRows[0]?.oldest, vpnRows[0]?.oldest].filter(
+      (value): value is number => typeof value === 'number' && Number.isFinite(value),
+    );
+    if (oldestCandidates.length > 0) {
+      await this.ctx.storage.setAlarm(Math.min(...oldestCandidates) + REMOTE_SESSION_TTL_MS);
     }
   }
 
@@ -239,6 +266,17 @@ export class PairingHub {
       if (existing.length === 0) return code;
     }
     throw new Error('Unable to generate a unique PIN');
+  }
+
+  private uniqueVpnCode(): string {
+    for (let attempt = 0; attempt < 1_000_000; attempt += 1) {
+      const code = this.createPinFn();
+      const existing = this.sql
+        .exec<{ code: string }>('SELECT code FROM vpn_sessions WHERE code = ?', code)
+        .toArray();
+      if (existing.length === 0) return code;
+    }
+    throw new Error('Unable to generate a unique VPN code');
   }
 
   private recordFailedPinAttempt(
@@ -299,6 +337,43 @@ export class PairingHub {
 
     this.sql.exec(
       'INSERT INTO sessions (pin, ip, created_at, poll_token_hash, payload, failed_attempts) VALUES (?, ?, ?, ?, NULL, 0)',
+      code,
+      ip,
+      timestamp,
+      pollTokenHash,
+    );
+    await this.scheduleNextAlarm();
+
+    return jsonResponse({
+      code,
+      pollToken,
+      expiresInSeconds: REMOTE_SESSION_TTL_SECONDS,
+    });
+  }
+
+  private async handleVpnCreate(ip: string, timestamp: number): Promise<Response> {
+    const pollToken = this.createPollTokenFn();
+    const pollTokenHash = await hashToken(pollToken);
+
+    const totalRows = this.sql
+      .exec<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM vpn_sessions')
+      .toArray();
+    const totalActive = Number(totalRows[0]?.cnt ?? 0);
+    if (totalActive >= MAX_SESSIONS) {
+      return jsonResponse({ error: 'TOO_MANY_SESSIONS' }, 429);
+    }
+
+    const ipRows = this.sql
+      .exec<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM vpn_sessions WHERE ip = ?', ip)
+      .toArray();
+    const ipActive = Number(ipRows[0]?.cnt ?? 0);
+    if (ipActive >= MAX_SESSIONS_PER_IP) {
+      return jsonResponse({ error: 'TOO_MANY_SESSIONS' }, 429);
+    }
+
+    const code = this.uniqueVpnCode();
+    this.sql.exec(
+      'INSERT INTO vpn_sessions (code, ip, created_at, poll_token_hash, iv, ciphertext, failed_attempts) VALUES (?, ?, ?, ?, NULL, NULL, 0)',
       code,
       ip,
       timestamp,
@@ -404,6 +479,141 @@ export class PairingHub {
     return jsonResponse({ ok: true });
   }
 
+  private recordInvalidVpnAttempt(code: string, failedAttempts: number): void {
+    const nextFailed = failedAttempts + 1;
+    if (nextFailed >= MAX_PIN_VALIDATION_FAILURES) {
+      this.sql.exec('DELETE FROM vpn_sessions WHERE code = ?', code);
+      return;
+    }
+    this.sql.exec(
+      'UPDATE vpn_sessions SET failed_attempts = ? WHERE code = ?',
+      nextFailed,
+      code,
+    );
+  }
+
+  private async handleVpnSubmit(
+    request: Request,
+    ip: string,
+    timestamp: number,
+  ): Promise<Response> {
+    const limitRows = this.sql
+      .exec<{
+        failed_count: number;
+        window_started_at: number;
+        blocked_until: number;
+      }>(
+        'SELECT failed_count, window_started_at, blocked_until FROM ip_submit_limits WHERE ip = ?',
+        ip,
+      )
+      .toArray();
+    const limitRow = limitRows[0];
+    if (limitRow && Number(limitRow.blocked_until) > timestamp) {
+      return jsonResponse({ error: 'TOO_MANY_ATTEMPTS' }, 429);
+    }
+
+    const contentLength = request.headers.get('Content-Length');
+    if (contentLength && Number(contentLength) > MAX_VPN_REQUEST_BYTES) {
+      return jsonResponse({ error: 'REQUEST_TOO_LARGE' }, 413);
+    }
+
+    let rawBody: ArrayBuffer;
+    try {
+      rawBody = await request.arrayBuffer();
+    } catch {
+      return jsonResponse({ error: 'INVALID_CREDENTIALS' }, 400);
+    }
+    if (rawBody.byteLength > MAX_VPN_REQUEST_BYTES) {
+      return jsonResponse({ error: 'REQUEST_TOO_LARGE' }, 413);
+    }
+
+    let body: Record<string, unknown>;
+    try {
+      const parsed: unknown = JSON.parse(new TextDecoder().decode(rawBody));
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return jsonResponse({ error: 'INVALID_CREDENTIALS' }, 400);
+      }
+      body = parsed as Record<string, unknown>;
+    } catch {
+      return jsonResponse({ error: 'INVALID_CREDENTIALS' }, 400);
+    }
+
+    const currentLimitRows = this.sql
+      .exec<{
+        failed_count: number;
+        window_started_at: number;
+        blocked_until: number;
+      }>(
+        'SELECT failed_count, window_started_at, blocked_until FROM ip_submit_limits WHERE ip = ?',
+        ip,
+      )
+      .toArray();
+    const currentLimitRow = currentLimitRows[0];
+    if (currentLimitRow && Number(currentLimitRow.blocked_until) > timestamp) {
+      return jsonResponse({ error: 'TOO_MANY_ATTEMPTS' }, 429);
+    }
+
+    const code = typeof body.code === 'string' ? body.code.trim() : '';
+    const sessionRows = isValidPin(code)
+      ? this.sql
+          .exec<{
+            code: string;
+            poll_token_hash: string;
+            iv: string | null;
+            ciphertext: string | null;
+            failed_attempts: number;
+          }>(
+            'SELECT code, poll_token_hash, iv, ciphertext, failed_attempts FROM vpn_sessions WHERE code = ?',
+            code,
+          )
+          .toArray()
+      : [];
+    const session = sessionRows[0];
+
+    if (!session) {
+      this.recordFailedPinAttempt(ip, timestamp, currentLimitRow);
+      return jsonResponse({ error: 'SESSION_NOT_FOUND' }, 404);
+    }
+    if (session.ciphertext !== null) {
+      return jsonResponse({ error: 'SESSION_ALREADY_COMPLETED' }, 409);
+    }
+
+    if (typeof body.iv !== 'string' || typeof body.ciphertext !== 'string') {
+      this.recordInvalidVpnAttempt(code, Number(session.failed_attempts));
+      return jsonResponse({ error: 'INVALID_CREDENTIALS' }, 400);
+    }
+
+    const iv = body.iv;
+    const ciphertext = body.ciphertext;
+    let validEnvelope = false;
+    try {
+      const decodedIv = decodeBase64Url(iv);
+      const decodedCiphertext = decodeBase64Url(ciphertext);
+      validEnvelope =
+        decodedIv.byteLength === VPN_IV_BYTES &&
+        decodedCiphertext.byteLength >= VPN_MIN_CIPHERTEXT_BYTES &&
+        decodedCiphertext.byteLength <= VPN_MAX_CIPHERTEXT_BYTES;
+      decodedIv.fill(0);
+      decodedCiphertext.fill(0);
+    } catch {
+      validEnvelope = false;
+    }
+
+    if (!validEnvelope) {
+      this.recordInvalidVpnAttempt(code, Number(session.failed_attempts));
+      return jsonResponse({ error: 'INVALID_CREDENTIALS' }, 400);
+    }
+
+    this.sql.exec(
+      'UPDATE vpn_sessions SET iv = ?, ciphertext = ? WHERE code = ?',
+      iv,
+      ciphertext,
+      code,
+    );
+    this.sql.exec('DELETE FROM ip_submit_limits WHERE ip = ?', ip);
+    return jsonResponse({ ok: true });
+  }
+
   private async handleStatus(request: Request, code: string): Promise<Response> {
     const sessionRows = isValidPin(code)
       ? this.sql
@@ -434,6 +644,42 @@ export class PairingHub {
     return jsonResponse({
       status: 'ready',
       credentials,
+    });
+  }
+
+  private async handleVpnStatus(request: Request, code: string): Promise<Response> {
+    const sessionRows = isValidPin(code)
+      ? this.sql
+          .exec<{
+            code: string;
+            poll_token_hash: string;
+            iv: string | null;
+            ciphertext: string | null;
+          }>(
+            'SELECT code, poll_token_hash, iv, ciphertext FROM vpn_sessions WHERE code = ?',
+            code,
+          )
+          .toArray()
+      : [];
+    const session = sessionRows[0];
+
+    const suppliedToken = extractBearerToken(request.headers.get('Authorization'));
+    const suppliedHash = await hashToken(suppliedToken || '');
+    const targetHash = session ? String(session.poll_token_hash) : suppliedHash;
+    const hashMatches = constantTimeEqual(targetHash, suppliedHash);
+
+    if (!session || !suppliedToken || !hashMatches) {
+      return jsonResponse({ error: 'SESSION_NOT_FOUND' }, 404);
+    }
+    if (session.iv === null || session.ciphertext === null) {
+      return jsonResponse({ status: 'waiting' });
+    }
+
+    this.sql.exec('DELETE FROM vpn_sessions WHERE code = ?', code);
+    return jsonResponse({
+      status: 'ready',
+      iv: session.iv,
+      ciphertext: session.ciphertext,
     });
   }
 
@@ -493,6 +739,19 @@ export class PairingHub {
 
     if (request.method === 'POST' && url.pathname === '/api/pair/submit') {
       return this.handleSubmit(request, ip, timestamp);
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/vpn/create') {
+      return this.handleVpnCreate(ip, timestamp);
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/vpn/submit') {
+      return this.handleVpnSubmit(request, ip, timestamp);
+    }
+
+    if (request.method === 'GET' && url.pathname.startsWith('/api/vpn/status/')) {
+      const code = decodeURIComponent(url.pathname.slice('/api/vpn/status/'.length));
+      return this.handleVpnStatus(request, code);
     }
 
     if (request.method === 'GET' && url.pathname.startsWith('/api/pair/status/')) {
@@ -562,10 +821,29 @@ export async function handleWorkerRequest(request: Request, env: Env): Promise<R
     );
   }
 
+  if (request.method === 'GET' && url.pathname === '/vpn') {
+    const html = renderVpnPage();
+    return withCorsHeaders(
+      new Response(html, {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Cache-Control': 'no-store',
+          'Referrer-Policy': 'no-referrer',
+          'Content-Security-Policy': "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'",
+        },
+      }),
+      cors.headers,
+    );
+  }
+
   if (
     (request.method === 'POST' && url.pathname === '/api/pair/create') ||
     (request.method === 'POST' && url.pathname === '/api/pair/submit') ||
     (request.method === 'GET' && url.pathname.startsWith('/api/pair/status/')) ||
+    (request.method === 'POST' && url.pathname === '/api/vpn/create') ||
+    (request.method === 'POST' && url.pathname === '/api/vpn/submit') ||
+    (request.method === 'GET' && url.pathname.startsWith('/api/vpn/status/')) ||
     (request.method === 'GET' && url.pathname.startsWith('/api/rubrica/'))
   ) {
     const id = env.PAIRING_HUB.idFromName('global');

@@ -4,6 +4,18 @@ Servizio pubblico di abbinamento TV ↔ smartphone per **FelixVisionPlayer** bas
 
 ---
 
+## Trasferimento configurazione VPN
+
+La TV crea una sessione e mostra un QR con `https://<relay>/vpn?code=<6 cifre>#k=<chiave base64url>`. La chiave AES-256 è casuale e resta nel frammento del QR, che il browser non invia al relay. Sul telefono la pagina cifra il file `.conf` con AES-GCM e AAD `felixvp-vpn-v1:<codice>`; il relay conserva soltanto `iv` e testo cifrato. La TV legge il risultato una sola volta usando il proprio `pollToken`.
+
+- `POST /api/vpn/create` crea una sessione e restituisce codice, `pollToken` e scadenza.
+- `POST /api/vpn/submit` riceve `{ code, iv, ciphertext }` in base64url.
+- `GET /api/vpn/status/{code}` con `Authorization: Bearer <pollToken>` restituisce `waiting` o `ready`; alla consegna cancella la sessione.
+
+Le sessioni scadono dopo 10 minuti. Il relay non riceve né memorizza la chiave AES o il testo in chiaro.
+
+---
+
 ## 1. Come modificare la rubrica (`rubrica.json`)
 
 La rubrica dei codici brevi si trova nel file [`rubrica.json`](./rubrica.json) ed è inclusa nel pacchetto al momento della pubblicazione (build).
