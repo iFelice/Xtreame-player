@@ -23,6 +23,11 @@ class MainActivity : ComponentActivity() {
 
         val container = (application as FvpApplication).container
 
+        // VPN di FelixVP: se l'interruttore era acceso riparte da sola. Non
+        // chiede mai il permesso all'avvio e non scavalca un'altra VPN: se il
+        // permesso manca lo dicono le Impostazioni.
+        container.vpnController.startIfEnabled()
+
         // Su Android TV l'app resta spesso in memoria: riaprirla dalla Home non
         // la riavvia, quindi una release pubblicata nel frattempo resterebbe
         // invisibile finché non si aprono le Impostazioni. Ogni volta che
@@ -43,6 +48,15 @@ class MainActivity : ComponentActivity() {
                 FvpApp(container = container)
             }
         }
+    }
+
+    override fun onDestroy() {
+        // Uscita dall'app: il tunnel si chiude, l'interruttore salvato resta
+        // com'è (al prossimo avvio la VPN riparte se era accesa).
+        if (isFinishing) {
+            (application as FvpApplication).container.vpnController.stop()
+        }
+        super.onDestroy()
     }
 
     /**

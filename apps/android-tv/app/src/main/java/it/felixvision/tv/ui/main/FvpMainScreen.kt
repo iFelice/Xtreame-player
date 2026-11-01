@@ -133,6 +133,9 @@ fun catalogSessionKey(
     username = username,
 )
 
+/** Durata degli avvisi della VPN nel riquadro in basso. */
+private const val VPN_MESSAGE_MILLIS = 4_000L
+
 @Composable
 fun FvpMainScreen(
     container: AppContainer,
@@ -169,6 +172,11 @@ fun FvpMainScreen(
     var myChannelFocusId by remember(sessionId, currentServer, currentUsername) { mutableStateOf<String?>(null) }
     var myChannelFocusTick by remember(sessionId) { mutableIntStateOf(0) }
     var favoritesMessage by remember(sessionId) { mutableStateOf<String?>(null) }
+    // Avvisi della VPN (connessione caduta, configurazione salvata…): 4 s nel
+    // riquadro in basso dei preferiti. Il contatore riavvia il tempo anche se
+    // arriva due volte lo stesso testo.
+    var vpnMessage by remember { mutableStateOf<String?>(null) }
+    var vpnMessageSerial by remember { mutableIntStateOf(0) }
     var continueLoadingKey by remember(sessionId) { mutableStateOf<String?>(null) }
     var continueErrorMessage by remember(sessionId) { mutableStateOf<String?>(null) }
     // Il testo cercato resta quando si torna nella sezione durante la sessione.
@@ -361,6 +369,20 @@ fun FvpMainScreen(
         if (favoritesMessage != null) {
             delay(2000)
             favoritesMessage = null
+        }
+    }
+
+    LaunchedEffect(container) {
+        container.vpnController.messages.collect { message ->
+            vpnMessage = message
+            vpnMessageSerial++
+        }
+    }
+
+    LaunchedEffect(vpnMessageSerial) {
+        if (vpnMessage != null) {
+            delay(VPN_MESSAGE_MILLIS)
+            vpnMessage = null
         }
     }
 
@@ -905,7 +927,7 @@ fun FvpMainScreen(
                     }
                 }
 
-                favoritesMessage?.let { msg ->
+                (favoritesMessage ?: vpnMessage)?.let { msg ->
                     Box(modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = scale.dp(24f)).background(FvpColors.SurfaceElevated, shape = RoundedCornerShape(scale.dp(8f))).padding(horizontal = scale.dp(16f), vertical = scale.dp(8f))) {
                         Text(text = msg, color = FvpColors.TextPrimary)
                     }
