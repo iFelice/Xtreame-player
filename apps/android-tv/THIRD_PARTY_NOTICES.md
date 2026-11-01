@@ -53,3 +53,11 @@ Le icone sono rese a runtime tramite `Icon(painter = painterResource(R.drawable.
 - **Licenza:** GNU General Public License v3.0 (GPL-3.0)
 - **Utilizzo:** ripiego software per l'audio che il dispositivo non decodifica (AC3/EAC3/DTS), caricato per riflessione da `DefaultRenderersFactory` con `EXTENSION_RENDERER_MODE_ON`; non contiene decodificatori video.
 - **Nota:** l'inclusione di un componente GPL-3.0 nell'APK comporta gli obblighi della licenza per la distribuzione dell'app.
+
+## Sora (font)
+
+- **Origine:** https://github.com/sora-xor/sora-font
+- **File:** `app/src/main/res/font/sora_medium.ttf` (Sora peso 500, istanza statica)
+- **Licenza:** SIL Open Font License 1.1, testo completo in `app/src/main/assets/licenses/Sora-OFL.txt`
+- **Utilizzo:** solo ora e data del menu laterale (`ui/navigation/DrawerClock.kt`); il resto dell'app resta con il font di sistema.
+- **Modifiche:** nessuna, il file è incluso così com'è.
