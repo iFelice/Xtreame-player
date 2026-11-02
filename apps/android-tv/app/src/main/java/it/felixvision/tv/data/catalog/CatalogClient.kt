@@ -5,8 +5,8 @@ import it.felixvision.tv.core.Clock
 import it.felixvision.tv.core.FvpJson
 import it.felixvision.tv.core.SystemClock
 import java.io.BufferedInputStream
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
+import java.io.BufferedOutputStream
+import java.io.File
 import java.io.IOException
 import java.io.InterruptedIOException
 import kotlinx.coroutines.CoroutineDispatcher
@@ -288,112 +288,116 @@ class CatalogClient(
                 var lastEmittedBytes = 0L
                 var lastEmittedPercent = 0
                 var lastEmittedAtMillis = downloadStartMillis
-                val initialCapacity = if (bytesTotal != null && bytesTotal <= Int.MAX_VALUE.toLong()) {
-                    bytesTotal.toInt()
-                } else {
-                    STREAM_BUFFER_SIZE
-                }
-                val rawBytes = DirectByteArrayOutputStream(initialCapacity)
-                body.byteStream().use { input ->
-                    val buffer = ByteArray(STREAM_BUFFER_SIZE)
-                    while (true) {
-                        val read = input.read(buffer)
-                        if (read < 0) break
-                        if (read == 0) continue
-                        rawBytes.write(buffer, 0, read)
-                        bytesReceived += read
-                        if (section != null) {
-                            val now = clock.nowMillis()
-                            val elapsed = now - lastEmittedAtMillis
-                            val shouldEmit = if (bytesTotal != null) {
-                                val percent = ((bytesReceived * 100L) / bytesTotal).toInt().coerceIn(0, 100)
-                                val percentAdvanced = percent > lastEmittedPercent
-                                val timeAdvanced = elapsed >= PROGRESS_MIN_INTERVAL_MILLIS
-                                if (percentAdvanced || timeAdvanced) {
-                                    lastEmittedPercent = percent
-                                    true
-                                } else {
-                                    false
+                val tempFile = File.createTempFile("fvp_catalog_", ".json")
+                try {
+                    body.byteStream().use { input ->
+                        tempFile.outputStream().use { fileOut ->
+                            BufferedOutputStream(fileOut, STREAM_BUFFER_SIZE).use { output ->
+                                val buffer = ByteArray(STREAM_BUFFER_SIZE)
+                                while (true) {
+                                    val read = input.read(buffer)
+                                    if (read < 0) break
+                                    if (read == 0) continue
+                                    output.write(buffer, 0, read)
+                                    bytesReceived += read
+                                    if (section != null) {
+                                        val now = clock.nowMillis()
+                                        val elapsed = now - lastEmittedAtMillis
+                                        val shouldEmit = if (bytesTotal != null) {
+                                            val percent = ((bytesReceived * 100L) / bytesTotal).toInt().coerceIn(0, 100)
+                                            val percentAdvanced = percent > lastEmittedPercent
+                                            val timeAdvanced = elapsed >= PROGRESS_MIN_INTERVAL_MILLIS
+                                            if (percentAdvanced || timeAdvanced) {
+                                                lastEmittedPercent = percent
+                                                true
+                                            } else {
+                                                false
+                                            }
+                                        } else {
+                                            lastEmittedBytes == 0L || elapsed >= PROGRESS_MIN_INTERVAL_MILLIS
+                                        }
+                                        if (shouldEmit) {
+                                            lastEmittedBytes = bytesReceived
+                                            lastEmittedAtMillis = now
+                                            onStage(
+                                                CatalogStage(
+                                                    section = section,
+                                                    status = CatalogSectionStatus.DOWNLOADING,
+                                                    bytesReceived = bytesReceived,
+                                                    bytesTotal = bytesTotal,
+                                                ),
+                                            )
+                                        }
+                                    }
                                 }
-                            } else {
-                                lastEmittedBytes == 0L || elapsed >= PROGRESS_MIN_INTERVAL_MILLIS
-                            }
-                            if (shouldEmit) {
-                                lastEmittedBytes = bytesReceived
-                                lastEmittedAtMillis = now
-                                onStage(
-                                    CatalogStage(
-                                        section = section,
-                                        status = CatalogSectionStatus.DOWNLOADING,
-                                        bytesReceived = bytesReceived,
-                                        bytesTotal = bytesTotal,
-                                    ),
-                                )
+                                output.flush()
                             }
                         }
                     }
-                }
-                if (section != null && bytesReceived > lastEmittedBytes) {
-                    onStage(
-                        CatalogStage(
-                            section = section,
-                            status = CatalogSectionStatus.DOWNLOADING,
-                            bytesReceived = bytesReceived,
-                            bytesTotal = bytesTotal,
-                        ),
-                    )
-                }
-                val downloadDurationMillis = (clock.nowMillis() - downloadStartMillis).coerceAtLeast(0L)
-                if (bytesReceived == 0L) {
+                    if (section != null && bytesReceived > lastEmittedBytes) {
+                        onStage(
+                            CatalogStage(
+                                section = section,
+                                status = CatalogSectionStatus.DOWNLOADING,
+                                bytesReceived = bytesReceived,
+                                bytesTotal = bytesTotal,
+                            ),
+                        )
+                    }
+                    val downloadDurationMillis = (clock.nowMillis() - downloadStartMillis).coerceAtLeast(0L)
+                    if (bytesReceived == 0L) {
+                        if (section != null) {
+                            onStage(
+                                CatalogStage(
+                                    section = section,
+                                    status = CatalogSectionStatus.PROCESSING,
+                                    bytesReceived = 0L,
+                                    bytesTotal = bytesTotal,
+                                ),
+                            )
+                        }
+                        return@withContext FetchResult.Success(emptyList(), 0L, bytesTotal)
+                    }
                     if (section != null) {
                         onStage(
                             CatalogStage(
                                 section = section,
                                 status = CatalogSectionStatus.PROCESSING,
-                                bytesReceived = 0L,
+                                bytesReceived = bytesReceived,
                                 bytesTotal = bytesTotal,
                             ),
                         )
                     }
-                    return@withContext FetchResult.Success(emptyList(), 0L, bytesTotal)
-                }
-                if (section != null) {
-                    onStage(
-                        CatalogStage(
-                            section = section,
-                            status = CatalogSectionStatus.PROCESSING,
-                            bytesReceived = bytesReceived,
-                            bytesTotal = bytesTotal,
-                        ),
-                    )
-                }
-                try {
-                    val parseStartMillis = clock.nowMillis()
-                    val decoded = withContext(background) {
-                        rawBytes.toInputStream().use { input ->
-                            BufferedInputStream(input).use { buffered ->
-                                // Per tolleranza: se il pannello restituisce oggetto anziché array, decode fallirà e gestiamo come vuoto
-                                try {
-                                    json.decodeFromStream<List<T>>(buffered)
-                                } catch (_: Exception) {
-                                    emptyList()
+                    try {
+                        val parseStartMillis = clock.nowMillis()
+                        val decoded = withContext(background) {
+                            tempFile.inputStream().use { input ->
+                                BufferedInputStream(input, STREAM_BUFFER_SIZE).use { buffered ->
+                                    // Per tolleranza: se il pannello restituisce oggetto anziché array, decode fallirà e gestiamo come vuoto
+                                    try {
+                                        json.decodeFromStream<List<T>>(buffered)
+                                    } catch (_: Exception) {
+                                        emptyList()
+                                    }
                                 }
                             }
                         }
+                        val parseDurationMillis = (clock.nowMillis() - parseStartMillis).coerceAtLeast(0L)
+                        AppLog.info(
+                            "Catalogo [$action]: ricevuti $bytesReceived byte" +
+                                (bytesTotal?.let { " su $it" } ?: "") +
+                                " in $downloadDurationMillis ms, ${decoded.size} elementi elaborati in $parseDurationMillis ms",
+                        )
+                        FetchResult.Success(
+                            value = decoded,
+                            bytesReceived = bytesReceived,
+                            bytesTotal = bytesTotal,
+                        )
+                    } catch (e: Exception) {
+                        FetchResult.Failure("Risposta del server non riconosciuta: non sembra un pannello Xtream.")
                     }
-                    val parseDurationMillis = (clock.nowMillis() - parseStartMillis).coerceAtLeast(0L)
-                    AppLog.info(
-                        "Catalogo [$action]: ricevuti $bytesReceived byte" +
-                            (bytesTotal?.let { " su $it" } ?: "") +
-                            " in $downloadDurationMillis ms, ${decoded.size} elementi elaborati in $parseDurationMillis ms",
-                    )
-                    FetchResult.Success(
-                        value = decoded,
-                        bytesReceived = bytesReceived,
-                        bytesTotal = bytesTotal,
-                    )
-                } catch (e: Exception) {
-                    FetchResult.Failure("Risposta del server non riconosciuta: non sembra un pannello Xtream.")
+                } finally {
+                    tempFile.delete()
                 }
             }
         } catch (timeout: InterruptedIOException) {
@@ -401,10 +405,6 @@ class CatalogClient(
         } catch (ioe: IOException) {
             FetchResult.Failure("Server non raggiungibile. Controlla l'indirizzo e la connessione.")
         }
-    }
-
-    private class DirectByteArrayOutputStream(size: Int) : ByteArrayOutputStream(size) {
-        fun toInputStream(): ByteArrayInputStream = ByteArrayInputStream(buf, 0, count)
     }
 
     private sealed interface FetchResult<out T> {
