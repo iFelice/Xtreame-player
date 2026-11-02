@@ -1,7 +1,9 @@
 package it.felixvision.tv.ui.components
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -109,29 +111,44 @@ object PositionMath {
  * secondario al 40%, cursore verde) sul bordo destro. Entrambi restano nascosti
  * quando non servono: nessun focus, oppure tutti gli elementi già visibili.
  *
- * Il componente non è focalizzabile: non sposta né intercetta il focus.
+ * Il componente non è focalizzabile: non sposta né intercetta il focus. Lo
+ * spazio a sinistra del contatore, sulla stessa riga, ospita eventuali
+ * contenuti passati in [topRowEnd] (il pulsante di ordinamento di Film e Serie).
+ *
+ * @param topRowEnd contenuto facoltativo a sinistra del contatore, sulla sua
+ *   stessa riga: viene mostrato anche senza contatore, perché è il pulsante a
+ *   dover prendere il focus quando la griglia non ne ha uno da mostrare.
  */
 @Composable
 fun PositionIndicator(
     position: ListPosition,
     scale: UiScale,
     modifier: Modifier = Modifier,
+    topRowEnd: (@Composable () -> Unit)? = null,
 ) {
     val counter = PositionMath.counterText(position.focusedIndex, position.totalItems)
     val scrollable = PositionMath.isScrollable(position.totalItems, position.visibleItems)
-    if (counter == null && !scrollable) return
+    if (counter == null && !scrollable && topRowEnd == null) return
 
     Box(modifier = modifier.fillMaxSize()) {
-        if (counter != null) {
-            Text(
-                text = counter,
-                color = FvpColors.TextSecondary,
-                fontSize = scale.positionText,
+        if (counter != null || topRowEnd != null) {
+            Row(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(top = scale.positionInset, end = scale.positionInset)
-                    .testTag(POSITION_COUNTER_TAG),
-            )
+                    .padding(top = scale.positionInset, end = scale.positionInset),
+                horizontalArrangement = Arrangement.spacedBy(scale.dp(10f), Alignment.End),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                topRowEnd?.invoke()
+                if (counter != null) {
+                    Text(
+                        text = counter,
+                        color = FvpColors.TextSecondary,
+                        fontSize = scale.positionText,
+                        modifier = Modifier.testTag(POSITION_COUNTER_TAG),
+                    )
+                }
+            }
         }
         if (scrollable) {
             ScrollbarThumb(

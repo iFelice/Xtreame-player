@@ -38,6 +38,7 @@ import it.felixvision.tv.data.update.isDebugVersion
 import it.felixvision.tv.data.volume.VolumeStore
 import it.felixvision.tv.data.xtream.XtreamClient
 import it.felixvision.tv.player.PlayerPreferences
+import it.felixvision.tv.ui.catalog.CategorySortStore
 import it.felixvision.tv.ui.settings.InterfaceSizeStore
 import it.felixvision.tv.vpn.KeystoreVpnConfigCipher
 import it.felixvision.tv.vpn.VpnController
@@ -142,6 +143,14 @@ class AppContainer(
      */
     val interfaceSizeStore: InterfaceSizeStore by lazy {
         InterfaceSizeStore(context)
+    }
+
+    /**
+     * Ordinamento scelto per ogni categoria di Film e Serie (`fvp_sort`): dato
+     * non sensibile, letto in modo sincrono quando la griglia si compone.
+     */
+    val categorySortStore: CategorySortStore by lazy {
+        CategorySortStore(context)
     }
 
     /** Formato dello schermo scelto per ogni canale Live, per server+utente. */

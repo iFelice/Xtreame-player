@@ -86,6 +86,7 @@ fun FvpApp(container: AppContainer) {
                         accessViewModel = viewModel,
                         onSignOut = viewModel::signOut,
                         sessionId = sessionId,
+                        categorySortStore = container.categorySortStore,
                     )
                 } else {
                     LoginScreen(
