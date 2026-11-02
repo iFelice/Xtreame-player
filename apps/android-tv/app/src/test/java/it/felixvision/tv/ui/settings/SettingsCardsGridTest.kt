@@ -119,10 +119,10 @@ class SettingsCardsGridTest {
         assertTrue("Contenuti protetti non sta a destra di Aspetto", protectedCard.left > appearance.left)
         assertTrue("VPN non sta a destra di Contenuti protetti", vpn.left > protectedCard.left)
         listOf(appearance, protectedCard, vpn).forEach { bounds ->
-            assertTrue("la card non sta sulla prima riga", abs(bounds.top.value - account.top.value) <= 0.5f)
+            assertTrue("la card non sta sulla prima riga", abs(bounds.top - account.top) <= 0.5f)
             assertTrue(
                 "la card non è alta come le altre",
-                abs(bounds.height.value - account.height.value) <= 0.5f,
+                abs(bounds.height - account.height) <= 0.5f,
             )
         }
 
@@ -131,10 +131,10 @@ class SettingsCardsGridTest {
         val app = rule.onNodeWithTag(SETTINGS_CARD_APP_TAG).fetchSemanticsNode().boundsInRoot
         assertTrue("Catalogo non sta sotto la prima riga", catalog.top >= account.bottom - 1f)
         assertTrue("App non sta a destra di Catalogo", app.left > catalog.left)
-        assertTrue("Catalogo non è larga come Account", abs(catalog.width.value - account.width.value) <= 0.5f)
-        assertTrue("App non è larga come Account", abs(app.width.value - account.width.value) <= 0.5f)
-        assertTrue("Catalogo non è alta come Account", abs(catalog.height.value - account.height.value) <= 0.5f)
-        assertTrue("App non è alta come Account", abs(app.height.value - account.height.value) <= 0.5f)
+        assertTrue("Catalogo non è larga come Account", abs(catalog.width - account.width) <= 0.5f)
+        assertTrue("App non è larga come Account", abs(app.width - account.width) <= 0.5f)
+        assertTrue("Catalogo non è alta come Account", abs(catalog.height - account.height) <= 0.5f)
+        assertTrue("App non è alta come Account", abs(app.height - account.height) <= 0.5f)
     }
 
     @Test
