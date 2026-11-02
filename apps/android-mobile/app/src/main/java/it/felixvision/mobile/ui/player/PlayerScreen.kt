@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
@@ -541,9 +542,12 @@ private fun ErrorOverlay(
     modifier: Modifier = Modifier,
 ) {
     Column(
+        // I test su emulatore riconoscono da questo tag l'impossibilità di
+        // riprodurre il contenuto (contenuti pubblici non raggiungibili).
         modifier = modifier
             .background(FvpColors.Background.copy(alpha = .95f))
-            .padding(20.dp),
+            .padding(20.dp)
+            .testTag("player_error"),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(message, color = FvpColors.TextPrimary)
@@ -614,7 +618,9 @@ private fun PlayerVideoSurface(
     onView: (PlayerView) -> Unit,
 ) {
     AndroidView(
-        modifier = modifier,
+        // Tag usato dai test su emulatore per conoscere i confini dell'area
+        // video (gesti volume/luminosità/canale) in orizzontale e in verticale.
+        modifier = modifier.testTag("player_video"),
         factory = { context ->
             PlayerView(context).apply {
                 useController = false

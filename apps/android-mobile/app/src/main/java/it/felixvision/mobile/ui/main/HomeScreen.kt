@@ -402,6 +402,7 @@ private fun SectionContent(
             settingsViewModel = settingsViewModel,
             catalogViewModel = catalogViewModel,
             modifier = modifier,
+            downloadMonitor = container.catalogDownloadMonitor,
         )
     }
 }
