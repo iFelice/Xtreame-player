@@ -240,12 +240,12 @@ class VpnControllerTest {
         controller.start()
         // Nessuna chiamata al backend deve essere partita sincronicamente sul chiamante.
         assertTrue("start() non deve lavorare sul chiamante",
-            backend.stateThreads.none { it == testThread })
+            backend.stateThreads.none { it.substringBefore(" @coroutine") == testThread.substringBefore(" @coroutine") })
         awaitState(VpnState.Connected(VpnTestVectors.SERVER_NAME))
 
         controller.stop()
         assertTrue("stop() non deve lavorare sul chiamante",
-            backend.stateThreads.none { it == testThread })
+            backend.stateThreads.none { it.substringBefore(" @coroutine") == testThread.substringBefore(" @coroutine") })
         awaitState(VpnState.Off)
         // Il DOWN è scritto dal thread "vpn-io-test" dopo che lo stato Off è visibile.
         awaitCondition(description = "DOWN arrivato al backend") {
@@ -255,7 +255,7 @@ class VpnControllerTest {
         assertFalse("il backend deve essere stato invocato", backend.stateThreads.isEmpty())
         // Tutte le chiamate al backend sono eseguite sul dispatcher IO dedicato.
         assertTrue("tutte le chiamate del backend devono essere su vpn-io-test: ${backend.stateThreads}",
-            backend.stateThreads.all { it == "vpn-io-test" })
+            backend.stateThreads.all { it.substringBefore(" @coroutine") == "vpn-io-test" })
 
         // Ordine preservato: UP prima di DOWN.
         val upIndex = backend.states.indexOf(Tunnel.State.UP)
@@ -307,7 +307,7 @@ class VpnControllerTest {
 
         assertEquals(listOf(Tunnel.State.UP, Tunnel.State.DOWN), backend.states)
         assertTrue("backend su vpn-io-test: ${backend.stateThreads}",
-            backend.stateThreads.all { it == "vpn-io-test" })
+            backend.stateThreads.all { it.substringBefore(" @coroutine") == "vpn-io-test" })
         testScheduler.advanceUntilIdle()
         assertTrue("nessun avviso", messagesBuffer.isEmpty())
         assertTrue(store.isEnabled)
@@ -552,6 +552,6 @@ class VpnControllerTest {
         // (thread "vpn-io-test"), non eseguito in modo sincrono sul main.
         Thread.sleep(300)
         assertTrue("evictConnections deve essere rilanciato sul dispatcher IO, mai sul main thread",
-            dispatchedThreads.any { it == "vpn-io-test" })
+            dispatchedThreads.any { it.substringBefore(" @coroutine") == "vpn-io-test" })
     }
 }
