@@ -43,6 +43,15 @@ class NovitaCategoryNavigationTest {
     private val serie = SeriesItem(seriesId = "001", name = "Serie uno", categoryId = "001")
     private val recentSerie = SeriesItem(seriesId = "002", name = "Serie recente", categoryId = "002")
 
+    /**
+     * OK su una categoria, come il telecomando: la categoria diventa subito
+     * quella scelta e il focus passa alla prima copertina.
+     */
+    private fun confirmCategory(tag: String) {
+        rule.onNodeWithTag(tag).performSemanticsAction(SemanticsActions.OnClick)
+        rule.waitForIdle()
+    }
+
     @Test
     fun `Film apre Novita con preferiti e visto poi passa alla categoria del provider`() {
         val focus = FocusRequester()
@@ -69,22 +78,24 @@ class NovitaCategoryNavigationTest {
         rule.onNodeWithTag("film_002_fav_star", useUnmergedTree = true).assertExists()
         rule.onNodeWithTag("film_002_seen", useUnmergedTree = true).assertExists()
 
-        provider.performSemanticsAction(SemanticsActions.OnClick)
-        rule.mainClock.advanceTimeBy(400)
-        rule.waitForIdle()
-        provider.assertIsSelected()
-        rule.onNodeWithTag("film_001").assertIsDisplayed()
+        // OK sulla categoria del provider: la categoria cambia subito e il
+        // focus va sulla sua prima copertina, che si vede. La voce non si
+        // controlla qui come "selezionata": con il focus nella griglia la
+        // colonna si compatta, come sempre.
+        confirmCategory("film_category_001")
+        rule.onNodeWithTag("film_001").assertIsDisplayed().assertIsFocused()
         rule.onNodeWithTag("film_002").assertDoesNotExist()
 
-        novita.performSemanticsAction(SemanticsActions.OnClick)
-        rule.mainClock.advanceTimeBy(400)
+        // Freccia sinistra: si torna alla colonna, che si riapre sulla voce
+        // della categoria scelta (le voci compattate non rispondono a OK).
+        rule.onNodeWithTag("film_001").performKeyInput { pressKey(Key.DirectionLeft) }
         rule.waitForIdle()
-        rule.runOnIdle { focus.requestFocus() }
-        rule.waitForIdle()
-        rule.onNodeWithTag("film_002").assertIsFocused()
-        rule.onNodeWithTag("film_002").performKeyInput { pressKey(Key.DirectionLeft) }
-        rule.waitForIdle()
-        novita.assertIsFocused()
+        provider.assertIsFocused()
+
+        // OK su Novità: torna il film recente, e il focus ci va sopra.
+        confirmCategory("film_category_$NOVITA_CATEGORY_ID")
+        rule.onNodeWithTag("film_002").assertIsDisplayed().assertIsFocused()
+        rule.onNodeWithTag("film_001").assertDoesNotExist()
     }
 
     @Test
@@ -111,22 +122,24 @@ class NovitaCategoryNavigationTest {
         rule.onNodeWithTag("serie_001").assertDoesNotExist()
         rule.onNodeWithTag("serie_002_fav_star", useUnmergedTree = true).assertExists()
 
-        provider.performSemanticsAction(SemanticsActions.OnClick)
-        rule.mainClock.advanceTimeBy(400)
-        rule.waitForIdle()
-        provider.assertIsSelected()
-        rule.onNodeWithTag("serie_001").assertIsDisplayed()
+        // OK sulla categoria del provider: la categoria cambia subito e il
+        // focus va sulla sua prima copertina, che si vede. La voce non si
+        // controlla qui come "selezionata": con il focus nella griglia la
+        // colonna si compatta, come sempre.
+        confirmCategory("serie_category_001")
+        rule.onNodeWithTag("serie_001").assertIsDisplayed().assertIsFocused()
         rule.onNodeWithTag("serie_002").assertDoesNotExist()
 
-        novita.performSemanticsAction(SemanticsActions.OnClick)
-        rule.mainClock.advanceTimeBy(400)
+        // Freccia sinistra: si torna alla colonna, che si riapre sulla voce
+        // della categoria scelta (le voci compattate non rispondono a OK).
+        rule.onNodeWithTag("serie_001").performKeyInput { pressKey(Key.DirectionLeft) }
         rule.waitForIdle()
-        rule.runOnIdle { focus.requestFocus() }
-        rule.waitForIdle()
-        rule.onNodeWithTag("serie_002").assertIsFocused()
-        rule.onNodeWithTag("serie_002").performKeyInput { pressKey(Key.DirectionLeft) }
-        rule.waitForIdle()
-        novita.assertIsFocused()
+        provider.assertIsFocused()
+
+        // OK su Novità: torna la serie recente, e il focus ci va sopra.
+        confirmCategory("serie_category_$NOVITA_CATEGORY_ID")
+        rule.onNodeWithTag("serie_002").assertIsDisplayed().assertIsFocused()
+        rule.onNodeWithTag("serie_001").assertDoesNotExist()
     }
 
     @Test

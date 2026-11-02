@@ -66,6 +66,7 @@ import it.felixvision.tv.data.progress.WatchProgress
 import it.felixvision.tv.data.update.UpdateCheckState
 import it.felixvision.tv.ui.access.AccessViewModel
 import it.felixvision.tv.ui.catalog.CatalogViewModel
+import it.felixvision.tv.ui.catalog.CategorySortStore
 import it.felixvision.tv.ui.catalog.ContinueWatchingSection
 import it.felixvision.tv.ui.catalog.FavoritesSection
 import it.felixvision.tv.ui.catalog.FilmSection
@@ -153,6 +154,11 @@ fun FvpMainScreen(
     accessViewModel: AccessViewModel,
     onSignOut: () -> Unit,
     sessionId: Long = 0L,
+    /**
+     * Ordinamento scelto per ogni categoria di Film e Serie. In applicazione
+     * arriva da [AppContainer]; le anteprime senza `Context` possono ometterlo.
+     */
+    categorySortStore: CategorySortStore? = null,
 ) {
     var currentServer by remember(sessionId) { mutableStateOf(server) }
     var currentUsername by remember(sessionId) { mutableStateOf(username) }
@@ -813,6 +819,7 @@ fun FvpMainScreen(
                                     },
                                     refocusTick = playerReturnTick,
                                     contentFocusRequester = contentFocusRequester,
+                                    sortStorage = categorySortStore,
                                     modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
                                 )
                                 DrawerSection.Serie -> SerieSection(
@@ -834,6 +841,7 @@ fun FvpMainScreen(
                                     progress = watchProgress,
                                     refocusTick = playerReturnTick,
                                     focusEpisodeId = returnEpisodeId,
+                                    sortStorage = categorySortStore,
                                     modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
                                 )
                                 DrawerSection.Preferiti -> {

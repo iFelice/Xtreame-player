@@ -155,6 +155,63 @@ class SettingsNavigationTest {
         }
     }
 
+    @Test
+    fun `ogni pagina segnaposto dà il focus al suo primo elemento focalizzabile`() {
+        showNavigation()
+        SettingsCard.entries.forEach { card ->
+            rule.onNodeWithTag(card.testTag).performSemanticsAction(SemanticsActions.OnClick)
+            settle()
+            // Il pulsante della pagina ha il focus d'ingresso: il tasto Indietro
+            // resta dentro la pagina, come su una TV.
+            rule.onNodeWithTag(fakePageTag(card) + FAKE_CLOSE_SUFFIX).assertIsFocused()
+            rule.onNodeWithTag(fakePageTag(card) + FAKE_CLOSE_SUFFIX)
+                .performKeyInput { pressKey(Key.Back) }
+            settle()
+            rule.onNodeWithTag(SETTINGS_GRID_TAG).assertExists()
+            rule.onNodeWithTag(card.testTag).assertIsFocused()
+        }
+    }
+
+    /**
+     * Il caso del difetto: la pagina non ha elementi focalizzabili, il focus
+     * esce dalla pagina e onPreviewKeyEvent non riceve più Indietro. Il
+     * BackHandler di [SettingsNavigation] (composto dopo quello della
+     * schermata principale) riporta comunque alla griglia con il focus sulla
+     * card da cui si era entrati.
+     */
+    @Test
+    fun `Indietro con il focus fuori dalla pagina torna alla griglia sulla card di ingresso`() {
+        rule.setContent {
+            FvpTheme {
+                SettingsNavigation(
+                    cardsState = cardsState(),
+                    scale = scale,
+                    // Pagina senza elementi focalizzabili, come la pagina App
+                    // aggiornata prima della correzione.
+                    appPage = { pageModifier, _ ->
+                        Box(modifier = pageModifier.fillMaxSize().testTag(FAKE_APP_TAG))
+                    },
+                )
+            }
+        }
+        settle()
+
+        rule.onNodeWithTag(SETTINGS_CARD_APP_TAG).performSemanticsAction(SemanticsActions.OnClick)
+        settle()
+        rule.onNodeWithTag(FAKE_APP_TAG).assertExists()
+        rule.onNodeWithTag(SETTINGS_GRID_TAG).assertDoesNotExist()
+
+        // Il focus è uscito dalla pagina: Indietro arriva al gestore del
+        // sistema (lo stesso che sul dispositivo vero chiama il BackHandler
+        // della navigazione, composto dopo quello della schermata principale)
+        // e riporta alla griglia, con il focus sulla card App.
+        rule.runOnIdle { rule.activity.onBackPressedDispatcher.onBackPressed() }
+        settle()
+        rule.onNodeWithTag(SETTINGS_GRID_TAG).assertExists()
+        rule.onNodeWithTag(FAKE_APP_TAG).assertDoesNotExist()
+        rule.onNodeWithTag(SETTINGS_CARD_APP_TAG).assertIsFocused()
+    }
+
     /** Due attese: il focus viene riportato dopo un fotogramma. */
     private fun settle() {
         rule.waitForIdle()
@@ -170,21 +227,22 @@ class SettingsNavigationTest {
                     scale = scale,
                     vpnSetupOpen = vpnSetupOpen,
                     onCloseVpnSetup = { vpnSetupOpen = false },
-                    accountPage = { pageModifier ->
-                        FakeSettingsPage(pageModifier, scale, FAKE_ACCOUNT_TAG)
+                    accountPage = { pageModifier, entryFocus ->
+                        FakeSettingsPage(pageModifier, scale, FAKE_ACCOUNT_TAG, entryFocus = entryFocus)
                     },
-                    appearancePage = { pageModifier ->
-                        FakeSettingsPage(pageModifier, scale, FAKE_APPEARANCE_TAG)
+                    appearancePage = { pageModifier, entryFocus ->
+                        FakeSettingsPage(pageModifier, scale, FAKE_APPEARANCE_TAG, entryFocus = entryFocus)
                     },
                     protectedPage = { pageModifier, closePage ->
                         FakeSettingsPage(pageModifier, scale, FAKE_PROTECTED_TAG, backAction = closePage)
                     },
-                    vpnPage = { pageModifier ->
+                    vpnPage = { pageModifier, entryFocus ->
                         FakeSettingsPage(
                             modifier = pageModifier,
                             scale = scale,
                             tag = FAKE_VPN_TAG,
                             onClick = { vpnSetupOpen = true },
+                            entryFocus = entryFocus,
                         )
                     },
                     vpnSetupPage = { pageModifier ->
@@ -195,11 +253,11 @@ class SettingsNavigationTest {
                             backAction = { vpnSetupOpen = false },
                         )
                     },
-                    catalogPage = { pageModifier ->
-                        FakeSettingsPage(pageModifier, scale, FAKE_CATALOG_TAG)
+                    catalogPage = { pageModifier, entryFocus ->
+                        FakeSettingsPage(pageModifier, scale, FAKE_CATALOG_TAG, entryFocus = entryFocus)
                     },
-                    appPage = { pageModifier ->
-                        FakeSettingsPage(pageModifier, scale, FAKE_APP_TAG)
+                    appPage = { pageModifier, entryFocus ->
+                        FakeSettingsPage(pageModifier, scale, FAKE_APP_TAG, entryFocus = entryFocus)
                     },
                 )
             }
@@ -223,8 +281,11 @@ private fun FakeSettingsPage(
     tag: String,
     onClick: () -> Unit = {},
     backAction: (() -> Unit)? = null,
+    entryFocus: FocusRequester? = null,
 ) {
-    val buttonFocus = remember(tag) { FocusRequester() }
+    val localButtonFocus = remember(tag) { FocusRequester() }
+    // Come le pagine vere: il focus d'ingresso arriva da SettingsNavigation.
+    val buttonFocus = entryFocus ?: localButtonFocus
     LaunchedEffect(tag) {
         withFrameNanos { }
         runCatching { buttonFocus.requestFocus() }

@@ -22,6 +22,18 @@ class NovitaCategoryTest {
     private val serie3 = SeriesItem(seriesId = "003", name = "Serie tre", categoryId = "001")
 
     @Test
+    fun `il nome della categoria locale e maiuscolo e il menu laterale resta Novità`() {
+        // Colonna delle categorie: nome maiuscolo con la À accentata.
+        assertEquals("NOVITÀ", NOVITA_CATEGORY_NAME)
+        assertEquals("NOVITÀ", withNovitaCategory(emptyList()).single().categoryName)
+        // Il menu laterale non cambia: la voce resta "Novità".
+        assertEquals(
+            "Novità",
+            it.felixvision.tv.ui.navigation.DrawerSection.Novita.label,
+        )
+    }
+
+    @Test
     fun `Novita e sempre prima e le categorie del provider restano in ordine`() {
         val result = withNovitaCategory(categories)
 

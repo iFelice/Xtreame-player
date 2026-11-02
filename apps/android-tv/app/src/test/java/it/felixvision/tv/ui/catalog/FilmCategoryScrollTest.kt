@@ -63,11 +63,28 @@ class FilmCategoryScrollTest {
     // Prima categoria: 60 film. Seconda: 20 film. I titoli continuano da
     // "Film 1" a "Film 80", così il primo film della seconda categoria
     // ("Film 61") esiste solo lì e non si confonde con la precedente.
+    //
+    // `added` cresce con il numero del film: l'ordine predefinito delle
+    // categorie (data di aggiunta, dal più recente) lascia la lista esattamente
+    // come arriva dal provider, cioè "Film 1"* in cima e "Film 61" in cima
+    // alla seconda categoria. Senza date l'ordine sarebbe per identificativo
+    // decrescente e questi test non proverebbero più la posizione della griglia.
+    private val addedBase = 1_700_000_000L
     private val firstCategoryFilms = (1..60).map { number ->
-        VodStream(streamId = (100 + number).toString(), name = "Film $number", categoryId = "001")
+        VodStream(
+            streamId = (100 + number).toString(),
+            name = "Film $number",
+            categoryId = "001",
+            added = (addedBase - number).toString(),
+        )
     }
     private val secondCategoryFilms = (61..80).map { number ->
-        VodStream(streamId = (100 + number).toString(), name = "Film $number", categoryId = "002")
+        VodStream(
+            streamId = (100 + number).toString(),
+            name = "Film $number",
+            categoryId = "002",
+            added = (addedBase - number).toString(),
+        )
     }
     private val allFilms = firstCategoryFilms + secondCategoryFilms
 

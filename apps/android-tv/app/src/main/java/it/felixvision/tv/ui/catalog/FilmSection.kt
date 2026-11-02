@@ -25,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
@@ -36,8 +37,10 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Border
@@ -67,6 +70,13 @@ import it.felixvision.tv.ui.theme.FvpColors
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 
+/**
+ * Tentativi (un fotogramma ciascuno) per dare il focus alla prima copertina
+ * della categoria confermata con OK: la griglia deve prima ricomporsi con la
+ * nuova lista. Circa 10 fotogrammi, ~170 ms a 60 Hz.
+ */
+private const val FIRST_ITEM_FOCUS_ATTEMPTS = 10
+
 @Composable
 fun FilmSection(
     categories: List<Category>,
@@ -85,6 +95,11 @@ fun FilmSection(
     recentStreams: List<VodStream> = emptyList(),
     /** Stato della griglia: i test lo passano dall'esterno per pilotare lo scorrimento. */
     gridState: LazyGridState = rememberLazyGridState(),
+    /**
+     * Archivio dell'ordinamento scelto per categoria (`fvp_sort` in
+     * applicazione). `null` fuori dall'applicazione: vale l'ordine predefinito.
+     */
+    sortStorage: CategorySortStorage? = null,
 ) {
     val displayCategories = remember(categories) { withNovitaCategory(categories) }
     var debouncedCategoryId by remember { mutableStateOf(NOVITA_CATEGORY_ID) }
@@ -145,9 +160,22 @@ fun FilmSection(
 
     val columns = 5
 
-    val filtered = remember(streams, recentStreams, debouncedCategoryId) {
-        filmsForCategory(debouncedCategoryId, streams, recentStreams)
+    // Ordinamento scelto per questa categoria, letto dalle preferenze: con una
+    // categoria diversa si rilegge la sua scelta, così ogni categoria ha la sua.
+    // `sortVersion` cambia a ogni scelta dell'utente: è la chiave che fa
+    // rileggere l'ordinamento salvato senza ripartire da zero a ogni fotogramma.
+    var sortVersion by remember { mutableStateOf(0) }
+    val categorySort = remember(sortStorage, debouncedCategoryId, sortVersion) {
+        readCategorySort(debouncedCategoryId, CategorySortStore.SECTION_VOD, sortStorage)
     }
+    var lastGridSort by remember { mutableStateOf(categorySort) }
+    val filtered = remember(streams, recentStreams, debouncedCategoryId, categorySort) {
+        sortedFilmsCategory(debouncedCategoryId, streams, recentStreams, categorySort)
+    }
+    // Il pulsante di ordinamento non c'è in NOVITÀ: quella categoria resta
+    // nell'ordine dei contenuti recenti.
+    val showSortButton = debouncedCategoryId != NOVITA_CATEGORY_ID
+    val sortButtonFocus = remember { FocusRequester() }
     // Se la griglia è vuota, il telecomando deve poter entrare nelle categorie
     // e scegliere un'altra voce, invece di cercare una card che non esiste.
     val columnFocusRequesters = remember(categoryFocusRequesters, filtered.isEmpty(), focusedCategoryId, contentFocusRequester) {
@@ -175,23 +203,94 @@ fun FilmSection(
     }
     // Indice dell'elemento con il focus, per il contatore "N / Totale".
     var focusedItemIndex by remember(filtered) { mutableStateOf<Int?>(null) }
-    // Cambio categoria: la nuova lista riparte dalla cima, non dall'altezza in
-    // cui era rimasta la precedente. Alla prima composizione non si tocca nulla
-    // e la posizione della categoria (scheda chiusa o ritorno dal player) resta.
-    LaunchedEffect(debouncedCategoryId) {
-        if (debouncedCategoryId == lastGridCategoryId) return@LaunchedEffect
+    // Cambio categoria o cambio ordinamento: la lista riparte dalla cima, non
+    // dall'altezza in cui era rimasta la precedente. Alla prima composizione
+    // non si tocca nulla e la posizione della categoria (scheda chiusa o
+    // ritorno dal player) resta.
+    LaunchedEffect(debouncedCategoryId, categorySort) {
+        if (debouncedCategoryId == lastGridCategoryId && categorySort == lastGridSort) return@LaunchedEffect
         lastGridCategoryId = debouncedCategoryId
+        lastGridSort = categorySort
         focusedItemIndex = null
         // Con la categoria vuota la griglia non è composta (al suo posto c'è il
         // messaggio): non c'è niente da riportare in cima.
         if (filtered.isEmpty()) return@LaunchedEffect
         gridState.scrollToItem(0)
     }
+
+    // Prima copertina da focalizzare dopo OK su una categoria o Freccia giù dal
+    // pulsante di ordinamento.
+    var pendingFirstItemFocus by remember { mutableStateOf<String?>(null) }
+    // OK sul pulsante di ordinamento: passa all'ordine successivo e lo salva per
+    // questa categoria. Il focus resta sul pulsante (non viene spostato) e la
+    // lista torna in cima, così il nuovo ordine si vede dal primo elemento.
+    val changeSort: (CatalogSort) -> Unit = { next ->
+        writeCategorySort(debouncedCategoryId, CategorySortStore.SECTION_VOD, next, sortStorage)
+        sortVersion++
+    }
+    // Freccia giù dal pulsante: il focus torna alla prima copertina, che
+    // esiste solo con la lista non vuota (il pulsante c'è solo in quel caso).
+    val sortButtonDown: () -> Boolean = {
+        if (filtered.isEmpty()) false else {
+            pendingFirstItemFocus = debouncedCategoryId
+            true
+        }
+    }
     val restoreHelper = rememberGridDetailFocusRestore(
         gridState = gridState,
         focusRequesters = { itemFocusRequesters },
         fallback = contentFocusRequester
     )
+
+    // OK su una voce della colonna: la categoria diventa subito quella scelta
+    // (senza i 300 ms di debounce), la griglia riparte dalla cima e il focus va
+    // sulla prima copertina. Con la categoria vuota non c'è nessuna copertina da
+    // focalizzare: il focus resta sulla voce e la colonna resta aperta.
+    val confirmCategory: (String) -> Unit = { categoryId ->
+        focusedCategoryId = categoryId
+        debouncedCategoryId = categoryId
+        pendingFirstItemFocus = categoryId
+    }
+    // La griglia si ricompone con la nuova categoria: la copertina da
+    // focalizzare si cerca a ogni fotogramma, perché il primo giro può cadere
+    // prima che la nuova lista sia composta. Categoria vuota: niente da
+    // focalizzare, la richiesta si consuma e il focus resta sulla voce della
+    // colonna.
+    val latestFilteredFilms by rememberUpdatedState(filtered)
+    val latestCategoryId by rememberUpdatedState(debouncedCategoryId)
+    val latestItemFocusRequesters by rememberUpdatedState(itemFocusRequesters)
+    LaunchedEffect(pendingFirstItemFocus, streams, recentStreams, itemFocusRequesters) {
+        val categoryId = pendingFirstItemFocus ?: return@LaunchedEffect
+        val sort = readCategorySort(categoryId, CategorySortStore.SECTION_VOD, sortStorage)
+        val first = sortedFilmsCategory(categoryId, streams, recentStreams, sort).firstOrNull()
+        if (first == null) {
+            pendingFirstItemFocus = null
+            return@LaunchedEffect
+        }
+        var scrolled = false
+        repeat(FIRST_ITEM_FOCUS_ATTEMPTS) { attempt ->
+            withFrameNanos { }
+            if (pendingFirstItemFocus == null) return@LaunchedEffect
+            if (latestCategoryId != categoryId ||
+                latestFilteredFilms.none { it.streamId == first.streamId }
+            ) {
+                return@repeat
+            }
+            if (!scrolled) {
+                gridState.scrollToItem(0)
+                scrolled = true
+            }
+            // Come per il ritorno dal player: si chiede il focus al film con il
+            // suo requester o, se è la prima card e non ne ha uno, a quello del
+            // contenuto, che la card porta comunque.
+            val target = latestItemFocusRequesters[first.streamId] ?: contentFocusRequester
+            if (target.requestFocus()) {
+                pendingFirstItemFocus = null
+                return@LaunchedEffect
+            }
+            if (attempt == FIRST_ITEM_FOCUS_ATTEMPTS - 1) pendingFirstItemFocus = null
+        }
+    }
 
     // Il margine sicuro del focus sta nel contentPadding della griglia: la Row
     // resta senza padding per non sommare due volte la stessa quantità.
@@ -209,6 +308,7 @@ fun FilmSection(
             listState = categoryListState,
             focusRequesters = columnFocusRequesters,
             testTagPrefix = "film",
+            onCategoryConfirmed = confirmCategory,
         )
 
         Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
@@ -220,8 +320,19 @@ fun FilmSection(
                     columns = GridCells.Fixed(columns),
                     verticalArrangement = Arrangement.spacedBy(scale.dp(12f)),
                     horizontalArrangement = Arrangement.spacedBy(scale.dp(12f)),
-                    // Ingrandimento e cornice del focus restano dentro la griglia.
-                    contentPadding = PaddingValues(scale.focusSafePadding),
+                    // Ingrandimento e cornice del focus restano dentro la
+                    // griglia; sopra, con il pulsante di ordinamento, c'è la
+                    // riga riservata al pulsante e al contatore.
+                    contentPadding = PaddingValues(
+                        start = scale.focusSafePadding,
+                        end = scale.focusSafePadding,
+                        top = if (showSortButton && filtered.isNotEmpty()) {
+                            scale.focusSafePadding + scale.sortRowHeight
+                        } else {
+                            scale.focusSafePadding
+                        },
+                        bottom = scale.focusSafePadding,
+                    ),
                     modifier = Modifier.fillMaxSize().testTag("film_grid_5"),
                 ) {
                     itemsIndexed(filtered, key = { _, f -> f.streamId }) { index, film ->
@@ -252,6 +363,18 @@ fun FilmSection(
                                         categoryExpanded = true
                                         pendingCategoryFocus = debouncedCategoryId
                                         true
+                                    } else if (
+                                        event.type == KeyEventType.KeyDown &&
+                                        event.key == Key.DirectionUp &&
+                                        index < columns &&
+                                        showSortButton &&
+                                        filtered.isNotEmpty()
+                                    ) {
+                                        // Dalla prima riga la Freccia su porta al
+                                        // pulsante di ordinamento, sopra la griglia.
+                                        // Se il pulsante non è ancora composto si
+                                        // lascia fare alla ricerca del focus.
+                                        runCatching { sortButtonFocus.requestFocus() }.isSuccess
                                     } else false
                                 }
                                 .fvpLongPress { onLongPressFilm(film) },
@@ -302,7 +425,8 @@ fun FilmSection(
         }
     }
 
-        // Contatore "N / Totale" e barra di scorrimento della griglia.
+        // Contatore "N / Totale", pulsante di ordinamento della categoria
+        // (sulla stessa riga, a sinistra) e barra di scorrimento della griglia.
         PositionIndicator(
             position = gridPosition(
                 gridState = gridState,
@@ -310,6 +434,25 @@ fun FilmSection(
                 totalItems = filtered.size,
             ),
             scale = scale,
+            topRowEnd = if (showSortButton && filtered.isNotEmpty()) {
+                {
+                    CatalogSortButton(
+                        sort = categorySort,
+                        scale = scale,
+                        onClick = { changeSort(categorySort.next()) },
+                        modifier = Modifier
+                            .testTag(FILM_SORT_BUTTON_TAG)
+                            .focusRequester(sortButtonFocus)
+                            .onPreviewKeyEvent { event ->
+                                if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionDown) {
+                                    sortButtonDown()
+                                } else {
+                                    false
+                                }
+                            },
+                    )
+                }
+            } else null,
         )
     }
 

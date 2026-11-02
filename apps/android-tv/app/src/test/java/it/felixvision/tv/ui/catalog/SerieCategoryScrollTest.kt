@@ -64,11 +64,28 @@ class SerieCategoryScrollTest {
     // Prima categoria: 60 serie. Seconda: 20 serie. I titoli continuano da
     // "Serie 1" a "Serie 80", così la prima serie della seconda categoria
     // ("Serie 61") esiste solo lì e non si confonde con la precedente.
+    //
+    // `lastModified` decresce con il numero della serie: l'ordine predefinito
+    // delle categorie (data di aggiunta, dal più recente) lascia la lista
+    // esattamente come arriva dal provider. Senza date l'ordine sarebbe per
+    // identificativo decrescente e questi test non proverebbero più la
+    // posizione della griglia.
+    private val modifiedBase = 1_700_000_000L
     private val firstCategorySeries = (1..60).map { number ->
-        SeriesItem(seriesId = (200 + number).toString(), name = "Serie $number", categoryId = "001")
+        SeriesItem(
+            seriesId = (200 + number).toString(),
+            name = "Serie $number",
+            categoryId = "001",
+            lastModified = (modifiedBase - number).toString(),
+        )
     }
     private val secondCategorySeries = (61..80).map { number ->
-        SeriesItem(seriesId = (200 + number).toString(), name = "Serie $number", categoryId = "002")
+        SeriesItem(
+            seriesId = (200 + number).toString(),
+            name = "Serie $number",
+            categoryId = "002",
+            lastModified = (modifiedBase - number).toString(),
+        )
     }
     private val allSeries = firstCategorySeries + secondCategorySeries
 

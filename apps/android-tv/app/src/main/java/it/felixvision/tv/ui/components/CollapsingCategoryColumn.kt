@@ -30,6 +30,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.tv.material3.Border
 import androidx.tv.material3.DenseListItem
@@ -43,6 +48,17 @@ import it.felixvision.tv.ui.theme.categoryCollapsedVertical
 import it.felixvision.tv.ui.theme.categorySpacing
 import it.felixvision.tv.ui.theme.rowText
 
+/**
+ * Colonna delle categorie di Live, Film e Serie.
+ *
+ * Il focus su una voce cambia la categoria mostrata dopo il debounce di 300 ms
+ * di chi compone la sezione (Su/Giù nella colonna); OK su una voce invece la
+ * conferma subito con [onCategoryConfirmed], senza attendere il debounce, così
+ * la sezione può aprire la categoria e passare il focus al suo primo contenuto.
+ *
+ * @param onCategoryConfirmed OK su una voce: la categoria va selezionata subito.
+ *   Con `null` OK si comporta come il focus ([onFocusedCategoryId]).
+ */
 @Composable
 fun CollapsingCategoryColumn(
     categories: List<Category>,
@@ -58,6 +74,7 @@ fun CollapsingCategoryColumn(
     modifier: Modifier = Modifier,
     favoriteCategoryIds: Set<String> = emptySet(),
     onLongPressCategory: ((Category) -> Unit)? = null,
+    onCategoryConfirmed: ((String) -> Unit)? = null,
 ) {
     // Il margine sicuro del focus sta dentro la colonna, quindi la larghezza
     // cresce di FocusSafePadding per lato: la voce con il focus (con il suo
@@ -104,7 +121,9 @@ fun CollapsingCategoryColumn(
                     // Voce compatta: altezza ridotta dal ListItem denso.
                     DenseListItem(
                         selected = selected,
-                        onClick = { onFocusedCategoryId(cat.categoryId) },
+                        // OK conferma subito la categoria; la pressione lunga
+                        // (preferito) resta gestita da fvpLongPress sotto.
+                        onClick = { (onCategoryConfirmed ?: onFocusedCategoryId)(cat.categoryId) },
                         headlineContent = {
                             if (onLongPressCategory == null) {
                                 FocusMarqueeText(
@@ -145,6 +164,22 @@ fun CollapsingCategoryColumn(
                             .fillMaxWidth()
                             .testTag("${testTagPrefix}_category_${cat.categoryId}")
                             .then(if (!expanded) Modifier.testTag("${testTagPrefix}_category_${cat.categoryId}_collapsed") else Modifier)
+                            // OK arriva anche come tasto (telecomando): il click
+                            // del componente resta la via principale, questo è
+                            // la riserva se l'evento non viene consegnato.
+                            .onPreviewKeyEvent { event ->
+                                val confirm = onCategoryConfirmed
+                                if (confirm == null || event.type != KeyEventType.KeyUp) {
+                                    return@onPreviewKeyEvent false
+                                }
+                                when (event.key) {
+                                    Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
+                                        confirm(cat.categoryId)
+                                        true
+                                    }
+                                    else -> false
+                                }
+                            }
                             .then(longPressModifier)
                             .focusRequester(fr)
                             .onFocusChanged {
