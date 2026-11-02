@@ -56,6 +56,8 @@ class CacheCleanupTest {
         )
 
         // 3 MB di immagini + 2 MB del vecchio APK + 1 MB di memoria: l'APK in uso non conta.
+        // Lo stesso conto torna dopo la pulizia: 5 MB di immagini (con la sottocartella),
+        // 2 MB del vecchio APK e 1 MB di memoria.
         assertEquals(6L, CacheCleanup.megabytes(occupied))
     }
 
@@ -76,7 +78,7 @@ class CacheCleanupTest {
             protectedApk = apkInUso,
         )
 
-        assertEquals("byte liberati", 7L, CacheCleanup.megabytes(freed))
+        assertEquals("byte liberati", 8L, CacheCleanup.megabytes(freed))
         assertTrue("cartella immagini ancora piena: ${imagesDir.listFiles()?.toList()}", imagesDir.listFiles().isNullOrEmpty())
         assertEquals("updates deve tenere solo l'APK in uso", listOf("FelixVP-1.0.3.apk"), updatesDir.listFiles()?.map { it.name })
         assertTrue("APK in uso cancellato", apkInUso.exists())
