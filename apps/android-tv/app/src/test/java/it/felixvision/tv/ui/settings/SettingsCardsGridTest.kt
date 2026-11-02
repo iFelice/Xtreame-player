@@ -18,6 +18,7 @@ import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.theme.FvpTheme
 import it.felixvision.tv.vpn.VpnState
 import java.time.ZoneId
+import kotlin.math.abs
 import java.time.ZonedDateTime
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -117,8 +118,11 @@ class SettingsCardsGridTest {
         assertTrue("Contenuti protetti non sta a destra di Aspetto", protectedCard.left > appearance.left)
         assertTrue("VPN non sta a destra di Contenuti protetti", vpn.left > protectedCard.left)
         listOf(appearance, protectedCard, vpn).forEach { bounds ->
-            assertEquals("la card non sta sulla prima riga", account.top, bounds.top, 0.5f)
-            assertEquals("la card non è alta come le altre", account.height, bounds.height, 0.5f)
+            assertTrue("la card non sta sulla prima riga", abs(bounds.top - account.top) <= 0.5f)
+            assertTrue(
+                "la card non è alta come le altre",
+                abs(bounds.height - account.height) <= 0.5f,
+            )
         }
 
         // Seconda riga: Catalogo e App, sotto la prima e larghe come le altre.
@@ -126,10 +130,10 @@ class SettingsCardsGridTest {
         val app = rule.onNodeWithTag(SETTINGS_CARD_APP_TAG).fetchSemanticsNode().boundsInRoot
         assertTrue("Catalogo non sta sotto la prima riga", catalog.top >= account.bottom - 1f)
         assertTrue("App non sta a destra di Catalogo", app.left > catalog.left)
-        assertEquals("Catalogo non è larga come Account", account.width, catalog.width, 0.5f)
-        assertEquals("App non è larga come Account", account.width, app.width, 0.5f)
-        assertEquals("Catalogo non è alta come Account", account.height, catalog.height, 0.5f)
-        assertEquals("App non è alta come Account", account.height, app.height, 0.5f)
+        assertTrue("Catalogo non è larga come Account", abs(catalog.width - account.width) <= 0.5f)
+        assertTrue("App non è larga come Account", abs(app.width - account.width) <= 0.5f)
+        assertTrue("Catalogo non è alta come Account", abs(catalog.height - account.height) <= 0.5f)
+        assertTrue("App non è alta come Account", abs(app.height - account.height) <= 0.5f)
     }
 
     @Test

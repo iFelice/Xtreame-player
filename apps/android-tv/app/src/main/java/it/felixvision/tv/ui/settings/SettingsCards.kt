@@ -369,23 +369,21 @@ private fun SettingsCardTile(
             .testTag(card.testTag),
         scale = CardDefaults.scale(focusedScale = SettingsCardDimens.FOCUSED_SCALE),
         shape = CardDefaults.shape(shape = shape),
+        // Tutti i colori previsti da CardDefaults.colors in tv-material: il fondo
+        // resta Surface in ogni stato, così la card non cambia colore con il focus
+        // e a parlare è solo il bordo verde.
         colors = CardDefaults.colors(
             containerColor = FvpColors.Surface,
             contentColor = FvpColors.TextPrimary,
             focusedContainerColor = FvpColors.Surface,
             focusedContentColor = FvpColors.TextPrimary,
-            selectedContainerColor = FvpColors.Surface,
-            selectedContentColor = FvpColors.TextPrimary,
             pressedContainerColor = FvpColors.Surface,
             pressedContentColor = FvpColors.TextPrimary,
-            disabledContainerColor = FvpColors.Surface,
-            disabledContentColor = FvpColors.TextSecondary,
         ),
         border = CardDefaults.border(
             border = restBorder,
             focusedBorder = focusBorder,
             pressedBorder = focusBorder,
-            disabledBorder = restBorder,
         ),
     ) {
         Column(
