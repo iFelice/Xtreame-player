@@ -110,7 +110,8 @@ private fun CatalogUpdateSectionRow(
                     CatalogSectionStatus.PENDING -> "In attesa"
                     CatalogSectionStatus.COMPLETED -> "Completato (${row.itemCount} elementi)"
                     CatalogSectionStatus.ERROR -> "Errore"
-                    CatalogSectionStatus.DOWNLOADING -> downloadStatusLabel(download)
+                    CatalogSectionStatus.DOWNLOADING,
+                    CatalogSectionStatus.PROCESSING -> downloadStatusLabel(download)
                 },
                 color = if (row.status == CatalogSectionStatus.ERROR) {
                     FvpColors.Error
@@ -121,7 +122,7 @@ private fun CatalogUpdateSectionRow(
                 modifier = Modifier.testTag("update_row_${key}_status"),
             )
         }
-        if (row.status == CatalogSectionStatus.DOWNLOADING) {
+        if (row.status == CatalogSectionStatus.DOWNLOADING || row.status == CatalogSectionStatus.PROCESSING) {
             val fraction = download?.fraction
             if (fraction != null) {
                 LinearProgressIndicator(

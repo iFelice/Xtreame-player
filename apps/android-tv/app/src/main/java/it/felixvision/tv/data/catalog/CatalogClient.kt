@@ -1,7 +1,12 @@
 package it.felixvision.tv.data.catalog
 
+import it.felixvision.tv.core.AppLog
+import it.felixvision.tv.core.Clock
 import it.felixvision.tv.core.FvpJson
+import it.felixvision.tv.core.SystemClock
 import java.io.BufferedInputStream
+import java.io.BufferedOutputStream
+import java.io.File
 import java.io.IOException
 import java.io.InterruptedIOException
 import kotlinx.coroutines.CoroutineDispatcher
@@ -9,7 +14,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
-import kotlinx.serialization.json.encodeToStream
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -29,11 +33,24 @@ class CatalogClient(
     private val json: Json = FvpJson,
     private val io: CoroutineDispatcher = Dispatchers.IO,
     private val background: CoroutineDispatcher = Dispatchers.Default,
+    private val clock: Clock = SystemClock,
 ) {
+
+    companion object {
+        /** Blocco di lettura dello stream HTTP (8 KB). */
+        const val STREAM_BUFFER_SIZE = 8 * 1024
+
+        /** Intervallo minimo tra due emissioni a tempo dell'avanzamento (200 ms). */
+        const val PROGRESS_MIN_INTERVAL_MILLIS = 200L
+    }
 
     /**
      * Carica l'intero catalogo in sequenza.
      * Se una delle tappe fallisce, restituisce errore senza riprovare.
+     *
+     * Ogni sezione fa due richieste (categorie ed elenco): la richiesta delle
+     * categorie vale come fase iniziale a 0%, mentre la barra rappresenta la
+     * richiesta pesante dell'elenco.
      */
     suspend fun loadCatalog(
         server: String,
@@ -44,7 +61,7 @@ class CatalogClient(
     ): CatalogResult {
         val base = server.toHttpUrlOrNull() ?: return CatalogResult.Error("Indirizzo del server non valido.")
 
-        onStage(CatalogStage(CatalogSection.LIVE, CatalogSectionStatus.DOWNLOADING))
+        onStage(CatalogStage(section = CatalogSection.LIVE, status = CatalogSectionStatus.DOWNLOADING))
         val liveCategories = when (val r = fetchList<Category>(base, username, password, "get_live_categories")) {
             is FetchResult.Success -> r.value
             is FetchResult.Failure -> {
@@ -53,18 +70,32 @@ class CatalogClient(
             }
         }
 
-        val liveStreams = when (val r = fetchList<LiveStream>(base, username, password, "get_live_streams")) {
-            is FetchResult.Success -> r.value
+        val liveStreamsResult = fetchList<LiveStream>(
+            base = base,
+            username = username,
+            password = password,
+            action = "get_live_streams",
+            section = CatalogSection.LIVE,
+            onStage = onStage,
+        )
+        val liveStreams = when (liveStreamsResult) {
+            is FetchResult.Success -> liveStreamsResult.value
             is FetchResult.Failure -> {
                 onStage(CatalogStage(CatalogSection.LIVE, CatalogSectionStatus.ERROR))
-                return CatalogResult.Error(r.message)
+                return CatalogResult.Error(liveStreamsResult.message)
             }
         }
         onStage(
-            CatalogStage(CatalogSection.LIVE, CatalogSectionStatus.COMPLETED, liveStreams.size),
+            CatalogStage(
+                section = CatalogSection.LIVE,
+                status = CatalogSectionStatus.COMPLETED,
+                itemCount = liveStreams.size,
+                bytesReceived = liveStreamsResult.bytesReceived,
+                bytesTotal = liveStreamsResult.bytesTotal,
+            ),
         )
 
-        onStage(CatalogStage(CatalogSection.FILM, CatalogSectionStatus.DOWNLOADING))
+        onStage(CatalogStage(section = CatalogSection.FILM, status = CatalogSectionStatus.DOWNLOADING))
         val vodCategories = when (val r = fetchList<Category>(base, username, password, "get_vod_categories")) {
             is FetchResult.Success -> r.value
             is FetchResult.Failure -> {
@@ -73,18 +104,32 @@ class CatalogClient(
             }
         }
 
-        val vodStreams = when (val r = fetchList<VodStream>(base, username, password, "get_vod_streams")) {
-            is FetchResult.Success -> r.value
+        val vodStreamsResult = fetchList<VodStream>(
+            base = base,
+            username = username,
+            password = password,
+            action = "get_vod_streams",
+            section = CatalogSection.FILM,
+            onStage = onStage,
+        )
+        val vodStreams = when (vodStreamsResult) {
+            is FetchResult.Success -> vodStreamsResult.value
             is FetchResult.Failure -> {
                 onStage(CatalogStage(CatalogSection.FILM, CatalogSectionStatus.ERROR))
-                return CatalogResult.Error(r.message)
+                return CatalogResult.Error(vodStreamsResult.message)
             }
         }
         onStage(
-            CatalogStage(CatalogSection.FILM, CatalogSectionStatus.COMPLETED, vodStreams.size),
+            CatalogStage(
+                section = CatalogSection.FILM,
+                status = CatalogSectionStatus.COMPLETED,
+                itemCount = vodStreams.size,
+                bytesReceived = vodStreamsResult.bytesReceived,
+                bytesTotal = vodStreamsResult.bytesTotal,
+            ),
         )
 
-        onStage(CatalogStage(CatalogSection.SERIES, CatalogSectionStatus.DOWNLOADING))
+        onStage(CatalogStage(section = CatalogSection.SERIES, status = CatalogSectionStatus.DOWNLOADING))
         val seriesCategories = when (val r = fetchList<Category>(base, username, password, "get_series_categories")) {
             is FetchResult.Success -> r.value
             is FetchResult.Failure -> {
@@ -93,15 +138,29 @@ class CatalogClient(
             }
         }
 
-        val series = when (val r = fetchList<SeriesItem>(base, username, password, "get_series")) {
-            is FetchResult.Success -> r.value
+        val seriesResult = fetchList<SeriesItem>(
+            base = base,
+            username = username,
+            password = password,
+            action = "get_series",
+            section = CatalogSection.SERIES,
+            onStage = onStage,
+        )
+        val series = when (seriesResult) {
+            is FetchResult.Success -> seriesResult.value
             is FetchResult.Failure -> {
                 onStage(CatalogStage(CatalogSection.SERIES, CatalogSectionStatus.ERROR))
-                return CatalogResult.Error(r.message)
+                return CatalogResult.Error(seriesResult.message)
             }
         }
         onStage(
-            CatalogStage(CatalogSection.SERIES, CatalogSectionStatus.COMPLETED, series.size),
+            CatalogStage(
+                section = CatalogSection.SERIES,
+                status = CatalogSectionStatus.COMPLETED,
+                itemCount = series.size,
+                bytesReceived = seriesResult.bytesReceived,
+                bytesTotal = seriesResult.bytesTotal,
+            ),
         )
 
         val catalog = Catalog(
@@ -111,7 +170,7 @@ class CatalogClient(
             vodStreams = vodStreams,
             seriesCategories = seriesCategories,
             series = series,
-            updatedAtMillis = System.currentTimeMillis(),
+            updatedAtMillis = clock.nowMillis(),
         )
         return CatalogResult.Success(catalog)
     }
@@ -192,6 +251,8 @@ class CatalogClient(
         username: String,
         password: String,
         action: String,
+        section: CatalogSection? = null,
+        noinline onStage: suspend (CatalogStage) -> Unit = {},
     ): FetchResult<List<T>> = withContext(io) {
         val url = base.newBuilder()
             .addPathSegment("player_api.php")
@@ -205,27 +266,138 @@ class CatalogClient(
                 if (response.code != 200) {
                     return@withContext FetchResult.Failure("Il server ha risposto con un errore (HTTP ${response.code}).")
                 }
-                val body = response.body ?: return@withContext FetchResult.Success(emptyList())
-                // Se contentLength 0 o body vuoto, ritorna vuoto
-                if (body.contentLength() == 0L) {
-                    return@withContext FetchResult.Success(emptyList())
+                val body = response.body ?: return@withContext FetchResult.Success(emptyList(), 0L, null)
+                val rawContentLength = body.contentLength()
+                // Se contentLength 0, ritorna vuoto
+                if (rawContentLength == 0L) {
+                    if (section != null) {
+                        onStage(
+                            CatalogStage(
+                                section = section,
+                                status = CatalogSectionStatus.PROCESSING,
+                                bytesReceived = 0L,
+                                bytesTotal = 0L,
+                            ),
+                        )
+                    }
+                    return@withContext FetchResult.Success(emptyList(), 0L, 0L)
                 }
+                val bytesTotal: Long? = rawContentLength.takeIf { it > 0L }
+                val downloadStartMillis = clock.nowMillis()
+                var bytesReceived = 0L
+                var lastEmittedBytes = 0L
+                var lastEmittedPercent = 0
+                var lastEmittedAtMillis = downloadStartMillis
+                val tempFile = File.createTempFile("fvp_catalog_", ".json")
                 try {
-                    val decoded = withContext(background) {
-                        body.byteStream().use { input ->
-                            BufferedInputStream(input).use { buffered ->
-                                // Per tolleranza: se il pannello restituisce oggetto anziché array, decode fallirà e gestiamo come vuoto
-                                try {
-                                    json.decodeFromStream<List<T>>(buffered)
-                                } catch (_: Exception) {
-                                    emptyList()
+                    body.byteStream().use { input ->
+                        tempFile.outputStream().use { fileOut ->
+                            BufferedOutputStream(fileOut, STREAM_BUFFER_SIZE).use { output ->
+                                val buffer = ByteArray(STREAM_BUFFER_SIZE)
+                                while (true) {
+                                    val read = input.read(buffer)
+                                    if (read < 0) break
+                                    if (read == 0) continue
+                                    output.write(buffer, 0, read)
+                                    bytesReceived += read
+                                    if (section != null) {
+                                        val now = clock.nowMillis()
+                                        val elapsed = now - lastEmittedAtMillis
+                                        val shouldEmit = if (bytesTotal != null) {
+                                            val percent = ((bytesReceived * 100L) / bytesTotal).toInt().coerceIn(0, 100)
+                                            val percentAdvanced = percent > lastEmittedPercent
+                                            val timeAdvanced = elapsed >= PROGRESS_MIN_INTERVAL_MILLIS
+                                            if (percentAdvanced || timeAdvanced) {
+                                                lastEmittedPercent = percent
+                                                true
+                                            } else {
+                                                false
+                                            }
+                                        } else {
+                                            lastEmittedBytes == 0L || elapsed >= PROGRESS_MIN_INTERVAL_MILLIS
+                                        }
+                                        if (shouldEmit) {
+                                            lastEmittedBytes = bytesReceived
+                                            lastEmittedAtMillis = now
+                                            onStage(
+                                                CatalogStage(
+                                                    section = section,
+                                                    status = CatalogSectionStatus.DOWNLOADING,
+                                                    bytesReceived = bytesReceived,
+                                                    bytesTotal = bytesTotal,
+                                                ),
+                                            )
+                                        }
+                                    }
                                 }
+                                output.flush()
                             }
                         }
                     }
-                    FetchResult.Success(decoded)
-                } catch (e: Exception) {
-                    FetchResult.Failure("Risposta del server non riconosciuta: non sembra un pannello Xtream.")
+                    if (section != null && bytesReceived > lastEmittedBytes) {
+                        onStage(
+                            CatalogStage(
+                                section = section,
+                                status = CatalogSectionStatus.DOWNLOADING,
+                                bytesReceived = bytesReceived,
+                                bytesTotal = bytesTotal,
+                            ),
+                        )
+                    }
+                    val downloadDurationMillis = (clock.nowMillis() - downloadStartMillis).coerceAtLeast(0L)
+                    if (bytesReceived == 0L) {
+                        if (section != null) {
+                            onStage(
+                                CatalogStage(
+                                    section = section,
+                                    status = CatalogSectionStatus.PROCESSING,
+                                    bytesReceived = 0L,
+                                    bytesTotal = bytesTotal,
+                                ),
+                            )
+                        }
+                        return@withContext FetchResult.Success(emptyList(), 0L, bytesTotal)
+                    }
+                    if (section != null) {
+                        onStage(
+                            CatalogStage(
+                                section = section,
+                                status = CatalogSectionStatus.PROCESSING,
+                                bytesReceived = bytesReceived,
+                                bytesTotal = bytesTotal,
+                            ),
+                        )
+                    }
+                    try {
+                        val parseStartMillis = clock.nowMillis()
+                        val decoded = withContext(background) {
+                            tempFile.inputStream().use { input ->
+                                BufferedInputStream(input, STREAM_BUFFER_SIZE).use { buffered ->
+                                    // Per tolleranza: se il pannello restituisce oggetto anziché array, decode fallirà e gestiamo come vuoto
+                                    try {
+                                        json.decodeFromStream<List<T>>(buffered)
+                                    } catch (_: Exception) {
+                                        emptyList()
+                                    }
+                                }
+                            }
+                        }
+                        val parseDurationMillis = (clock.nowMillis() - parseStartMillis).coerceAtLeast(0L)
+                        AppLog.info(
+                            "Catalogo [$action]: ricevuti $bytesReceived byte" +
+                                (bytesTotal?.let { " su $it" } ?: "") +
+                                " in $downloadDurationMillis ms, ${decoded.size} elementi elaborati in $parseDurationMillis ms",
+                        )
+                        FetchResult.Success(
+                            value = decoded,
+                            bytesReceived = bytesReceived,
+                            bytesTotal = bytesTotal,
+                        )
+                    } catch (e: Exception) {
+                        FetchResult.Failure("Risposta del server non riconosciuta: non sembra un pannello Xtream.")
+                    }
+                } finally {
+                    tempFile.delete()
                 }
             }
         } catch (timeout: InterruptedIOException) {
@@ -236,7 +408,12 @@ class CatalogClient(
     }
 
     private sealed interface FetchResult<out T> {
-        data class Success<T>(val value: T) : FetchResult<T>
+        data class Success<T>(
+            val value: T,
+            val bytesReceived: Long,
+            val bytesTotal: Long?,
+        ) : FetchResult<T>
+
         data class Failure(val message: String) : FetchResult<Nothing>
     }
 }
