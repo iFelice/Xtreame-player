@@ -306,6 +306,39 @@ jobs:
           pre-emulator-launch-script: nohup bash .github/scripts/emulator-boot-watch.sh > /tmp/emulator-watch.log 2>&1 &
           script: bash .github/scripts/run-emulator-tests.sh
 
+      # Rende visibili negli annotation del run gli esiti dei test su
+      # emulatore (il log completo resta nell'artifact).
+      - name: Annota gli esiti dei test su emulatore
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          python3 - <<'PY'
+          import glob, re, xml.etree.ElementTree as ET
+          tot = fail = err = skip = 0
+          for path in glob.glob('apps/android-mobile/app/build/outputs/androidTest-results/connected/**/*.xml', recursive=True):
+              try:
+                  root = ET.parse(path).getroot()
+              except Exception:
+                  continue
+              tot += int(root.get('tests') or 0)
+              fail += int(root.get('failures') or 0)
+              err += int(root.get('errors') or 0)
+              skip += int(root.get('skipped') or 0)
+              for case in root.iter('testcase'):
+                  for f in list(case):
+                      if f.tag in ('failure', 'error'):
+                          body = f.text or f.get('message') or ''
+                          lines = [re.sub(r'\s+', ' ', ln).strip()[:220]
+                                   for ln in body.split('\n') if ln.strip()][:8]
+                          print(f"::error::test «{case.get('name','?')}»: " + ' || '.join(lines)[:1500])
+          if tot:
+              print(f"::notice::test su emulatore: eseguiti {tot}, falliti {fail}, errori {err}, saltati {skip}, superati {tot - fail - err - skip}")
+          else:
+              print("::notice::nessun risultato XML dei test su emulatore trovato")
+          PY
+          echo "::notice::gradle (coda): $(tail -n 25 /tmp/fvp-connected.log 2>/dev/null | tr '\n' '|' | cut -c1-900)"
+
       # Se l'emulatore non parte o i test falliscono, raccoglie indizi
       # (dispositivi adb, AVD, spazio, memoria, log del mock server) e li
       # riporta anche come annotation del run, oltre che nell'artifact.
