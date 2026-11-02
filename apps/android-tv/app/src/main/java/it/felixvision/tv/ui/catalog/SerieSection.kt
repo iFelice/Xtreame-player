@@ -185,13 +185,7 @@ fun SerieSection(
         // Con la categoria vuota la griglia non è composta (al suo posto c'è il
         // messaggio): non c'è niente da riportare in cima.
         if (filtered.isEmpty()) return@LaunchedEffect
-        try {
-            gridState.scrollToItem(0)
-        } catch (_: CancellationException) {
-            throw it
-        } catch (_: Exception) {
-            // Griglia ricomposta nello stesso frame: la posizione resta quella.
-        }
+        gridState.scrollToItem(0)
     }
     val restoreHelper = rememberGridDetailFocusRestore(
         gridState = gridState,

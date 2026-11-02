@@ -5,7 +5,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -55,9 +54,6 @@ import it.felixvision.tv.ui.theme.drawerVerticalPadding
 
 /** Tag di test del pallino di aggiornamento sull'icona Impostazioni. */
 const val DRAWER_UPDATE_BADGE_ICON_TAG = "drawer_update_badge_icon"
-
-/** Tag di test del pallino di aggiornamento accanto all'etichetta, a menu aperto. */
-const val DRAWER_UPDATE_BADGE_LABEL_TAG = "drawer_update_badge_label"
 
 enum class DrawerSection(
     val label: String,
@@ -202,26 +198,17 @@ fun FvpNavigationDrawer(
                         },
                         headlineContent = {
                             if (expanded) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = section.label,
-                                        style = labelStyle,
-                                        color = if (isSelected) section.activeColor else FvpColors.TextSecondary,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                        maxLines = 1,
-                                        softWrap = false,
-                                        modifier = Modifier.padding(end = extraInset),
-                                    )
-                                    if (showUpdateBadge) {
-                                        // A menu aperto il pallino compare anche
-                                        // accanto all'etichetta "Impostazioni".
-                                        UpdateBadge(
-                                            scale = scale,
-                                            tag = DRAWER_UPDATE_BADGE_LABEL_TAG,
-                                            modifier = Modifier.padding(start = scale.dp(6f)),
-                                        )
-                                    }
-                                }
+                                // Il pallino di aggiornamento sta solo sull'icona:
+                                // l'etichetta resta il solo testo della voce.
+                                Text(
+                                    text = section.label,
+                                    style = labelStyle,
+                                    color = if (isSelected) section.activeColor else FvpColors.TextSecondary,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    modifier = Modifier.padding(end = extraInset),
+                                )
                             }
                         },
                         modifier = Modifier
