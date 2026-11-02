@@ -74,10 +74,13 @@ class CategoryConfirmFocusTest {
         Category(categoryId = "live3", categoryName = "Canali vuota"),
     )
 
-    /** OK sulla voce [tag] con l'orologio fermo: il debounce di 300 ms non scatta. */
+    /**
+     * OK sulla voce [tag] con l'orologio fermo: il debounce di 300 ms non
+     * scatta, quindi quello che si vede subito dopo viene da OK e non dal
+     * focus che si è spostato nella colonna.
+     */
     private fun pressOkWithinDebounce(tag: String) {
         rule.onNodeWithTag(tag).performSemanticsAction(SemanticsActions.OnClick)
-        // 100 ms: meno dei 300 ms del debounce del solo spostamento del focus.
         rule.mainClock.advanceTimeBy(100)
         rule.waitForIdle()
     }
@@ -116,14 +119,16 @@ class CategoryConfirmFocusTest {
         rule.waitForIdle()
 
         // OK con l'orologio fermo a 100 ms: la categoria è già quella scelta.
+        // La colonna resta aperta fin quando il focus non arriva alla
+        // copertina, quindi qui la voce si può ancora leggere come scelta.
         rule.mainClock.autoAdvance = false
         pressOkWithinDebounce("film_category_001")
+        rule.onNodeWithTag("film_category_001").assertIsSelected()
         rule.onNodeWithText("Film di prova").assertIsDisplayed()
         rule.onNodeWithText("Film recente").assertDoesNotExist()
 
         // Il focus passa alla copertina della categoria confermata.
         resumeClockAndAwaitFocus("film_201")
-        rule.onNodeWithTag("film_category_001").assertIsSelected()
     }
 
     @Test
@@ -180,11 +185,11 @@ class CategoryConfirmFocusTest {
 
         rule.mainClock.autoAdvance = false
         pressOkWithinDebounce("serie_category_001")
+        rule.onNodeWithTag("serie_category_001").assertIsSelected()
         rule.onNodeWithText("Serie di prova").assertIsDisplayed()
         rule.onNodeWithText("Serie recente").assertDoesNotExist()
 
         resumeClockAndAwaitFocus("serie_301")
-        rule.onNodeWithTag("serie_category_001").assertIsSelected()
     }
 
     @Test
@@ -234,12 +239,12 @@ class CategoryConfirmFocusTest {
         rule.onNodeWithText("Canale di prova").assertIsDisplayed()
         rule.onNodeWithTag("live_category_live1").assertIsSelected()
 
-        // OK su "Canali uno" (già scelta): il focus va al primo canale, senza
-        // aspettare il debounce.
+        // OK su "Canali uno" (già scelta): la categoria resta quella scelta e
+        // il focus va al primo canale, senza aspettare il debounce.
         rule.mainClock.autoAdvance = false
         pressOkWithinDebounce("live_category_live1")
-        resumeClockAndAwaitFocus("live_channel_101")
         rule.onNodeWithTag("live_category_live1").assertIsSelected()
+        resumeClockAndAwaitFocus("live_channel_101")
     }
 
     @Test
