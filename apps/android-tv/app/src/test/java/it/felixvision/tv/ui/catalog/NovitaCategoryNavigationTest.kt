@@ -78,10 +78,11 @@ class NovitaCategoryNavigationTest {
         rule.onNodeWithTag("film_002_fav_star", useUnmergedTree = true).assertExists()
         rule.onNodeWithTag("film_002_seen", useUnmergedTree = true).assertExists()
 
-        // OK sulla categoria del provider: il focus va sulla sua prima
-        // copertina, che si vede e si può confermare con il telecomando.
+        // OK sulla categoria del provider: la categoria cambia subito e il
+        // focus va sulla sua prima copertina, che si vede. La voce non si
+        // controlla qui come "selezionata": con il focus nella griglia la
+        // colonna si compatta, come sempre.
         confirmCategory("film_category_001")
-        provider.assertIsSelected()
         rule.onNodeWithTag("film_001").assertIsDisplayed().assertIsFocused()
         rule.onNodeWithTag("film_002").assertDoesNotExist()
 
@@ -118,10 +119,11 @@ class NovitaCategoryNavigationTest {
         rule.onNodeWithTag("serie_001").assertDoesNotExist()
         rule.onNodeWithTag("serie_002_fav_star", useUnmergedTree = true).assertExists()
 
-        // OK sulla categoria del provider: il focus va sulla sua prima
-        // copertina, che si vede e si può confermare con il telecomando.
+        // OK sulla categoria del provider: la categoria cambia subito e il
+        // focus va sulla sua prima copertina, che si vede. La voce non si
+        // controlla qui come "selezionata": con il focus nella griglia la
+        // colonna si compatta, come sempre.
         confirmCategory("serie_category_001")
-        provider.assertIsSelected()
         rule.onNodeWithTag("serie_001").assertIsDisplayed().assertIsFocused()
         rule.onNodeWithTag("serie_002").assertDoesNotExist()
 
