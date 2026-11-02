@@ -337,6 +337,15 @@ jobs:
           else:
               print("::notice::nessun risultato XML dei test su emulatore trovato")
           PY
+          # Errori di compilazione Kotlin degli androidTest (e: file://...)
+          grep -E "^e: " /tmp/fvp-connected.log 2>/dev/null | head -10 | while IFS= read -r line; do
+            echo "::error::${line:0:600}"
+          done
+          # Sezione di riepilogo del fallimento Gradle
+          failure=$(sed -n '/FAILURE: Build failed/,/^BUILD FAILED/p' /tmp/fvp-connected.log 2>/dev/null | head -40 | tr '\n' '|')
+          if [ -n "$failure" ]; then
+            echo "::notice::gradle: ${failure:0:1600}"
+          fi
           echo "::notice::gradle (coda): $(tail -n 25 /tmp/fvp-connected.log 2>/dev/null | tr '\n' '|' | cut -c1-900)"
 
       # Se l'emulatore non parte o i test falliscono, raccoglie indizi
