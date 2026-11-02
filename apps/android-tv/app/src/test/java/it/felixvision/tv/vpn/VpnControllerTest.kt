@@ -16,8 +16,8 @@ import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.TestCoroutineScheduler
@@ -63,7 +63,7 @@ class VpnControllerTest {
 
     @After
     fun tearDown() {
-        controllerScope.cancel()
+        controllerScope.coroutineContext[Job]?.cancel()
         ioExecutor.shutdownNow()
         realIo.close()
     }
