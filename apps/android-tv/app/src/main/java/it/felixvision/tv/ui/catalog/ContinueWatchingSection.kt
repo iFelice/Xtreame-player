@@ -486,7 +486,7 @@ private fun ContinueMenuContent(
                 .testTag("continue_menu_open"),
         )
         FvpCompactButton(
-            text = "Rimuovi da Continua a guardare",
+            text = "Rimuovi da Riprendi",
             onClick = onRemove,
             scale = scale,
             modifier = Modifier.testTag("continue_menu_remove"),
