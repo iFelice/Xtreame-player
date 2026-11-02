@@ -47,7 +47,6 @@ class SettingsCatalogProgressDialogTest {
 
     @Test
     fun `la finestra mostra per ogni sezione percentuale con totale noto MB senza totale Elaborazione e Completato`() {
-        rule.mainClock.autoAdvance = false
         var sections by mutableStateOf(CatalogRefresh.idle())
         var refreshing by mutableStateOf(true)
         var dismissed = false
@@ -62,7 +61,7 @@ class SettingsCatalogProgressDialogTest {
                 )
             }
         }
-        avanzaOrologio()
+        rule.waitForIdle()
 
         rule.onNodeWithTag("settings_catalog_dialog").assertExists()
         rule.onNodeWithText("Aggiornamento catalogo").assertIsDisplayed()
@@ -83,7 +82,7 @@ class SettingsCatalogProgressDialogTest {
         )
 
         val totalBytes = (23.9 * CATALOG_BYTES_PER_MB).toLong()
-        val received62Bytes = (totalBytes * 0.62).toLong()
+        val received62Bytes = (14.8 * CATALOG_BYTES_PER_MB).toLong()
         val receivedUnknownTotalBytes = (14.8 * CATALOG_BYTES_PER_MB).toLong()
 
         // Verifica per ciascuna sezione Live, Film, Serie tutte le fasi richieste
@@ -100,7 +99,7 @@ class SettingsCatalogProgressDialogTest {
                     bytesTotal = totalBytes,
                 ),
             )
-            avanzaOrologio()
+            rule.waitForIdle()
             rule.onNodeWithTag("settings_catalog_${key}_status")
                 .assertTextEquals("62% · 14,8 di 23,9 MB")
             rule.onNodeWithTag("settings_catalog_${key}_bar_fill").assertExists()
@@ -112,36 +111,45 @@ class SettingsCatalogProgressDialogTest {
             assertEquals(0.62f, fillWidth / barWidth, 0.03f)
 
             // 2) Scaricamento senza totale: barra indeterminata animata e "14,8 MB"
-            sections = CatalogRefresh.apply(
-                sections,
-                CatalogStage(
-                    section = section,
-                    status = CatalogSectionStatus.DOWNLOADING,
-                    bytesReceived = receivedUnknownTotalBytes,
-                    bytesTotal = null,
-                ),
-            )
-            avanzaOrologio()
-            rule.onNodeWithTag("settings_catalog_${key}_status")
-                .assertTextEquals("14,8 MB")
-            rule.onNodeWithTag("settings_catalog_${key}_bar_indeterminate").assertExists()
-            rule.onNodeWithTag("settings_catalog_${key}_bar_fill").assertDoesNotExist()
-            // Avanza l'animazione della barra indeterminata
-            rule.mainClock.advanceTimeBy(500)
-            rule.waitForIdle()
-            rule.onNodeWithTag("settings_catalog_${key}_bar_indeterminate").assertExists()
+            // Con l'animazione infinita l'orologio va avanzato manualmente.
+            rule.mainClock.autoAdvance = false
+            try {
+                rule.runOnIdle {
+                    sections = CatalogRefresh.apply(
+                        sections,
+                        CatalogStage(
+                            section = section,
+                            status = CatalogSectionStatus.DOWNLOADING,
+                            bytesReceived = receivedUnknownTotalBytes,
+                            bytesTotal = null,
+                        ),
+                    )
+                }
+                rule.mainClock.advanceTimeBy(64)
+                rule.onNodeWithTag("settings_catalog_${key}_status")
+                    .assertTextEquals("14,8 MB")
+                rule.onNodeWithTag("settings_catalog_${key}_bar_indeterminate").assertExists()
+                rule.onNodeWithTag("settings_catalog_${key}_bar_fill").assertDoesNotExist()
+                rule.mainClock.advanceTimeBy(500)
+                rule.onNodeWithTag("settings_catalog_${key}_bar_indeterminate").assertExists()
 
-            // 3) Elaborazione: barra piena e "Elaborazione…"
-            sections = CatalogRefresh.apply(
-                sections,
-                CatalogStage(
-                    section = section,
-                    status = CatalogSectionStatus.PROCESSING,
-                    bytesReceived = totalBytes,
-                    bytesTotal = totalBytes,
-                ),
-            )
-            avanzaOrologio()
+                // 3) Elaborazione: barra piena e "Elaborazione…"
+                rule.runOnIdle {
+                    sections = CatalogRefresh.apply(
+                        sections,
+                        CatalogStage(
+                            section = section,
+                            status = CatalogSectionStatus.PROCESSING,
+                            bytesReceived = totalBytes,
+                            bytesTotal = totalBytes,
+                        ),
+                    )
+                }
+                rule.mainClock.advanceTimeBy(64)
+            } finally {
+                rule.mainClock.autoAdvance = true
+            }
+            rule.waitForIdle()
             rule.onNodeWithTag("settings_catalog_${key}_status")
                 .assertTextEquals("Elaborazione…")
             rule.onNodeWithTag("settings_catalog_${key}_bar_fill").assertExists()
@@ -161,7 +169,7 @@ class SettingsCatalogProgressDialogTest {
                     bytesTotal = totalBytes,
                 ),
             )
-            avanzaOrologio()
+            rule.waitForIdle()
             rule.onNodeWithTag("settings_catalog_${key}_status")
                 .assertTextEquals("Completato · 21.277 elementi")
             rule.onNodeWithTag("settings_catalog_${key}_bar_fill").assertExists()
@@ -172,11 +180,11 @@ class SettingsCatalogProgressDialogTest {
 
         // Fine aggiornamento: "Chiudi" diventa attivo e chiude la finestra
         refreshing = false
-        avanzaOrologio()
+        rule.waitForIdle()
         val closeButton = rule.onNodeWithTag("settings_catalog_close")
         assertFalse(SemanticsProperties.Disabled in closeButton.fetchSemanticsNode().config)
         closeButton.performSemanticsAction(SemanticsActions.OnClick)
-        avanzaOrologio()
+        rule.waitForIdle()
         assertTrue(dismissed)
     }
 
@@ -215,10 +223,5 @@ class SettingsCatalogProgressDialogTest {
         assertEquals(barWidth, fillWidth, 1f)
         rule.onNodeWithTag("settings_catalog_series_status")
             .assertTextEquals("In attesa")
-    }
-
-    private fun avanzaOrologio() {
-        rule.mainClock.advanceTimeBy(64)
-        rule.waitForIdle()
     }
 }

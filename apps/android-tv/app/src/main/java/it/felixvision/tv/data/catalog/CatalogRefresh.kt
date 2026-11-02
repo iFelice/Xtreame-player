@@ -2,6 +2,7 @@ package it.felixvision.tv.data.catalog
 
 import java.util.Locale
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 /** Byte in un megabyte (1024 × 1024), per la formattazione dell'avanzamento. */
 const val CATALOG_BYTES_PER_MB = 1_048_576.0
@@ -52,10 +53,14 @@ data class CatalogSectionProgress(
     val progressPercent: Int?
         get() {
             val total = bytesTotal
-            return if (total != null && total > 0L) {
-                ((bytesReceived.coerceAtLeast(0L) * 100L) / total).toInt().coerceIn(0, 100)
+            if (total == null || total <= 0L) return null
+            val safeReceived = bytesReceived.coerceAtLeast(0L)
+            return if (safeReceived >= total) {
+                100
             } else {
-                null
+                ((safeReceived.toDouble() * 100.0) / total.toDouble())
+                    .roundToInt()
+                    .coerceIn(0, 99)
             }
         }
 
@@ -95,8 +100,8 @@ data class CatalogSectionProgress(
             CatalogSectionStatus.DOWNLOADING -> {
                 val total = bytesTotal
                 val receivedMb = CatalogRefresh.formatMegabytes(bytesReceived)
-                if (total != null && total > 0L) {
-                    val pct = ((bytesReceived.coerceAtLeast(0L) * 100L) / total).toInt().coerceIn(0, 100)
+                val pct = progressPercent
+                if (total != null && total > 0L && pct != null) {
                     val totalMb = CatalogRefresh.formatMegabytes(total)
                     "$pct% · $receivedMb di $totalMb MB"
                 } else {
