@@ -163,6 +163,7 @@ app/src/main/java/it/felixvision/tv/
 ├── data/playback/             URL Xtream, redazione credenziali, coda episodi, zapping
 ├── data/progress/             archivio avanzamento e regole 30 s / 90% (DataStore)
 ├── data/images/               ImageLoader Coil 3 con client dedicato (max 4, 200 MB)
+├── player/                    solo TV: zapping automatico (controller puro) e preferenze del player
 ├── vpn/                       VPN WireGuard: canale cifrato col telefono, relay, parser, archivio, controller
 └── ui/                        tema, controlli TV, QR, cataloghi, player e impostazioni
 ```
@@ -247,6 +248,24 @@ server Xtream raggiunti con indirizzo privato non risponderebbero.
   4 s (numero, nome, categoria, logo); OK mostra/nasconde il banner; Sinistra apre la
   lista canali della categoria con focus sul canale in onda; Indietro chiude banner/lista
   o torna alla lista Live con focus sull'ultimo canale guardato.
+- **Zapping automatico** (solo Live): il pulsante "Zapping" nella barra info del canale
+  (quella che compare con OK; Destra porta il focus al pulsante) chiude la barra e, dopo
+  l'intervallo scelto, passa al canale successivo della lista corrente del player — la
+  stessa dello zapping con Su/Giù: la categoria di partenza o "I miei canali", con i
+  contenuti protetti già esclusi. In alto a destra compare "Zapping · N" con i secondi
+  che mancano, aggiornato ogni secondo (fondo `FvpColors.PlayerOverlay`). Intervallo
+  predefinito 10 s, salvato in SharedPreferences `fvp_player` chiave `zapping_seconds`
+  (5/10/15/30; un valore diverso vale 10), letto e scritto da `PlayerPreferences` nel
+  pacchetto solo TV `player/`, senza interfaccia per ora. Un canale che entro 5 s
+  dall'avvio è in errore o ancora in caricamento iniziale (non un buffering a metà
+  visione) si salta subito, senza aspettare l'intervallo, e il conto riparte dal canale
+  nuovo. Qualsiasi tasto del telecomando ferma lo zapping e viene consumato: si resta sul
+  canale in visione, senza cambi canale, barre o uscite. Dopo l'ultimo canale compare
+  "Fine della lista: vuoi ripartire dal primo canale?" con "Sì" (focus iniziale) e "No":
+  "Sì" riparte dal primo canale, "No", Indietro o 15 s senza risposta tornano al canale
+  da cui era partito lo zapping. Uscita dal player o cambio canale manuale fermano lo
+  zapping, che non si riattiva da solo alla riapertura. Avvio, passi, canale non partito,
+  fine lista e risposta sono in `ZappingController`, classe pura con orologio iniettabile.
 - **Formato audio**: nella barra dei comandi e nel banner Live, etichetta ricavata dal
   `Format` della traccia selezionata (`sampleMimeType` + `channelCount`): Dolby Digital,
   Dolby Digital Plus, Dolby Atmos, Dolby AC-4, DTS/DTS-HD, AAC, MP3 e canali `2.0`/`5.1`/
@@ -381,6 +400,8 @@ simulato e implementazioni finte per cifrario e preferenze:
 | `WatchRulesTest`, `ProgressStoreInMemoryTest`, `ProgressStoreTest` | soglia 30 s, visto al 90%, ripresa, durata mantenuta, separazione per account, archivio vuoto |
 | `EpisodeQueueTest` | ordine stagioni/episodi, episodio successivo nella stessa stagione e nella seguente, ultimo episodio |
 | `LiveZappingTest`, `PlaybackFormattingTest` | zapping circolare, accelerazione 10/30/60 s, tempi `mm:ss` e `h:mm:ss` |
+| `ZappingControllerTest` | zapping automatico con orologio finto: intervallo e conto nuovo, canale in errore o in caricamento saltato dopo 5 s, fine lista, "Sì"/"No"/15 s, arresto, durate non ammesse → 10 |
+| `PlayerZappingTest` | Robolectric, un solo `setContent` per test: pulsante "Zapping" con OK solo nel Live, indicatore dopo l'attivazione, un tasto qualsiasi lo ferma senza cambiare canale, domanda di fine lista con Indietro che torna al canale di partenza |
 | `ConnectionsAdvisoryTest` | avviso solo a connessioni piene e TV non in riproduzione |
 | `AudioFormatLabelsTest` | mappatura dei mime audio, varianti DTS, canali `2.0`/`5.1`/`7.1`, riconoscimento del decoder FFmpeg |
 | `SeekFeedbackTest` | etichette `+10 s`/`−10 s`, somma entro 1,5 s, ripartenza al cambio di verso, passo accelerato |

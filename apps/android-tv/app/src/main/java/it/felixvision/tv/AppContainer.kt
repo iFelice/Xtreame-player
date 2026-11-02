@@ -37,6 +37,7 @@ import it.felixvision.tv.data.update.UpdateInstaller
 import it.felixvision.tv.data.update.isDebugVersion
 import it.felixvision.tv.data.volume.VolumeStore
 import it.felixvision.tv.data.xtream.XtreamClient
+import it.felixvision.tv.player.PlayerPreferences
 import it.felixvision.tv.ui.settings.InterfaceSizeStore
 import it.felixvision.tv.vpn.KeystoreVpnConfigCipher
 import it.felixvision.tv.vpn.VpnController
@@ -146,6 +147,14 @@ class AppContainer(
     /** Formato dello schermo scelto per ogni canale Live, per server+utente. */
     val channelVideoFormatStore: ChannelVideoFormatStore by lazy {
         ChannelVideoFormatStore(context = context)
+    }
+
+    /**
+     * Preferenze del player TV (`fvp_player`): per ora l'intervallo dello
+     * zapping automatico. Pacchetto solo TV, mai `data/` o `core/`.
+     */
+    val playerPreferences: PlayerPreferences by lazy {
+        PlayerPreferences(context = context)
     }
 
     /** Archivio "Continua a guardare": una voce per film e una per serie. */
