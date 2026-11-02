@@ -259,6 +259,19 @@ jobs:
           fi
           ls -l /dev/kvm
 
+      # L'immagine del runner parte con poco disco libero e l'emulatore lo
+      # esaurisce: rimuove componenti preinstallati non necessari (NDK, .NET,
+      # Haskell) prima di creare l'AVD.
+      - name: Libera spazio disco per l'emulatore
+        shell: bash
+        run: |
+          set -uo pipefail
+          df -h / | tail -1
+          sudo rm -rf /usr/local/lib/android/sdk/ndk /usr/share/dotnet /usr/local/.ghcup /opt/ghc /usr/local/share/boost /usr/local/lib/node_modules/nodemon 2>/dev/null || true
+          sudo apt-get clean || true
+          docker image prune -af > /dev/null 2>&1 || true
+          df -h / | tail -1
+
       # Il mock server deve restare in ascolto anche nei gradini successivi.
       # Gli script npm (mock:xtream:visual) vivono nel package.json della radice.
       - name: Avvia il server di prova Xtream (mock visual)
@@ -344,6 +357,14 @@ jobs:
           echo "::notice::$(adb devices 2>&1 | tr '\n' ' ' | cut -c1-400)"
           echo "::notice::kvm: $(ls -l /dev/kvm 2>&1 | cut -c1-200); disco: $(df -h / | tail -1 | tr -s ' ' | cut -c1-120)"
           echo "::notice::watcher: $(tail -n 12 /tmp/emulator-watch.log 2>/dev/null | tr '\n' '|' | cut -c1-900)"
+          # Prova di avvio manuale (60 s) per catturare l'eventuale errore
+          # dell'emulatore: l'AVD "test" e l'emulatore sono già installati.
+          adb kill-server >/dev/null 2>&1 || true
+          timeout 60 "$ANDROID_HOME/emulator/emulator" -avd test -no-window -gpu swiftshader_indirect \
+            -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none \
+            > /tmp/emulator-manual.log 2>&1 || true
+          cp /tmp/emulator-manual.log emulator-artifacts/emulator-manual.log || true
+          echo "::notice::avvio manuale: $(tail -n 25 /tmp/emulator-manual.log 2>/dev/null | tr '\n' '|' | cut -c1-900)"
           cat emulator-artifacts/diagnostica-boot.txt || true
 
       - name: Carica report e screenshot dei test su emulatore
