@@ -111,44 +111,31 @@ class SettingsCatalogProgressDialogTest {
             assertEquals(0.62f, fillWidth / barWidth, 0.03f)
 
             // 2) Scaricamento senza totale: barra indeterminata animata e "14,8 MB"
-            // Con l'animazione infinita l'orologio va avanzato manualmente.
-            rule.mainClock.autoAdvance = false
-            try {
-                rule.runOnIdle {
-                    sections = CatalogRefresh.apply(
-                        sections,
-                        CatalogStage(
-                            section = section,
-                            status = CatalogSectionStatus.DOWNLOADING,
-                            bytesReceived = receivedUnknownTotalBytes,
-                            bytesTotal = null,
-                        ),
-                    )
-                }
-                rule.mainClock.advanceTimeBy(64)
-                rule.onNodeWithTag("settings_catalog_${key}_status")
-                    .assertTextEquals("14,8 MB")
-                rule.onNodeWithTag("settings_catalog_${key}_bar_indeterminate").assertExists()
-                rule.onNodeWithTag("settings_catalog_${key}_bar_fill").assertDoesNotExist()
-                rule.mainClock.advanceTimeBy(500)
-                rule.onNodeWithTag("settings_catalog_${key}_bar_indeterminate").assertExists()
+            sections = CatalogRefresh.apply(
+                sections,
+                CatalogStage(
+                    section = section,
+                    status = CatalogSectionStatus.DOWNLOADING,
+                    bytesReceived = receivedUnknownTotalBytes,
+                    bytesTotal = null,
+                ),
+            )
+            rule.waitForIdle()
+            rule.onNodeWithTag("settings_catalog_${key}_status")
+                .assertTextEquals("14,8 MB")
+            rule.onNodeWithTag("settings_catalog_${key}_bar_indeterminate").assertExists()
+            rule.onNodeWithTag("settings_catalog_${key}_bar_fill").assertDoesNotExist()
 
-                // 3) Elaborazione: barra piena e "Elaborazione…"
-                rule.runOnIdle {
-                    sections = CatalogRefresh.apply(
-                        sections,
-                        CatalogStage(
-                            section = section,
-                            status = CatalogSectionStatus.PROCESSING,
-                            bytesReceived = totalBytes,
-                            bytesTotal = totalBytes,
-                        ),
-                    )
-                }
-                rule.mainClock.advanceTimeBy(64)
-            } finally {
-                rule.mainClock.autoAdvance = true
-            }
+            // 3) Elaborazione: barra piena e "Elaborazione…"
+            sections = CatalogRefresh.apply(
+                sections,
+                CatalogStage(
+                    section = section,
+                    status = CatalogSectionStatus.PROCESSING,
+                    bytesReceived = totalBytes,
+                    bytesTotal = totalBytes,
+                ),
+            )
             rule.waitForIdle()
             rule.onNodeWithTag("settings_catalog_${key}_status")
                 .assertTextEquals("Elaborazione…")

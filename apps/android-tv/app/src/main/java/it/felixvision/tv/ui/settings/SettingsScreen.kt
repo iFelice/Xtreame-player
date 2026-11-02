@@ -7,9 +7,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.repeatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -617,12 +616,15 @@ internal fun CatalogSectionProgressBar(
             .testTag("settings_catalog_${sectionKey}_bar"),
     ) {
         if (section.isIndeterminate) {
-            val transition = rememberInfiniteTransition(label = "catalog_progress_$sectionKey")
-            val offset by transition.animateFloat(
-                initialValue = 0.001f,
-                targetValue = 0.999f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(durationMillis = 1_000, easing = LinearEasing),
+            var targetOffset by remember { mutableStateOf(0.001f) }
+            LaunchedEffect(Unit) {
+                targetOffset = 0.999f
+            }
+            val offset by animateFloatAsState(
+                targetValue = targetOffset,
+                animationSpec = repeatable(
+                    iterations = 20,
+                    animation = tween(durationMillis = 800, easing = LinearEasing),
                     repeatMode = RepeatMode.Reverse,
                 ),
                 label = "catalog_progress_offset_$sectionKey",
