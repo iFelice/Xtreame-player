@@ -82,6 +82,13 @@ sealed interface DetailTarget {
     data class LiveGuide(val stream: LiveStream) : DetailTarget
 }
 
+/** Le tre schede di Preferiti, come la sezione Preferiti della TV. */
+enum class FavoritesTab(val title: String, val testTag: String) {
+    MY_CHANNELS("I miei canali", "favorites_tab_my_channels"),
+    FILM_SERIES("Film e Serie", "favorites_tab_film_series"),
+    LIVE_CATEGORIES("Categorie Live", "favorites_tab_live_categories"),
+}
+
 /** Contenuto del pannello azioni aperto dalla pressione lunga. */
 sealed interface ActionTarget {
 
@@ -97,7 +104,7 @@ sealed interface ActionTarget {
 
     data class LiveCategory(val categoryId: String, val name: String) : ActionTarget
 
-    /** Voce di "Continua a guardare": solo la rimozione. */
+    /** Voce di "Riprendi": solo la rimozione. */
     data class Continue(val entry: ContinueEntry) : ActionTarget
 }
 
@@ -168,7 +175,7 @@ class SectionStateStore {
  * `it.felixvision.tv.ui.catalog.CatalogViewModel` con la stessa logica:
  * caricamento e cache del catalogo (cache prima, poi rete se serve),
  * aggiornamento manuale con avanzamento per sezione ([CatalogRefresh]),
- * info VOD e serie, preferiti, "I miei canali", "Continua a guardare",
+ * info VOD e serie, preferiti, "I miei canali", "Riprendi",
  * ricerca con debounce e naviga tra le sezioni. Tutto ciò che riguarda
  * l'aggiornamento dell'app è escluso (arriva nel PR4).
  *
@@ -214,7 +221,7 @@ class CatalogViewModel(
     private val _myChannels = MutableStateFlow<List<MyChannel>>(emptyList())
     val myChannels: StateFlow<List<MyChannel>> = _myChannels.asStateFlow()
 
-    /** Voci visibili di "Continua a guardare", dalla più recente. */
+    /** Voci visibili di "Riprendi", dalla più recente. */
     private val _continueEntries = MutableStateFlow<List<ContinueEntry>>(emptyList())
     val continueEntries: StateFlow<List<ContinueEntry>> = _continueEntries.asStateFlow()
 
@@ -247,6 +254,17 @@ class CatalogViewModel(
 
     private val _playRequest = MutableStateFlow<PlayTarget?>(null)
     val playRequest: StateFlow<PlayTarget?> = _playRequest.asStateFlow()
+
+    /**
+     * Scheda dei Preferiti attualmente scelta ("I miei canali", "Film e Serie",
+     * "Categorie Live"). Conservata tra cambi di sezione e rotazioni.
+     */
+    private val _favoritesTab = MutableStateFlow(FavoritesTab.MY_CHANNELS)
+    val favoritesTab: StateFlow<FavoritesTab> = _favoritesTab.asStateFlow()
+
+    fun selectFavoritesTab(tab: FavoritesTab) {
+        _favoritesTab.value = tab
+    }
 
     private var noticeCounter = 0L
 
@@ -439,7 +457,7 @@ class CatalogViewModel(
         }
     }
 
-    // --- Continua a guardare ---
+    // --- Riprendi ---
 
     private suspend fun reloadContinueWatching() {
         _continueEntries.value = ContinueWatchingRules.visible(
@@ -447,7 +465,7 @@ class CatalogViewModel(
         )
     }
 
-    /** "Rimuovi da Continua a guardare" dal pannello azioni. */
+    /** "Rimuovi da Riprendi" dal pannello azioni. */
     fun hideContinueEntry(entry: ContinueEntry) {
         viewModelScope.launch {
             continueGateway.hide(server, username, entry.key)
@@ -583,7 +601,7 @@ class CatalogViewModel(
         const val MY_CHANNEL_REMOVED = "Rimosso da I miei canali"
         const val ADDED_AT_POSITION_PREFIX = "Aggiunto in posizione"
         const val MOVED_TO_POSITION_PREFIX = "Spostato in posizione"
-        const val CONTINUE_REMOVED = "Rimosso da Continua a guardare"
+        const val CONTINUE_REMOVED = "Rimosso da Riprendi"
 
         /** Debounce della ricerca, come nella sezione Cerca della TV. */
         const val SEARCH_DEBOUNCE_MILLIS = 300L

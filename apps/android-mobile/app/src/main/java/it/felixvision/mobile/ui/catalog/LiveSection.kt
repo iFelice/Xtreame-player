@@ -18,6 +18,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -91,15 +92,16 @@ fun LiveSection(
     val headerOpen = viewModel.sectionStates.isHeaderOpen(sectionKey)
 
     val filtered = remember(streams, selectedCategoryId) {
-        if (selectedCategoryId == null) {
-            emptyList()
-        } else {
-            streams.filter { it.categoryId == selectedCategoryId }
-        }
+        liveStreamsForCategory(selectedCategoryId, streams)
     }
 
     val listState = rememberSectionListState(viewModel.sectionStates, "live_channels")
     val nowMillis = rememberMinuteNow(clock)
+
+    // Al cambio di categoria la lista torna in cima (stessa regola della TV).
+    LaunchedEffect(selectedCategoryId) {
+        listState.scrollToItem(0)
+    }
 
     // Solo i canali visibili a schermo, come nella sezione Live della TV.
     val visibleChannelIds by remember(filtered) {

@@ -11,16 +11,23 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.SecondaryTabRow
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -48,10 +55,10 @@ import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.ImageLoader
 import it.felixvision.mobile.ui.components.ChannelLogoImage
-import it.felixvision.mobile.ui.components.NowOnLine
 import it.felixvision.mobile.ui.components.EmptyState
 import it.felixvision.mobile.ui.components.FavoriteBadge
 import it.felixvision.mobile.ui.components.FvpIcons
+import it.felixvision.mobile.ui.components.NowOnLine
 import it.felixvision.mobile.ui.components.PosterCard
 import it.felixvision.mobile.ui.components.RowTitle
 import it.felixvision.mobile.ui.components.SecondaryText
@@ -61,11 +68,13 @@ import it.felixvision.mobile.ui.components.rememberMinuteNow
 import it.felixvision.mobile.ui.components.rememberSectionListState
 import it.felixvision.mobile.ui.theme.FvpColors
 import it.felixvision.tv.core.Clock
+import it.felixvision.tv.data.catalog.Catalog
 import it.felixvision.tv.data.channels.MyChannel
 import it.felixvision.tv.data.epg.ChannelScheduleLoader
 import it.felixvision.tv.data.epg.EpgProgram
 import it.felixvision.tv.data.favorites.FavoriteItem
 import it.felixvision.tv.data.progress.ProgressKeys
+import it.felixvision.tv.data.progress.WatchProgress
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
@@ -74,16 +83,15 @@ const val MY_CHANNELS_EMPTY_MESSAGE =
     "Aggiungi i canali che guardi di più: tieni premuto su un canale in Live e scegli «I miei canali»"
 
 /**
- * Sezione "Preferiti" del tablet: stessi gruppi e stesso ordine della sezione
- * Preferiti della TV — "I miei canali" numerati per primi, poi "Categorie
- * Live", "Film" e "Serie"; le righe vuote non compaiono.
+ * Sezione "Preferiti" del tablet in tre schede, come la sezione Preferiti
+ * della TV: "I miei canali" (lista personale numerata, con modifica e
+ * trascinamento), "Film e Serie" (le righe Film e Serie) e "Categorie Live"
+ * (elenco delle categorie Live preferite).
  *
- * "Modifica" entra nella modalità di riordino di "I miei canali": maniglia di
- * trascinamento su ogni riga (riordino interamente in Compose, con scorrimento
- * automatico vicino ai bordi) e, al rilascio, salvataggio in
- * MyChannelsStore via `moveTo` (le posizioni sono 1-based e ricalcolate dallo
- * store). In modalità modifica sono esposti anche "Rimuovi" e "Sposta in
- * posizione n°"; "Fine" ne esce.
+ * Le schede sono touch ([SecondaryTabRow] di material3). La scheda scelta si
+ * conserva cambiando sezione e ruotando lo schermo: lo stato vive nel
+ * [CatalogViewModel.favoritesTab]. Tornando da Live dopo aver aperto una
+ * categoria preferita si torna sulla scheda "Categorie Live".
  */
 @Composable
 fun PreferitiSection(
@@ -100,17 +108,16 @@ fun PreferitiSection(
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
     val myChannels by viewModel.myChannels.collectAsStateWithLifecycle()
     val progress by viewModel.watchProgress.collectAsStateWithLifecycle()
+    val tab by viewModel.favoritesTab.collectAsStateWithLifecycle()
 
     val catalog = catalogState.catalog
     val filmFavorites = favorites.filter { it.type == FavoriteItem.VOD }
     val seriesFavorites = favorites.filter { it.type == FavoriteItem.SERIES }
-    val categoryFavorites = favorites
-        .filter { it.type == FavoriteItem.LIVE_CATEGORY }
-        .map { favorite ->
-            val available = favorite.categoryId != null &&
-                catalog?.liveCategories.orEmpty().any { it.categoryId == favorite.categoryId }
-            if (available) favorite.title else "${favorite.title} (non più disponibile)"
-        }
+    val categoryFavorites = mobileLiveCategoryFavorites(
+        favorites = favorites,
+        categories = catalog?.liveCategories.orEmpty(),
+        streams = catalog?.liveStreams.orEmpty(),
+    )
 
     var editMode by remember { mutableStateOf(false) }
     val listState = rememberSectionListState(viewModel.sectionStates, "preferiti_list")
@@ -170,249 +177,359 @@ fun PreferitiSection(
         }
     }
 
-    Box(modifier = modifier) {
-        LazyColumn(
-            state = listState,
-            verticalArrangement = Arrangement.spacedBy(18.dp),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-            modifier = Modifier.fillMaxWidth().testTag("preferiti_list"),
+    Column(modifier = modifier.fillMaxWidth()) {
+        // --- Barra delle schede ---
+        SecondaryTabRow(
+            selectedTab = tab,
+            onTabSelected = { viewModel.selectFavoritesTab(it) },
+            modifier = Modifier.fillMaxWidth(),
         ) {
-            // --- I miei canali ---
-            item(key = "preferiti_myheader") {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth().testTag("preferiti_my_header"),
-                ) {
-                    RowTitle(
-                        text = "I miei canali",
-                        modifier = Modifier.weight(1f),
-                    )
-                    TextButton(
-                        onClick = { editMode = !editMode },
-                        modifier = Modifier.testTag(if (editMode) "favorites_done" else "favorites_edit"),
-                    ) {
+            FavoritesTab.entries.forEach { entry ->
+                Tab(
+                    selected = tab == entry,
+                    onClick = { viewModel.selectFavoritesTab(entry) },
+                    text = {
                         Text(
-                            text = if (editMode) "Fine" else "Modifica",
-                            color = FvpColors.Green,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.SemiBold,
+                            text = entry.title,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
                         )
-                    }
-                }
+                    },
+                    modifier = Modifier.testTag(entry.testTag),
+                )
             }
+        }
+        HorizontalDivider(color = FvpColors.SurfaceElevated, thickness = 1.dp)
 
-            val shownChannels = if (editMode) workingList else myChannels
-            if (shownChannels.isEmpty()) {
-                item(key = "preferiti_my_empty") {
-                    SecondaryText(
-                        text = MY_CHANNELS_EMPTY_MESSAGE,
-                        maxLines = 3,
-                        modifier = Modifier.testTag("preferiti_my_empty"),
-                    )
-                }
-            } else {
-                itemsIndexed(
-                    shownChannels,
-                    key = { _, channel -> "mychannel_${channel.streamId}" },
-                ) { index, channel ->
-                    val isDragging = editMode && channel.streamId == draggingStreamId
-                    val offsetY by animateFloatAsState(
-                        targetValue = if (isDragging) dragOffsetPx else 0f,
-                        label = "drag_offset",
-                    )
-                    MyChannelRow(
-                        channel = channel,
-                        index = index,
-                        imageLoader = imageLoader,
-                        editMode = editMode,
-                        isDragging = isDragging,
-                        programs = programs[channel.streamId],
-                        nowMillis = nowMillis,
-                        onDragStart = {
-                            draggingStreamId = channel.streamId
-                            dragMovedFrom = workingList.indexOfFirst { it.streamId == channel.streamId }
-                        },
-                        onDrag = { amountY ->
-                            dragOffsetPx += amountY
-                            val currentIndex =
-                                workingList.indexOfFirst { it.streamId == channel.streamId }
-                            if (currentIndex >= 0) {
-                                val shift = (dragOffsetPx / rowHeightPx).roundToInt()
-                                if (shift != 0) {
-                                    val newIndex = (currentIndex + shift)
-                                        .coerceIn(0, workingList.size - 1)
-                                    if (newIndex != currentIndex) {
-                                        val moved = workingList.removeAt(currentIndex)
-                                        workingList.add(newIndex, moved)
-                                        dragOffsetPx -= shift * rowHeightPx
-                                    }
+        Box(modifier = Modifier.fillMaxWidth()) {
+            when (tab) {
+                FavoritesTab.MY_CHANNELS -> FavoritesMyChannelsTab(
+                    viewModel = viewModel,
+                    myChannels = myChannels,
+                    workingList = workingList,
+                    editMode = editMode,
+                    imageLoader = imageLoader,
+                    programs = programs,
+                    nowMillis = nowMillis,
+                    listState = listState,
+                    draggingStreamId = draggingStreamId,
+                    dragOffsetPx = dragOffsetPx,
+                    dragMovedFrom = dragMovedFrom,
+                    rowHeightPx = rowHeightPx,
+                    onEditModeChange = { editMode = it },
+                    onDragStart = { draggingStreamId = it },
+                    onDrag = { amountY ->
+                        dragOffsetPx += amountY
+                        val currentIndex =
+                            workingList.indexOfFirst { it.streamId == draggingStreamId }
+                        if (currentIndex >= 0) {
+                            val shift = (dragOffsetPx / rowHeightPx).roundToInt()
+                            if (shift != 0) {
+                                val newIndex = (currentIndex + shift).coerceIn(0, workingList.size - 1)
+                                if (newIndex != currentIndex) {
+                                    val moved = workingList.removeAt(currentIndex)
+                                    workingList.add(newIndex, moved)
+                                    dragOffsetPx -= shift * rowHeightPx
                                 }
                             }
-                        },
-                        onDragEnd = {
-                            val from = dragMovedFrom
-                            val to = workingList.indexOfFirst { it.streamId == channel.streamId }
-                            draggingStreamId = null
-                            dragOffsetPx = 0f
-                            if (from >= 0 && to >= 0 && from != to) {
-                                // Posizioni 1-based, ricalcolo fatto dallo store.
-                                viewModel.moveMyChannelTo(channel.streamId, to + 1)
-                            }
-                        },
-                        onDragCancel = {
-                            draggingStreamId = null
-                            dragOffsetPx = 0f
-                            workingList.clear()
-                            workingList.addAll(myChannels)
-                        },
-                        onPlay = {
-                            viewModel.onPlayRequest(PlayTarget.LiveChannel(channel.streamId, fromMyChannels = true))
-                        },
-                        onLongPress = {
-                            viewModel.openActions(ActionTarget.MyChannelEntry(channel))
-                        },
-                        onRemove = { viewModel.removeMyChannel(channel.streamId) },
-                        onMoveToPosition = {
-                            viewModel.openPositionDialog(channel, isNewChannel = false)
-                        },
-                        modifier = Modifier
-                            .offset { IntOffset(0, offsetY.roundToInt()) }
-                            .zIndex(if (isDragging) 1f else 0f),
+                        }
+                    },
+                    onDragEnd = { channel ->
+                        val from = dragMovedFrom
+                        val to = workingList.indexOfFirst { it.streamId == channel.streamId }
+                        draggingStreamId = null
+                        dragOffsetPx = 0f
+                        if (from >= 0 && to >= 0 && from != to) {
+                            viewModel.moveMyChannelTo(channel.streamId, to + 1)
+                        }
+                    },
+                    onDragCancel = {
+                        draggingStreamId = null
+                        dragOffsetPx = 0f
+                        workingList.clear()
+                        workingList.addAll(myChannels)
+                    },
+                )
+                FavoritesTab.FILM_SERIES -> FavoritesFilmSeriesTab(
+                    filmFavorites = filmFavorites,
+                    seriesFavorites = seriesFavorites,
+                    catalog = catalog,
+                    progress = progress,
+                    imageLoader = imageLoader,
+                    viewModel = viewModel,
+                )
+                FavoritesTab.LIVE_CATEGORIES -> FavoritesLiveCategoriesTab(
+                    categoryFavorites = categoryFavorites,
+                    viewModel = viewModel,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+    }
+}
+
+/** Scheda "I miei canali": lista numerata con modifica/trascinamento. */
+@Composable
+private fun FavoritesMyChannelsTab(
+    viewModel: CatalogViewModel,
+    myChannels: List<MyChannel>,
+    workingList: List<MyChannel>,
+    editMode: Boolean,
+    imageLoader: ImageLoader,
+    programs: Map<String, List<EpgProgram>>,
+    nowMillis: Long,
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    draggingStreamId: String?,
+    dragOffsetPx: Float,
+    dragMovedFrom: Int,
+    rowHeightPx: Float,
+    onEditModeChange: (Boolean) -> Unit,
+    onDragStart: (String) -> Unit,
+    onDrag: (Float) -> Unit,
+    onDragEnd: (MyChannel) -> Unit,
+    onDragCancel: () -> Unit,
+) {
+    LazyColumn(
+        state = listState,
+        verticalArrangement = Arrangement.spacedBy(18.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+        modifier = Modifier.fillMaxWidth().testTag("preferiti_my_channels_list"),
+    ) {
+        item(key = "preferiti_myheader") {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().testTag("preferiti_my_header"),
+            ) {
+                RowTitle(text = "I miei canali", modifier = Modifier.weight(1f))
+                TextButton(
+                    onClick = { onEditModeChange(!editMode) },
+                    modifier = Modifier.testTag(if (editMode) "favorites_done" else "favorites_edit"),
+                ) {
+                    Text(
+                        text = if (editMode) "Fine" else "Modifica",
+                        color = FvpColors.Green,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
                     )
-                }
-            }
-
-            // --- Categorie Live ---
-            if (categoryFavorites.isNotEmpty()) {
-                item(key = "preferiti_livecattitle") {
-                    RowTitle(text = "Categorie Live")
-                }
-                item(key = "preferiti_livecatrow") {
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        contentPadding = PaddingValues(end = 8.dp),
-                        modifier = Modifier.fillMaxWidth().testTag("preferiti_row_categorie"),
-                    ) {
-                        items(
-                            favorites.filter { it.type == FavoriteItem.LIVE_CATEGORY },
-                            key = { "livecatfav_${it.id}" },
-                        ) { favorite ->
-                            val categoryId = favorite.categoryId
-                            val available = favorite.categoryId != null &&
-                                catalog?.liveCategories.orEmpty()
-                                    .any { it.categoryId == favorite.categoryId }
-                            TouchListRow(
-                                onClick = {
-                                    if (available && categoryId != null) {
-                                        viewModel.selectLiveCategory(categoryId)
-                                    }
-                                },
-                                onLongClick = { viewModel.openActions(ActionTarget.LiveCategory(categoryId.orEmpty(), favorite.title)) },
-                                modifier = Modifier
-                                    .width(220.dp)
-                                    .testTag("favorite_${favorite.id}"),
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = favorite.title,
-                                        color = if (available) FvpColors.TextPrimary else FvpColors.TextSecondary,
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.Medium,
-                                    )
-                                    val count = if (available) {
-                                        catalog?.liveStreams.orEmpty()
-                                            .count { it.categoryId == categoryId }
-                                    } else {
-                                        0
-                                    }
-                                    SecondaryText(
-                                        text = if (available) "$count canali" else "Non più disponibile",
-                                    )
-                                }
-                                FavoriteBadge()
-                            }
-                        }
-                    }
-                }
-            }
-
-            // --- Film ---
-            if (filmFavorites.isNotEmpty()) {
-                item(key = "preferiti_filmtitle") {
-                    RowTitle(text = "Film")
-                }
-                item(key = "preferiti_filmrow") {
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        contentPadding = PaddingValues(end = 8.dp),
-                        modifier = Modifier.fillMaxWidth().testTag("preferiti_row_film"),
-                    ) {
-                        items(filmFavorites, key = { "filmfav_${it.id}" }) { favorite ->
-                            val vodId = favorite.id.removePrefix("vod_")
-                            val vod = catalog?.vodStreams.orEmpty()
-                                .firstOrNull { it.streamId == vodId }
-                            val vodProgress = progress[ProgressKeys.movie(vodId)]
-                            PosterCard(
-                                imageUrl = favorite.poster,
-                                title = favorite.title,
-                                imageLoader = imageLoader,
-                                width = 132.dp,
-                                isFavorite = true,
-                                progress = vodProgress,
-                                isWatched = vodProgress?.isWatched == true,
-                                onClick = {
-                                    if (vod != null) viewModel.openDetail(DetailTarget.Film(vod))
-                                },
-                                onLongClick = {
-                                    if (vod != null) viewModel.openActions(ActionTarget.Film(vod))
-                                },
-                                testTag = "favorite_${favorite.id}",
-                            )
-                        }
-                    }
-                }
-            }
-
-            // --- Serie ---
-            if (seriesFavorites.isNotEmpty()) {
-                item(key = "preferiti_serietitle") {
-                    RowTitle(text = "Serie")
-                }
-                item(key = "preferiti_serierow") {
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        contentPadding = PaddingValues(end = 8.dp),
-                        modifier = Modifier.fillMaxWidth().testTag("preferiti_row_serie"),
-                    ) {
-                        items(seriesFavorites, key = { "seriefav_${it.id}" }) { favorite ->
-                            val seriesId = favorite.id.removePrefix("series_")
-                            val series = catalog?.series.orEmpty()
-                                .firstOrNull { it.seriesId == seriesId }
-                            PosterCard(
-                                imageUrl = favorite.poster,
-                                title = favorite.title,
-                                imageLoader = imageLoader,
-                                width = 132.dp,
-                                isFavorite = true,
-                                onClick = {
-                                    if (series != null) viewModel.openDetail(DetailTarget.Series(series))
-                                },
-                                onLongClick = {
-                                    if (series != null) viewModel.openActions(ActionTarget.Series(series))
-                                },
-                                testTag = "favorite_${favorite.id}",
-                            )
-                        }
-                    }
                 }
             }
         }
 
-        if (!editMode && myChannels.isEmpty() && favorites.isEmpty()) {
+        val shownChannels = if (editMode) workingList else myChannels
+        if (shownChannels.isEmpty()) {
+            item(key = "preferiti_my_empty") {
+                SecondaryText(
+                    text = MY_CHANNELS_EMPTY_MESSAGE,
+                    maxLines = 3,
+                    modifier = Modifier.testTag("preferiti_my_empty"),
+                )
+            }
+        } else {
+            itemsIndexed(
+                shownChannels,
+                key = { _, channel -> "mychannel_${channel.streamId}" },
+            ) { index, channel ->
+                val isDragging = editMode && channel.streamId == draggingStreamId
+                val offsetY by animateFloatAsState(
+                    targetValue = if (isDragging) dragOffsetPx else 0f,
+                    label = "drag_offset",
+                )
+                MyChannelRow(
+                    channel = channel,
+                    index = index,
+                    imageLoader = imageLoader,
+                    editMode = editMode,
+                    isDragging = isDragging,
+                    programs = programs[channel.streamId],
+                    nowMillis = nowMillis,
+                    onDragStart = { onDragStart(channel.streamId) },
+                    onDrag = { amountY ->
+                        onDrag(amountY)
+                    },
+                    onDragEnd = { onDragEnd(channel) },
+                    onDragCancel = onDragCancel,
+                    onPlay = {
+                        viewModel.onPlayRequest(
+                            PlayTarget.LiveChannel(channel.streamId, fromMyChannels = true),
+                        )
+                    },
+                    onLongPress = {
+                        viewModel.openActions(ActionTarget.MyChannelEntry(channel))
+                    },
+                    onRemove = { viewModel.removeMyChannel(channel.streamId) },
+                    onMoveToPosition = {
+                        viewModel.openPositionDialog(channel, isNewChannel = false)
+                    },
+                    modifier = Modifier
+                        .offset { IntOffset(0, offsetY.roundToInt()) }
+                        .zIndex(if (isDragging) 1f else 0f),
+                )
+            }
+        }
+    }
+}
+
+/** Scheda "Film e Serie": righe Film e Serie dei preferiti. */
+@Composable
+private fun FavoritesFilmSeriesTab(
+    filmFavorites: List<FavoriteItem>,
+    seriesFavorites: List<FavoriteItem>,
+    catalog: Catalog?,
+    progress: Map<String, WatchProgress>,
+    imageLoader: ImageLoader,
+    viewModel: CatalogViewModel,
+) {
+    val isEmpty = filmFavorites.isEmpty() && seriesFavorites.isEmpty()
+    Box(modifier = Modifier.fillMaxWidth()) {
+        if (isEmpty) {
             EmptyState(
-                title = "Nessun preferito",
-                description = "Tieni premuto su un canale, un film o una serie e scegli «Preferiti» per trovarlo qui",
+                title = "Nessun film o serie nei preferiti",
+                description = "Tieni premuto su un film o una serie e scegli «Preferiti»",
                 modifier = Modifier.align(Alignment.Center).padding(24.dp),
+            )
+        } else {
+            Column(
+                modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+                    .testTag("preferiti_film_series_list"),
+                verticalArrangement = Arrangement.spacedBy(18.dp),
+            ) {
+                if (filmFavorites.isNotEmpty()) {
+                    RowTitle(text = "Film")
+                    FavoritesPosterRow(
+                        favorites = filmFavorites,
+                        catalog = catalog,
+                        progress = progress,
+                        imageLoader = imageLoader,
+                        viewModel = viewModel,
+                        testTag = "preferiti_row_film",
+                    ) { favorite ->
+                        val vodId = favorite.id.removePrefix("vod_")
+                        val vod = catalog?.vodStreams.orEmpty().firstOrNull { it.streamId == vodId }
+                        if (vod != null) viewModel.openDetail(DetailTarget.Film(vod))
+                    }
+                    { favorite ->
+                        val vodId = favorite.id.removePrefix("vod_")
+                        val vod = catalog?.vodStreams.orEmpty().firstOrNull { it.streamId == vodId }
+                        if (vod != null) viewModel.openActions(ActionTarget.Film(vod))
+                    }
+                }
+                if (seriesFavorites.isNotEmpty()) {
+                    RowTitle(text = "Serie")
+                    FavoritesPosterRow(
+                        favorites = seriesFavorites,
+                        catalog = catalog,
+                        progress = progress,
+                        imageLoader = imageLoader,
+                        viewModel = viewModel,
+                        testTag = "preferiti_row_serie",
+                    ) { favorite ->
+                        val seriesId = favorite.id.removePrefix("series_")
+                        val series = catalog?.series.orEmpty().firstOrNull { it.seriesId == seriesId }
+                        if (series != null) viewModel.openDetail(DetailTarget.Series(series))
+                    }
+                    { favorite ->
+                        val seriesId = favorite.id.removePrefix("series_")
+                        val series = catalog?.series.orEmpty().firstOrNull { it.seriesId == seriesId }
+                        if (series != null) viewModel.openActions(ActionTarget.Series(series))
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Scheda "Categorie Live": elenco delle categorie Live preferite. */
+@Composable
+private fun FavoritesLiveCategoriesTab(
+    categoryFavorites: List<MobileLiveCategoryFavorite>,
+    viewModel: CatalogViewModel,
+    modifier: Modifier = Modifier,
+) {
+    val isEmpty = categoryFavorites.isEmpty()
+    Box(modifier = modifier) {
+        if (isEmpty) {
+            EmptyState(
+                title = "Nessuna categoria Live nei preferiti",
+                description = "Tieni premuto su una categoria in Live per aggiungerla ai preferiti.",
+                modifier = Modifier.align(Alignment.Center).padding(24.dp),
+            )
+        } else {
+            LazyColumn(
+                modifier = modifier.testTag("preferiti_live_categories_list"),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+            ) {
+                items(categoryFavorites, key = { "livecatfav_${it.favorite.id}" }) { item ->
+                    val favorite = item.favorite
+                    val categoryId = favorite.categoryId
+                    TouchListRow(
+                        onClick = {
+                            if (item.available && categoryId != null) {
+                                viewModel.selectLiveCategory(categoryId)
+                            }
+                        },
+                        onLongClick = {
+                            viewModel.openActions(
+                                ActionTarget.LiveCategory(categoryId.orEmpty(), favorite.title),
+                            )
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("favorite_${favorite.id}"),
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = favorite.title,
+                                color = if (item.available) FvpColors.TextPrimary else FvpColors.TextSecondary,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Medium,
+                            )
+                            SecondaryText(text = item.supportingText)
+                        }
+                        FavoriteBadge()
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Riga orizzontale di locandine dei preferiti (Film o Serie). */
+@Composable
+private fun FavoritesPosterRow(
+    favorites: List<FavoriteItem>,
+    catalog: Catalog?,
+    progress: Map<String, WatchProgress>,
+    imageLoader: ImageLoader,
+    viewModel: CatalogViewModel,
+    testTag: String,
+    onClick: (FavoriteItem) -> Unit,
+    onLongClick: (FavoriteItem) -> Unit,
+) {
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(end = 8.dp),
+        modifier = Modifier.fillMaxWidth().testTag(testTag),
+    ) {
+        items(favorites, key = { "${testTag}_${it.id}" }) { favorite ->
+            val isVod = favorite.type == FavoriteItem.VOD
+            val id = favorite.id.removePrefix(if (isVod) "vod_" else "series_")
+            val progressForItem = if (isVod) {
+                progress[ProgressKeys.movie(id)]
+            } else {
+                null
+            }
+            PosterCard(
+                imageUrl = favorite.poster,
+                title = favorite.title,
+                imageLoader = imageLoader,
+                width = 132.dp,
+                isFavorite = true,
+                progress = progressForItem,
+                isWatched = progressForItem?.isWatched == true,
+                onClick = { onClick(favorite) },
+                onLongClick = { onLongClick(favorite) },
+                testTag = "favorite_${favorite.id}",
             )
         }
     }
