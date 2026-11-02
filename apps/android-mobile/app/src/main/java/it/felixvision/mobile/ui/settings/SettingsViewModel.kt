@@ -35,6 +35,7 @@ data class SettingsUiState(
     val showExitConfirm: Boolean = false,
     val clearUserDataOnExit: Boolean = false,
     val versionName: String = "",
+    val versionCode: Int = 0,
 )
 
 /**
@@ -67,6 +68,7 @@ class SettingsViewModel(
     private val isPlaybackActive: () -> Boolean,
     private val clock: Clock = SystemClock,
     versionName: String = BuildConfig.VERSION_NAME,
+    versionCode: Int = BuildConfig.VERSION_CODE,
 ) : ViewModel() {
 
     constructor(
@@ -113,6 +115,7 @@ class SettingsViewModel(
             maxConnections = maxConnections,
             activeConnections = activeConnections,
             versionName = versionName,
+            versionCode = versionCode,
         ),
     )
     val ui: StateFlow<SettingsUiState> = _ui.asStateFlow()
@@ -132,6 +135,19 @@ class SettingsViewModel(
     fun onSettingsVisible() {
         refreshServerLabel()
         refreshAccountInfo()
+    }
+
+    /**
+     * Rilegge l'ora dell'ultimo aggiornamento del catalogo dalla cache: viene
+     * chiamata dalla finestra di aggiornamento quando un aggiornamento termina,
+     * così la riga "Ultimo aggiornamento" mostra subito il nuovo valore senza
+     * riaprire la sezione.
+     */
+    fun reloadLastUpdate() {
+        viewModelScope.launch {
+            val last = runCatching { readLastCatalogUpdate(server, username) }.getOrNull()
+            _ui.update { it.copy(lastUpdateMillis = last) }
+        }
     }
 
     /**

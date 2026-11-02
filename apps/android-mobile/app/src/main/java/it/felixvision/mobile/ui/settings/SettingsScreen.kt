@@ -14,19 +14,21 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -36,6 +38,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import it.felixvision.mobile.data.catalog.CatalogDownloadMonitor
 import it.felixvision.mobile.ui.access.AccessViewModel
 import it.felixvision.mobile.ui.catalog.CatalogViewModel
 import it.felixvision.mobile.ui.components.FvpPrimaryButton
@@ -48,8 +51,10 @@ import java.time.format.DateTimeFormatter
 /**
  * Sezione "Impostazioni" del tablet: scheda utente (stato, scadenza,
  * connessioni con la regola di avviso della TV), etichetta server, pulsante
- * "Aggiorna catalogo" con avanzamento, versione dell'app e Esci verso
- * l'accesso (con conferma e pulizia opzionale dei dati locali, come sulla TV).
+ * "Aggiorna catalogo" che apre la finestra di avanzamento
+ * ([CatalogUpdateDialog]) — anche quando un aggiornamento è già in corso —,
+ * versione dell'app (versionName e versionCode) e Esci verso l'accesso (con
+ * conferma e pulizia opzionale dei dati locali, come sulla TV).
  * Nessuna voce di aggiornamento in-app in questo PR.
  */
 @Composable
@@ -57,9 +62,23 @@ fun SettingsScreen(
     settingsViewModel: SettingsViewModel,
     catalogViewModel: CatalogViewModel,
     modifier: Modifier = Modifier,
+    downloadMonitor: CatalogDownloadMonitor,
 ) {
     val state by settingsViewModel.ui.collectAsStateWithLifecycle()
     val catalogState by catalogViewModel.ui.collectAsStateWithLifecycle()
+    val downloadProgress by downloadMonitor.progress.collectAsStateWithLifecycle()
+    var showUpdateDialog by remember { mutableStateOf(false) }
+
+    // Quando il catalogo viene ricaricato (aggiornamento riuscito), la riga
+    // "Ultimo aggiornamento" rilegge l'ora salvata in cache dalla finestra.
+    var lastSeenCatalogUpdate by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(catalogState.lastUpdateMillis) {
+        val value = catalogState.lastUpdateMillis
+        if (value != null && value != lastSeenCatalogUpdate) {
+            lastSeenCatalogUpdate = value
+            settingsViewModel.reloadLastUpdate()
+        }
+    }
 
     Column(
         modifier = modifier
@@ -137,45 +156,28 @@ fun SettingsScreen(
                 value = formatMillis(state.lastUpdateMillis) ?: "Mai",
                 testTag = "settings_last_update",
             )
-            if (catalogState.isRefreshing) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.fillMaxWidth().testTag("settings_refresh_progress"),
-                ) {
-                    CircularProgressIndicator(
-                        color = FvpColors.ImpostazioniActive,
-                        trackColor = FvpColors.SurfaceElevated,
-                        modifier = Modifier.size(18.dp),
-                        strokeWidth = 2.dp,
-                    )
-                    Text(
-                        text = "Aggiornamento in corso…",
-                        color = FvpColors.TextSecondary,
-                        fontSize = 14.sp,
-                    )
-                }
-            } else {
-                FvpPrimaryButton(
-                    text = "Aggiorna catalogo",
-                    onClick = catalogViewModel::refreshManual,
-                    modifier = Modifier.fillMaxWidth(),
-                    testTag = "settings_refresh",
-                )
-            }
-            catalogState.errorMessage?.let { message ->
-                Text(
-                    text = message,
-                    color = FvpColors.Error,
-                    fontSize = 13.sp,
-                    modifier = Modifier.testTag("settings_refresh_error"),
-                )
-            }
+            // Il pulsante resta sempre disponibile: se un aggiornamento
+            // (anche automatico) è già in corso, apre la stessa finestra invece
+            // di essere ignorato.
+            val busy = catalogState.isRefreshing || catalogState.isLoading
+            FvpPrimaryButton(
+                text = "Aggiorna catalogo",
+                onClick = {
+                    if (!busy) catalogViewModel.refreshManual()
+                    showUpdateDialog = true
+                },
+                modifier = Modifier.fillMaxWidth(),
+                testTag = "settings_refresh",
+            )
         }
 
         // --- Applicazione ---
         SettingsCard(title = "Applicazione") {
-            InfoRow(label = "Versione", value = state.versionName, testTag = "settings_version")
+            InfoRow(
+                label = "Versione",
+                value = "${state.versionName} (${state.versionCode})",
+                testTag = "settings_version",
+            )
         }
 
         Spacer(Modifier.height(2.dp))
@@ -186,6 +188,16 @@ fun SettingsScreen(
             testTag = "settings_exit",
         )
         Spacer(Modifier.height(28.dp))
+    }
+
+    if (showUpdateDialog) {
+        CatalogUpdateDialog(
+            sections = catalogState.refreshSections,
+            downloads = downloadProgress,
+            errorMessage = if (catalogState.isRefreshing) null else catalogState.errorMessage,
+            onRetry = catalogViewModel::retry,
+            onClose = { showUpdateDialog = false },
+        )
     }
 
     if (state.showExitConfirm) {

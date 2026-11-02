@@ -134,13 +134,44 @@ motivo è spiegato nel file.
 ## 4. CI
 
 `.github/workflows/android-mobile-ci.yml` (push su qualunque branch e
-`pull_request` verso `main`, più `workflow_dispatch`) esegue
-`./gradlew testDebugUnitTest assembleDebug lintDebug` da
-`apps/android-mobile` — test e lint della sola variante debug, stesso
-schema del CI della TV — e carica:
+`pull_request` verso `main`, più `workflow_dispatch`) esegue due job.
+
+**verify** — `./gradlew testDebugUnitTest assembleDebug lintDebug` da
+`apps/android-mobile` (test e lint della sola variante debug, stesso
+schema del CI della TV) e carica:
 
 - **FelixVP-mobile-debug**: APK di debug (retention 7 giorni);
 - **android-mobile-ci-reports**: report di test e lint, anche in caso di errore.
+
+L'APK di debug viene costruito con una versione riconoscibile:
+`FVP_VERSION_NAME` è `0.1.0-<primi 7 caratteri dello SHA del commit>` e
+`FVP_VERSION_CODE` è il numero di esecuzione del workflow (`github.run_number`);
+il job emette un avviso `::notice` con versione e codice, visibile nella
+pagina dell'esecuzione. Nessun segreto obbligatorio nel workflow.
+
+**emulatore** (dopo `verify`) — test strumentati end-to-end del percorso
+completo del tablet su un AVD **API 35, target `google_apis`, architettura
+`x86_64`, profilo `pixel_tablet`** (2560×1600, ~320dpi), tramite
+`reactivecircus/android-emulator-runner@v2` con KVM verificato sul runner.
+Il job:
+
+1. avvia il mock server Xtream `tools/xtream-mock` in locale (profilo
+   `visual`, porta 3333, utente demo/demo) e ne attende `/health`;
+2. esegue `./gradlew connectedDebugAndroidTest`, che lancia
+   `EmulatorTabletJourneyTest`: login con eventi reali, sezioni
+   Novità/Live/Film/Impostazioni in entrambi gli orientamenti (controlli su
+   inset/safe-area e allineamento della barra laterale), player Live e Film
+   con gesti per volume, luminosità e cambio canale, aggiornamento del
+   catalogo con percentuali reali; ogni schermata/orientamento viene
+   fotografata in PNG dentro `filesDir/screenshots`;
+3. recupera gli screenshot con `adb exec-out run-as … tar` (piano B:
+   `adb root` + `adb pull`) e carica l'artifact **android-mobile-emulator**
+   (report dei test connessi + screenshot, retention 7 giorni, anche in
+   caso di errore).
+
+In locale gli stessi test si eseguono con `./gradlew connectedDebugAndroidTest`
+avendo un dispositivo/emulatore collegato e il mock server in ascolto su
+`10.0.2.2:3333` (`npm run mock:xtream:visual` da `tools/xtream-mock`).
 
 I path di trigger includono anche `data/`, `core/` e `libs.versions.toml` della
 TV, perché il tablet compila quei sorgenti. Nessun segreto nel workflow.
