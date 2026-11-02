@@ -13,6 +13,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.pressKey
@@ -53,9 +54,6 @@ class CategoryConfirmFocusTest {
 
     private val scale = UiScale(1f)
 
-    /** Id delle categorie di prova, per i messaggi di errore. */
-    private val candidateIds = listOf(NOVITA_CATEGORY_ID, "001", "002", "live1", "live3")
-
     // Categorie di prova: la "001" ha un contenuto, la "002" è vuota.
     private val categories = listOf(
         Category(categoryId = "001", categoryName = "Categoria uno"),
@@ -93,34 +91,37 @@ class CategoryConfirmFocusTest {
     }
 
     private fun tagExists(tag: String): Boolean =
-        rule.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()
+        rule.onAllNodesWithTag(tag, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
 
-    /**
-     * La categoria applicata alla griglia o all'elenco, letta dai tag della
-     * colonna (`<prefisso>_category_column_<id>_expanded|_collapsed`): serve nei
-     * messaggi di errore per dire subito cosa mostra la colonna.
-     */
-    private fun appliedCategory(prefix: String, candidates: List<String>): String =
-        candidates.firstOrNull { tagExists("${prefix}_category_column_${it}_expanded") }?.let { "$it (aperta)" }
-            ?: candidates.firstOrNull { tagExists("${prefix}_category_column_${it}_collapsed") }?.let { "$it (compatta)" }
-            ?: "colonna non composta"
+    /** Tag presenti nell'albero, in ordine: rende leggibile un errore della CI. */
+    private fun tagsInTree(): String = runCatching {
+        val root = rule.onRoot(useUnmergedTree = true)
+        root.fetchSemanticsNode()
+        val printed: String = root.printToString()
+        printed.lines()
+            .filter { "Tag:" in it }
+            .map { it.substringAfter("Tag:").trim().removeSurrounding("'") }
+            .joinToString(", ")
+    }.getOrElse { "albero non leggibile: ${it.message}" }
 
-    /** Applica OK fin quando la colonna non mostra [categoryId]. */
-    private fun confirmUntilApplied(step: String, tag: String, prefix: String, categoryId: String) {
-        pressOk(tag)
-        if (isApplied(prefix, categoryId)) return
-        // Riserva: il tasto OK sulla voce (il click non è arrivato).
-        pressOkKey(tag)
-        if (isApplied(prefix, categoryId)) return
-        throw AssertionError(
-            "[$step] la categoria $categoryId non è stata applicata; " +
-                "la colonna mostra ${appliedCategory(prefix, candidateIds)}",
-        )
-    }
-
+    /** La categoria [categoryId] è quella applicata alla colonna. */
     private fun isApplied(prefix: String, categoryId: String): Boolean =
         tagExists("${prefix}_category_column_${categoryId}_expanded") ||
             tagExists("${prefix}_category_column_${categoryId}_collapsed")
+
+    /**
+     * Applica OK sulla voce [tag] e verifica che la categoria cambi: prima con
+     * il click, poi, se non arriva, con il tasto OK del telecomando.
+     */
+    private fun confirmUntilApplied(step: String, tag: String, prefix: String, categoryId: String) {
+        pressOk(tag)
+        if (isApplied(prefix, categoryId)) return
+        pressOkKey(tag)
+        if (isApplied(prefix, categoryId)) return
+        throw AssertionError(
+            "[$step] la categoria $categoryId non è stata applicata. Tag nell'albero: ${tagsInTree()}",
+        )
+    }
 
     private fun assertFocus(step: String, tag: String) {
         try {
