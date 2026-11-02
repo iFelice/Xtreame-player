@@ -37,6 +37,7 @@ import org.junit.Assume
 import org.junit.FixMethodOrder
 import org.junit.Rule
 import org.junit.Test
+import org.junit.runner.RunWith
 import org.junit.runners.MethodSorters
 
 /**
