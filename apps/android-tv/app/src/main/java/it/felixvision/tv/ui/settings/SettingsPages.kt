@@ -33,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.tv.material3.Text
 import it.felixvision.tv.data.images.CacheCleanup
+import it.felixvision.tv.player.ZappingSeconds
 import it.felixvision.tv.ui.access.AccessViewModel
 import it.felixvision.tv.ui.access.PairingPanel
 import it.felixvision.tv.ui.components.FvpCompactButton
@@ -57,7 +58,24 @@ const val SETTINGS_PAGE_ACCOUNT_TAG = "settings_page_account"
 const val SETTINGS_PAGE_APPEARANCE_TAG = "settings_page_appearance"
 const val SETTINGS_PAGE_VPN_TAG = "settings_page_vpn"
 const val SETTINGS_PAGE_CATALOG_TAG = "settings_page_catalog"
+const val SETTINGS_PAGE_PLAYER_TAG = "settings_page_player"
 const val SETTINGS_PAGE_APP_TAG = "settings_page_app"
+
+/** Riquadro "Durata zapping" dentro la pagina Player. */
+const val SETTINGS_PLAYER_SECTION_TAG = "settings_player_section"
+
+/** Etichetta della riga di scelta della durata dello zapping. */
+const val SETTINGS_ZAPPING_DURATION_LABEL = "Durata zapping"
+
+/** Tag di test del pulsante di [seconds] nella pagina Player. */
+fun zappingSecondsTag(seconds: Int): String = "settings_zapping_seconds_$seconds"
+
+/** Prefisso del pulsante della durata di zapping attiva. */
+const val ZAPPING_ACTIVE_PREFIX = "✓ "
+
+/** Etichetta del pulsante: "<n> s", con "✓ " se è il valore attivo. */
+fun zappingSecondsButtonLabel(seconds: Int, active: Int): String =
+    if (seconds == active) "$ZAPPING_ACTIVE_PREFIX${seconds} s" else "${seconds} s"
 
 /** Riquadro Account dentro la pagina Account. */
 const val SETTINGS_ACCOUNT_SECTION_TAG = "settings_account_section"
@@ -321,6 +339,79 @@ internal fun SettingsAppearancePage(
                         modifier = Modifier
                             .focusRequester(sizeFocusRequesters.getValue(size))
                             .testTag(interfaceSizeTag(size)),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Pagina "Impostazioni › Player": la durata dello zapping automatico, scelta
+ * tra 5, 10, 15 e 30 secondi (predefinita 10). Il valore scelto resta salvato
+ * nelle preferenze del player ([it.felixvision.tv.player.PlayerPreferences]) e
+ * lo zapping automatico lo legge al suo avvio; la regola "salta i canali che
+ * non partono in 5 s" resta invariata.
+ *
+ * La pagina è predisposta per accogliere in futuro lingua audio, sottotitoli e
+ * formato video, ma per ora contiene solo la durata dello zapping: niente
+ * voci segnaposto.
+ *
+ * Come la pagina Aspetto, il focus d'ingresso va sul valore attivo con i propri
+ * [FocusRequester], così si può cambiare subito e Indietro resta alla pagina.
+ */
+@Composable
+internal fun SettingsPlayerPage(
+    scale: UiScale,
+    modifier: Modifier = Modifier,
+    zappingSeconds: Int = ZappingSeconds.DEFAULT,
+    onZappingSecondsSelected: (Int) -> Unit = {},
+) {
+    val active = ZappingSeconds.normalize(zappingSeconds)
+    val secondsFocusRequesters = remember { ZappingSeconds.ALLOWED.associateWith { FocusRequester() } }
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
+        runCatching { secondsFocusRequesters.getValue(active).requestFocus() }
+    }
+
+    SettingsPage(
+        card = SettingsCard.Player,
+        scale = scale,
+        modifier = modifier,
+        pageTag = SETTINGS_PAGE_PLAYER_TAG,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(scale.dp(14f)))
+                .background(FvpColors.Surface)
+                .padding(scale.settingsSectionPadding)
+                .testTag(SETTINGS_PLAYER_SECTION_TAG),
+            verticalArrangement = Arrangement.spacedBy(scale.settingsRowSpacing),
+        ) {
+            Text(
+                text = SETTINGS_PLAYER_TITLE,
+                color = FvpColors.TextPrimary,
+                fontSize = scale.sp(16f),
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = SETTINGS_ZAPPING_DURATION_LABEL,
+                color = FvpColors.TextSecondary,
+                fontSize = scale.settingsRowText,
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(scale.dp(8f)),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                ZappingSeconds.ALLOWED.forEach { seconds ->
+                    FvpCompactButton(
+                        text = zappingSecondsButtonLabel(seconds = seconds, active = active),
+                        onClick = { onZappingSecondsSelected(seconds) },
+                        scale = scale,
+                        modifier = Modifier
+                            .focusRequester(secondsFocusRequesters.getValue(seconds))
+                            .testTag(zappingSecondsTag(seconds)),
                     )
                 }
             }

@@ -45,6 +45,7 @@ private const val FAKE_PROTECTED_TAG = "fake_protected_page"
 private const val FAKE_VPN_TAG = "fake_vpn_page"
 private const val FAKE_VPN_SETUP_TAG = "fake_vpn_setup_page"
 private const val FAKE_CATALOG_TAG = "fake_catalog_page"
+private const val FAKE_PLAYER_TAG = "fake_player_page"
 private const val FAKE_APP_TAG = "fake_app_page"
 
 /** Suffisso del pulsante che riceve il focus dentro una pagina segnaposto. */
@@ -87,6 +88,7 @@ class SettingsNavigationTest {
         SettingsCard.Protected -> FAKE_PROTECTED_TAG
         SettingsCard.Vpn -> FAKE_VPN_TAG
         SettingsCard.Catalog -> FAKE_CATALOG_TAG
+        SettingsCard.Player -> FAKE_PLAYER_TAG
         SettingsCard.App -> FAKE_APP_TAG
     }
 
@@ -145,7 +147,7 @@ class SettingsNavigationTest {
     }
 
     @Test
-    fun `all'ingresso c'è solo la griglia, con il titolo e le sei card`() {
+    fun `all'ingresso c'è solo la griglia, con il titolo e le sette card`() {
         showNavigation()
 
         rule.onNodeWithTag(SETTINGS_TITLE_TAG).assertTextEquals(SETTINGS_TITLE)
@@ -255,6 +257,9 @@ class SettingsNavigationTest {
                     },
                     catalogPage = { pageModifier, entryFocus ->
                         FakeSettingsPage(pageModifier, scale, FAKE_CATALOG_TAG, entryFocus = entryFocus)
+                    },
+                    playerPage = { pageModifier, entryFocus ->
+                        FakeSettingsPage(pageModifier, scale, FAKE_PLAYER_TAG, entryFocus = entryFocus)
                     },
                     appPage = { pageModifier, entryFocus ->
                         FakeSettingsPage(pageModifier, scale, FAKE_APP_TAG, entryFocus = entryFocus)

@@ -25,6 +25,8 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.SemanticsPropertyKey
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -35,6 +37,7 @@ import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
 import it.felixvision.tv.R
+import it.felixvision.tv.player.ZappingSeconds
 import it.felixvision.tv.ui.access.AccessViewModel
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.theme.FvpColors
@@ -50,20 +53,46 @@ const val SETTINGS_TITLE = "Impostazioni"
 const val SETTINGS_TITLE_TAG = "settings_title"
 const val SETTINGS_GRID_TAG = "settings_grid"
 
-/** Tag di test delle sei card, nell'ordine in cui compaiono nella griglia. */
+/** Tag di test delle sette card, nell'ordine in cui compaiono nella griglia. */
 const val SETTINGS_CARD_ACCOUNT_TAG = "settings_card_account"
 const val SETTINGS_CARD_APPEARANCE_TAG = "settings_card_appearance"
 const val SETTINGS_CARD_PROTECTED_TAG = "settings_card_protected"
 const val SETTINGS_CARD_VPN_TAG = "settings_card_vpn"
 const val SETTINGS_CARD_CATALOG_TAG = "settings_card_catalog"
+const val SETTINGS_CARD_PLAYER_TAG = "settings_card_player"
 const val SETTINGS_CARD_APP_TAG = "settings_card_app"
 
-/** Suffisso del tag della riga di stato e del titolo di una card. */
+/** Suffisso del tag della riga di stato, del titolo e dell'icona di una card. */
 const val SETTINGS_CARD_STATUS_SUFFIX = "_status"
 const val SETTINGS_CARD_TITLE_SUFFIX = "_title"
+const val SETTINGS_CARD_ICON_SUFFIX = "_icon"
+
+/**
+ * Chiave semantica con il colore corrente dell'icona di una card: il test legge
+ * il tint reale (per esempio [FvpColors.Orange] sulla card App con un
+ * aggiornamento disponibile).
+ */
+val SettingsCardIconTintKey = SemanticsPropertyKey<Color>("SettingsCardIconTint")
 
 /** Titolo della card e della pagina del catalogo. */
 const val SETTINGS_CATALOG_TITLE = "Catalogo"
+
+/** Titolo della card e della pagina del player. */
+const val SETTINGS_PLAYER_TITLE = "Player"
+
+/**
+ * Vero quando lo stato dell'aggiornamento è Available, Downloading o
+ * Installing: in questi stati l'icona della card App si colora di
+ * [FvpColors.Orange].
+ */
+fun AppUpdateStatus.hasActiveUpdate(): Boolean = when (this) {
+    is AppUpdateStatus.Available,
+    is AppUpdateStatus.Downloading,
+    is AppUpdateStatus.Installing,
+    -> true
+
+    else -> false
+}
 
 /** Righe di stato della card del catalogo. */
 const val CATALOG_STATUS_REFRESHING = "Aggiornamento in corso…"
@@ -111,7 +140,7 @@ object SettingsCardDimens {
     /** Spazio tra le card e tra le righe della griglia. */
     const val GRID_SPACING_BASE = 16f
 
-    /** Card per riga: la griglia è 4 + 2. */
+    /** Card per riga: la griglia è 4 + 3. */
     const val CARDS_PER_ROW = 4
 
     /** Margine orizzontale della griglia, come il resto delle Impostazioni. */
@@ -122,8 +151,8 @@ object SettingsCardDimens {
 }
 
 /**
- * Le sei card della griglia Impostazioni, nell'ordine in cui compaiono:
- * Account, Aspetto, Contenuti protetti, VPN, Catalogo, App.
+ * Le sette card della griglia Impostazioni, nell'ordine in cui compaiono:
+ * Account, Aspetto, Contenuti protetti, VPN, Catalogo, Player, App.
  *
  * Ogni card apre la pagina della sua funzione. Le icone riusano i drawable già
  * presenti dove esistono (`ic_replay` per il Catalogo) e ne aggiungono di nuovi
@@ -139,6 +168,7 @@ enum class SettingsCard(
     Protected(SETTINGS_PROTECTED_TITLE, SETTINGS_CARD_PROTECTED_TAG, R.drawable.ic_settings_lock),
     Vpn(SETTINGS_VPN_TITLE, SETTINGS_CARD_VPN_TAG, R.drawable.ic_settings_vpn),
     Catalog(SETTINGS_CATALOG_TITLE, SETTINGS_CARD_CATALOG_TAG, R.drawable.ic_replay),
+    Player(SETTINGS_PLAYER_TITLE, SETTINGS_CARD_PLAYER_TAG, R.drawable.ic_settings_player),
     App("App", SETTINGS_CARD_APP_TAG, R.drawable.ic_settings_app),
     ;
 
@@ -147,6 +177,9 @@ enum class SettingsCard(
 
     /** Tag di test della riga di stato della card. */
     val statusTag: String get() = testTag + SETTINGS_CARD_STATUS_SUFFIX
+
+    /** Tag di test dell'icona della card. */
+    val iconTag: String get() = testTag + SETTINGS_CARD_ICON_SUFFIX
 }
 
 /** Riga di stato di una card: testo e colore (verde o rosso solo dove serve). */
@@ -156,7 +189,7 @@ data class SettingsCardStatus(
 )
 
 /**
- * Dati delle righe di stato delle sei card. È solo lettura: la griglia non
+ * Dati delle righe di stato delle sette card. È solo lettura: la griglia non
  * chiama il ViewModel, così si compone e si prova con dati finti.
  */
 data class SettingsCardsState(
@@ -167,6 +200,7 @@ data class SettingsCardsState(
     val vpnState: VpnState = VpnState.NoConfig,
     val catalogLastUpdateMillis: Long? = null,
     val catalogRefreshing: Boolean = false,
+    val zappingSeconds: Int = ZappingSeconds.DEFAULT,
     val versionName: String = "",
     val updateStatus: AppUpdateStatus = AppUpdateStatus.Checking,
 )
@@ -233,8 +267,15 @@ fun settingsCardStatuses(state: SettingsCardsState): Map<SettingsCard, SettingsC
     SettingsCard.Catalog to SettingsCardStatus(
         text = catalogStatusLine(state.catalogLastUpdateMillis, state.catalogRefreshing),
     ),
+    SettingsCard.Player to SettingsCardStatus(
+        text = playerStatusLine(state.zappingSeconds),
+    ),
     SettingsCard.App to appCardStatus(state.versionName, state.updateStatus),
 )
+
+/** Riga di stato della card Player: l'intervallo attuale dello zapping. */
+fun playerStatusLine(zappingSeconds: Int): String =
+    "Zapping ogni ${ZappingSeconds.normalize(zappingSeconds)} s"
 
 /** "HH:mm" di un istante; stringa vuota se il valore non è leggibile. */
 internal fun settingsClockText(millis: Long): String = runCatching {
@@ -243,15 +284,17 @@ internal fun settingsClockText(millis: Long): String = runCatching {
 }.getOrDefault("")
 
 /**
- * Griglia delle Impostazioni: titolo e sei card, quattro per riga.
+ * Griglia delle Impostazioni: titolo e sette card, quattro per riga.
  *
- * Le righe sono [Row] con pesi uguali (non una lista Lazy): con sei card la
+ * Le righe sono [Row] con pesi uguali (non una lista Lazy): con sette card la
  * griglia sta in una schermata e le card restano tutte visibili insieme. Gli
  * spazi vuoti della seconda riga sono [Spacer] dello stesso peso, così le card
  * hanno la stessa larghezza in entrambe le righe.
  *
  * Nessun pallino di aggiornamento sulle card: il pallino resta solo sull'icona
- * Impostazioni del menu laterale.
+ * Impostazioni del menu laterale. Quando c'è un aggiornamento disponibile (stato
+ * Available, Downloading o Installing) l'icona della card App si colora di
+ * [FvpColors.Orange].
  *
  * @param entryFocusRequester focus d'ingresso dal menu laterale: va sulla prima
  *   card (Account).
@@ -267,6 +310,7 @@ internal fun SettingsGrid(
     onOpenCard: (SettingsCard) -> Unit = {},
 ) {
     val statuses = remember(state) { settingsCardStatuses(state) }
+    val appUpdateActive = remember(state.updateStatus) { state.updateStatus.hasActiveUpdate() }
     val cardHeight = scale.dp(SettingsCardDimens.HEIGHT_BASE)
     val spacing = scale.dp(SettingsCardDimens.GRID_SPACING_BASE)
 
@@ -301,6 +345,10 @@ internal fun SettingsGrid(
                         card = card,
                         status = statuses.getValue(card),
                         scale = scale,
+                        // Arancione sull'icona della card App solo con un
+                        // aggiornamento in corso (disponibile, in scaricamento
+                        // o in installazione).
+                        iconOrange = card == SettingsCard.App && appUpdateActive,
                         modifier = Modifier
                             .weight(1f)
                             .height(cardHeight)
@@ -324,7 +372,7 @@ internal fun SettingsGrid(
     }
 }
 
-/** I [FocusRequester] delle sei card, uno per card, creati una volta sola. */
+/** I [FocusRequester] delle sette card, uno per card, creati una volta sola. */
 @Composable
 internal fun rememberSettingsCardFocusRequesters(): Map<SettingsCard, FocusRequester> =
     remember { SettingsCard.entries.associateWith { FocusRequester() } }
@@ -346,6 +394,11 @@ internal fun rememberSettingsPageFocusRequesters(): Map<SettingsCard, FocusReque
  * bordo [FvpColors.SurfaceElevated] a riposo e [FvpColors.GreenFocus] di 2 dp
  * con il focus. La forma è una sola, condivisa da contenitore e bordi, così gli
  * angoli restano arrotondati allo stesso modo in tutti gli stati.
+ *
+ * Con [iconOrange] l'icona resta arancione ([FvpColors.Orange]) anche a riposo
+ * e con il focus: è il caso della card App con un aggiornamento disponibile,
+ * in scaricamento o in installazione. Il colore corrente dell'icona è esposto
+ * nella chiave semantica [SettingsCardIconTintKey].
  */
 @Composable
 private fun SettingsCardTile(
@@ -353,6 +406,7 @@ private fun SettingsCardTile(
     status: SettingsCardStatus,
     scale: UiScale,
     modifier: Modifier = Modifier,
+    iconOrange: Boolean = false,
     onClick: () -> Unit,
 ) {
     val shape = remember(scale) { RoundedCornerShape(scale.dp(SettingsCardDimens.CORNER_BASE)) }
@@ -406,11 +460,19 @@ private fun SettingsCardTile(
                 Alignment.CenterVertically,
             ),
         ) {
+            val iconTint = when {
+                iconOrange -> FvpColors.Orange
+                focused -> FvpColors.GreenFocus
+                else -> FvpColors.TextPrimary
+            }
             Icon(
                 painter = painterResource(card.iconRes),
                 contentDescription = card.title,
-                tint = if (focused) FvpColors.GreenFocus else FvpColors.TextPrimary,
-                modifier = Modifier.size(scale.dp(SettingsCardDimens.ICON_BASE)),
+                tint = iconTint,
+                modifier = Modifier
+                    .size(scale.dp(SettingsCardDimens.ICON_BASE))
+                    .testTag(card.iconTag)
+                    .semantics { this[SettingsCardIconTintKey] = iconTint },
             )
             Text(
                 text = card.title,

@@ -9,6 +9,7 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertTextEquals
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performKeyInput
@@ -22,6 +23,7 @@ import it.felixvision.tv.data.catalog.VodStream
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.theme.FvpTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -228,6 +230,56 @@ class CatalogSortButtonTest {
         rule.waitForIdle()
         rule.waitUntil(timeoutMillis = 2_000) { isFocused("film_${zeta.streamId}") }
         rule.onNodeWithTag("film_${zeta.streamId}").assertIsFocused()
+    }
+
+    /**
+     * I bounds non ritagliati del pulsante (con e senza focus, quindi anche con
+     * l'ingrandimento 1,05) non devono intersecare quelli della prima
+     * copertina della griglia.
+     */
+    @Test
+    fun `il pulsante non si sovrappone alla prima copertina con e senza focus`() {
+        rule.setContent {
+            FvpTheme {
+                FilmSection(
+                    categories = categories,
+                    streams = listOf(zeta, alfa, other),
+                    recentStreams = listOf(recent),
+                    scale = scale,
+                    sortStorage = storage,
+                )
+            }
+        }
+        rule.waitForIdle()
+        openCategory("film_category_001")
+        // Ordine predefinito: la prima copertina è "Zeta recente".
+        val firstPoster = "film_${zeta.streamId}"
+        rule.onNodeWithTag(firstPoster).assertIsDisplayed()
+
+        // Senza focus sul pulsante.
+        assertNoOverlap(FILM_SORT_BUTTON_TAG, firstPoster)
+
+        // Con il focus sul pulsante: i bounds non ritagliati comprendono
+        // l'ingrandimento da focus.
+        rule.onNodeWithTag(FILM_SORT_BUTTON_TAG).requestFocus()
+        rule.waitForIdle()
+        rule.onNodeWithTag(FILM_SORT_BUTTON_TAG).assertIsFocused()
+        assertNoOverlap(FILM_SORT_BUTTON_TAG, firstPoster)
+    }
+
+    /** Asserisce che i bounds non ritagliati dei nodi [a] e [b] non si intersecano. */
+    private fun assertNoOverlap(a: String, b: String) {
+        rule.waitForIdle()
+        val first = rule.onNodeWithTag(a).getUnclippedBoundsInRoot()
+        val second = rule.onNodeWithTag(b).getUnclippedBoundsInRoot()
+        val intersects = first.left < second.right &&
+            first.right > second.left &&
+            first.top < second.bottom &&
+            first.bottom > second.top
+        assertFalse(
+            "i bounds di $a $first intersecano quelli di $b $second",
+            intersects,
+        )
     }
 
     @Test
