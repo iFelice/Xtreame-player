@@ -213,13 +213,12 @@ fun FilmSection(
     }
     // La griglia si ricompone con la nuova categoria: la copertina da
     // focalizzare si cerca a ogni fotogramma, perché il primo giro può cadere
-    // prima che la nuova lista sia composta e il focus, se richiesto troppo
-    // presto, non arriverebbe mai. Categoria vuota: niente da focalizzare, la
-    // richiesta si consuma e il focus resta sulla voce della colonna.
-    val latestFiltered by rememberUpdatedState(filtered)
+    // prima che la nuova lista sia composta. Categoria vuota: niente da
+    // focalizzare, la richiesta si consuma e il focus resta sulla voce della
+    // colonna.
+    val latestFilteredFilms by rememberUpdatedState(filtered)
     val latestCategoryId by rememberUpdatedState(debouncedCategoryId)
     val latestItemFocusRequesters by rememberUpdatedState(itemFocusRequesters)
-    val latestGridState by rememberUpdatedState(gridState)
     LaunchedEffect(pendingFirstItemFocus, streams, recentStreams, itemFocusRequesters) {
         val categoryId = pendingFirstItemFocus ?: return@LaunchedEffect
         val first = filmsForCategory(categoryId, streams, recentStreams).firstOrNull()
@@ -227,22 +226,24 @@ fun FilmSection(
             pendingFirstItemFocus = null
             return@LaunchedEffect
         }
-        if (itemFocusRequesters[first.streamId] == null) return@LaunchedEffect
         var scrolled = false
         repeat(FIRST_ITEM_FOCUS_ATTEMPTS) { attempt ->
             withFrameNanos { }
             if (pendingFirstItemFocus == null) return@LaunchedEffect
             if (latestCategoryId != categoryId ||
-                latestFiltered.none { it.streamId == first.streamId }
+                latestFilteredFilms.none { it.streamId == first.streamId }
             ) {
                 return@repeat
             }
             if (!scrolled) {
-                latestGridState.scrollToItem(0)
+                gridState.scrollToItem(0)
                 scrolled = true
             }
-            val latestRequester = latestItemFocusRequesters[first.streamId]
-            if (latestRequester != null && latestRequester.requestFocus()) {
+            // Come per il ritorno dal player: si chiede il focus al film con il
+            // suo requester o, se è la prima card e non ne ha uno, a quello del
+            // contenuto, che la card porta comunque.
+            val target = latestItemFocusRequesters[first.streamId] ?: contentFocusRequester
+            if (target.requestFocus()) {
                 pendingFirstItemFocus = null
                 return@LaunchedEffect
             }

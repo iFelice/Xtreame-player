@@ -215,10 +215,9 @@ fun SerieSection(
     // focalizzare si cerca a ogni fotogramma, perché il primo giro può cadere
     // prima che la nuova lista sia composta. Categoria vuota: niente da
     // focalizzare, la richiesta si consuma e il focus resta sulla voce.
-    val latestFiltered by rememberUpdatedState(filtered)
+    val latestFilteredSeries by rememberUpdatedState(filtered)
     val latestCategoryId by rememberUpdatedState(debouncedCategoryId)
     val latestItemFocusRequesters by rememberUpdatedState(itemFocusRequesters)
-    val latestGridState by rememberUpdatedState(gridState)
     LaunchedEffect(pendingFirstItemFocus, series, recentSeries, itemFocusRequesters) {
         val categoryId = pendingFirstItemFocus ?: return@LaunchedEffect
         val first = seriesForCategory(categoryId, series, recentSeries).firstOrNull()
@@ -226,22 +225,23 @@ fun SerieSection(
             pendingFirstItemFocus = null
             return@LaunchedEffect
         }
-        if (itemFocusRequesters[first.seriesId] == null) return@LaunchedEffect
         var scrolled = false
         repeat(FIRST_ITEM_FOCUS_ATTEMPTS) { attempt ->
             withFrameNanos { }
             if (pendingFirstItemFocus == null) return@LaunchedEffect
             if (latestCategoryId != categoryId ||
-                latestFiltered.none { it.seriesId == first.seriesId }
+                latestFilteredSeries.none { it.seriesId == first.seriesId }
             ) {
                 return@repeat
             }
             if (!scrolled) {
-                latestGridState.scrollToItem(0)
+                gridState.scrollToItem(0)
                 scrolled = true
             }
-            val latestRequester = latestItemFocusRequesters[first.seriesId]
-            if (latestRequester != null && latestRequester.requestFocus()) {
+            // Come per il ritorno dal player: il focus va alla serie con il suo
+            // requester o, se è la prima card, a quello del contenuto.
+            val target = latestItemFocusRequesters[first.seriesId] ?: contentFocusRequester
+            if (target.requestFocus()) {
                 pendingFirstItemFocus = null
                 return@LaunchedEffect
             }

@@ -4,6 +4,7 @@ package it.felixvision.tv.ui.catalog
 
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsSelected
@@ -35,7 +36,9 @@ import org.robolectric.annotation.Config
  *
  * Un solo `setContent` per test. Le voci della colonna sono `DenseListItem` di
  * tv-material: OK si prova con l'azione semantica `SemanticsActions.OnClick`,
- * mentre il focus iniziale sulla voce si chiede con `requestFocus`.
+ * mentre il focus iniziale sulla voce si chiede con `requestFocus`. Il focus
+ * sul primo elemento si attende (la griglia si ricompone con la nuova
+ * categoria): l'attesa è limitata a 2 s e il messaggio nomina il passo.
  */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [34], qualifiers = "w1920dp-h1080dp-land-television-mdpi")
@@ -64,20 +67,30 @@ class CategoryConfirmFocusTest {
     )
 
     /**
-     * OK come il telecomando, lasciando passare 100 ms — meno dei 300 ms del
-     * debounce. Lo stato della categoria deve cambiare lo stesso.
+     * OK su una voce, come il telecomando. La categoria deve cambiare subito:
+     * il test non fa scattare il debounce di 300 ms del solo spostamento del
+     * focus.
      */
-    private fun confirmWithinDebounce(tag: String) {
-        rule.mainClock.autoAdvance = false
+    private fun pressOk(tag: String) {
         rule.onNodeWithTag(tag).performSemanticsAction(SemanticsActions.OnClick)
-        rule.mainClock.advanceTimeBy(100)
         rule.waitForIdle()
     }
 
-    /** Ripristina l'orologio automatico dopo [confirmWithinDebounce]. */
-    private fun resumeClock() {
-        rule.mainClock.autoAdvance = true
-        rule.waitForIdle()
+    /** Asserzioni con il passo nel messaggio: l'annotazione della CI lo mostra. */
+    private fun assertSelected(step: String, tag: String) {
+        try {
+            rule.onNodeWithTag(tag).assertIsSelected()
+        } catch (error: AssertionError) {
+            throw AssertionError("[$step] la voce $tag non risulta selezionata", error)
+        }
+    }
+
+    private fun assertFocus(step: String, tag: String) {
+        try {
+            rule.onNodeWithTag(tag).assertIsFocused()
+        } catch (error: AssertionError) {
+            throw AssertionError("[$step] $tag non ha il focus", error)
+        }
     }
 
     @Test
@@ -99,19 +112,20 @@ class CategoryConfirmFocusTest {
         category.requestFocus()
         rule.waitForIdle()
 
-        // OK senza lasciar passare i 300 ms del debounce (il focus sulla voce non
-        // è bastato a cambiare categoria): la categoria cambia comunque, e il
-        // focus va sulla prima (qui unica) copertina.
-        confirmWithinDebounce("film_category_001")
-
-        // Orologio ancora fermo a 100 ms: la categoria è già quella scelta e il
-        // focus è già sulla prima copertina.
-        rule.onNodeWithTag("film_category_001").assertIsSelected()
+        // OK: la categoria cambia subito, senza i 300 ms del debounce che
+        // valgono per il solo spostamento del focus.
+        pressOk("film_category_001")
+        assertSelected("dopo OK", "film_category_001")
         rule.onNodeWithText("Nessun film").assertDoesNotExist()
-        rule.onNodeWithTag("film_201").assertIsDisplayed().assertIsFocused()
+
+        // Il focus passa alla prima (qui unica) copertina.
+        rule.waitUntil(timeoutMillis = 2_000) {
+            rule.onNodeWithTag("film_201").fetchSemanticsNode()
+                .config.contains(SemanticsProperties.Focused)
+        }
+        assertFocus("dopo OK", "film_201")
         // Con il focus nella griglia la colonna si compatta, come sempre.
         rule.onNodeWithTag("film_category_column_collapsed").assertExists()
-        resumeClock()
     }
 
     @Test
@@ -130,12 +144,12 @@ class CategoryConfirmFocusTest {
         val emptyCategory = rule.onNodeWithTag("film_category_002")
         emptyCategory.requestFocus()
         rule.waitForIdle()
-        emptyCategory.performSemanticsAction(SemanticsActions.OnClick)
-        rule.waitForIdle()
+        pressOk("film_category_002")
 
         // Nessuna copertina da focalizzare: il focus resta sulla voce, la
         // categoria è quella scelta e la colonna resta aperta.
-        rule.onNodeWithTag("film_category_002").assertIsSelected().assertIsFocused()
+        assertSelected("categoria vuota", "film_category_002")
+        assertFocus("categoria vuota", "film_category_002")
         rule.onNodeWithTag("film_category_column_collapsed").assertDoesNotExist()
         rule.onNodeWithText("Nessun film").assertIsDisplayed()
         rule.onNodeWithTag("film_201").assertDoesNotExist()
@@ -159,13 +173,16 @@ class CategoryConfirmFocusTest {
         category.requestFocus()
         rule.waitForIdle()
 
-        confirmWithinDebounce("serie_category_001")
-
-        rule.onNodeWithTag("serie_category_001").assertIsSelected()
+        pressOk("serie_category_001")
+        assertSelected("dopo OK", "serie_category_001")
         rule.onNodeWithText("Nessuna serie").assertDoesNotExist()
-        rule.onNodeWithTag("serie_301").assertIsDisplayed().assertIsFocused()
+
+        rule.waitUntil(timeoutMillis = 2_000) {
+            rule.onNodeWithTag("serie_301").fetchSemanticsNode()
+                .config.contains(SemanticsProperties.Focused)
+        }
+        assertFocus("dopo OK", "serie_301")
         rule.onNodeWithTag("serie_category_column_collapsed").assertExists()
-        resumeClock()
     }
 
     @Test
@@ -184,10 +201,9 @@ class CategoryConfirmFocusTest {
         val emptyCategory = rule.onNodeWithTag("serie_category_002")
         emptyCategory.requestFocus()
         rule.waitForIdle()
-        emptyCategory.performSemanticsAction(SemanticsActions.OnClick)
-        rule.waitForIdle()
-
-        rule.onNodeWithTag("serie_category_002").assertIsSelected().assertIsFocused()
+        pressOk("serie_category_002")
+        assertSelected("categoria vuota", "serie_category_002")
+        assertFocus("categoria vuota", "serie_category_002")
         rule.onNodeWithTag("serie_category_column_collapsed").assertDoesNotExist()
         rule.onNodeWithText("Nessuna serie").assertIsDisplayed()
         rule.onNodeWithTag("serie_301").assertDoesNotExist()
@@ -211,13 +227,16 @@ class CategoryConfirmFocusTest {
         category.requestFocus()
         rule.waitForIdle()
 
-        confirmWithinDebounce("live_category_live1")
-
-        rule.onNodeWithTag("live_category_live1").assertIsSelected()
+        pressOk("live_category_live1")
+        assertSelected("dopo OK", "live_category_live1")
         rule.onNodeWithText("Nessun canale").assertDoesNotExist()
-        rule.onNodeWithTag("live_channel_101").assertIsDisplayed().assertIsFocused()
+
+        rule.waitUntil(timeoutMillis = 2_000) {
+            rule.onNodeWithTag("live_channel_101").fetchSemanticsNode()
+                .config.contains(SemanticsProperties.Focused)
+        }
+        assertFocus("dopo OK", "live_channel_101")
         rule.onNodeWithTag("live_category_column_collapsed").assertExists()
-        resumeClock()
     }
 
     @Test
@@ -237,10 +256,9 @@ class CategoryConfirmFocusTest {
         val emptyCategory = rule.onNodeWithTag("live_category_live3")
         emptyCategory.requestFocus()
         rule.waitForIdle()
-        emptyCategory.performSemanticsAction(SemanticsActions.OnClick)
-        rule.waitForIdle()
-
-        rule.onNodeWithTag("live_category_live3").assertIsSelected().assertIsFocused()
+        pressOk("live_category_live3")
+        assertSelected("categoria vuota", "live_category_live3")
+        assertFocus("categoria vuota", "live_category_live3")
         rule.onNodeWithTag("live_category_column_collapsed").assertDoesNotExist()
         rule.onNodeWithText("Nessun canale").assertIsDisplayed()
         rule.onNodeWithTag("live_channel_101").assertDoesNotExist()

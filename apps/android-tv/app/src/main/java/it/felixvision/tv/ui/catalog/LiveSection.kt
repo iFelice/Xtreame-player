@@ -293,7 +293,6 @@ fun LiveSection(
             pendingFirstChannelFocus = null
             return@LaunchedEffect
         }
-        if (channelFocusRequesters[first.streamId] == null) return@LaunchedEffect
         var scrolled = false
         repeat(FIRST_CHANNEL_FOCUS_ATTEMPTS) { attempt ->
             withFrameNanos { }
@@ -307,8 +306,10 @@ fun LiveSection(
                 channelsListState.scrollToItem(0)
                 scrolled = true
             }
-            val latestRequester = latestChannelFocusRequesters[first.streamId]
-            if (latestRequester != null && latestRequester.requestFocus()) {
+            // Come per il ritorno dal player: il focus va al canale con il suo
+            // requester o, se è la prima riga, a quello del contenuto.
+            val target = latestChannelFocusRequesters[first.streamId] ?: contentFocusRequester
+            if (target.requestFocus()) {
                 pendingFirstChannelFocus = null
                 return@LaunchedEffect
             }
