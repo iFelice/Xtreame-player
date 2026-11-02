@@ -3,6 +3,7 @@ package it.felixvision.tv.vpn
 import android.content.Context
 import android.content.Intent
 import android.net.VpnService
+import android.os.Looper
 import com.wireguard.android.backend.Backend
 import com.wireguard.android.backend.BackendException
 import com.wireguard.android.backend.Tunnel
@@ -11,9 +12,11 @@ import it.felixvision.tv.core.Clock
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -26,6 +29,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.limitedParallelism
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -62,9 +66,14 @@ sealed interface VpnState {
  * Nel tunnel passa solo il traffico di questa app (vedi [VpnConfigParser]).
  * Il backend WireGuard si crea solo al primo avvio del tunnel, perché carica
  * la libreria nativa; nei test si passa un [Backend] finto con
- * [backendFactory]. Le operazioni girano nello [scope] dell'app, una alla
- * volta e nell'ordine in cui sono chieste; le chiamate bloccanti del backend
- * vanno su [io].
+ * [backendFactory].
+ *
+ * Nessuna operazione VPN viene mai eseguita sul thread chiamante: ogni
+ * operazione pubblica viene lanciata su [serial], un dispatcher seriale
+ * ricavato da [io], e le operazioni si eseguono una alla volta nell'ordine in
+ * cui sono richieste (il [Mutex] è equo e preserva l'ordine anche quando
+ * un'operazione sospende, in attesa dell'handshake). Le chiamate pubbliche
+ * restituiscono subito senza fare lavoro sul chiamante.
  *
  * Se il tunnel non si attiva entro [handshakeTimeoutMillis] FelixVP prosegue
  * senza VPN: stato [VpnState.NotConnected] e un avviso in [messages]; la
@@ -91,8 +100,9 @@ class VpnController(
 
     private val packageName: String = context.packageName
 
-    /** Serializza avvio, arresto e cambi di configurazione. */
-    private val operations = Mutex()
+    /** Serializza avvio, arresto e cambi di configurazione su un unico thread di IO. */
+    @OptIn(ExperimentalCoroutinesApi::class, DelicateCoroutinesApi::class)
+    private val serial: CoroutineDispatcher = io.limitedParallelism(1)
 
     /** Creato al primo avvio del tunnel; letto e scritto solo dentro [operations]. */
     private var backend: Backend? = null
@@ -100,6 +110,24 @@ class VpnController(
     /** Avvio in corso o in coda: "Spegni" e "Rimuovi" lo annullano subito. */
     @Volatile
     private var startJob: Job? = null
+
+    /**
+     * Gestisce gli errori imprevisti delle operazioni VPN senza mai chiudere
+     * l'app: registra solo la classe dell'eccezione, aggiorna lo stato in
+     * base all'interruttore salvato e invia l'avviso una tantum.
+     */
+    private val exceptionHandler = CoroutineExceptionHandler { _, error ->
+        AppLog.warn("VPN: errore imprevisto della VPN (${error.javaClass.simpleName})")
+        _state.value = when {
+            store.isEnabled -> VpnState.NotConnected(NOT_CONNECTED_REASON)
+            store.hasConfig() -> VpnState.Off
+            else -> VpnState.NoConfig
+        }
+        postMessage(NOT_CONNECTED_MESSAGE)
+    }
+
+    /** Serializza avvio, arresto e cambi di configurazione. */
+    private val operations = Mutex()
 
     private val tunnel: Tunnel = object : Tunnel {
         override fun getName(): String = TUNNEL_NAME
@@ -157,14 +185,18 @@ class VpnController(
 
     /** "Accendi" dalle Impostazioni, con il permesso già concesso. */
     fun enable() {
-        store.setEnabled(true)
-        start()
+        startJob = launchOperation {
+            store.setEnabled(true)
+            startLocked()
+        }
     }
 
     /** "Spegni" dalle Impostazioni. */
     fun disable() {
-        store.setEnabled(false)
-        stop()
+        launchOperation {
+            store.setEnabled(false)
+            stopLocked()
+        }
     }
 
     /** "Rimuovi": tunnel fermo, configurazione cancellata, interruttore spento. */
@@ -201,19 +233,19 @@ class VpnController(
      * primo osservatore.
      */
     fun postMessage(message: String) {
-        scope.launch {
+        scope.launch(exceptionHandler) {
             _messages.subscriptionCount.first { it > 0 }
             _messages.emit(message)
         }
     }
 
     private fun launchOperation(block: suspend () -> Unit): Job =
-        // UNDISPATCHED: la richiesta del lucchetto parte subito, nell'ordine
-        // delle chiamate (il Mutex è equo), poi il lavoro passa su [io].
-        scope.launch(start = CoroutineStart.UNDISPATCHED) {
-            operations.withLock {
-                withContext(io) { block() }
-            }
+        // Mai sul thread chiamante: il corpo parte sul dispatcher seriale
+        // [serial] (ricavato da [io]), mai su quello che ha invocato l'operazione
+        // pubblica. Il Mutex equo esegue le operazioni una alla volta e nell'ordine
+        // in cui sono state richieste.
+        scope.launch(serial + exceptionHandler) {
+            operations.withLock { block() }
         }
 
     private fun cancelStart() {
@@ -328,7 +360,11 @@ class VpnController(
         } catch (error: Exception) {
             AppLog.warn("VPN: arresto del tunnel non riuscito (${describe(error)})")
         }
-        evictConnections()
+        try {
+            evictConnections()
+        } catch (error: RuntimeException) {
+            AppLog.warn("VPN: chiusura delle connessioni non riuscita (${error.javaClass.simpleName})")
+        }
     }
 
     /**
@@ -376,8 +412,18 @@ class VpnController(
      * Dopo ogni UP o DOWN le connessioni già aperte puntano alla rete di
      * prima: si chiudono, così le richieste successive seguono il nuovo
      * percorso.
+     *
+     * Viene chiamato solo dentro le operazioni (sul dispatcher [serial]) o, da
+     * [onTunnelStateChange], con [scope.launch(io)]. Se per errore venisse
+     * invocato sul thread principale, la chiusura viene rilanciata su [io]
+     * e questo metodo restituisce subito: mai chiudere connessioni sul main.
      */
     private fun evictConnections() {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            // Difensivo: non chiudere mai le connessioni di rete sul thread principale.
+            scope.launch(io + exceptionHandler) { evictConnections() }
+            return
+        }
         httpClient.connectionPool.evictAll()
         imageHttpClient.connectionPool.evictAll()
     }
@@ -391,7 +437,7 @@ class VpnController(
         AppLog.warn("VPN: tunnel chiuso dal sistema")
         // La notifica può arrivare sul thread principale: la chiusura delle
         // connessioni va su [io].
-        scope.launch(io) { evictConnections() }
+        scope.launch(io + exceptionHandler) { evictConnections() }
         postMessage(NOT_CONNECTED_MESSAGE)
     }
 
