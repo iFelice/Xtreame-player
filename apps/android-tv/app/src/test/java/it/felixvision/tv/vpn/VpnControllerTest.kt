@@ -9,7 +9,7 @@ import com.wireguard.android.backend.Statistics
 import com.wireguard.android.backend.Tunnel
 import com.wireguard.config.Config
 import com.wireguard.crypto.Key
-import it.felixvision.tv.core.SystemClock
+import it.felixvision.tv.core.Clock
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import kotlin.coroutines.CoroutineContext
@@ -58,6 +58,8 @@ class VpnControllerTest {
         Executors.newSingleThreadExecutor { Thread(it, "vpn-io-test") }
     /** Dispatcher di IO dedicato: un solo thread chiamato "vpn-io-test". */
     private val realIo: ExecutorCoroutineDispatcher = ioExecutor.asCoroutineDispatcher()
+    /** Orologio basato su nanoTime, monotono e robusto nei test. */
+    private val nanoClock = Clock { System.nanoTime() / 1_000_000 }
 
     private var backendsCreated = 0
     private lateinit var controllerScope: CoroutineScope
@@ -133,8 +135,8 @@ class VpnControllerTest {
             store = store,
             httpClient = OkHttpClient(),
             imageHttpClient = OkHttpClient(),
-            scope = scope,
-            clock = SystemClock,
+        scope = scope,
+        clock = nanoClock,
             backendFactory = {
                 backendsCreated++
                 backend
@@ -151,8 +153,8 @@ class VpnControllerTest {
 
     /** Attende (tempo reale, con timeout) che il controller raggiunga [expected]. */
     private fun awaitState(expected: VpnState, timeoutMillis: Long = 5000) {
-        val deadline = System.currentTimeMillis() + timeoutMillis
-        while (System.currentTimeMillis() < deadline) {
+        val deadline = System.nanoTime() + timeoutMillis * 1_000_000
+        while (System.nanoTime() < deadline) {
             if (currentController.state.value == expected) return
             Thread.sleep(20)
         }
