@@ -95,6 +95,10 @@ class LivePlayerReturnFocusTest {
                     streams = streams,
                     scale = scale,
                     onSelectChannel = { channel -> lastPlayedChannelId.value = channel.streamId },
+                    // Come in FvpMainScreen: con la pressione lunga sulla
+                    // categoria la voce resta un ListItem focalizzabile anche
+                    // a colonna collassata.
+                    onLongPressCategory = {},
                     focusChannelId = returnChannelId.value,
                     focusChannelTick = returnTick.value,
                     onChannelFocusRestored = { returnChannelId.value = null },
