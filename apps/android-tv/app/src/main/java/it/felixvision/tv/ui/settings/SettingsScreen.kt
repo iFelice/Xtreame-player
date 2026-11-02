@@ -197,16 +197,19 @@ fun SettingsScreen(
         downloadInProgress = state.isDownloadingUpdate,
         vpnSetupOpen = showVpnSetup,
         onCloseVpnSetup = { showVpnSetup = false },
-        accountPage = { pageModifier ->
+        accountPage = { pageModifier, entryFocus ->
             SettingsAccountPage(
                 state = state,
                 scale = scale,
                 modifier = pageModifier,
                 onExitClicked = { viewModel.onExitClicked() },
                 onRenewCode = { viewModel.onRenewCode() },
+                entryFocusRequester = entryFocus,
             )
         },
-        appearancePage = { pageModifier ->
+        // La pagina Aspetto dà il focus alla dimensione attiva con i propri
+        // FocusRequester: non le serve quello della navigazione.
+        appearancePage = { pageModifier, _ ->
             SettingsAppearancePage(
                 scale = scale,
                 modifier = pageModifier,
@@ -229,7 +232,7 @@ fun SettingsScreen(
                 onExit = closeProtectedPage,
             )
         },
-        vpnPage = { pageModifier ->
+        vpnPage = { pageModifier, entryFocus ->
             SettingsVpnPage(
                 vpnState = vpnState,
                 scale = scale,
@@ -241,6 +244,7 @@ fun SettingsScreen(
                     vpnController.removeConfig()
                 },
                 configureFocus = vpnConfigureFocus,
+                entryFocusRequester = entryFocus,
             )
         },
         vpnSetupPage = { pageModifier ->
@@ -259,7 +263,7 @@ fun SettingsScreen(
                 onExit = { showVpnSetup = false },
             )
         },
-        catalogPage = { pageModifier ->
+        catalogPage = { pageModifier, entryFocus ->
             // Lo spazio occupato si misura a ogni apertura: cresce con l'uso dell'app.
             LaunchedEffect(Unit) { cacheBytes = viewModel.cacheOccupiedBytes() }
             SettingsCatalogPage(
@@ -281,14 +285,18 @@ fun SettingsScreen(
                     cacheBytes = viewModel.cacheOccupiedBytes()
                     freed
                 },
+                entryFocusRequester = entryFocus,
             )
         },
-        appPage = { pageModifier ->
+        appPage = { pageModifier, entryFocus ->
             SettingsAppPage(
                 state = state,
                 scale = scale,
                 modifier = pageModifier,
                 onUpdateClicked = { viewModel.onUpdateClicked() },
+                // Stesso controllo manuale già esistente nel ViewModel.
+                onCheckForUpdates = { viewModel.checkForUpdates() },
+                entryFocusRequester = entryFocus,
             )
         },
     )
@@ -407,18 +415,24 @@ internal fun SettingsNavigation(
     downloadInProgress: Boolean = false,
     vpnSetupOpen: Boolean = false,
     onCloseVpnSetup: () -> Unit = {},
-    accountPage: @Composable (Modifier) -> Unit = {},
-    appearancePage: @Composable (Modifier) -> Unit = {},
+    accountPage: @Composable (Modifier, FocusRequester?) -> Unit = { _, _ -> },
+    appearancePage: @Composable (Modifier, FocusRequester?) -> Unit = { _, _ -> },
     protectedPage: @Composable (Modifier, () -> Unit) -> Unit = { _, _ -> },
-    vpnPage: @Composable (Modifier) -> Unit = {},
+    vpnPage: @Composable (Modifier, FocusRequester?) -> Unit = { _, _ -> },
     vpnSetupPage: @Composable (Modifier) -> Unit = {},
-    catalogPage: @Composable (Modifier) -> Unit = {},
-    appPage: @Composable (Modifier) -> Unit = {},
+    catalogPage: @Composable (Modifier, FocusRequester?) -> Unit = { _, _ -> },
+    appPage: @Composable (Modifier, FocusRequester?) -> Unit = { _, _ -> },
 ) {
     // La card aperta decide cosa occupa l'area dei contenuti; [lastOpenedCard]
     // resta anche dopo la chiusura, così il focus torna sulla card di ingresso.
     var openCard by remember { mutableStateOf<SettingsCard?>(null) }
     var lastOpenedCard by remember { mutableStateOf<SettingsCard?>(null) }
+
+    // Focus d'ingresso delle pagine: ognuna lo riceve (è ricordato qui, mai
+    // creato fuori da remember) e lo mette sul proprio primo elemento
+    // focalizzabile. Una pagina senza elementi focalizzabili lascerebbe uscire
+    // il focus e con lui il tasto Indietro.
+    val pageEntryFocusRequesters = rememberSettingsPageFocusRequesters()
 
     LaunchedEffect(openCard) {
         val card = lastOpenedCard
@@ -441,14 +455,25 @@ internal fun SettingsNavigation(
     // durante lo scaricamento di un aggiornamento Indietro appartiene alla
     // schermata, che annulla lo scaricamento.
     //
-    // Il tasto si prende con onPreviewKeyEvent sul contenitore della pagina e
-    // non con un BackHandler: la pagina protetta e la configurazione della VPN
-    // restano libere di gestirlo (qui si restituisce false), e i test iniettano
-    // i tasti nell'albero Compose, che non raggiunge il gestore Indietro
-    // dell'Activity.
+    // Il tasto si prende con onPreviewKeyEvent sul contenitore della pagina:
+    // la pagina protetta e la configurazione della VPN restano libere di
+    // gestirlo (qui si restituisce false), e i test iniettano i tasti
+    // nell'albero Compose, che non raggiunge il gestore Indietro dell'Activity.
+    // La riserva per il dispositivo vero è il BackHandler qui sotto.
     val pageHandlesBack = openCard != SettingsCard.Protected &&
         !(openCard == SettingsCard.Vpn && vpnSetupOpen) &&
         !downloadInProgress
+
+    // Riserva per il dispositivo vero: quando la pagina non ha elementi
+    // focalizzabili (o il focus è comunque uscito) Indietro non passa da
+    // onPreviewKeyEvent. Questo BackHandler è composto DOPO quello di
+    // FvpMainScreen, quindi ha la precedenza e riporta alla griglia invece che
+    // al menu laterale. Il BackHandler dello scaricamento aggiornamento, più in
+    // alto in SettingsScreen, resta prioritario: qui downloadInProgress lo
+    // esclude.
+    BackHandler(enabled = openCard != null && pageHandlesBack) {
+        closePage()
+    }
 
     when {
         openCard == null -> SettingsGrid(
@@ -482,11 +507,24 @@ internal fun SettingsNavigation(
         ) {
             when (openCard) {
                 SettingsCard.Protected -> protectedPage(modifier, closePage)
-                SettingsCard.Vpn -> if (vpnSetupOpen) vpnSetupPage(modifier) else vpnPage(modifier)
-                SettingsCard.Account -> accountPage(modifier)
-                SettingsCard.Appearance -> appearancePage(modifier)
-                SettingsCard.Catalog -> catalogPage(modifier)
-                SettingsCard.App -> appPage(modifier)
+                SettingsCard.Vpn -> if (vpnSetupOpen) {
+                    vpnSetupPage(modifier)
+                } else {
+                    vpnPage(modifier, pageEntryFocusRequesters.getValue(SettingsCard.Vpn))
+                }
+                SettingsCard.Account -> accountPage(
+                    modifier,
+                    pageEntryFocusRequesters.getValue(SettingsCard.Account),
+                )
+                SettingsCard.Appearance -> appearancePage(
+                    modifier,
+                    pageEntryFocusRequesters.getValue(SettingsCard.Appearance),
+                )
+                SettingsCard.Catalog -> catalogPage(
+                    modifier,
+                    pageEntryFocusRequesters.getValue(SettingsCard.Catalog),
+                )
+                SettingsCard.App -> appPage(modifier, pageEntryFocusRequesters.getValue(SettingsCard.App))
                 null -> Unit
             }
         }
@@ -588,6 +626,13 @@ const val UPDATE_STATUS_CHECKING = "Controllo aggiornamenti…"
 const val UPDATE_STATUS_UP_TO_DATE = "App aggiornata"
 const val UPDATE_STATUS_ERROR = "Impossibile controllare gli aggiornamenti"
 const val SETTINGS_UPDATE_BUTTON_LABEL = "Aggiorna"
+
+/**
+ * Pulsante della pagina App senza aggiornamenti disponibili: rilancia lo stesso
+ * controllo manuale del ViewModel. Resta sempre presente, così la pagina ha un
+ * elemento focalizzabile e il tasto Indietro non esce dalle Impostazioni.
+ */
+const val SETTINGS_CHECK_UPDATES_BUTTON_LABEL = "Controlla aggiornamenti"
 const val SETTINGS_UPDATE_BUTTON_TAG = "settings_update_button"
 const val SETTINGS_UPDATE_STATUS_TAG = "settings_update_status"
 

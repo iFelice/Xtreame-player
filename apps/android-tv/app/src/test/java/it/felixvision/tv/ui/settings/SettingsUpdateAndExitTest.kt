@@ -176,7 +176,7 @@ class SettingsUpdateAndExitTest {
     """.trimIndent()
 
     @Test
-    fun `riga Versione stati mostrati e pulsante Aggiorna visibile solo con versione piu nuova`() {
+    fun `riga Versione stati mostrati e pulsante sempre presente Aggiorna o Controlla aggiornamenti`() {
         // Pagina "Impostazioni › App", aperta dalla card App della griglia.
         var uiState by mutableStateOf(
             SettingsUiState(
@@ -201,25 +201,30 @@ class SettingsUpdateAndExitTest {
         }
         rule.waitForIdle()
 
-        // 1. Riga Versione e stato iniziale "Controllo aggiornamenti…" (nessun pulsante Aggiorna)
+        // 1. Riga Versione e stato iniziale "Controllo aggiornamenti…": il
+        // pulsante c'è ed è "Controlla aggiornamenti" (la pagina ha sempre un
+        // elemento focalizzabile, altrimenti Indietro uscirebbe dalle Impostazioni).
         rule.onNodeWithText("Versione").assertIsDisplayed()
         rule.onNodeWithText("1.0.2").assertIsDisplayed()
         rule.onNodeWithText("(105)").assertIsDisplayed()
         rule.onNodeWithText("Controllo aggiornamenti…").assertIsDisplayed()
-        rule.onNodeWithTag(SETTINGS_UPDATE_BUTTON_TAG).assertDoesNotExist()
+        rule.onNodeWithTag(SETTINGS_UPDATE_BUTTON_TAG).assertIsDisplayed()
+        rule.onNodeWithText(SETTINGS_CHECK_UPDATES_BUTTON_LABEL).assertIsDisplayed()
         rule.onNodeWithText(SETTINGS_UPDATE_BUTTON_LABEL).assertDoesNotExist()
 
-        // 2. Stato "App aggiornata" (nessun pulsante Aggiorna)
+        // 2. Stato "App aggiornata": resta "Controlla aggiornamenti"
         uiState = uiState.copy(updateStatus = AppUpdateStatus.UpToDate)
         rule.waitForIdle()
         rule.onNodeWithText("App aggiornata").assertIsDisplayed()
-        rule.onNodeWithTag(SETTINGS_UPDATE_BUTTON_TAG).assertDoesNotExist()
+        rule.onNodeWithTag(SETTINGS_UPDATE_BUTTON_TAG).assertIsDisplayed()
+        rule.onNodeWithText(SETTINGS_CHECK_UPDATES_BUTTON_LABEL).assertIsDisplayed()
 
-        // 3. Stato "Impossibile controllare gli aggiornamenti" (nessun pulsante Aggiorna)
+        // 3. Stato "Impossibile controllare gli aggiornamenti": idem
         uiState = uiState.copy(updateStatus = AppUpdateStatus.CheckFailed)
         rule.waitForIdle()
         rule.onNodeWithText("Impossibile controllare gli aggiornamenti").assertIsDisplayed()
-        rule.onNodeWithTag(SETTINGS_UPDATE_BUTTON_TAG).assertDoesNotExist()
+        rule.onNodeWithTag(SETTINGS_UPDATE_BUTTON_TAG).assertIsDisplayed()
+        rule.onNodeWithText(SETTINGS_CHECK_UPDATES_BUTTON_LABEL).assertIsDisplayed()
 
         // 4. Stato "Disponibile la versione 1.0.3" con pulsante "Aggiorna" attivo
         val release = ReleaseInfo(
@@ -232,6 +237,8 @@ class SettingsUpdateAndExitTest {
         rule.onNodeWithText("Disponibile la versione 1.0.3").assertIsDisplayed()
         val buttonNode = rule.onNodeWithTag(SETTINGS_UPDATE_BUTTON_TAG)
         buttonNode.assertIsDisplayed()
+        rule.onNodeWithText(SETTINGS_UPDATE_BUTTON_LABEL).assertIsDisplayed()
+        rule.onNodeWithText(SETTINGS_CHECK_UPDATES_BUTTON_LABEL).assertDoesNotExist()
         buttonNode.assertHasClickAction()
         assertFalse(SemanticsProperties.Disabled in buttonNode.fetchSemanticsNode().config)
         buttonNode.performSemanticsAction(SemanticsActions.OnClick)

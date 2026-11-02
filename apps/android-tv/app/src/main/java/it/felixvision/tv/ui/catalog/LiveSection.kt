@@ -262,6 +262,32 @@ fun LiveSection(
         onChannelFocusRestored()
     }
 
+    // OK su una voce della colonna: la categoria diventa subito quella scelta
+    // (senza i 300 ms di debounce) e il focus va al primo canale, scorrendo
+    // all'inizio. Con la categoria vuota non c'è nessun canale da focalizzare:
+    // il focus resta sulla voce e la colonna resta aperta.
+    var pendingFirstChannelFocus by remember { mutableStateOf<String?>(null) }
+    val confirmCategory: (String) -> Unit = { categoryId ->
+        focusedCategoryId = categoryId
+        debouncedCategoryId = categoryId
+        pendingFirstChannelFocus = categoryId
+    }
+    LaunchedEffect(pendingFirstChannelFocus, filtered) {
+        val categoryId = pendingFirstChannelFocus ?: return@LaunchedEffect
+        if (categoryId != debouncedCategoryId) return@LaunchedEffect
+        // Categoria vuota: non c'è nessun canale da focalizzare, la richiesta si
+        // consuma qui e il focus resta sulla voce della colonna.
+        if (filtered.isEmpty()) {
+            pendingFirstChannelFocus = null
+            return@LaunchedEffect
+        }
+        val first = filtered.first()
+        channelsListState.scrollToItem(0)
+        withFrameNanos { }
+        channelFocusRequesters[first.streamId]?.requestFocus()
+        pendingFirstChannelFocus = null
+    }
+
     val scope = rememberCoroutineScope()
     val latestOnSelectChannel by rememberUpdatedState(onSelectChannel)
     val channelNumberSession = remember { ChannelNumberSession() }
@@ -369,6 +395,7 @@ fun LiveSection(
                     testTagPrefix = "live",
                     favoriteCategoryIds = favoriteCategoryIds,
                     onLongPressCategory = onLongPressCategory,
+                    onCategoryConfirmed = confirmCategory,
                     modifier = Modifier
                 )
             }

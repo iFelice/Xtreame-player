@@ -6,7 +6,13 @@ import it.felixvision.tv.data.catalog.VodStream
 import it.felixvision.tv.data.catalog.allCategoryIds
 
 const val NOVITA_CATEGORY_ID = "__fvp_novita__"
-const val NOVITA_CATEGORY_NAME = "Novità"
+
+/**
+ * Nome della categoria locale nella colonna delle categorie: maiuscolo, con la
+ * À accentata. Il menu laterale ([it.felixvision.tv.ui.navigation.DrawerSection])
+ * resta invece "Novità".
+ */
+const val NOVITA_CATEGORY_NAME = "NOVITÀ"
 
 /** Categoria locale seguita dalle categorie del provider, nello stesso ordine. */
 fun withNovitaCategory(categories: List<Category>): List<Category> =

@@ -43,6 +43,17 @@ import it.felixvision.tv.ui.theme.categoryCollapsedVertical
 import it.felixvision.tv.ui.theme.categorySpacing
 import it.felixvision.tv.ui.theme.rowText
 
+/**
+ * Colonna delle categorie di Live, Film e Serie.
+ *
+ * Il focus su una voce cambia la categoria mostrata dopo il debounce di 300 ms
+ * di chi compone la sezione (Su/Giù nella colonna); OK su una voce invece la
+ * conferma subito con [onCategoryConfirmed], senza attendere il debounce, così
+ * la sezione può aprire la categoria e passare il focus al suo primo contenuto.
+ *
+ * @param onCategoryConfirmed OK su una voce: la categoria va selezionata subito.
+ *   Con `null` OK si comporta come il focus ([onFocusedCategoryId]).
+ */
 @Composable
 fun CollapsingCategoryColumn(
     categories: List<Category>,
@@ -58,6 +69,7 @@ fun CollapsingCategoryColumn(
     modifier: Modifier = Modifier,
     favoriteCategoryIds: Set<String> = emptySet(),
     onLongPressCategory: ((Category) -> Unit)? = null,
+    onCategoryConfirmed: ((String) -> Unit)? = null,
 ) {
     // Il margine sicuro del focus sta dentro la colonna, quindi la larghezza
     // cresce di FocusSafePadding per lato: la voce con il focus (con il suo
@@ -104,7 +116,9 @@ fun CollapsingCategoryColumn(
                     // Voce compatta: altezza ridotta dal ListItem denso.
                     DenseListItem(
                         selected = selected,
-                        onClick = { onFocusedCategoryId(cat.categoryId) },
+                        // OK conferma subito la categoria; la pressione lunga
+                        // (preferito) resta gestita da fvpLongPress sotto.
+                        onClick = { (onCategoryConfirmed ?: onFocusedCategoryId)(cat.categoryId) },
                         headlineContent = {
                             if (onLongPressCategory == null) {
                                 FocusMarqueeText(

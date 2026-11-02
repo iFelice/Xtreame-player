@@ -330,6 +330,16 @@ internal fun rememberSettingsCardFocusRequesters(): Map<SettingsCard, FocusReque
     remember { SettingsCard.entries.associateWith { FocusRequester() } }
 
 /**
+ * I [FocusRequester] d'ingresso delle pagine, uno per card, creati una volta
+ * sola con [remember]: la pagina aperta li mette sul proprio primo elemento
+ * focalizzabile, così il focus non esce dalla pagina e il tasto Indietro resta
+ * alle Impostazioni.
+ */
+@Composable
+internal fun rememberSettingsPageFocusRequesters(): Map<SettingsCard, FocusRequester> =
+    remember { SettingsCard.entries.associateWith { FocusRequester() } }
+
+/**
  * Una card della griglia: icona in alto, titolo e riga di stato.
  *
  * [Card] di tv-material cliccabile: fondo [FvpColors.Surface] in ogni stato,

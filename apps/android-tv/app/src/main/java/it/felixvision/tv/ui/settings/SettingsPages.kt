@@ -134,7 +134,8 @@ internal fun SettingsPage(
  * e la configurazione da remoto, che sostituisce le credenziali dell'account.
  *
  * Il focus d'ingresso va su "Esci dall'account", l'unico pulsante sempre
- * presente nella pagina.
+ * presente nella pagina: chi la compone passa il [FocusRequester] ricordato in
+ * [SettingsNavigation], altrimenti se ne usa uno locale.
  */
 @Composable
 internal fun SettingsAccountPage(
@@ -143,8 +144,10 @@ internal fun SettingsAccountPage(
     modifier: Modifier = Modifier,
     onExitClicked: () -> Unit = {},
     onRenewCode: () -> Unit = {},
+    entryFocusRequester: FocusRequester? = null,
 ) {
-    val exitFocus = remember { FocusRequester() }
+    val localExitFocus = remember { FocusRequester() }
+    val exitFocus = entryFocusRequester ?: localExitFocus
     LaunchedEffect(Unit) {
         withFrameNanos { }
         runCatching { exitFocus.requestFocus() }
@@ -262,7 +265,9 @@ internal fun SettingsAccountPage(
  * spostata qui dal riquadro Aspetto. La scelta si applica all'istante e il focus
  * resta sul pulsante premuto, così si può cambiare ancora.
  *
- * Il focus d'ingresso va sulla dimensione attiva.
+ * Il focus d'ingresso va sulla dimensione attiva, con i [FocusRequester]
+ * ricordati qui: la pagina non ha bisogno di quello della navigazione, perché
+ * il suo primo elemento focalizzabile è sempre un pulsante della riga.
  */
 @Composable
 internal fun SettingsAppearancePage(
@@ -339,12 +344,16 @@ internal fun SettingsVpnPage(
     onVpnConfigure: () -> Unit = {},
     onVpnRemove: () -> Unit = {},
     configureFocus: FocusRequester? = null,
+    entryFocusRequester: FocusRequester? = null,
 ) {
     val localConfigureFocus = remember { FocusRequester() }
     val focus = configureFocus ?: localConfigureFocus
+    // All'apertura della pagina il focus va su "Configura" (il primo elemento
+    // focalizzabile), usando il requester ricordato dalla navigazione.
+    val openFocus = entryFocusRequester ?: focus
     LaunchedEffect(Unit) {
         withFrameNanos { }
-        runCatching { focus.requestFocus() }
+        runCatching { openFocus.requestFocus() }
     }
 
     SettingsPage(
@@ -361,6 +370,7 @@ internal fun SettingsVpnPage(
             onRemove = onVpnRemove,
             modifier = Modifier.fillMaxWidth(),
             configureFocus = focus,
+            entryFocusRequester = entryFocusRequester,
         )
     }
 }
@@ -390,8 +400,11 @@ internal fun SettingsCatalogPage(
     onRefreshCatalog: () -> Unit = {},
     cacheBytes: Long = 0L,
     onClearCache: suspend () -> Long = { 0L },
+    entryFocusRequester: FocusRequester? = null,
 ) {
-    val refreshFocus = remember { FocusRequester() }
+    val localRefreshFocus = remember { FocusRequester() }
+    // Il primo elemento focalizzabile è il pulsante di aggiornamento.
+    val refreshFocus = entryFocusRequester ?: localRefreshFocus
     val scope = rememberCoroutineScope()
     var cacheMessage by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
@@ -486,9 +499,16 @@ internal fun SettingsCatalogPage(
  * Pagina "Impostazioni › App": versione installata, stato del controllo
  * aggiornamenti e pulsante "Aggiorna", spostati qui dal riquadro App.
  *
- * Il focus d'ingresso va sul pulsante "Aggiorna" quando c'è; lo stesso pulsante
- * riprende il focus se uno scaricamento annullato riporta lo stato su
- * "Disponibile la versione <y>".
+ * La pagina ha sempre un pulsante compatto focalizzabile, anche quando l'app è
+ * aggiornata: "Aggiorna" se c'è una versione nuova, altrimenti "Controlla
+ * aggiornamenti", che rilancia lo stesso controllo manuale del ViewModel. Senza
+ * questo pulsante la pagina aggiornata restava senza elementi focalizzabili: il
+ * focus usciva dalla pagina e il tasto Indietro non arrivava più al contenitore
+ * delle Impostazioni, che tornava al menu laterale invece che alla griglia.
+ *
+ * Il focus d'ingresso va sul pulsante; lo stesso pulsante riprende il focus se
+ * uno scaricamento annullato riporta lo stato su "Disponibile la versione <y>",
+ * e quando il controllo manuale passa da "Controllo aggiornamenti…" a un esito.
  */
 @Composable
 internal fun SettingsAppPage(
@@ -496,10 +516,14 @@ internal fun SettingsAppPage(
     scale: UiScale,
     modifier: Modifier = Modifier,
     onUpdateClicked: () -> Unit = {},
+    onCheckForUpdates: () -> Unit = {},
+    entryFocusRequester: FocusRequester? = null,
 ) {
     val updateButtonFocus = remember { FocusRequester() }
     var wasDownloading by remember { mutableStateOf(false) }
+    var wasChecking by remember { mutableStateOf(false) }
     val isDownloadingNow = state.updateStatus is AppUpdateStatus.Downloading
+    val isCheckingNow = state.updateStatus is AppUpdateStatus.Checking
 
     LaunchedEffect(Unit) {
         withFrameNanos { }
@@ -511,6 +535,17 @@ internal fun SettingsAppPage(
             runCatching { updateButtonFocus.requestFocus() }
         }
         wasDownloading = isDownloadingNow
+    }
+    // Al termine di un controllo manuale il pulsante è cambiato (da "Aggiorna"
+    // a "Controlla aggiornamenti" o viceversa): il focus ci torna sopra. Vale
+    // solo se il focus era già nella pagina (lo stato ha un elemento
+    // focalizzabile), così l'apertura resta gestita dal focus d'ingresso.
+    LaunchedEffect(isCheckingNow, state.updateStatus) {
+        if (wasChecking && !isCheckingNow) {
+            withFrameNanos { }
+            runCatching { updateButtonFocus.requestFocus() }
+        }
+        wasChecking = isCheckingNow
     }
 
     SettingsPage(
@@ -608,12 +643,6 @@ internal fun SettingsAppPage(
                             modifier = Modifier.testTag("settings_update_error"),
                         )
                     }
-                    UpdateButton(
-                        scale = scale,
-                        enabled = true,
-                        updateButtonFocus = updateButtonFocus,
-                        onUpdateClicked = onUpdateClicked,
-                    )
                 }
 
                 is AppUpdateStatus.Downloading -> {
@@ -644,12 +673,6 @@ internal fun SettingsAppPage(
                         color = FvpColors.TextSecondary,
                         fontSize = scale.sp(12f),
                     )
-                    UpdateButton(
-                        scale = scale,
-                        enabled = false,
-                        updateButtonFocus = updateButtonFocus,
-                        onUpdateClicked = onUpdateClicked,
-                    )
                 }
 
                 is AppUpdateStatus.Installing -> {
@@ -659,16 +682,48 @@ internal fun SettingsAppPage(
                         fontSize = scale.settingsRowText,
                         modifier = Modifier.testTag(SETTINGS_UPDATE_STATUS_TAG),
                     )
-                    UpdateButton(
-                        scale = scale,
-                        enabled = false,
-                        updateButtonFocus = updateButtonFocus,
-                        onUpdateClicked = onUpdateClicked,
-                    )
                 }
             }
+
+            // Il pulsante c'è sempre: "Aggiorna" con una versione disponibile,
+            // altrimenti "Controlla aggiornamenti" (nuovo controllo manuale).
+            // Anche a controllo in corso resta, così la pagina ha sempre un
+            // elemento focalizzabile e il tasto Indietro resta alle Impostazioni.
+            UpdateButton(
+                label = updateButtonLabel(state.updateStatus),
+                enabled = when (state.updateStatus) {
+                    is AppUpdateStatus.Downloading, is AppUpdateStatus.Installing -> false
+                    else -> true
+                },
+                updateButtonFocus = updateButtonFocus,
+                // Il pulsante è il primo elemento focalizzabile della pagina:
+                // riceve il focus d'ingresso ricordato dalla navigazione.
+                entryFocusRequester = entryFocusRequester,
+                onClick = {
+                    if (state.updateStatus is AppUpdateStatus.Available) {
+                        onUpdateClicked()
+                    } else {
+                        onCheckForUpdates()
+                    }
+                },
+                scale = scale,
+            )
         }
     }
+}
+
+/**
+ * Etichetta del pulsante della pagina App per lo stato [status]: "Aggiorna" con
+ * una versione disponibile (e durante scaricamento e installazione, quando il
+ * pulsante è disattivato), "Controlla aggiornamenti" in tutti gli altri casi.
+ */
+internal fun updateButtonLabel(status: AppUpdateStatus): String = when (status) {
+    is AppUpdateStatus.Available,
+    is AppUpdateStatus.Downloading,
+    is AppUpdateStatus.Installing,
+    -> SETTINGS_UPDATE_BUTTON_LABEL
+
+    else -> SETTINGS_CHECK_UPDATES_BUTTON_LABEL
 }
 
 /** Riga di stato del controllo aggiornamenti. */
@@ -686,22 +741,35 @@ private fun UpdateStatusText(
     )
 }
 
-/** Pulsante "Aggiorna", attivo solo con una versione disponibile. */
+/**
+ * Unico pulsante della pagina App: "Aggiorna" con una versione disponibile,
+ * "Controlla aggiornamenti" altrimenti. È disattivato solo mentre scarica o
+ * installa, quando il tasto Indietro appartiene allo scaricamento.
+ */
 @Composable
 private fun UpdateButton(
-    scale: UiScale,
+    label: String,
     enabled: Boolean,
     updateButtonFocus: FocusRequester,
-    onUpdateClicked: () -> Unit,
+    onClick: () -> Unit,
+    scale: UiScale,
+    entryFocusRequester: FocusRequester? = null,
 ) {
-    FvpPrimaryButton(
-        text = SETTINGS_UPDATE_BUTTON_LABEL,
-        onClick = onUpdateClicked,
+    FvpCompactButton(
+        text = label,
+        onClick = onClick,
         scale = scale,
         enabled = enabled,
         modifier = Modifier
             .padding(top = scale.settingsRowSpacing)
             .focusRequester(updateButtonFocus)
+            .then(
+                if (entryFocusRequester != null) {
+                    Modifier.focusRequester(entryFocusRequester)
+                } else {
+                    Modifier
+                },
+            )
             .testTag(SETTINGS_UPDATE_BUTTON_TAG),
     )
 }

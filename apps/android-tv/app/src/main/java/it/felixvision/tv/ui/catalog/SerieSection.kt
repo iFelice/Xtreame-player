@@ -193,6 +193,34 @@ fun SerieSection(
         fallback = contentFocusRequester
     )
 
+    // OK su una voce della colonna: la categoria diventa subito quella scelta
+    // (senza i 300 ms di debounce) e il focus va sulla prima copertina,
+    // scorrendo all'inizio. Con la categoria vuota non c'è nessuna copertina da
+    // focalizzare: il focus resta sulla voce e la colonna resta aperta.
+    var pendingFirstItemFocus by remember { mutableStateOf<String?>(null) }
+    val confirmCategory: (String) -> Unit = { categoryId ->
+        focusedCategoryId = categoryId
+        debouncedCategoryId = categoryId
+        pendingFirstItemFocus = categoryId
+    }
+    // La copertina da focalizzare arriva dalla ricomposizione della griglia:
+    // si aspetta che la serie sia davvero composta e poi le si chiede il focus.
+    LaunchedEffect(pendingFirstItemFocus, filtered, itemFocusRequesters) {
+        val categoryId = pendingFirstItemFocus ?: return@LaunchedEffect
+        if (categoryId != debouncedCategoryId) return@LaunchedEffect
+        // Categoria vuota: non c'è nessuna copertina da focalizzare, la richiesta
+        // si consuma qui e il focus resta sulla voce della colonna.
+        if (filtered.isEmpty()) {
+            pendingFirstItemFocus = null
+            return@LaunchedEffect
+        }
+        val first = filtered.first()
+        gridState.scrollToItem(0)
+        withFrameNanos { }
+        itemFocusRequesters[first.seriesId]?.requestFocus()
+        pendingFirstItemFocus = null
+    }
+
     // Il margine sicuro del focus sta nel contentPadding della griglia: la Row
     // resta senza padding per non sommare due volte la stessa quantità.
     // L'indicatore di posizione (contatore e barra) sta sopra, sul bordo destro.
@@ -209,6 +237,7 @@ fun SerieSection(
             listState = categoryListState,
             focusRequesters = columnFocusRequesters,
             testTagPrefix = "serie",
+            onCategoryConfirmed = confirmCategory,
         )
 
         Box(modifier = Modifier.weight(1f).fillMaxHeight()) {

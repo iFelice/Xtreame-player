@@ -74,6 +74,8 @@ internal fun VpnSettingsSection(
     modifier: Modifier = Modifier,
     /** Focus da riportare su "Configura" al rientro dalla pagina di configurazione. */
     configureFocus: FocusRequester? = null,
+    /** Focus d'ingresso della pagina: va sullo stesso "Configura". */
+    entryFocusRequester: FocusRequester? = null,
 ) {
     val hasConfig = state != VpnState.NoConfig
     // L'interruttore è acceso in tutti gli stati con configurazione tranne "Spenta".
@@ -125,6 +127,13 @@ internal fun VpnSettingsSection(
                     .then(
                         if (configureFocus != null) {
                             Modifier.focusRequester(configureFocus)
+                        } else {
+                            Modifier
+                        },
+                    )
+                    .then(
+                        if (entryFocusRequester != null) {
+                            Modifier.focusRequester(entryFocusRequester)
                         } else {
                             Modifier
                         },
