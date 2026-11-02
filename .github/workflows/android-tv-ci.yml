@@ -46,6 +46,7 @@ jobs:
 
       - name: Test unitari e lint
         working-directory: apps/android-tv
+        shell: bash
         run: ./gradlew testDebugUnitTest lintDebug 2>&1 | tee /tmp/fvp-tv-build.log
 
       # GitHub mostra al massimo 10 annotazioni per tipo per passo e 50 per job:
