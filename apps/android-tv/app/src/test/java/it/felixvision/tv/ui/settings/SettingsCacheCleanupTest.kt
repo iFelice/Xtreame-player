@@ -90,7 +90,7 @@ class SettingsCacheCleanupTest {
             catalogCache.save(
                 server = SERVER,
                 username = UTENTE,
-                catalog = Catalog(updatedAtMillis = 1_700_000_000_000L),
+                catalog = Catalog(liveCategories = emptyList()),
             )
         }
         assertTrue("il catalogo salvato deve esistere prima della pulizia", fileCatalogo.exists())
@@ -153,7 +153,9 @@ class SettingsCacheCleanupTest {
 
         val salvato = runBlocking { catalogCache.load(server = SERVER, username = UTENTE) }
         assertNotNull("il catalogo salvato non si rilegge più", salvato)
-        assertEquals(1_700_000_000_000L, salvato?.catalog?.updatedAtMillis)
+        // save() stampa l'orario di salvataggio: si controlla a chi appartiene.
+        assertEquals(SERVER, salvato?.server)
+        assertEquals(UTENTE, salvato?.username)
     }
 
     private fun mostraPagina() {

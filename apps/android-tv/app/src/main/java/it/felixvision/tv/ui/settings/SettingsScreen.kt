@@ -27,6 +27,11 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -429,34 +434,24 @@ internal fun SettingsNavigation(
         openCard = null
     }
 
-    // Indietro da una pagina torna alla griglia. "Contenuti protetti" e la
-    // configurazione della VPN gestiscono da sole il tasto e chiamano [closePage]
-    // (o chiudono solo se stesse) quando è il momento di tornare indietro.
-    BackHandler(
-        enabled = openCard != null &&
-            openCard != SettingsCard.Protected &&
-            !(openCard == SettingsCard.Vpn && vpnSetupOpen) &&
-            !downloadInProgress,
-    ) {
-        closePage()
-    }
+    // Indietro da una pagina torna alla griglia, e chiude anche l'eventuale
+    // configurazione della VPN. Due casi non passano di qui: "Contenuti
+    // protetti" e la configurazione della VPN gestiscono il tasto da sole e
+    // chiamano [closePage] quando è il momento di tornare indietro, mentre
+    // durante lo scaricamento di un aggiornamento Indietro appartiene alla
+    // schermata, che annulla lo scaricamento.
+    //
+    // Il tasto si prende con onPreviewKeyEvent sul contenitore della pagina e
+    // non con un BackHandler: la pagina protetta e la configurazione della VPN
+    // restano libere di gestirlo (qui si restituisce false), e i test iniettano
+    // i tasti nell'albero Compose, che non raggiunge il gestore Indietro
+    // dell'Activity.
+    val pageHandlesBack = openCard != SettingsCard.Protected &&
+        !(openCard == SettingsCard.Vpn && vpnSetupOpen) &&
+        !downloadInProgress
 
     when {
-        openCard == SettingsCard.Protected -> protectedPage(modifier, closePage)
-
-        openCard == SettingsCard.Vpn && vpnSetupOpen -> vpnSetupPage(modifier)
-
-        openCard == SettingsCard.Account -> accountPage(modifier)
-
-        openCard == SettingsCard.Appearance -> appearancePage(modifier)
-
-        openCard == SettingsCard.Vpn -> vpnPage(modifier)
-
-        openCard == SettingsCard.Catalog -> catalogPage(modifier)
-
-        openCard == SettingsCard.App -> appPage(modifier)
-
-        else -> SettingsGrid(
+        openCard == null -> SettingsGrid(
             state = cardsState,
             scale = scale,
             modifier = modifier,
@@ -467,6 +462,34 @@ internal fun SettingsNavigation(
                 openCard = card
             },
         )
+
+        else -> Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .onPreviewKeyEvent { event ->
+                    if (event.key != Key.Back || !pageHandlesBack) return@onPreviewKeyEvent false
+                    when (event.type) {
+                        // Come nelle altre schermate: la pressione si consuma e
+                        // l'azione avviene al rilascio, senza doppi effetti.
+                        KeyEventType.KeyDown -> true
+                        KeyEventType.KeyUp -> {
+                            closePage()
+                            true
+                        }
+                        else -> false
+                    }
+                },
+        ) {
+            when (openCard) {
+                SettingsCard.Protected -> protectedPage(modifier, closePage)
+                SettingsCard.Vpn -> if (vpnSetupOpen) vpnSetupPage(modifier) else vpnPage(modifier)
+                SettingsCard.Account -> accountPage(modifier)
+                SettingsCard.Appearance -> appearancePage(modifier)
+                SettingsCard.Catalog -> catalogPage(modifier)
+                SettingsCard.App -> appPage(modifier)
+                null -> Unit
+            }
+        }
     }
 }
 

@@ -34,7 +34,8 @@ import org.robolectric.annotation.Config
  *
  * La griglia si compone senza ViewModel ([SettingsGrid]): le card sono [Card]
  * di tv-material, quindi OK si prova con l'azione semantica
- * `SemanticsActions.OnClick`. Un solo `setContent` per test.
+ * `SemanticsActions.OnClick` e titolo e stato, che la Card unisce nel proprio
+ * nodo, si leggono con `useUnmergedTree = true`. Un solo `setContent` per test.
  */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [34], qualifiers = "w1920dp-h1080dp-land-television-mdpi")
@@ -118,10 +119,10 @@ class SettingsCardsGridTest {
         assertTrue("Contenuti protetti non sta a destra di Aspetto", protectedCard.left > appearance.left)
         assertTrue("VPN non sta a destra di Contenuti protetti", vpn.left > protectedCard.left)
         listOf(appearance, protectedCard, vpn).forEach { bounds ->
-            assertTrue("la card non sta sulla prima riga", abs(bounds.top - account.top) <= 0.5f)
+            assertTrue("la card non sta sulla prima riga", abs(bounds.top.value - account.top.value) <= 0.5f)
             assertTrue(
                 "la card non è alta come le altre",
-                abs(bounds.height - account.height) <= 0.5f,
+                abs(bounds.height.value - account.height.value) <= 0.5f,
             )
         }
 
@@ -130,47 +131,47 @@ class SettingsCardsGridTest {
         val app = rule.onNodeWithTag(SETTINGS_CARD_APP_TAG).fetchSemanticsNode().boundsInRoot
         assertTrue("Catalogo non sta sotto la prima riga", catalog.top >= account.bottom - 1f)
         assertTrue("App non sta a destra di Catalogo", app.left > catalog.left)
-        assertTrue("Catalogo non è larga come Account", abs(catalog.width - account.width) <= 0.5f)
-        assertTrue("App non è larga come Account", abs(app.width - account.width) <= 0.5f)
-        assertTrue("Catalogo non è alta come Account", abs(catalog.height - account.height) <= 0.5f)
-        assertTrue("App non è alta come Account", abs(app.height - account.height) <= 0.5f)
+        assertTrue("Catalogo non è larga come Account", abs(catalog.width.value - account.width.value) <= 0.5f)
+        assertTrue("App non è larga come Account", abs(app.width.value - account.width.value) <= 0.5f)
+        assertTrue("Catalogo non è alta come Account", abs(catalog.height.value - account.height.value) <= 0.5f)
+        assertTrue("App non è alta come Account", abs(app.height.value - account.height.value) <= 0.5f)
     }
 
     @Test
     fun `ogni card ha titolo e riga di stato dai dati finti`() {
         showGrid()
 
-        rule.onNodeWithTag(SettingsCard.Account.titleTag).assertTextEquals("Account")
-        rule.onNodeWithTag(SettingsCard.Account.statusTag).assertTextEquals("demo · scade 15/03/2027")
+        rule.onNodeWithTag(SettingsCard.Account.titleTag, useUnmergedTree = true).assertTextEquals("Account")
+        rule.onNodeWithTag(SettingsCard.Account.statusTag, useUnmergedTree = true).assertTextEquals("demo · scade 15/03/2027")
 
-        rule.onNodeWithTag(SettingsCard.Appearance.titleTag).assertTextEquals("Aspetto")
-        rule.onNodeWithTag(SettingsCard.Appearance.statusTag).assertTextEquals("Interfaccia media")
+        rule.onNodeWithTag(SettingsCard.Appearance.titleTag, useUnmergedTree = true).assertTextEquals("Aspetto")
+        rule.onNodeWithTag(SettingsCard.Appearance.statusTag, useUnmergedTree = true).assertTextEquals("Interfaccia media")
 
-        rule.onNodeWithTag(SettingsCard.Protected.titleTag).assertTextEquals("Contenuti protetti")
-        rule.onNodeWithTag(SettingsCard.Protected.statusTag).assertTextEquals("PIN impostato")
+        rule.onNodeWithTag(SettingsCard.Protected.titleTag, useUnmergedTree = true).assertTextEquals("Contenuti protetti")
+        rule.onNodeWithTag(SettingsCard.Protected.statusTag, useUnmergedTree = true).assertTextEquals("PIN impostato")
 
-        rule.onNodeWithTag(SettingsCard.Vpn.titleTag).assertTextEquals("VPN")
-        rule.onNodeWithTag(SettingsCard.Vpn.statusTag).assertTextEquals("Connessa · server-prova")
+        rule.onNodeWithTag(SettingsCard.Vpn.titleTag, useUnmergedTree = true).assertTextEquals("VPN")
+        rule.onNodeWithTag(SettingsCard.Vpn.statusTag, useUnmergedTree = true).assertTextEquals("Connessa · server-prova")
 
-        rule.onNodeWithTag(SettingsCard.Catalog.titleTag).assertTextEquals("Catalogo")
-        rule.onNodeWithTag(SettingsCard.Catalog.statusTag).assertTextEquals("Aggiornato alle 14:05")
+        rule.onNodeWithTag(SettingsCard.Catalog.titleTag, useUnmergedTree = true).assertTextEquals("Catalogo")
+        rule.onNodeWithTag(SettingsCard.Catalog.statusTag, useUnmergedTree = true).assertTextEquals("Aggiornato alle 14:05")
 
-        rule.onNodeWithTag(SettingsCard.App.titleTag).assertTextEquals("App")
-        rule.onNodeWithTag(SettingsCard.App.statusTag).assertTextEquals("Versione 1.0.2")
+        rule.onNodeWithTag(SettingsCard.App.titleTag, useUnmergedTree = true).assertTextEquals("App")
+        rule.onNodeWithTag(SettingsCard.App.statusTag, useUnmergedTree = true).assertTextEquals("Versione 1.0.2")
     }
 
     @Test
     fun `senza scadenza la card Account mostra il solo nome utente`() {
         showGrid(cardsState().copy(expiresAtEpochSeconds = null))
 
-        rule.onNodeWithTag(SettingsCard.Account.statusTag).assertTextEquals("demo")
+        rule.onNodeWithTag(SettingsCard.Account.statusTag, useUnmergedTree = true).assertTextEquals("demo")
     }
 
     @Test
     fun `aggiornamento del catalogo in corso sulla card Catalogo`() {
         showGrid(cardsState().copy(catalogRefreshing = true))
 
-        rule.onNodeWithTag(SettingsCard.Catalog.statusTag).assertTextEquals("Aggiornamento in corso…")
+        rule.onNodeWithTag(SettingsCard.Catalog.statusTag, useUnmergedTree = true).assertTextEquals("Aggiornamento in corso…")
     }
 
     @Test
@@ -182,7 +183,7 @@ class SettingsCardsGridTest {
         )
         showGrid(cardsState(updateStatus = AppUpdateStatus.Available(release = release)))
 
-        rule.onNodeWithTag(SettingsCard.App.statusTag)
+        rule.onNodeWithTag(SettingsCard.App.statusTag, useUnmergedTree = true)
             .assertTextEquals("Disponibile la versione 1.0.3")
         // Il pallino di aggiornamento resta solo sull'icona del menu laterale.
         rule.onAllNodesWithTag(UPDATE_BADGE_TAG, useUnmergedTree = true).assertCountEquals(0)
