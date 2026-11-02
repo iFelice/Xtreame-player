@@ -180,8 +180,8 @@ fun PreferitiSection(
     Column(modifier = modifier.fillMaxWidth()) {
         // --- Barra delle schede ---
         SecondaryTabRow(
-            selectedTab = tab,
-            onTabSelected = { viewModel.selectFavoritesTab(it) },
+            selectedTabIndex = FavoritesTab.entries.indexOf(tab),
+            onTabSelected = { index -> viewModel.selectFavoritesTab(FavoritesTab.entries[index]) },
             modifier = Modifier.fillMaxWidth(),
         ) {
             FavoritesTab.entries.forEach { entry ->
