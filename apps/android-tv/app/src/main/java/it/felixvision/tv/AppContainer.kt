@@ -16,6 +16,7 @@ import it.felixvision.tv.data.continuewatching.ContinueWatchingStore
 import it.felixvision.tv.data.favorites.FavoritesStore
 import it.felixvision.tv.data.epg.ChannelEpgClient
 import it.felixvision.tv.data.epg.ChannelScheduleLoader
+import it.felixvision.tv.data.images.CacheCleanup
 import it.felixvision.tv.data.images.FvpImageLoader
 import it.felixvision.tv.data.pairing.PairingClient
 import it.felixvision.tv.data.pairing.PairingCoordinator
@@ -75,6 +76,13 @@ class AppContainer(
     val imageHttpClient: OkHttpClient by lazy { FvpImageLoader.createImageHttpClient() }
 
     val imageLoader by lazy { FvpImageLoader.create(context) }
+
+    /**
+     * Cartella della cache su disco delle immagini (`cacheDir/fvp_images`): la
+     * pagina Catalogo delle Impostazioni ne mostra lo spazio occupato e la
+     * svuota (vedi [CacheCleanup]).
+     */
+    val imageCacheDir: File get() = CacheCleanup.imageCacheDir(context.cacheDir)
 
     val xtreamClient: XtreamClient by lazy {
         XtreamClient(http = httpClient, json = json, clock = clock)

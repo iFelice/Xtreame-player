@@ -19,6 +19,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -31,6 +32,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.tv.material3.Text
+import it.felixvision.tv.data.images.CacheCleanup
 import it.felixvision.tv.ui.access.AccessViewModel
 import it.felixvision.tv.ui.access.PairingPanel
 import it.felixvision.tv.ui.components.FvpCompactButton
@@ -47,6 +49,7 @@ import it.felixvision.tv.vpn.VpnState
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.launch
 
 /** Tag di test delle pagine delle Impostazioni. */
 const val SETTINGS_PAGE_TITLE_TAG = "settings_page_title"
@@ -59,11 +62,32 @@ const val SETTINGS_PAGE_APP_TAG = "settings_page_app"
 /** Riquadro Account dentro la pagina Account. */
 const val SETTINGS_ACCOUNT_SECTION_TAG = "settings_account_section"
 
+/** Riquadro dell'abbinamento da remoto dentro la pagina Account. */
+const val SETTINGS_PAIRING_SECTION_TAG = "settings_pairing_section"
+
 /** Riga "Aggiorna catalogo" della pagina Catalogo. */
 const val SETTINGS_CATALOG_REFRESH_ROW_TAG = "settings_catalog_refresh_row"
 
 /** Tag di test del pulsante di aggiornamento del catalogo. */
 const val SETTINGS_CATALOG_REFRESH_TAG = "settings_refresh"
+
+/** Cache immagini della pagina Catalogo: testi e tag di test. */
+const val SETTINGS_CACHE_TITLE = "Cache immagini"
+const val SETTINGS_CACHE_SIZE_LABEL = "Spazio occupato"
+const val SETTINGS_CACHE_SECTION_TAG = "settings_cache_section"
+const val SETTINGS_CACHE_SIZE_ROW_TAG = "settings_cache_size_row"
+const val SETTINGS_CACHE_SIZE_TAG = "settings_cache_size"
+const val SETTINGS_CACHE_CLEAR_LABEL = "Svuota cache immagini"
+const val SETTINGS_CACHE_CLEAR_TAG = "settings_cache_clear"
+const val SETTINGS_CACHE_RESULT_TAG = "settings_cache_result"
+const val SETTINGS_CACHE_NOTE = "Il catalogo salvato non viene cancellato."
+
+/** "<n> MB" occupati dalle cache, arrotondati al megabyte. */
+fun cacheSizeLabel(bytes: Long): String = "${CacheCleanup.megabytes(bytes)} MB"
+
+/** Messaggio dopo la pulizia: "Cache svuotata · liberati <n> MB". */
+fun cacheClearedMessage(freedBytes: Long): String =
+    "Cache svuotata · liberati ${CacheCleanup.megabytes(freedBytes)} MB"
 
 /** Titolo di una pagina: "Impostazioni › Account". */
 fun settingsPageTitle(card: SettingsCard): String = "$SETTINGS_TITLE › ${card.title}"
@@ -343,9 +367,18 @@ internal fun SettingsVpnPage(
 
 /**
  * Pagina "Impostazioni › Catalogo": l'aggiornamento del catalogo che stava
- * nella schermata, con la finestra di avanzamento aperta da [SettingsScreen].
+ * nella schermata (finestra di avanzamento compresa, aperta da [SettingsScreen])
+ * e la cache delle immagini, con lo spazio occupato e il pulsante che la svuota.
+ *
+ * La cache svuotabile è quella su disco di Coil (`cacheDir/fvp_images`), quella
+ * in memoria dell'`ImageLoader` e i file di `cacheDir/updates` tranne l'APK di un
+ * aggiornamento in corso ([CacheCleanup]). Il catalogo salvato in `filesDir` non
+ * si tocca.
  *
  * Il focus d'ingresso va su "Aggiorna catalogo".
+ *
+ * @param cacheBytes spazio occupato dalle cache svuotabili.
+ * @param onClearCache svuota le cache e restituisce i byte liberati.
  */
 @Composable
 internal fun SettingsCatalogPage(
@@ -355,8 +388,12 @@ internal fun SettingsCatalogPage(
     catalogRefreshing: Boolean = false,
     catalogLastUpdateMillis: Long? = null,
     onRefreshCatalog: () -> Unit = {},
+    cacheBytes: Long = 0L,
+    onClearCache: suspend () -> Long = { 0L },
 ) {
     val refreshFocus = remember { FocusRequester() }
+    val scope = rememberCoroutineScope()
+    var cacheMessage by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
         withFrameNanos { }
         runCatching { refreshFocus.requestFocus() }
@@ -393,6 +430,53 @@ internal fun SettingsCatalogPage(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false),
+            )
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(scale.dp(14f)))
+                .background(FvpColors.Surface)
+                .padding(scale.settingsSectionPadding)
+                .testTag(SETTINGS_CACHE_SECTION_TAG),
+            verticalArrangement = Arrangement.spacedBy(scale.settingsRowSpacing),
+        ) {
+            Text(
+                text = SETTINGS_CACHE_TITLE,
+                color = FvpColors.TextPrimary,
+                fontSize = scale.sp(16f),
+                fontWeight = FontWeight.SemiBold,
+            )
+            SettingsRow(
+                label = SETTINGS_CACHE_SIZE_LABEL,
+                value = cacheSizeLabel(cacheBytes),
+                scale = scale,
+                rowTestTag = SETTINGS_CACHE_SIZE_ROW_TAG,
+                valueTestTag = SETTINGS_CACHE_SIZE_TAG,
+            )
+            FvpSecondaryButton(
+                text = SETTINGS_CACHE_CLEAR_LABEL,
+                onClick = {
+                    scope.launch {
+                        cacheMessage = cacheClearedMessage(onClearCache())
+                    }
+                },
+                scale = scale,
+                modifier = Modifier.testTag(SETTINGS_CACHE_CLEAR_TAG),
+            )
+            cacheMessage?.let { message ->
+                Text(
+                    text = message,
+                    color = FvpColors.Green,
+                    fontSize = scale.settingsRowText,
+                    modifier = Modifier.testTag(SETTINGS_CACHE_RESULT_TAG),
+                )
+            }
+            Text(
+                text = SETTINGS_CACHE_NOTE,
+                color = FvpColors.TextSecondary,
+                fontSize = scale.settingsRowText,
             )
         }
     }
@@ -629,6 +713,7 @@ internal fun SettingsRow(
     value: String,
     scale: UiScale,
     rowTestTag: String? = null,
+    valueTestTag: String? = null,
 ) {
     Row(
         modifier = Modifier
@@ -637,7 +722,14 @@ internal fun SettingsRow(
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(text = label, color = FvpColors.TextSecondary, fontSize = scale.settingsRowText)
-        Text(text = value, color = FvpColors.TextPrimary, fontSize = scale.settingsRowText)
+        Text(
+            text = value,
+            color = FvpColors.TextPrimary,
+            fontSize = scale.settingsRowText,
+            modifier = Modifier.then(
+                if (valueTestTag != null) Modifier.testTag(valueTestTag) else Modifier,
+            ),
+        )
     }
 }
 

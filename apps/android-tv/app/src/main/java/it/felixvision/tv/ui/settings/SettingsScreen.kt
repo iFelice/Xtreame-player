@@ -19,6 +19,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -83,6 +84,8 @@ fun SettingsScreen(
     // anche FvpApp), qui si osserva e si cambia.
     val interfaceSize by viewModel.interfaceSize.collectAsState()
     var showCatalogDialog by remember { mutableStateOf(false) }
+    // Spazio occupato dalle cache svuotabili, riletto a ogni apertura della pagina Catalogo.
+    var cacheBytes by remember { mutableLongStateOf(0L) }
     val catalogCloseFocus = remember { FocusRequester() }
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -252,6 +255,8 @@ fun SettingsScreen(
             )
         },
         catalogPage = { pageModifier ->
+            // Lo spazio occupato si misura a ogni apertura: cresce con l'uso dell'app.
+            LaunchedEffect(Unit) { cacheBytes = viewModel.cacheOccupiedBytes() }
             SettingsCatalogPage(
                 state = state,
                 scale = scale,
@@ -262,6 +267,14 @@ fun SettingsScreen(
                 onRefreshCatalog = {
                     showCatalogDialog = true
                     onRefreshCatalog()
+                },
+                cacheBytes = cacheBytes,
+                // Dopo la pulizia si rilegge lo spazio: l'APK di un aggiornamento in
+                // corso resta e quindi il conto non arriva a zero per forza.
+                onClearCache = {
+                    val freed = viewModel.clearCaches()
+                    cacheBytes = viewModel.cacheOccupiedBytes()
+                    freed
                 },
             )
         },

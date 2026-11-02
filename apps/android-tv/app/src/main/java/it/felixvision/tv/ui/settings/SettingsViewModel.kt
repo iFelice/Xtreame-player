@@ -19,6 +19,7 @@ import it.felixvision.tv.data.update.ApkDownloadResult
 import it.felixvision.tv.data.update.DOWNLOAD_ERROR_MESSAGE
 import it.felixvision.tv.data.update.DOWNLOAD_SIZE_MISMATCH_MESSAGE
 import it.felixvision.tv.data.update.INSTALL_CANCELLED_MESSAGE
+import it.felixvision.tv.data.images.CacheCleanup
 import it.felixvision.tv.data.update.InstallEvent
 import it.felixvision.tv.data.update.ReleaseInfo
 import it.felixvision.tv.data.update.UNKNOWN_SOURCES_INSTRUCTIONS
@@ -26,13 +27,16 @@ import it.felixvision.tv.data.update.UpdateCheckState
 import it.felixvision.tv.data.update.UpdateChecker
 import it.felixvision.tv.data.update.UpdateClient
 import it.felixvision.tv.data.update.UpdateInstaller
+import it.felixvision.tv.data.update.apkFileForVersion
 import it.felixvision.tv.data.xtream.LoginResult
 import it.felixvision.tv.data.xtream.ServerAddress
 import it.felixvision.tv.data.xtream.ServerInput
 import it.felixvision.tv.ui.access.statusLabel
 import it.felixvision.tv.vpn.VpnController
 import it.felixvision.tv.vpn.VpnRelayApi
+import java.io.File
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,6 +46,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** Stato del controllo e dell'installazione degli aggiornamenti dall'app. */
 sealed interface AppUpdateStatus {
@@ -376,6 +381,56 @@ class SettingsViewModel(
             }
         }
     }
+
+    /**
+     * APK di un aggiornamento scaricato o in installazione: "Svuota cache
+     * immagini" non deve cancellarlo, altrimenti l'installazione fallisce.
+     */
+    fun activeUpdateApk(): File? {
+        val version = when (val status = _ui.value.updateStatus) {
+            is AppUpdateStatus.Downloading -> status.release.version
+            is AppUpdateStatus.Installing -> status.release.version
+            else -> null
+        } ?: return null
+        return apkFileForVersion(updateInstaller.updatesDir, version)
+    }
+
+    /**
+     * Byte occupati dalle cache svuotabili: immagini su disco di Coil
+     * (`cacheDir/fvp_images`), cache in memoria dell'`ImageLoader` e file di
+     * `cacheDir/updates` tranne l'APK di un aggiornamento in corso.
+     *
+     * Il catalogo salvato in `filesDir` non è contato e non si tocca.
+     */
+    suspend fun cacheOccupiedBytes(): Long = withContext(Dispatchers.IO) {
+        CacheCleanup.occupiedBytes(
+            imagesDir = container.imageCacheDir,
+            updatesDir = updateInstaller.updatesDir,
+            memoryCacheBytes = memoryCacheBytes(),
+            protectedApk = activeUpdateApk(),
+        )
+    }
+
+    /**
+     * Svuota le cache e restituisce i byte liberati, cache in memoria compresa.
+     * Prima passa da Coil, così il suo indice resta coerente, poi cancella i
+     * file rimasti nelle due cartelle.
+     */
+    suspend fun clearCaches(): Long = withContext(Dispatchers.IO) {
+        val memoryBytes = memoryCacheBytes()
+        runCatching { container.imageLoader.diskCache?.clear() }
+        runCatching { container.imageLoader.memoryCache?.clear() }
+        CacheCleanup.clear(
+            imagesDir = container.imageCacheDir,
+            updatesDir = updateInstaller.updatesDir,
+            memoryCacheBytes = memoryBytes,
+            protectedApk = activeUpdateApk(),
+        )
+    }
+
+    /** Byte nella cache in memoria di Coil; 0 se non c'è o non è leggibile. */
+    private fun memoryCacheBytes(): Long =
+        runCatching { container.imageLoader.memoryCache?.size?.toLong() ?: 0L }.getOrDefault(0L)
 
     private fun startApkDownloadAndInstall(release: ReleaseInfo) {
         if (downloadJob?.isActive == true) return
