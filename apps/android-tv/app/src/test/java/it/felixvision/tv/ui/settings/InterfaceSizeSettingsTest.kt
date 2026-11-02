@@ -1,14 +1,9 @@
 package it.felixvision.tv.ui.settings
 
 import androidx.activity.ComponentActivity
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
@@ -19,10 +14,8 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performKeyInput
-import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.pressKey
-import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.theme.FvpTheme
@@ -34,10 +27,11 @@ import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 
 /**
- * Riquadro "Aspetto" delle Impostazioni: riga "Dimensione interfaccia" con i tre
- * pulsanti Compatta/Media/Grande.
+ * Pagina "Impostazioni › Aspetto", aperta dalla card Aspetto della griglia: la
+ * riga "Dimensione interfaccia" con i tre pulsanti Compatta/Media/Grande,
+ * spostata qui dal vecchio riquadro Aspetto senza cambiamenti.
  *
- * La schermata si compone senza ViewModel ([SettingsContent]): la dimensione
+ * La pagina si compone senza ViewModel ([SettingsAppearancePage]): la dimensione
  * attiva arriva dal parametro e la scelta passa da un callback. I pulsanti
  * tv-material non rispondono a `performClick`: si usa l'azione semantica
  * `SemanticsActions.OnClick`. Un solo `setContent` per test.
@@ -51,27 +45,18 @@ class InterfaceSizeSettingsTest {
 
     private val scale = UiScale(1f)
 
-    /** Stato di esempio: nessun dato reale, solo valori dimostrativi. */
-    private fun settingsState() = SettingsUiState(
-        username = "demo",
-        serverLabel = "http://server.esempio:8080",
-        status = "Attivo",
-        expiresAtEpochSeconds = null,
-        maxConnections = 2,
-        activeConnections = 1,
-    )
-
     @Test
-    fun `il riquadro Aspetto sta subito dopo Account con le tre dimensioni`() {
+    fun `la pagina Aspetto ha il titolo e le tre dimensioni`() {
         rule.setContent {
             FvpTheme {
-                SettingsContent(state = settingsState(), scale = scale)
+                SettingsAppearancePage(scale = scale)
             }
         }
         rule.waitForIdle()
-        // Le Impostazioni scorrono: il riquadro Aspetto sta più in basso.
-        rule.onNodeWithTag(SETTINGS_APPEARANCE_SECTION_TAG).performScrollTo()
 
+        rule.onNodeWithTag(SETTINGS_PAGE_APPEARANCE_TAG).assertIsDisplayed()
+        rule.onNodeWithTag(SETTINGS_PAGE_TITLE_TAG).assertTextEquals("Impostazioni › Aspetto")
+        rule.onNodeWithTag(SETTINGS_APPEARANCE_SECTION_TAG).assertIsDisplayed()
         rule.onNodeWithText(SETTINGS_APPEARANCE_TITLE).assertIsDisplayed()
         rule.onNodeWithText(SETTINGS_INTERFACE_SIZE_LABEL).assertIsDisplayed()
 
@@ -79,48 +64,28 @@ class InterfaceSizeSettingsTest {
         rule.onNodeWithTag("settings_interface_size_compact").assertIsDisplayed()
         rule.onNodeWithTag("settings_interface_size_medium").assertIsDisplayed()
         rule.onNodeWithTag("settings_interface_size_large").assertIsDisplayed()
-        rule.onNodeWithTag("settings_interface_size_compact")
-            .assertTextEquals("✓ Compatta")
-        rule.onNodeWithTag("settings_interface_size_medium")
-            .assertTextEquals("Media")
-        rule.onNodeWithTag("settings_interface_size_large")
-            .assertTextEquals("Grande")
+        rule.onNodeWithTag("settings_interface_size_compact").assertTextEquals("✓ Compatta")
+        rule.onNodeWithTag("settings_interface_size_medium").assertTextEquals("Media")
+        rule.onNodeWithTag("settings_interface_size_large").assertTextEquals("Grande")
 
-        // Posizione: dopo l'ultimo elemento del riquadro Account (il pulsante di
-        // uscita) e prima del riquadro App.
-        val accountEnd = rule.onNodeWithTag(SETTINGS_EXIT_TAG).fetchSemanticsNode().boundsInRoot
-        val appearance = rule.onNodeWithTag(SETTINGS_APPEARANCE_SECTION_TAG).fetchSemanticsNode().boundsInRoot
-        val appSection = rule.onNodeWithTag("settings_app_section").fetchSemanticsNode().boundsInRoot
-
-        assertTrue("il riquadro Aspetto non sta sotto Account", appearance.top >= accountEnd.bottom - 1f)
-        assertTrue("il riquadro Aspetto non sta sopra App", appearance.bottom <= appSection.top + 1f)
+        // Il focus d'ingresso dalla card va sulla dimensione attiva.
+        rule.onNodeWithTag("settings_interface_size_compact").assertIsFocused()
     }
 
     @Test
-    fun `il riquadro Aspetto resta fermo con il focus su Media e Grande`() {
-        val contentFocus = FocusRequester()
+    fun `la pagina Aspetto resta ferma con il focus su Media e Grande`() {
+        var active by mutableStateOf(InterfaceSize.COMPACT)
         rule.setContent {
             FvpTheme {
-                // Un'altezza ridotta obbliga la pagina a scorrere quando si
-                // risale da Aggiorna catalogo al riquadro Aspetto.
-                Box(Modifier.width(960.dp).height(240.dp)) {
-                    SettingsContent(state = settingsState(), scale = scale, contentFocusRequester = contentFocus)
-                }
+                SettingsAppearancePage(
+                    scale = scale,
+                    interfaceSize = active,
+                    onInterfaceSizeSelected = { active = it },
+                )
             }
         }
         rule.waitForIdle()
-        rule.runOnIdle { contentFocus.requestFocus() }
-        rule.waitForIdle()
 
-        rule.onNodeWithTag("settings_refresh").performKeyInput { pressKey(Key.DirectionUp) }
-        // Tra "Aggiorna catalogo" e Aspetto stanno i riquadri "VPN" e
-        // "Contenuti protetti": il primo Su porta su "Configura" (senza
-        // configurazione è l'unico pulsante della VPN), il secondo su
-        // "Gestisci", il terzo sulla riga delle dimensioni.
-        rule.onNodeWithTag(SETTINGS_VPN_CONFIGURE_TAG).assertIsFocused()
-        rule.onNodeWithTag(SETTINGS_VPN_CONFIGURE_TAG).performKeyInput { pressKey(Key.DirectionUp) }
-        rule.onNodeWithTag(SETTINGS_PROTECTED_OPEN_TAG).assertIsFocused()
-        rule.onNodeWithTag(SETTINGS_PROTECTED_OPEN_TAG).performKeyInput { pressKey(Key.DirectionUp) }
         rule.onNodeWithTag("settings_interface_size_compact").assertIsFocused()
         rule.onNodeWithTag("settings_interface_size_compact").performKeyInput { pressKey(Key.DirectionRight) }
         rule.onNodeWithTag("settings_interface_size_medium").assertIsFocused()
@@ -134,7 +99,7 @@ class InterfaceSizeSettingsTest {
                     rule.waitForIdle()
                     rule.onNodeWithTag(SETTINGS_APPEARANCE_SECTION_TAG).getUnclippedBoundsInRoot().top.value
                 }
-                assertTrue("Il riquadro Aspetto si muove: $tops", tops.maxOrNull()!! - tops.minOrNull()!! <= 0.5f)
+                assertTrue("La pagina Aspetto si muove: $tops", tops.maxOrNull()!! - tops.minOrNull()!! <= 0.5f)
             }
 
             assertAppearanceStaysStill()
@@ -153,8 +118,7 @@ class InterfaceSizeSettingsTest {
 
         rule.setContent {
             FvpTheme {
-                SettingsContent(
-                    state = settingsState(),
+                SettingsAppearancePage(
                     scale = scale,
                     interfaceSize = active,
                     onInterfaceSizeSelected = {
@@ -166,7 +130,6 @@ class InterfaceSizeSettingsTest {
         }
         rule.waitForIdle()
 
-        rule.onNodeWithTag("settings_interface_size_large").performScrollTo()
         rule.onNodeWithTag("settings_interface_size_large")
             .performSemanticsAction(SemanticsActions.OnClick)
         rule.waitForIdle()
@@ -177,7 +140,6 @@ class InterfaceSizeSettingsTest {
         rule.onNodeWithTag("settings_interface_size_compact").assertTextEquals("Compatta")
 
         // E anche "Media" passa dal callback giusto.
-        rule.onNodeWithTag("settings_interface_size_medium").performScrollTo()
         rule.onNodeWithTag("settings_interface_size_medium")
             .performSemanticsAction(SemanticsActions.OnClick)
         rule.waitForIdle()

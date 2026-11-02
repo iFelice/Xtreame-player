@@ -177,6 +177,7 @@ class SettingsUpdateAndExitTest {
 
     @Test
     fun `riga Versione stati mostrati e pulsante Aggiorna visibile solo con versione piu nuova`() {
+        // Pagina "Impostazioni › App", aperta dalla card App della griglia.
         var uiState by mutableStateOf(
             SettingsUiState(
                 username = demoUser,
@@ -191,7 +192,7 @@ class SettingsUpdateAndExitTest {
 
         rule.setContent {
             FvpTheme {
-                SettingsContent(
+                SettingsAppPage(
                     state = uiState,
                     scale = scale,
                     onUpdateClicked = { updateClicks++ },
@@ -248,7 +249,7 @@ class SettingsUpdateAndExitTest {
     }
 
     @Test
-    fun `versione disponibile e app aggiornata senza pallino nelle impostazioni`() {
+    fun `versione disponibile e app aggiornata senza pallino nella pagina App`() {
         val release = ReleaseInfo(
             version = "1.0.3",
             downloadUrl = "https://github.com/iFelice/felixvp-releases/releases/download/1.0.3/FelixVP.apk",
@@ -267,7 +268,7 @@ class SettingsUpdateAndExitTest {
 
         rule.setContent {
             FvpTheme {
-                SettingsContent(state = uiState, scale = scale)
+                SettingsAppPage(state = uiState, scale = scale)
             }
         }
         rule.waitForIdle()
