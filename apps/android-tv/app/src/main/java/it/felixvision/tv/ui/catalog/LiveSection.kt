@@ -97,6 +97,13 @@ private const val PLAYER_RETURN_FOCUS_TIMEOUT_MILLIS = 2_000L
 private const val PLAYER_RETURN_FOCUS_POLL_MILLIS = 50L
 
 /**
+ * Tentativi (un fotogramma ciascuno) per dare il focus al primo canale della
+ * categoria confermata con OK: l'elenco deve prima ricomporsi con la nuova
+ * lista. Circa 10 fotogrammi, ~170 ms a 60 Hz.
+ */
+private const val FIRST_CHANNEL_FOCUS_ATTEMPTS = 10
+
+/**
  * Canali Live della categoria scelta, nell'ordine dell'elenco del provider.
  *
  * Appartenenza, non uguaglianza: un canale compare in OGNI categoria che il
@@ -271,31 +278,42 @@ fun LiveSection(
         focusedCategoryId = categoryId
         debouncedCategoryId = categoryId
         pendingFirstChannelFocus = categoryId
-        // La colonna resta aperta durante il passaggio del focus al canale: il
-        // collasso lo decide il focus che arriva sull'elenco.
-        categoryExpanded = true
     }
-    // Si guarda l'elenco vero della categoria confermata (non lo stato della
-    // composizione, che può essere ancora quello di prima) e si chiede il focus
-    // solo quando il canale è composto.
-    LaunchedEffect(pendingFirstChannelFocus, filtered, latestStreams) {
+    // L'elenco si ricompone con la nuova categoria: il canale da focalizzare si
+    // cerca a ogni fotogramma, perché il primo giro può cadere prima che la
+    // nuova lista sia composta. Categoria vuota: niente da focalizzare, la
+    // richiesta si consuma e il focus resta sulla voce della colonna.
+    val latestFilteredChannels by rememberUpdatedState(filtered)
+    val latestDebouncedCategory by rememberUpdatedState(debouncedCategoryId)
+    val latestChannelFocusRequesters by rememberUpdatedState(channelFocusRequesters)
+    LaunchedEffect(pendingFirstChannelFocus, latestStreams) {
         val categoryId = pendingFirstChannelFocus ?: return@LaunchedEffect
-        // Categoria vuota: non c'è nessun canale da focalizzare, la richiesta si
-        // consuma qui e il focus resta sulla voce della colonna.
         val first = liveStreamsForCategory(categoryId, latestStreams).firstOrNull()
         if (first == null) {
             pendingFirstChannelFocus = null
             return@LaunchedEffect
         }
-        // Se l'elenco mostra già la categoria confermata riparte dall'inizio;
-        // altrimenti riparte da solo quando arriva la nuova lista.
-        if (debouncedCategoryId == categoryId && filtered.isNotEmpty()) {
-            channelsListState.scrollToItem(0)
+        if (channelFocusRequesters[first.streamId] == null) return@LaunchedEffect
+        var scrolled = false
+        repeat(FIRST_CHANNEL_FOCUS_ATTEMPTS) { attempt ->
+            withFrameNanos { }
+            if (pendingFirstChannelFocus == null) return@LaunchedEffect
+            if (latestDebouncedCategory != categoryId ||
+                latestFilteredChannels.none { it.streamId == first.streamId }
+            ) {
+                return@repeat
+            }
+            if (!scrolled) {
+                channelsListState.scrollToItem(0)
+                scrolled = true
+            }
+            val latestRequester = latestChannelFocusRequesters[first.streamId]
+            if (latestRequester != null && latestRequester.requestFocus()) {
+                pendingFirstChannelFocus = null
+                return@LaunchedEffect
+            }
+            if (attempt == FIRST_CHANNEL_FOCUS_ATTEMPTS - 1) pendingFirstChannelFocus = null
         }
-        val attempt = channelFocusRequesters[first.streamId] ?: return@LaunchedEffect
-        withFrameNanos { }
-        attempt.requestFocus()
-        pendingFirstChannelFocus = null
     }
 
     val scope = rememberCoroutineScope()

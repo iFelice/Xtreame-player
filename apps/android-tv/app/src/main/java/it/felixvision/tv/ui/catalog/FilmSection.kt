@@ -25,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
@@ -66,6 +67,13 @@ import it.felixvision.tv.ui.detail.FilmDetailOverlay
 import it.felixvision.tv.ui.theme.FvpColors
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+
+/**
+ * Tentativi (un fotogramma ciascuno) per dare il focus alla prima copertina
+ * della categoria confermata con OK: la griglia deve prima ricomporsi con la
+ * nuova lista. Circa 10 fotogrammi, ~170 ms a 60 Hz.
+ */
+private const val FIRST_ITEM_FOCUS_ATTEMPTS = 10
 
 @Composable
 fun FilmSection(
@@ -202,33 +210,44 @@ fun FilmSection(
         focusedCategoryId = categoryId
         debouncedCategoryId = categoryId
         pendingFirstItemFocus = categoryId
-        // La colonna resta aperta durante il passaggio del focus alla copertina:
-        // il collasso lo decide il focus che arriva sulla griglia.
-        categoryExpanded = true
     }
-    // La copertina da focalizzare arriva dalla ricomposizione della griglia: si
-    // guarda l'elenco vero della categoria confermata (non lo stato della
-    // composizione, che può essere ancora quello di prima) e si chiede il focus
-    // solo quando il film è composto.
-    LaunchedEffect(pendingFirstItemFocus, filtered, itemFocusRequesters, streams, recentStreams) {
+    // La griglia si ricompone con la nuova categoria: la copertina da
+    // focalizzare si cerca a ogni fotogramma, perché il primo giro può cadere
+    // prima che la nuova lista sia composta e il focus, se richiesto troppo
+    // presto, non arriverebbe mai. Categoria vuota: niente da focalizzare, la
+    // richiesta si consuma e il focus resta sulla voce della colonna.
+    val latestFiltered by rememberUpdatedState(filtered)
+    val latestCategoryId by rememberUpdatedState(debouncedCategoryId)
+    val latestItemFocusRequesters by rememberUpdatedState(itemFocusRequesters)
+    val latestGridState by rememberUpdatedState(gridState)
+    LaunchedEffect(pendingFirstItemFocus, streams, recentStreams, itemFocusRequesters) {
         val categoryId = pendingFirstItemFocus ?: return@LaunchedEffect
-        // Categoria vuota: non c'è nessuna copertina da focalizzare, la richiesta
-        // si consuma qui e il focus resta sulla voce della colonna.
         val first = filmsForCategory(categoryId, streams, recentStreams).firstOrNull()
         if (first == null) {
             pendingFirstItemFocus = null
             return@LaunchedEffect
         }
-        // Se la griglia mostra già la categoria confermata si parte dalla cima;
-        // altrimenti riparte da sola quando la nuova lista arriva (vedi
-        // LaunchedEffect(debouncedCategoryId) qui sopra).
-        if (debouncedCategoryId == categoryId && !filtered.isEmpty()) {
-            gridState.scrollToItem(0)
+        if (itemFocusRequesters[first.streamId] == null) return@LaunchedEffect
+        var scrolled = false
+        repeat(FIRST_ITEM_FOCUS_ATTEMPTS) { attempt ->
+            withFrameNanos { }
+            if (pendingFirstItemFocus == null) return@LaunchedEffect
+            if (latestCategoryId != categoryId ||
+                latestFiltered.none { it.streamId == first.streamId }
+            ) {
+                return@repeat
+            }
+            if (!scrolled) {
+                latestGridState.scrollToItem(0)
+                scrolled = true
+            }
+            val latestRequester = latestItemFocusRequesters[first.streamId]
+            if (latestRequester != null && latestRequester.requestFocus()) {
+                pendingFirstItemFocus = null
+                return@LaunchedEffect
+            }
+            if (attempt == FIRST_ITEM_FOCUS_ATTEMPTS - 1) pendingFirstItemFocus = null
         }
-        val attempt = itemFocusRequesters[first.streamId] ?: return@LaunchedEffect
-        withFrameNanos { }
-        attempt.requestFocus()
-        pendingFirstItemFocus = null
     }
 
     // Il margine sicuro del focus sta nel contentPadding della griglia: la Row

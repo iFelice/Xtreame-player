@@ -25,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
@@ -65,6 +66,13 @@ import it.felixvision.tv.ui.detail.SeriesDetailOverlay
 import it.felixvision.tv.ui.theme.FvpColors
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+
+/**
+ * Tentativi (un fotogramma ciascuno) per dare il focus alla prima copertina
+ * della categoria confermata con OK: la griglia deve prima ricomporsi con la
+ * nuova lista. Circa 10 fotogrammi, ~170 ms a 60 Hz.
+ */
+private const val FIRST_ITEM_FOCUS_ATTEMPTS = 10
 
 @Composable
 fun SerieSection(
@@ -202,32 +210,43 @@ fun SerieSection(
         focusedCategoryId = categoryId
         debouncedCategoryId = categoryId
         pendingFirstItemFocus = categoryId
-        // La colonna resta aperta durante il passaggio del focus alla copertina:
-        // il collasso lo decide il focus che arriva sulla griglia.
-        categoryExpanded = true
     }
-    // La copertina da focalizzare arriva dalla ricomposizione della griglia: si
-    // guarda l'elenco vero della categoria confermata (non lo stato della
-    // composizione, che può essere ancora quello di prima) e si chiede il focus
-    // solo quando la serie è composta.
-    LaunchedEffect(pendingFirstItemFocus, filtered, itemFocusRequesters, series, recentSeries) {
+    // La griglia si ricompone con la nuova categoria: la copertina da
+    // focalizzare si cerca a ogni fotogramma, perché il primo giro può cadere
+    // prima che la nuova lista sia composta. Categoria vuota: niente da
+    // focalizzare, la richiesta si consuma e il focus resta sulla voce.
+    val latestFiltered by rememberUpdatedState(filtered)
+    val latestCategoryId by rememberUpdatedState(debouncedCategoryId)
+    val latestItemFocusRequesters by rememberUpdatedState(itemFocusRequesters)
+    val latestGridState by rememberUpdatedState(gridState)
+    LaunchedEffect(pendingFirstItemFocus, series, recentSeries, itemFocusRequesters) {
         val categoryId = pendingFirstItemFocus ?: return@LaunchedEffect
-        // Categoria vuota: non c'è nessuna copertina da focalizzare, la richiesta
-        // si consuma qui e il focus resta sulla voce della colonna.
         val first = seriesForCategory(categoryId, series, recentSeries).firstOrNull()
         if (first == null) {
             pendingFirstItemFocus = null
             return@LaunchedEffect
         }
-        // Se la griglia mostra già la categoria confermata si parte dalla cima;
-        // altrimenti riparte da sola quando la nuova lista arriva.
-        if (debouncedCategoryId == categoryId && !filtered.isEmpty()) {
-            gridState.scrollToItem(0)
+        if (itemFocusRequesters[first.seriesId] == null) return@LaunchedEffect
+        var scrolled = false
+        repeat(FIRST_ITEM_FOCUS_ATTEMPTS) { attempt ->
+            withFrameNanos { }
+            if (pendingFirstItemFocus == null) return@LaunchedEffect
+            if (latestCategoryId != categoryId ||
+                latestFiltered.none { it.seriesId == first.seriesId }
+            ) {
+                return@repeat
+            }
+            if (!scrolled) {
+                latestGridState.scrollToItem(0)
+                scrolled = true
+            }
+            val latestRequester = latestItemFocusRequesters[first.seriesId]
+            if (latestRequester != null && latestRequester.requestFocus()) {
+                pendingFirstItemFocus = null
+                return@LaunchedEffect
+            }
+            if (attempt == FIRST_ITEM_FOCUS_ATTEMPTS - 1) pendingFirstItemFocus = null
         }
-        val attempt = itemFocusRequesters[first.seriesId] ?: return@LaunchedEffect
-        withFrameNanos { }
-        attempt.requestFocus()
-        pendingFirstItemFocus = null
     }
 
     // Il margine sicuro del focus sta nel contentPadding della griglia: la Row
