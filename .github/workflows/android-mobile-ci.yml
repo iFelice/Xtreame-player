@@ -283,6 +283,12 @@ jobs:
           force-avd-creation: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none
           emulator-boot-timeout: 1200
+          # Osserva l'avvio: campiona dispositivi adb e processo dell'emulatore
+          # ogni 20 s, per capire se è lento, bloccato o morto.
+          pre-emulator-launch-script: |
+            grep -E "hw.lcd|hw.ramSize|hw.device.name|avd.ini" "$HOME/.android/avd/test.avd/config.ini" 2>/dev/null || cat "$HOME/.android/avd/test.avd/config.ini" 2>/dev/null || echo "config.ini non trovato"
+            nohup bash -c 'while true; do echo "== $(date -Is) =="; adb devices; ps -eo pid,pcpu,pmem,etime,args | grep [e]mulator | grep -v grep | head -2; sleep 20; done' > /tmp/emulator-watch.log 2>&1 &
+            echo "Watcher dell'avvio avviato (pid $!)"
           script: |
             set -o pipefail
             sha="$(git rev-parse HEAD)"
@@ -316,7 +322,8 @@ jobs:
             exit "$status"
 
       # Se l'emulatore non parte o i test falliscono, raccoglie indizi
-      # (dispositivi adb, AVD, spazio, memoria, log del mock server).
+      # (dispositivi adb, AVD, spazio, memoria, log del mock server) e li
+      # riporta anche come annotation del run, oltre che nell'artifact.
       - name: Diagnostica del job emulatore
         if: failure()
         shell: bash
@@ -330,8 +337,13 @@ jobs:
             echo "== KVM =="; ls -l /dev/kvm 2>&1 || true
             echo "== disco =="; df -h 2>&1 | head -8 || true
             echo "== memoria =="; free -h 2>&1 || true
+            echo "== watcher avvio (ultime righe) =="; tail -n 60 /tmp/emulator-watch.log 2>&1 || true
           } > emulator-artifacts/diagnostica-boot.txt 2>&1 || true
           cp /tmp/fvp-mock-server.log emulator-artifacts/mock-server.log 2>/dev/null || true
+          # Il log completo va nell'artifact; nei annotation bastano i fatti salienti.
+          echo "::notice::$(adb devices 2>&1 | tr '\n' ' ' | cut -c1-400)"
+          echo "::notice::kvm: $(ls -l /dev/kvm 2>&1 | cut -c1-200); disco: $(df -h / | tail -1 | tr -s ' ' | cut -c1-120)"
+          echo "::notice::watcher: $(tail -n 12 /tmp/emulator-watch.log 2>/dev/null | tr '\n' '|' | cut -c1-900)"
           cat emulator-artifacts/diagnostica-boot.txt || true
 
       - name: Carica report e screenshot dei test su emulatore
