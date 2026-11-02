@@ -26,19 +26,20 @@ import kotlinx.serialization.json.JsonPrimitive
  *
  * Il descrittore è quello di una lista di stringhe: la forma "naturale" del
  * campo. La tolleranza sta tutta nel deserializzatore, che legge il
- * [JsonElement] qualunque sia la sua forma.
+ * [JsonElement] qualunque sia la sua forma. In scrittura (cache del catalogo,
+ * un valore per elemento) si riusa [ListSerializer] sulle stringhe: il
+ * descrittore dichiarato e la forma scritta restano coerenti.
  */
 object FlexibleStringListSerializer : KSerializer<List<String>> {
 
-    override val descriptor: SerialDescriptor =
-        ListSerializer(FlexibleStringSerializer).descriptor
+    private val strings = ListSerializer(FlexibleStringSerializer)
+
+    override val descriptor: SerialDescriptor = strings.descriptor
 
     override fun deserialize(decoder: Decoder): List<String> {
         if (decoder !is JsonDecoder) {
             // Nessun JSON: l'unica forma sensata è già un elenco.
-            return runCatching {
-                decoder.decodeSerializableValue(ListSerializer(FlexibleStringSerializer))
-            }.getOrDefault(emptyList())
+            return runCatching { decoder.decodeSerializableValue(strings) }.getOrDefault(emptyList())
         }
         return when (val element = decoder.decodeJsonElement()) {
             is JsonArray -> element.mapNotNull { it.asCategoryIdOrNull() }
@@ -49,7 +50,7 @@ object FlexibleStringListSerializer : KSerializer<List<String>> {
     }
 
     override fun serialize(encoder: Encoder, value: List<String>) {
-        ListSerializer(FlexibleStringSerializer).serialize(encoder, value)
+        strings.serialize(encoder, value)
     }
 }
 

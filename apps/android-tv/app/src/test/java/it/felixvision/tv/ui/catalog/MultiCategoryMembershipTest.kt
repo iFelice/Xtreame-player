@@ -57,12 +57,11 @@ class MultiCategoryMembershipTest {
 
     @Test
     fun `Novita resta la copia dei recenti e non dipende dalle categorie`() {
-        val recent = listOf(filmSoloDue, filmDoppio)
-        assertEquals(recent, filmsForCategory(NOVITA_CATEGORY_ID, listOf(filmDoppio), recent))
-        assertEquals(
-            recent,
-            seriesForCategory(NOVITA_CATEGORY_ID, emptyList(), listOf(serieDoppia)),
-        )
+        val recentFilms = listOf(filmSoloDue, filmDoppio)
+        assertEquals(recentFilms, filmsForCategory(NOVITA_CATEGORY_ID, listOf(filmDoppio), recentFilms))
+
+        val recentSeries = listOf(serieDoppia)
+        assertEquals(recentSeries, seriesForCategory(NOVITA_CATEGORY_ID, emptyList(), recentSeries))
     }
 
     @Test
