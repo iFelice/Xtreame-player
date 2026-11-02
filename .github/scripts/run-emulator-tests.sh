@@ -15,6 +15,12 @@ export FVP_VERSION_NAME="0.1.0-${sha:0:7}"
 export FVP_VERSION_CODE="${GITHUB_RUN_NUMBER:-1}"
 echo "::notice::APK di test su emulatore: versione ${FVP_VERSION_NAME} (${FVP_VERSION_CODE})"
 
+# Logcat dell'intera esecuzione: gli errori del player e i passaggi di
+# navigazione finiscono qui (gli URL degli stream sono sempre offuscati da
+# redactStreamUrl).
+adb logcat -c || true
+nohup adb logcat -v time > /tmp/fvp-logcat.log 2>&1 &
+
 cd apps/android-mobile
 set +e
 timeout 1800 ./gradlew connectedDebugAndroidTest --console=plain --stacktrace 2>&1 | tee /tmp/fvp-connected.log
@@ -40,5 +46,6 @@ fi
 ls -R emulator-artifacts || true
 cp /tmp/fvp-connected.log emulator-artifacts/gradle-connected.log || true
 cp /tmp/fvp-mock-server.log emulator-artifacts/mock-server.log || true
+cp /tmp/fvp-logcat.log emulator-artifacts/logcat.txt || true
 
 exit "$status"

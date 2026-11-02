@@ -347,6 +347,15 @@ jobs:
             echo "::notice::gradle: ${failure:0:1600}"
           fi
           echo "::notice::gradle (coda): $(tail -n 25 /tmp/fvp-connected.log 2>/dev/null | tr '\n' '|' | cut -c1-900)"
+          # Log dell'app (tag FelixVP): navigazione, login, errori del player.
+          if [ -f /tmp/fvp-logcat.log ]; then
+            echo "::notice::app (ultimi log): $(grep -E 'FelixVP' /tmp/fvp-logcat.log | tail -n 45 | tr '\n' '|' | cut -c1-1700)"
+            echo "::notice::player errori: $(grep -E 'ExoPlayer|HttpDataSource|MediaCodec|AudioTrack|VideoCapabilities' /tmp/fvp-logcat.log | grep -iE 'error|fail|exception|unable' | tail -n 15 | tr '\n' '|' | cut -c1-1200)"
+          fi
+          # Richieste ricevute dal mock server (se loggate).
+          if [ -f /tmp/fvp-mock-server.log ]; then
+            echo "::notice::mock server (coda): $(tail -n 30 /tmp/fvp-mock-server.log | tr '\n' '|' | cut -c1-1200)"
+          fi
 
       # Se l'emulatore non parte o i test falliscono, raccoglie indizi
       # (dispositivi adb, AVD, spazio, memoria, log del mock server) e li
