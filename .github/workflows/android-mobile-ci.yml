@@ -307,12 +307,13 @@ jobs:
           script: bash .github/scripts/run-emulator-tests.sh
 
       # Rende visibili negli annotation del run gli esiti dei test su
-      # emulatore (il log completo resta nell'artifact).
+      # emulatore (il log completo resta nell'artifact). Nessun comando qui
+      # deve fallire: è solo diagnostica.
       - name: Annota gli esiti dei test su emulatore
         if: always()
         shell: bash
         run: |
-          set -uo pipefail
+          set +e
           python3 - <<'PY'
           import glob, re, xml.etree.ElementTree as ET
           tot = fail = err = skip = 0
@@ -338,7 +339,7 @@ jobs:
               print("::notice::nessun risultato XML dei test su emulatore trovato")
           PY
           # Errori di compilazione Kotlin degli androidTest (e: file://...)
-          grep -E "^e: " /tmp/fvp-connected.log 2>/dev/null | head -10 | while IFS= read -r line; do
+          awk '/^e: /' /tmp/fvp-connected.log 2>/dev/null | head -10 | while IFS= read -r line; do
             echo "::error::${line:0:600}"
           done
           # Sezione di riepilogo del fallimento Gradle
@@ -351,11 +352,13 @@ jobs:
           if [ -f /tmp/fvp-logcat.log ]; then
             echo "::notice::app (ultimi log): $(grep -E 'FelixVP' /tmp/fvp-logcat.log | tail -n 45 | tr '\n' '|' | cut -c1-1700)"
             echo "::notice::player errori: $(grep -E 'ExoPlayer|HttpDataSource|MediaCodec|AudioTrack|VideoCapabilities' /tmp/fvp-logcat.log | grep -iE 'error|fail|exception|unable' | tail -n 15 | tr '\n' '|' | cut -c1-1200)"
+            echo "::notice::crash: $(grep -E 'FATAL EXCEPTION|AndroidRuntime' /tmp/fvp-logcat.log | tail -n 6 | tr '\n' '|' | cut -c1-900)"
           fi
-          # Richieste ricevute dal mock server (se loggate).
+          # Richieste ricevute dal mock server.
           if [ -f /tmp/fvp-mock-server.log ]; then
-            echo "::notice::mock server (coda): $(tail -n 30 /tmp/fvp-mock-server.log | tr '\n' '|' | cut -c1-1200)"
+            echo "::notice::mock server (coda): $(tail -n 40 /tmp/fvp-mock-server.log | tr '\n' '|' | cut -c1-1400)"
           fi
+          exit 0
 
       # Se l'emulatore non parte o i test falliscono, raccoglie indizi
       # (dispositivi adb, AVD, spazio, memoria, log del mock server) e li
