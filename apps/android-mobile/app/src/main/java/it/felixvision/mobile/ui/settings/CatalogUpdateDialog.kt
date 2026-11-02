@@ -89,7 +89,7 @@ private fun CatalogUpdateSectionRow(
     row: CatalogSectionProgress,
     download: CatalogDownloadMonitor.Progress?,
 ) {
-    val key = row.section.name.lowercase(Locale.ROOT)
+    val key = row.section.rowKey()
     Column(
         modifier = Modifier.fillMaxWidth().testTag("update_row_$key"),
         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -177,4 +177,11 @@ private fun downloadStatusLabel(download: CatalogDownloadMonitor.Progress?): Str
     } else {
         String.format(Locale.ITALY, "%.1f MB scaricati", download?.megabytes ?: 0f)
     }
+}
+
+/** Chiave stabile della riga nei testTag: live / film / serie. */
+private fun CatalogSection.rowKey(): String = when (this) {
+    CatalogSection.LIVE -> "live"
+    CatalogSection.FILM -> "film"
+    CatalogSection.SERIES -> "serie"
 }
