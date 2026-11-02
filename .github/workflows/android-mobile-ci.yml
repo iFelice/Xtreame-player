@@ -209,8 +209,10 @@ jobs:
   # reali e screenshot di ogni schermata/orientamento.
   emulatore:
     needs: verify
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # ubuntu-24.04 esplicita: l'immagine su cui l'emulatore con KVM è
+    # consolidata (ubuntu-latest migra a Ubuntu 26 da ottobre 2026).
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -279,8 +281,8 @@ jobs:
           cores: 4
           disable-animations: true
           force-avd-creation: true
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          emulator-boot-timeout: 900
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none
+          emulator-boot-timeout: 1200
           script: |
             set -o pipefail
             sha="$(git rev-parse HEAD)"
@@ -310,7 +312,27 @@ jobs:
             fi
             ls -R emulator-artifacts || true
             cp /tmp/fvp-connected.log emulator-artifacts/gradle-connected.log || true
+            cp /tmp/fvp-mock-server.log emulator-artifacts/mock-server.log || true
             exit "$status"
+
+      # Se l'emulatore non parte o i test falliscono, raccoglie indizi
+      # (dispositivi adb, AVD, spazio, memoria, log del mock server).
+      - name: Diagnostica del job emulatore
+        if: failure()
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p emulator-artifacts
+          {
+            echo "== adb devices =="; adb devices -l 2>&1 || true
+            echo "== AVD =="; ls -la "$HOME/.android/avd" 2>&1 || true
+            echo "== log AVD =="; tail -n 100 "$HOME"/.android/avd/*.avd/*.log 2>/dev/null || true
+            echo "== KVM =="; ls -l /dev/kvm 2>&1 || true
+            echo "== disco =="; df -h 2>&1 | head -8 || true
+            echo "== memoria =="; free -h 2>&1 || true
+          } > emulator-artifacts/diagnostica-boot.txt 2>&1 || true
+          cp /tmp/fvp-mock-server.log emulator-artifacts/mock-server.log 2>/dev/null || true
+          cat emulator-artifacts/diagnostica-boot.txt || true
 
       - name: Carica report e screenshot dei test su emulatore
         if: always()
