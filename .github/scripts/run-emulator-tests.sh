@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 #
 # Test strumentati del tablet su emulatore, eseguiti dal job "emulatore"
-# della CI (android-mobile-ci.yml) tramite reactivecircus/android-emulator-
-# runner. L'action esegue lo script una riga per volta con /bin/sh: tutto il
-# lavoro vive qui, in un solo bash, richiamato con una riga sola.
+# della CI (android-mobile-ci.yml, solo lancio manuale) tramite
+# reactivecircus/android-emulator-runner. L'action esegue lo script una riga
+# per volta con /bin/sh: tutta la logica vive qui, in un solo bash,
+# richiamato con una riga sola.
 #
 # Lo script parte con l'emulatore già avviato dall'action (ANDROID_SERIAL
 # punta a emulator-5554) e con il mock server Xtream in ascolto sull'host
@@ -14,12 +15,6 @@ sha="$(git rev-parse HEAD)"
 export FVP_VERSION_NAME="0.1.0-${sha:0:7}"
 export FVP_VERSION_CODE="${GITHUB_RUN_NUMBER:-1}"
 echo "::notice::APK di test su emulatore: versione ${FVP_VERSION_NAME} (${FVP_VERSION_CODE})"
-
-# Logcat dell'intera esecuzione: gli errori del player e i passaggi di
-# navigazione finiscono qui (gli URL degli stream sono sempre offuscati da
-# redactStreamUrl).
-adb logcat -c || true
-nohup adb logcat -v time > /tmp/fvp-logcat.log 2>&1 &
 
 cd apps/android-mobile
 set +e
@@ -46,6 +41,5 @@ fi
 ls -R emulator-artifacts || true
 cp /tmp/fvp-connected.log emulator-artifacts/gradle-connected.log || true
 cp /tmp/fvp-mock-server.log emulator-artifacts/mock-server.log || true
-cp /tmp/fvp-logcat.log emulator-artifacts/logcat.txt || true
 
 exit "$status"

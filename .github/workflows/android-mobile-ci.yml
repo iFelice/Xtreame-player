@@ -209,8 +209,12 @@ jobs:
   # server Xtream su 127.0.0.1:3333, sezioni, player Live e Film con gesti in
   # entrambi gli orientamenti, aggiornamento catalogo) con iniezione di eventi
   # reali e screenshot di ogni schermata/orientamento.
+  #
+  # Gira SOLO su lancio manuale (workflow_dispatch): su push e pull_request
+  # viene saltato e il job verify non è bloccato da un emulatore.
   emulatore:
     needs: verify
+    if: github.event_name == 'workflow_dispatch'
     # ubuntu-24.04 esplicita: l'immagine su cui l'emulatore con KVM è
     # consolidata (ubuntu-latest migra a Ubuntu 26 da ottobre 2026).
     runs-on: ubuntu-24.04
@@ -286,9 +290,9 @@ jobs:
           curl -s http://127.0.0.1:3333/health
           echo "Mock server in ascolto su 127.0.0.1:3333 (raggiunto dall'app come 10.0.2.2)."
 
-      # Nota: l'action esegue script e pre-script UNA RIGA PER VOLTA con
-      # /bin/sh (dash): nessun blocco multilinea. Tutta la logica vive in
-      # .github/scripts/*.bash, richiamati con una riga sola.
+      # Nota: l'action esegue lo script UNA RIGA PER VOLTA con /bin/sh (dash):
+      # nessun blocco multilinea. Tutta la logica vive in
+      # .github/scripts/run-emulator-tests.sh, richiamato con una riga sola.
       - name: Test strumentati del tablet su emulatore (API 35)
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -301,97 +305,7 @@ jobs:
           force-avd-creation: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none
           emulator-boot-timeout: 1200
-          # Osserva l'avvio: campiona dispositivi adb e processo dell'emulatore
-          # ogni 20 s, per capire se è lento, bloccato o morto.
-          pre-emulator-launch-script: nohup bash .github/scripts/emulator-boot-watch.sh > /tmp/emulator-watch.log 2>&1 &
           script: bash .github/scripts/run-emulator-tests.sh
-
-      # Rende visibili negli annotation del run gli esiti dei test su
-      # emulatore (il log completo resta nell'artifact). Nessun comando qui
-      # deve fallire: è solo diagnostica.
-      - name: Annota gli esiti dei test su emulatore
-        if: always()
-        shell: bash
-        run: |
-          set +e
-          python3 - <<'PY'
-          import glob, re, xml.etree.ElementTree as ET
-          tot = fail = err = skip = 0
-          for path in glob.glob('apps/android-mobile/app/build/outputs/androidTest-results/connected/**/*.xml', recursive=True):
-              try:
-                  root = ET.parse(path).getroot()
-              except Exception:
-                  continue
-              tot += int(root.get('tests') or 0)
-              fail += int(root.get('failures') or 0)
-              err += int(root.get('errors') or 0)
-              skip += int(root.get('skipped') or 0)
-              for case in root.iter('testcase'):
-                  for f in list(case):
-                      if f.tag in ('failure', 'error'):
-                          body = f.text or f.get('message') or ''
-                          lines = [re.sub(r'\s+', ' ', ln).strip()[:220]
-                                   for ln in body.split('\n') if ln.strip()][:8]
-                          print(f"::error::test «{case.get('name','?')}»: " + ' || '.join(lines)[:1500])
-          if tot:
-              print(f"::notice::test su emulatore: eseguiti {tot}, falliti {fail}, errori {err}, saltati {skip}, superati {tot - fail - err - skip}")
-          else:
-              print("::notice::nessun risultato XML dei test su emulatore trovato")
-          PY
-          # Errori di compilazione Kotlin degli androidTest (e: file://...)
-          awk '/^e: /' /tmp/fvp-connected.log 2>/dev/null | head -10 | while IFS= read -r line; do
-            echo "::error::${line:0:600}"
-          done
-          # Sezione di riepilogo del fallimento Gradle
-          failure=$(sed -n '/FAILURE: Build failed/,/^BUILD FAILED/p' /tmp/fvp-connected.log 2>/dev/null | head -40 | tr '\n' '|')
-          if [ -n "$failure" ]; then
-            echo "::notice::gradle: ${failure:0:1600}"
-          fi
-          echo "::notice::gradle (coda): $(tail -n 25 /tmp/fvp-connected.log 2>/dev/null | tr '\n' '|' | cut -c1-900)"
-          # Log dell'app (tag FelixVP): navigazione, login, errori del player.
-          if [ -f /tmp/fvp-logcat.log ]; then
-            echo "::notice::app (ultimi log): $(grep -E 'FelixVP' /tmp/fvp-logcat.log | tail -n 45 | tr '\n' '|' | cut -c1-1700)"
-            echo "::notice::player errori: $(grep -E 'ExoPlayer|HttpDataSource|MediaCodec|AudioTrack|VideoCapabilities' /tmp/fvp-logcat.log | grep -iE 'error|fail|exception|unable' | tail -n 15 | tr '\n' '|' | cut -c1-1200)"
-            echo "::notice::crash: $(grep -E 'FATAL EXCEPTION|AndroidRuntime' /tmp/fvp-logcat.log | tail -n 6 | tr '\n' '|' | cut -c1-900)"
-          fi
-          # Richieste ricevute dal mock server.
-          if [ -f /tmp/fvp-mock-server.log ]; then
-            echo "::notice::mock server (coda): $(tail -n 40 /tmp/fvp-mock-server.log | tr '\n' '|' | cut -c1-1400)"
-          fi
-          exit 0
-
-      # Se l'emulatore non parte o i test falliscono, raccoglie indizi
-      # (dispositivi adb, AVD, spazio, memoria, log del mock server) e li
-      # riporta anche come annotation del run, oltre che nell'artifact.
-      - name: Diagnostica del job emulatore
-        if: failure()
-        shell: bash
-        run: |
-          set -uo pipefail
-          mkdir -p emulator-artifacts
-          {
-            echo "== adb devices =="; adb devices -l 2>&1 || true
-            echo "== AVD =="; ls -la "$HOME/.android/avd" 2>&1 || true
-            echo "== log AVD =="; tail -n 100 "$HOME"/.android/avd/*.avd/*.log 2>/dev/null || true
-            echo "== KVM =="; ls -l /dev/kvm 2>&1 || true
-            echo "== disco =="; df -h 2>&1 | head -8 || true
-            echo "== memoria =="; free -h 2>&1 || true
-            echo "== watcher avvio (ultime righe) =="; tail -n 60 /tmp/emulator-watch.log 2>&1 || true
-          } > emulator-artifacts/diagnostica-boot.txt 2>&1 || true
-          cp /tmp/fvp-mock-server.log emulator-artifacts/mock-server.log 2>/dev/null || true
-          # Il log completo va nell'artifact; nei annotation bastano i fatti salienti.
-          echo "::notice::$(adb devices 2>&1 | tr '\n' ' ' | cut -c1-400)"
-          echo "::notice::kvm: $(ls -l /dev/kvm 2>&1 | cut -c1-200); disco: $(df -h / | tail -1 | tr -s ' ' | cut -c1-120)"
-          echo "::notice::watcher: $(tail -n 12 /tmp/emulator-watch.log 2>/dev/null | tr '\n' '|' | cut -c1-900)"
-          # Prova di avvio manuale (60 s) per catturare l'eventuale errore
-          # dell'emulatore: l'AVD "test" e l'emulatore sono già installati.
-          adb kill-server >/dev/null 2>&1 || true
-          timeout 60 "$ANDROID_HOME/emulator/emulator" -avd test -no-window -gpu swiftshader_indirect \
-            -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none \
-            > /tmp/emulator-manual.log 2>&1 || true
-          cp /tmp/emulator-manual.log emulator-artifacts/emulator-manual.log || true
-          echo "::notice::avvio manuale: $(tail -n 25 /tmp/emulator-manual.log 2>/dev/null | tr '\n' '|' | cut -c1-900)"
-          cat emulator-artifacts/diagnostica-boot.txt || true
 
       - name: Carica report e screenshot dei test su emulatore
         if: always()

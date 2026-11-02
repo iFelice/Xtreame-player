@@ -23,12 +23,6 @@ app.use((_req, res, next) => {
   res.setHeader('Cache-Control', 'no-store');
   next();
 });
-// Log minimale delle richieste: solo metodo e percorso, senza query string
-// (utile nei job CI per verificare che l'app raggiunga il server di prova).
-app.use((req, _res, next) => {
-  console.log(`${req.method} ${req.path}`);
-  next();
-});
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', service: 'xtream-player-mock', version: 1 });
