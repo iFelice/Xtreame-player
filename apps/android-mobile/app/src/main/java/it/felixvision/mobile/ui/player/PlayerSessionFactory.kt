@@ -5,6 +5,7 @@ import it.felixvision.mobile.ui.access.AccountSummary
 import it.felixvision.mobile.ui.catalog.CatalogViewModel
 import it.felixvision.mobile.ui.catalog.PlayTarget
 import it.felixvision.tv.data.catalog.Catalog
+import it.felixvision.tv.data.catalog.allCategoryIds
 import it.felixvision.tv.data.channels.MyChannelPlayback
 import it.felixvision.tv.data.epg.CatchupRules
 import it.felixvision.tv.data.playback.LiveZapping
@@ -27,7 +28,10 @@ suspend fun createMobilePlayerSession(
             }
         }
         val category = chosen.categoryId
-        val channels = if (category.isNullOrBlank()) allLive else allLive.filter { it.categoryId == category }
+        // Zapping nella categoria di partenza: appartenenza (`allCategoryIds`),
+        // non uguaglianza: un canale assegnato a più categorie appartiene alla
+        // lista di OGNI categoria.
+        val channels = if (category.isNullOrBlank()) allLive else allLive.filter { category in it.allCategoryIds }
         val start = channels.indexOfFirst { it.streamId == streamId }.let { if (it < 0) 0 else it }
         val categoryName = catalog.liveCategories.firstOrNull { it.categoryId == category }?.categoryName
         return MobilePlaybackSource.Live(channels, LiveZapping.clamp(start, channels.size), categoryName)

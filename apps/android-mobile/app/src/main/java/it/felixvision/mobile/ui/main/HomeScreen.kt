@@ -355,7 +355,7 @@ private fun SectionContent(
             imageLoader = imageLoader,
             modifier = modifier,
         )
-        AppSection.CONTINUA -> ContinueWatchingSection(
+        AppSection.RIPRENDI -> ContinueWatchingSection(
             viewModel = catalogViewModel,
             imageLoader = imageLoader,
             modifier = modifier,
