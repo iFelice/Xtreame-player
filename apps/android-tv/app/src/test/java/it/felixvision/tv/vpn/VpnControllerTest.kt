@@ -16,6 +16,7 @@ import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
@@ -45,6 +46,7 @@ import org.robolectric.annotation.Config as RobolectricConfig
  * gli avvisi postMessage) usa lo [testScheduler] di test, fatto avanzare con
  * `scheduler.advanceUntilIdle()` quando si vogliono consegnare gli avvisi.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 @RobolectricConfig(sdk = [34])
 class VpnControllerTest {
