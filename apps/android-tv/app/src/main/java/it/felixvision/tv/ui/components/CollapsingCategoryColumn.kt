@@ -30,6 +30,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.tv.material3.Border
 import androidx.tv.material3.DenseListItem
@@ -159,6 +164,22 @@ fun CollapsingCategoryColumn(
                             .fillMaxWidth()
                             .testTag("${testTagPrefix}_category_${cat.categoryId}")
                             .then(if (!expanded) Modifier.testTag("${testTagPrefix}_category_${cat.categoryId}_collapsed") else Modifier)
+                            // OK arriva anche come tasto (telecomando): il click
+                            // del componente resta la via principale, questo è
+                            // la riserva se l'evento non viene consegnato.
+                            .onPreviewKeyEvent { event ->
+                                val confirm = onCategoryConfirmed
+                                if (confirm == null || event.type != KeyEventType.KeyUp) {
+                                    return@onPreviewKeyEvent false
+                                }
+                                when (event.key) {
+                                    Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
+                                        confirm(cat.categoryId)
+                                        true
+                                    }
+                                    else -> false
+                                }
+                            }
                             .then(longPressModifier)
                             .focusRequester(fr)
                             .onFocusChanged {

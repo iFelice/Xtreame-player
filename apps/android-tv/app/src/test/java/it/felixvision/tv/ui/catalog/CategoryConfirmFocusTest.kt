@@ -3,6 +3,7 @@
 package it.felixvision.tv.ui.catalog
 
 import androidx.activity.ComponentActivity
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
@@ -12,7 +13,9 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.requestFocus
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import it.felixvision.tv.data.catalog.Category
@@ -50,6 +53,9 @@ class CategoryConfirmFocusTest {
 
     private val scale = UiScale(1f)
 
+    /** Id delle categorie di prova, per i messaggi di errore. */
+    private val candidateIds = listOf(NOVITA_CATEGORY_ID, "001", "002", "live1", "live3")
+
     // Categorie di prova: la "001" ha un contenuto, la "002" è vuota.
     private val categories = listOf(
         Category(categoryId = "001", categoryName = "Categoria uno"),
@@ -70,9 +76,19 @@ class CategoryConfirmFocusTest {
     /**
      * OK su una voce, come il telecomando: la categoria deve cambiare subito,
      * senza i 300 ms del debounce che valgono per il solo spostamento del focus.
+     *
+     * La voce è un `DenseListItem` di tv-material: l'azione semantica
+     * `SemanticsActions.OnClick` è la via principale. Se l'evento non viene
+     * consegnato, il tasto OK (DPad center) sulla voce fa la stessa cosa.
      */
     private fun pressOk(tag: String) {
         rule.onNodeWithTag(tag).performSemanticsAction(SemanticsActions.OnClick)
+        rule.waitForIdle()
+    }
+
+    /** OK con il tasto del telecomando, come riserva del click. */
+    private fun pressOkKey(tag: String) {
+        rule.onNodeWithTag(tag).performKeyInput { pressKey(Key.DirectionCenter) }
         rule.waitForIdle()
     }
 
@@ -80,30 +96,31 @@ class CategoryConfirmFocusTest {
         rule.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()
 
     /**
-     * Categoria applicata alla colonna, letta dai suoi tag
-     * (`<prefisso>_category_column_<id>_expanded|_collapsed`): serve nei
+     * La categoria applicata alla griglia o all'elenco, letta dai tag della
+     * colonna (`<prefisso>_category_column_<id>_expanded|_collapsed`): serve nei
      * messaggi di errore per dire subito cosa mostra la colonna.
      */
     private fun appliedCategory(prefix: String, candidates: List<String>): String =
         candidates.firstOrNull { tagExists("${prefix}_category_column_${it}_expanded") }?.let { "$it (aperta)" }
             ?: candidates.firstOrNull { tagExists("${prefix}_category_column_${it}_collapsed") }?.let { "$it (compatta)" }
-            ?: "sconosciuta"
+            ?: "colonna non composta"
 
-    /** La voce [tag] è quella scelta e la colonna mostra la sua categoria. */
-    private fun assertSelected(step: String, tag: String, prefix: String, categoryId: String) {
-        val applied = appliedCategory(prefix, listOf(NOVITA_CATEGORY_ID, "001", "002", "live1", "live3"))
-        if (!tagExists(tag)) {
-            throw AssertionError("[$step] la voce $tag non esiste; la colonna mostra $applied")
-        }
-        if (!tagExists("${prefix}_category_column_${categoryId}_expanded") &&
-            !tagExists("${prefix}_category_column_${categoryId}_collapsed")
-        ) {
-            throw AssertionError(
-                "[$step] la categoria $categoryId non è stata applicata; la colonna mostra $applied",
-            )
-        }
-        rule.onNodeWithTag(tag).assertIsSelected()
+    /** Applica OK fin quando la colonna non mostra [categoryId]. */
+    private fun confirmUntilApplied(step: String, tag: String, prefix: String, categoryId: String) {
+        pressOk(tag)
+        if (isApplied(prefix, categoryId)) return
+        // Riserva: il tasto OK sulla voce (il click non è arrivato).
+        pressOkKey(tag)
+        if (isApplied(prefix, categoryId)) return
+        throw AssertionError(
+            "[$step] la categoria $categoryId non è stata applicata; " +
+                "la colonna mostra ${appliedCategory(prefix, candidateIds)}",
+        )
     }
+
+    private fun isApplied(prefix: String, categoryId: String): Boolean =
+        tagExists("${prefix}_category_column_${categoryId}_expanded") ||
+            tagExists("${prefix}_category_column_${categoryId}_collapsed")
 
     private fun assertFocus(step: String, tag: String) {
         try {
@@ -134,8 +151,8 @@ class CategoryConfirmFocusTest {
 
         // OK: la categoria cambia subito, senza i 300 ms del debounce che
         // valgono per il solo spostamento del focus.
-        pressOk("film_category_001")
-        assertSelected("dopo OK", "film_category_001", "film", "001")
+        confirmUntilApplied("dopo OK", "film_category_001", "film", "001")
+        rule.onNodeWithTag("film_category_001").assertIsSelected()
         rule.onNodeWithText("Nessun film").assertDoesNotExist()
 
         // Il focus passa alla prima (qui unica) copertina.
@@ -164,11 +181,10 @@ class CategoryConfirmFocusTest {
         val emptyCategory = rule.onNodeWithTag("film_category_002")
         emptyCategory.requestFocus()
         rule.waitForIdle()
-        pressOk("film_category_002")
-
         // Nessuna copertina da focalizzare: il focus resta sulla voce, la
         // categoria è quella scelta e la colonna resta aperta.
-        assertSelected("categoria vuota", "film_category_002", "film", "002")
+        confirmUntilApplied("categoria vuota", "film_category_002", "film", "002")
+        rule.onNodeWithTag("film_category_002").assertIsSelected()
         assertFocus("categoria vuota", "film_category_002")
         rule.onNodeWithTag("film_category_column_collapsed").assertDoesNotExist()
         rule.onNodeWithText("Nessun film").assertIsDisplayed()
@@ -193,8 +209,8 @@ class CategoryConfirmFocusTest {
         category.requestFocus()
         rule.waitForIdle()
 
-        pressOk("serie_category_001")
-        assertSelected("dopo OK", "serie_category_001", "serie", "001")
+        confirmUntilApplied("dopo OK", "serie_category_001", "serie", "001")
+        rule.onNodeWithTag("serie_category_001").assertIsSelected()
         rule.onNodeWithText("Nessuna serie").assertDoesNotExist()
 
         rule.waitUntil(timeoutMillis = 2_000) {
@@ -221,8 +237,8 @@ class CategoryConfirmFocusTest {
         val emptyCategory = rule.onNodeWithTag("serie_category_002")
         emptyCategory.requestFocus()
         rule.waitForIdle()
-        pressOk("serie_category_002")
-        assertSelected("categoria vuota", "serie_category_002", "serie", "002")
+        confirmUntilApplied("categoria vuota", "serie_category_002", "serie", "002")
+        rule.onNodeWithTag("serie_category_002").assertIsSelected()
         assertFocus("categoria vuota", "serie_category_002")
         rule.onNodeWithTag("serie_category_column_collapsed").assertDoesNotExist()
         rule.onNodeWithText("Nessuna serie").assertIsDisplayed()
@@ -247,8 +263,8 @@ class CategoryConfirmFocusTest {
         category.requestFocus()
         rule.waitForIdle()
 
-        pressOk("live_category_live1")
-        assertSelected("dopo OK", "live_category_live1", "live", "live1")
+        confirmUntilApplied("dopo OK", "live_category_live1", "live", "live1")
+        rule.onNodeWithTag("live_category_live1").assertIsSelected()
         rule.onNodeWithText("Nessun canale").assertDoesNotExist()
 
         rule.waitUntil(timeoutMillis = 2_000) {
@@ -276,8 +292,8 @@ class CategoryConfirmFocusTest {
         val emptyCategory = rule.onNodeWithTag("live_category_live3")
         emptyCategory.requestFocus()
         rule.waitForIdle()
-        pressOk("live_category_live3")
-        assertSelected("categoria vuota", "live_category_live3", "live", "live3")
+        confirmUntilApplied("categoria vuota", "live_category_live3", "live", "live3")
+        rule.onNodeWithTag("live_category_live3").assertIsSelected()
         assertFocus("categoria vuota", "live_category_live3")
         rule.onNodeWithTag("live_category_column_collapsed").assertDoesNotExist()
         rule.onNodeWithText("Nessun canale").assertIsDisplayed()
