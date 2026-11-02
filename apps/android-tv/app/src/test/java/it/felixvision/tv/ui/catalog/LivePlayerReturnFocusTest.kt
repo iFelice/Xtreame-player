@@ -10,7 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsFocused
-import androidx.compose.ui.test.fetchSemanticsNodes
+import androidx.compose.ui.test.exists
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performKeyInput
@@ -112,10 +112,9 @@ class LivePlayerReturnFocusTest {
      * canali). La voce collassata non ha semantica "selected".
      */
     private fun assertCategorySelected(categoryId: String) {
-        val found = listOf(
-            "live_category_column_${categoryId}_expanded",
-            "live_category_column_${categoryId}_collapsed",
-        ).any { tag -> rule.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty() }
+        val found = listOf("_expanded", "_collapsed").any { suffix ->
+            rule.onNodeWithTag("live_category_column_${categoryId}$suffix").exists()
+        }
         assertTrue("Categoria $categoryId non selezionata (tag colonna)", found)
     }
 
