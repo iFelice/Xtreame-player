@@ -67,6 +67,10 @@ android {
             ?: throw GradleException("FVP_VERSION_CODE must be an integer")
         versionName = System.getenv("FVP_VERSION_NAME") ?: "0.1.0"
 
+        // Test strumentati su emulatore (job "emulatore" della CI): regola
+        // standard di AndroidX per createAndroidComposeRule + UiDevice.
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
         // Indirizzo del servizio di abbinamento (Cloudflare Worker) usato per
         // il pairing da remoto: stesso valore dell'app TV. Per puntare a un
         // altro deployment si modifica qui (vedi README) e si ricompila.
@@ -184,4 +188,20 @@ dependencies {
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
     testImplementation(libs.androidx.test.ext.junit)
+    // MockWebServer per i test JVM dell'interceptor di avanzamento download
+    // (stesso artefatto già usato dai test dell'app TV).
+    testImplementation(libs.okhttp.mockwebserver)
+
+    // --- Test strumentati (app/src/androidTest, emulatore) ---
+    // Runner/regole di AndroidX e uiautomator: gli unici nuovi artefatti,
+    // dichiarati nel catalogo mobile.versions.toml. Il resto (ext.junit,
+    // compose ui-test-junit4, junit) sono artefatti già presenti nel catalogo
+    // condiviso "libs", usati qui nella configurazione androidTest.
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.junit)
+    androidTestImplementation(mobileLibs.androidx.test.runner)
+    androidTestImplementation(mobileLibs.androidx.test.rules)
+    androidTestImplementation(mobileLibs.androidx.test.uiautomator)
 }

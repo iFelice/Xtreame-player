@@ -3,13 +3,30 @@
 #
 # Contiene SOLO le librerie che l'app TV non dichiara: tutto il resto viene
 # letto dal catalogo condiviso "libs" (../android-tv/gradle/libs.versions.toml,
-# dichiarato in settings.gradle.kts). Qui non c'è una sezione [versions]:
-# material3 e la navigation suite sono gestiti dal Compose BOM già presente
-# in "libs" (androidx.compose:compose-bom:2026.09.00), che li include con le
-# versioni 1.4.0. Verificato sul POM del BOM su Google Maven
+# dichiarato in settings.gradle.kts). Qui non c'è una sezione [versions]: le
+# librerie di Compose sono gestite dal Compose BOM già presente in "libs".
+# Verificato sul POM del BOM su Google Maven
 # (dl.google.com/dl/android/maven2/androidx/compose/compose-bom/2026.09.00/):
 #   androidx.compose.material3:material3:1.4.0
 #   androidx.compose.material3:material3-adaptive-navigation-suite:1.4.0
+#
+# Le librerie di test qui sotto servono ai test strumentati su emulatore
+# (app/src/androidTest, job "emulatore" del CI). Versioni verificate su
+# Google Maven leggendo i maven-metadata.xml ufficiali
+# (dl.google.com/android/maven2/...):
+#   androidx.test:runner        1.7.0   (androidx/test/runner/maven-metadata.xml)
+#   androidx.test:rules         1.7.0   (androidx/test/rules/maven-metadata.xml)
+#   androidx.test.uiautomator:uiautomator 2.4.0
+#     (androidx/test/uiautomator/uiautomator/maven-metadata.xml; il POM 2.4.0
+#      dipende da androidx.test:core 1.7.0, junit 4.13.2 e kotlin-stdlib
+#      2.1.20: compatibili con il catalogo condiviso)
+# androidx.test:core 1.7.0 e :monitor fanno parte dello stesso treno di
+# rilascio (verificato in androidx/test/core/maven-metadata.xml).
 [libraries]
 androidx-compose-material3 = { module = "androidx.compose.material3:material3" }
 androidx-compose-material3-adaptive-navigation-suite = { module = "androidx.compose.material3:material3-adaptive-navigation-suite" }
+
+# --- Test strumentati (androidTest) ---
+androidx-test-runner = { module = "androidx.test:runner", version = "1.7.0" }
+androidx-test-rules = { module = "androidx.test:rules", version = "1.7.0" }
+androidx-test-uiautomator = { module = "androidx.test.uiautomator:uiautomator", version = "2.4.0" }

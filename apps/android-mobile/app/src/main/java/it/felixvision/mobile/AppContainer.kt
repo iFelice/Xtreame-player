@@ -8,6 +8,8 @@ import it.felixvision.tv.core.Clock
 import it.felixvision.tv.core.FvpJson
 import it.felixvision.tv.core.HttpClientFactory
 import it.felixvision.tv.core.SystemClock
+import it.felixvision.mobile.data.catalog.CatalogDownloadInterceptor
+import it.felixvision.mobile.data.catalog.CatalogDownloadMonitor
 import it.felixvision.tv.data.catalog.CatalogCache
 import it.felixvision.tv.data.catalog.CatalogClient
 import it.felixvision.tv.data.channels.MyChannelsStore
@@ -54,8 +56,25 @@ class AppContainer(
     /** Vero mentre questo tablet ha una riproduzione aperta. */
     val playbackActivity = PlaybackActivityTracker()
 
-    /** Un solo [OkHttpClient] per tutta l'app (vedi [HttpClientFactory]). */
-    val httpClient: OkHttpClient by lazy { HttpClientFactory.create() }
+    /**
+     * Avanzamento dei download del catalogo (get_live_streams, get_vod_streams,
+     * get_series), misurato dall'interceptor qui sotto: lo osserva la finestra
+     * di aggiornamento delle Impostazioni.
+     */
+    val catalogDownloadMonitor = CatalogDownloadMonitor()
+
+    /**
+     * Un solo [OkHttpClient] per tutta l'app (vedi [HttpClientFactory]), con in
+     * più l'interceptor che misura i byte ricevuti dai download del catalogo:
+     * è aggiunto QUI, solo al client del tablet, senza toccare il codice
+     * condiviso della TV.
+     */
+    val httpClient: OkHttpClient by lazy {
+        HttpClientFactory.create()
+            .newBuilder()
+            .addInterceptor(CatalogDownloadInterceptor(catalogDownloadMonitor))
+            .build()
+    }
 
     /** Client dedicato alle immagini: max 4 download simultanee, nessuna retry, cache 200MB via Coil. */
     val imageHttpClient: OkHttpClient by lazy { FvpImageLoader.createImageHttpClient() }

@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -120,10 +121,13 @@ private fun PlayerTopControls(
             modifier = Modifier.weight(1f).padding(horizontal = 4.dp),
         ) {
             Text(
+                // Nome del canale/film in riproduzione: i test su emulatore lo
+                // leggono per verificare il cambio canale del trascinamento.
                 text = state.channelName,
                 color = FvpColors.TextPrimary,
                 fontSize = 14.sp,
                 maxLines = 1,
+                modifier = Modifier.testTag("player_channel_name"),
             )
             if (currentProgram != null) {
                 Text(
