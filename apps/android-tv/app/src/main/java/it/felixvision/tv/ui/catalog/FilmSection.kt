@@ -194,30 +194,40 @@ fun FilmSection(
     )
 
     // OK su una voce della colonna: la categoria diventa subito quella scelta
-    // (senza i 300 ms di debounce) e il focus va sulla prima copertina,
-    // scorrendo all'inizio. Con la categoria vuota non c'è nessuna copertina da
+    // (senza i 300 ms di debounce), la griglia riparte dalla cima e il focus va
+    // sulla prima copertina. Con la categoria vuota non c'è nessuna copertina da
     // focalizzare: il focus resta sulla voce e la colonna resta aperta.
     var pendingFirstItemFocus by remember { mutableStateOf<String?>(null) }
     val confirmCategory: (String) -> Unit = { categoryId ->
         focusedCategoryId = categoryId
         debouncedCategoryId = categoryId
         pendingFirstItemFocus = categoryId
+        // La colonna resta aperta durante il passaggio del focus alla copertina:
+        // il collasso lo decide il focus che arriva sulla griglia.
+        categoryExpanded = true
     }
-    // La copertina da focalizzare arriva dalla ricomposizione della griglia:
-    // si aspetta che il film sia davvero composto e poi gli si chiede il focus.
-    LaunchedEffect(pendingFirstItemFocus, filtered, itemFocusRequesters) {
+    // La copertina da focalizzare arriva dalla ricomposizione della griglia: si
+    // guarda l'elenco vero della categoria confermata (non lo stato della
+    // composizione, che può essere ancora quello di prima) e si chiede il focus
+    // solo quando il film è composto.
+    LaunchedEffect(pendingFirstItemFocus, filtered, itemFocusRequesters, streams, recentStreams) {
         val categoryId = pendingFirstItemFocus ?: return@LaunchedEffect
-        if (categoryId != debouncedCategoryId) return@LaunchedEffect
         // Categoria vuota: non c'è nessuna copertina da focalizzare, la richiesta
         // si consuma qui e il focus resta sulla voce della colonna.
-        if (filtered.isEmpty()) {
+        val first = filmsForCategory(categoryId, streams, recentStreams).firstOrNull()
+        if (first == null) {
             pendingFirstItemFocus = null
             return@LaunchedEffect
         }
-        val first = filtered.first()
-        gridState.scrollToItem(0)
+        // Se la griglia mostra già la categoria confermata si parte dalla cima;
+        // altrimenti riparte da sola quando la nuova lista arriva (vedi
+        // LaunchedEffect(debouncedCategoryId) qui sopra).
+        if (debouncedCategoryId == categoryId && !filtered.isEmpty()) {
+            gridState.scrollToItem(0)
+        }
+        val attempt = itemFocusRequesters[first.streamId] ?: return@LaunchedEffect
         withFrameNanos { }
-        itemFocusRequesters[first.streamId]?.requestFocus()
+        attempt.requestFocus()
         pendingFirstItemFocus = null
     }
 

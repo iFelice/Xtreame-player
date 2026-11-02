@@ -43,6 +43,18 @@ class NovitaCategoryNavigationTest {
     private val serie = SeriesItem(seriesId = "001", name = "Serie uno", categoryId = "001")
     private val recentSerie = SeriesItem(seriesId = "002", name = "Serie recente", categoryId = "002")
 
+    /**
+     * OK su una categoria, come il telecomando: la categoria diventa subito
+     * quella scelta e il focus passa alla prima copertina. Va chiamato con
+     * `mainClock.autoAdvance = false`, perché OK non deve avere bisogno dei
+     * 300 ms di debounce del focus.
+     */
+    private fun confirmCategory(tag: String) {
+        rule.onNodeWithTag(tag).performSemanticsAction(SemanticsActions.OnClick)
+        rule.mainClock.advanceTimeBy(100)
+        rule.waitForIdle()
+    }
+
     @Test
     fun `Film apre Novita con preferiti e visto poi passa alla categoria del provider`() {
         val focus = FocusRequester()
@@ -69,18 +81,18 @@ class NovitaCategoryNavigationTest {
         rule.onNodeWithTag("film_002_fav_star", useUnmergedTree = true).assertExists()
         rule.onNodeWithTag("film_002_seen", useUnmergedTree = true).assertExists()
 
-        provider.performSemanticsAction(SemanticsActions.OnClick)
-        rule.mainClock.advanceTimeBy(400)
-        rule.waitForIdle()
+        // OK sulla categoria del provider, senza attendere il debounce: il
+        // focus va sulla sua prima copertina.
+        rule.mainClock.autoAdvance = false
+        confirmCategory("film_category_001")
         provider.assertIsSelected()
-        rule.onNodeWithTag("film_001").assertIsDisplayed()
+        rule.onNodeWithTag("film_001").assertIsDisplayed().assertIsFocused()
         rule.onNodeWithTag("film_002").assertDoesNotExist()
 
-        novita.performSemanticsAction(SemanticsActions.OnClick)
-        rule.mainClock.advanceTimeBy(400)
+        confirmCategory("film_category_$NOVITA_CATEGORY_ID")
+        rule.mainClock.autoAdvance = true
         rule.waitForIdle()
-        rule.runOnIdle { focus.requestFocus() }
-        rule.waitForIdle()
+        novita.assertIsSelected()
         rule.onNodeWithTag("film_002").assertIsFocused()
         rule.onNodeWithTag("film_002").performKeyInput { pressKey(Key.DirectionLeft) }
         rule.waitForIdle()
@@ -111,18 +123,18 @@ class NovitaCategoryNavigationTest {
         rule.onNodeWithTag("serie_001").assertDoesNotExist()
         rule.onNodeWithTag("serie_002_fav_star", useUnmergedTree = true).assertExists()
 
-        provider.performSemanticsAction(SemanticsActions.OnClick)
-        rule.mainClock.advanceTimeBy(400)
-        rule.waitForIdle()
+        // OK sulla categoria del provider, senza attendere il debounce: il
+        // focus va sulla sua prima copertina.
+        rule.mainClock.autoAdvance = false
+        confirmCategory("serie_category_001")
         provider.assertIsSelected()
-        rule.onNodeWithTag("serie_001").assertIsDisplayed()
+        rule.onNodeWithTag("serie_001").assertIsDisplayed().assertIsFocused()
         rule.onNodeWithTag("serie_002").assertDoesNotExist()
 
-        novita.performSemanticsAction(SemanticsActions.OnClick)
-        rule.mainClock.advanceTimeBy(400)
+        confirmCategory("serie_category_$NOVITA_CATEGORY_ID")
+        rule.mainClock.autoAdvance = true
         rule.waitForIdle()
-        rule.runOnIdle { focus.requestFocus() }
-        rule.waitForIdle()
+        novita.assertIsSelected()
         rule.onNodeWithTag("serie_002").assertIsFocused()
         rule.onNodeWithTag("serie_002").performKeyInput { pressKey(Key.DirectionLeft) }
         rule.waitForIdle()

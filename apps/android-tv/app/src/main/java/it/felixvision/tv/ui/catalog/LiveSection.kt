@@ -263,28 +263,38 @@ fun LiveSection(
     }
 
     // OK su una voce della colonna: la categoria diventa subito quella scelta
-    // (senza i 300 ms di debounce) e il focus va al primo canale, scorrendo
-    // all'inizio. Con la categoria vuota non c'è nessun canale da focalizzare:
+    // (senza i 300 ms di debounce), l'elenco riparte dall'inizio e il focus va al
+    // primo canale. Con la categoria vuota non c'è nessun canale da focalizzare:
     // il focus resta sulla voce e la colonna resta aperta.
     var pendingFirstChannelFocus by remember { mutableStateOf<String?>(null) }
     val confirmCategory: (String) -> Unit = { categoryId ->
         focusedCategoryId = categoryId
         debouncedCategoryId = categoryId
         pendingFirstChannelFocus = categoryId
+        // La colonna resta aperta durante il passaggio del focus al canale: il
+        // collasso lo decide il focus che arriva sull'elenco.
+        categoryExpanded = true
     }
-    LaunchedEffect(pendingFirstChannelFocus, filtered) {
+    // Si guarda l'elenco vero della categoria confermata (non lo stato della
+    // composizione, che può essere ancora quello di prima) e si chiede il focus
+    // solo quando il canale è composto.
+    LaunchedEffect(pendingFirstChannelFocus, filtered, latestStreams) {
         val categoryId = pendingFirstChannelFocus ?: return@LaunchedEffect
-        if (categoryId != debouncedCategoryId) return@LaunchedEffect
         // Categoria vuota: non c'è nessun canale da focalizzare, la richiesta si
         // consuma qui e il focus resta sulla voce della colonna.
-        if (filtered.isEmpty()) {
+        val first = liveStreamsForCategory(categoryId, latestStreams).firstOrNull()
+        if (first == null) {
             pendingFirstChannelFocus = null
             return@LaunchedEffect
         }
-        val first = filtered.first()
-        channelsListState.scrollToItem(0)
+        // Se l'elenco mostra già la categoria confermata riparte dall'inizio;
+        // altrimenti riparte da solo quando arriva la nuova lista.
+        if (debouncedCategoryId == categoryId && filtered.isNotEmpty()) {
+            channelsListState.scrollToItem(0)
+        }
+        val attempt = channelFocusRequesters[first.streamId] ?: return@LaunchedEffect
         withFrameNanos { }
-        channelFocusRequesters[first.streamId]?.requestFocus()
+        attempt.requestFocus()
         pendingFirstChannelFocus = null
     }
 

@@ -63,6 +63,23 @@ class CategoryConfirmFocusTest {
         Category(categoryId = "live3", categoryName = "Canali vuota"),
     )
 
+    /**
+     * OK come il telecomando, lasciando passare 100 ms — meno dei 300 ms del
+     * debounce. Lo stato della categoria deve cambiare lo stesso.
+     */
+    private fun confirmWithinDebounce(tag: String) {
+        rule.mainClock.autoAdvance = false
+        rule.onNodeWithTag(tag).performSemanticsAction(SemanticsActions.OnClick)
+        rule.mainClock.advanceTimeBy(100)
+        rule.waitForIdle()
+    }
+
+    /** Ripristina l'orologio automatico dopo [confirmWithinDebounce]. */
+    private fun resumeClock() {
+        rule.mainClock.autoAdvance = true
+        rule.waitForIdle()
+    }
+
     @Test
     fun `Film OK su una categoria la seleziona subito e dà il focus alla prima copertina`() {
         rule.setContent {
@@ -82,16 +99,19 @@ class CategoryConfirmFocusTest {
         category.requestFocus()
         rule.waitForIdle()
 
-        // OK senza lasciar passare i 300 ms del debounce: la categoria cambia
-        // comunque, e il focus va sulla prima (qui unica) copertina.
-        rule.mainClock.autoAdvance = false
-        category.performSemanticsAction(SemanticsActions.OnClick)
-        rule.mainClock.advanceTimeBy(100)
-        rule.mainClock.autoAdvance = true
-        rule.waitForIdle()
+        // OK senza lasciar passare i 300 ms del debounce (il focus sulla voce non
+        // è bastato a cambiare categoria): la categoria cambia comunque, e il
+        // focus va sulla prima (qui unica) copertina.
+        confirmWithinDebounce("film_category_001")
 
+        // Orologio ancora fermo a 100 ms: la categoria è già quella scelta e il
+        // focus è già sulla prima copertina.
         rule.onNodeWithTag("film_category_001").assertIsSelected()
+        rule.onNodeWithText("Nessun film").assertDoesNotExist()
         rule.onNodeWithTag("film_201").assertIsDisplayed().assertIsFocused()
+        // Con il focus nella griglia la colonna si compatta, come sempre.
+        rule.onNodeWithTag("film_category_column_collapsed").assertExists()
+        resumeClock()
     }
 
     @Test
@@ -116,7 +136,7 @@ class CategoryConfirmFocusTest {
         // Nessuna copertina da focalizzare: il focus resta sulla voce, la
         // categoria è quella scelta e la colonna resta aperta.
         rule.onNodeWithTag("film_category_002").assertIsSelected().assertIsFocused()
-        rule.onNodeWithTag("film_category_column_expanded").assertIsDisplayed()
+        rule.onNodeWithTag("film_category_column_collapsed").assertDoesNotExist()
         rule.onNodeWithText("Nessun film").assertIsDisplayed()
         rule.onNodeWithTag("film_201").assertDoesNotExist()
     }
@@ -139,14 +159,13 @@ class CategoryConfirmFocusTest {
         category.requestFocus()
         rule.waitForIdle()
 
-        rule.mainClock.autoAdvance = false
-        category.performSemanticsAction(SemanticsActions.OnClick)
-        rule.mainClock.advanceTimeBy(100)
-        rule.mainClock.autoAdvance = true
-        rule.waitForIdle()
+        confirmWithinDebounce("serie_category_001")
 
         rule.onNodeWithTag("serie_category_001").assertIsSelected()
+        rule.onNodeWithText("Nessuna serie").assertDoesNotExist()
         rule.onNodeWithTag("serie_301").assertIsDisplayed().assertIsFocused()
+        rule.onNodeWithTag("serie_category_column_collapsed").assertExists()
+        resumeClock()
     }
 
     @Test
@@ -169,7 +188,7 @@ class CategoryConfirmFocusTest {
         rule.waitForIdle()
 
         rule.onNodeWithTag("serie_category_002").assertIsSelected().assertIsFocused()
-        rule.onNodeWithTag("serie_category_column_expanded").assertIsDisplayed()
+        rule.onNodeWithTag("serie_category_column_collapsed").assertDoesNotExist()
         rule.onNodeWithText("Nessuna serie").assertIsDisplayed()
         rule.onNodeWithTag("serie_301").assertDoesNotExist()
     }
@@ -192,14 +211,13 @@ class CategoryConfirmFocusTest {
         category.requestFocus()
         rule.waitForIdle()
 
-        rule.mainClock.autoAdvance = false
-        category.performSemanticsAction(SemanticsActions.OnClick)
-        rule.mainClock.advanceTimeBy(100)
-        rule.mainClock.autoAdvance = true
-        rule.waitForIdle()
+        confirmWithinDebounce("live_category_live1")
 
         rule.onNodeWithTag("live_category_live1").assertIsSelected()
+        rule.onNodeWithText("Nessun canale").assertDoesNotExist()
         rule.onNodeWithTag("live_channel_101").assertIsDisplayed().assertIsFocused()
+        rule.onNodeWithTag("live_category_column_collapsed").assertExists()
+        resumeClock()
     }
 
     @Test
@@ -223,7 +241,7 @@ class CategoryConfirmFocusTest {
         rule.waitForIdle()
 
         rule.onNodeWithTag("live_category_live3").assertIsSelected().assertIsFocused()
-        rule.onNodeWithTag("live_category_column_expanded").assertIsDisplayed()
+        rule.onNodeWithTag("live_category_column_collapsed").assertDoesNotExist()
         rule.onNodeWithText("Nessun canale").assertIsDisplayed()
         rule.onNodeWithTag("live_channel_101").assertDoesNotExist()
     }
