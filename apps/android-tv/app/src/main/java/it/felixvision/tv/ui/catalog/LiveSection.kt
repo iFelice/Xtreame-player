@@ -233,9 +233,14 @@ fun LiveSection(
         }
         var waitedMillis = 0L
         while (waitedMillis < PLAYER_RETURN_FOCUS_TIMEOUT_MILLIS) {
+            // Riafferma la categoria da aprire: mentre la lista cambiava,
+            // il focus può essere finito su una voce della colonna delle
+            // categorie, che la riaprirebbe (onFocusedCategoryId + debounce).
+            if (focusedCategoryId != restoreCategory) focusedCategoryId = restoreCategory
+            if (debouncedCategoryId != restoreCategory) debouncedCategoryId = restoreCategory
             val current = liveStreamsForCategory(debouncedCategoryId, latestStreams)
             val index = current.indexOfFirst { it.streamId == targetId }
-            if (index >= 0 && debouncedCategoryId == restoreCategory) {
+            if (index >= 0) {
                 // Scorre solo quando la lista ha già ricaricato la categoria.
                 if (index < channelsListState.layoutInfo.totalItemsCount) {
                     channelsListState.scrollToItem(index)
@@ -244,7 +249,11 @@ fun LiveSection(
                 // Il focus va dato solo quando la riga del canale è composta.
                 if (channelsListState.layoutInfo.visibleItemsInfo.any { it.key == targetId }) {
                     categoryExpanded = false
-                    if (channelFocusRequesters[targetId]?.requestFocus() == true) break
+                    if (channelFocusRequesters[targetId]?.requestFocus() == true) {
+                        focusedCategoryId = restoreCategory
+                        debouncedCategoryId = restoreCategory
+                        break
+                    }
                 }
             }
             delay(PLAYER_RETURN_FOCUS_POLL_MILLIS)
