@@ -10,33 +10,32 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.Lifecycle
@@ -48,27 +47,29 @@ import it.felixvision.tv.data.catalog.Catalog
 import it.felixvision.tv.data.catalog.CatalogRefresh
 import it.felixvision.tv.data.catalog.CatalogSectionProgress
 import it.felixvision.tv.data.catalog.CatalogSectionStatus
-import it.felixvision.tv.ui.access.AccessViewModel
-import it.felixvision.tv.ui.access.PairingPanel
 import it.felixvision.tv.ui.components.FvpCheckboxButton
-import it.felixvision.tv.ui.components.FvpCompactButton
 import it.felixvision.tv.ui.components.FvpPrimaryButton
 import it.felixvision.tv.ui.components.FvpSecondaryButton
-import it.felixvision.tv.ui.components.FvpStatusText
 import it.felixvision.tv.ui.components.UiScale
-import it.felixvision.tv.ui.components.rememberRowsBringIntoViewer
 import it.felixvision.tv.ui.settings.protection.ProtectedContentScreen
 import it.felixvision.tv.ui.settings.vpn.VpnSetupScreen
 import it.felixvision.tv.ui.theme.FvpColors
-import it.felixvision.tv.ui.theme.settingsBlockSpacing
-import it.felixvision.tv.ui.theme.settingsRowSpacing
-import it.felixvision.tv.ui.theme.settingsRowText
-import it.felixvision.tv.ui.theme.settingsSectionPadding
 import it.felixvision.tv.vpn.VpnState
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 
+/**
+ * Schermata Impostazioni: una griglia di sei card (Account, Aspetto, Contenuti
+ * protetti, VPN, Catalogo, App) e, per ogni card, la pagina della sua funzione
+ * a tutto schermo nell'area dei contenuti.
+ *
+ * Il contenuto dei vecchi riquadri sta nelle pagine ([SettingsAccountPage],
+ * [SettingsAppearancePage], [SettingsVpnPage], [SettingsCatalogPage],
+ * [SettingsAppPage]); la card "Contenuti protetti" apre direttamente
+ * [ProtectedContentScreen], PIN compreso, senza pagina intermedia, e la pagina
+ * della VPN apre la configurazione con il QR [VpnSetupScreen] com'era prima.
+ *
+ * Qui stanno i dati (ViewModel, controller VPN, abbinamento) e le finestre di
+ * servizio; la navigazione griglia ↔ pagine è [SettingsNavigation].
+ */
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel,
@@ -88,26 +89,17 @@ fun SettingsScreen(
     // anche FvpApp), qui si osserva e si cambia.
     val interfaceSize by viewModel.interfaceSize.collectAsState()
     var showCatalogDialog by remember { mutableStateOf(false) }
+    // Spazio occupato dalle cache svuotabili, riletto a ogni apertura della pagina Catalogo.
+    var cacheBytes by remember { mutableLongStateOf(0L) }
     val catalogCloseFocus = remember { FocusRequester() }
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    // Pagina "Contenuti protetti": mentre è aperta sostituisce il contenuto
-    // delle Impostazioni; al rientro il focus torna sul pulsante "Gestisci".
+    // Riepilogo del PIN per la riga di stato della card "Contenuti protetti".
     val protectedSummary by viewModel.protectedSummary.collectAsState()
-    var showProtectedScreen by remember { mutableStateOf(false) }
-    val protectedManageFocus = remember { FocusRequester() }
-    var wasProtectedOpen by remember { mutableStateOf(false) }
-    LaunchedEffect(showProtectedScreen) {
-        if (wasProtectedOpen && !showProtectedScreen) {
-            withFrameNanos { }
-            runCatching { protectedManageFocus.requestFocus() }
-        }
-        wasProtectedOpen = showProtectedScreen
-    }
 
-    // Riquadro "VPN": lo stato arriva dal controller dell'app. La pagina di
-    // configurazione sostituisce il contenuto come "Contenuti protetti" e al
-    // rientro il focus torna su "Configura"/"Cambia configurazione".
+    // VPN: lo stato arriva dal controller dell'app. La pagina di configurazione
+    // con il QR si apre dalla pagina VPN; al rientro il focus torna su
+    // "Configura"/"Cambia configurazione".
     val vpnController = viewModel.vpnController
     val vpnState by vpnController.state.collectAsState()
     var showVpnSetup by remember { mutableStateOf(false) }
@@ -180,70 +172,126 @@ fun SettingsScreen(
     }
 
     // Durante lo scaricamento dell'APK il tasto Indietro annulla il download e
-    // cancella il file parziale senza uscire dalle Impostazioni.
+    // cancella il file parziale senza uscire dalle Impostazioni: per questo la
+    // navigazione tra griglia e pagine lascia il tasto al download.
     BackHandler(enabled = state.isDownloadingUpdate) {
         viewModel.cancelUpdateDownload()
     }
 
-    if (showProtectedScreen) {
-        ProtectedContentScreen(
-            store = viewModel.protectedContentStore,
-            session = viewModel.protectedSession,
-            credentialStore = viewModel.credentialStore,
-            clock = viewModel.clock,
-            server = viewModel.server,
-            username = viewModel.username,
-            catalog = catalog,
-            scale = scale,
-            modifier = modifier,
-            onExit = { showProtectedScreen = false },
-        )
-    } else if (showVpnSetup) {
-        VpnSetupScreen(
-            relay = viewModel.vpnRelayClient,
-            clock = viewModel.clock,
-            relayBaseUrl = BuildConfig.PAIRING_RELAY_URL,
-            packageName = packageName,
-            scale = scale,
-            saveConfig = { text, serverName -> vpnController.saveConfig(text, serverName) },
-            onSaved = { serverName ->
-                vpnController.postMessage("$VPN_SAVED_MESSAGE_PREFIX$serverName")
-                showVpnSetup = false
-            },
-            modifier = modifier,
-            onExit = { showVpnSetup = false },
-        )
-    } else {
-        SettingsContent(
-            state = state,
-            scale = scale,
-            modifier = modifier,
-            contentFocusRequester = contentFocusRequester,
+    SettingsNavigation(
+        cardsState = SettingsCardsState(
+            username = state.username,
+            expiresAtEpochSeconds = state.expiresAtEpochSeconds,
             interfaceSize = interfaceSize,
-            onInterfaceSizeSelected = { viewModel.onInterfaceSizeSelected(it) },
-            catalogRefreshing = catalogRefreshing,
-            catalogLastUpdateMillis = catalogLastUpdateMillis,
-            // La finestra di avanzamento si apre qui: il contenuto resta senza stato.
-            onRefreshCatalog = {
-                showCatalogDialog = true
-                onRefreshCatalog()
-            },
-            onUpdateClicked = { viewModel.onUpdateClicked() },
-            onExitClicked = { viewModel.onExitClicked() },
-            onRenewCode = { viewModel.onRenewCode() },
             protectedSummary = protectedSummary,
-            onOpenProtected = { showProtectedScreen = true },
-            protectedManageFocus = protectedManageFocus,
             vpnState = vpnState,
-            onVpnToggle = onVpnToggle,
-            onVpnConfigure = { showVpnSetup = true },
-            onVpnRemove = {
-                vpnFocusAfterRemove = true
-                vpnController.removeConfig()
-            },
-            vpnConfigureFocus = vpnConfigureFocus,
-        )
-    }
+            catalogLastUpdateMillis = catalogLastUpdateMillis ?: state.lastUpdateMillis,
+            catalogRefreshing = catalogRefreshing,
+            versionName = state.versionName,
+            updateStatus = state.updateStatus,
+        ),
+        scale = scale,
+        modifier = modifier,
+        // Il focus d'ingresso dal menu laterale va sulla prima card.
+        entryFocusRequester = contentFocusRequester,
+        downloadInProgress = state.isDownloadingUpdate,
+        vpnSetupOpen = showVpnSetup,
+        onCloseVpnSetup = { showVpnSetup = false },
+        accountPage = { pageModifier ->
+            SettingsAccountPage(
+                state = state,
+                scale = scale,
+                modifier = pageModifier,
+                onExitClicked = { viewModel.onExitClicked() },
+                onRenewCode = { viewModel.onRenewCode() },
+            )
+        },
+        appearancePage = { pageModifier ->
+            SettingsAppearancePage(
+                scale = scale,
+                modifier = pageModifier,
+                interfaceSize = interfaceSize,
+                onInterfaceSizeSelected = { viewModel.onInterfaceSizeSelected(it) },
+            )
+        },
+        protectedPage = { pageModifier, closeProtectedPage ->
+            ProtectedContentScreen(
+                store = viewModel.protectedContentStore,
+                session = viewModel.protectedSession,
+                credentialStore = viewModel.credentialStore,
+                clock = viewModel.clock,
+                server = viewModel.server,
+                username = viewModel.username,
+                catalog = catalog,
+                scale = scale,
+                modifier = pageModifier,
+                // Indietro dalla radice della schermata torna alla griglia.
+                onExit = closeProtectedPage,
+            )
+        },
+        vpnPage = { pageModifier ->
+            SettingsVpnPage(
+                vpnState = vpnState,
+                scale = scale,
+                modifier = pageModifier,
+                onVpnToggle = onVpnToggle,
+                onVpnConfigure = { showVpnSetup = true },
+                onVpnRemove = {
+                    vpnFocusAfterRemove = true
+                    vpnController.removeConfig()
+                },
+                configureFocus = vpnConfigureFocus,
+            )
+        },
+        vpnSetupPage = { pageModifier ->
+            VpnSetupScreen(
+                relay = viewModel.vpnRelayClient,
+                clock = viewModel.clock,
+                relayBaseUrl = BuildConfig.PAIRING_RELAY_URL,
+                packageName = packageName,
+                scale = scale,
+                saveConfig = { text, serverName -> vpnController.saveConfig(text, serverName) },
+                onSaved = { serverName ->
+                    vpnController.postMessage("$VPN_SAVED_MESSAGE_PREFIX$serverName")
+                    showVpnSetup = false
+                },
+                modifier = pageModifier,
+                onExit = { showVpnSetup = false },
+            )
+        },
+        catalogPage = { pageModifier ->
+            // Lo spazio occupato si misura a ogni apertura: cresce con l'uso dell'app.
+            LaunchedEffect(Unit) { cacheBytes = viewModel.cacheOccupiedBytes() }
+            SettingsCatalogPage(
+                state = state,
+                scale = scale,
+                modifier = pageModifier,
+                catalogRefreshing = catalogRefreshing,
+                catalogLastUpdateMillis = catalogLastUpdateMillis,
+                // La finestra di avanzamento si apre qui: la pagina resta senza stato.
+                onRefreshCatalog = {
+                    showCatalogDialog = true
+                    onRefreshCatalog()
+                },
+                cacheBytes = cacheBytes,
+                // Dopo la pulizia si rilegge lo spazio: l'APK di un aggiornamento in
+                // corso resta e quindi il conto non arriva a zero per forza.
+                onClearCache = {
+                    val freed = viewModel.clearCaches()
+                    cacheBytes = viewModel.cacheOccupiedBytes()
+                    freed
+                },
+            )
+        },
+        appPage = { pageModifier ->
+            SettingsAppPage(
+                state = state,
+                scale = scale,
+                modifier = pageModifier,
+                onUpdateClicked = { viewModel.onUpdateClicked() },
+            )
+        },
+    )
 
     if (showCatalogDialog) {
         LaunchedEffect(catalogRefreshing) {
@@ -334,6 +382,117 @@ fun SettingsScreen(
     }
 }
 
+/**
+ * Navigazione della schermata Impostazioni: griglia di card e pagine, senza
+ * ViewModel né archivi, così il passaggio da una card alla sua pagina e il
+ * ritorno con il focus sulla card si provano con dati finti.
+ *
+ * Le pagine arrivano come contenuti già pronti: chi compone decide cosa mettere
+ * in ognuna. La pagina della VPN può aprirne un'altra (la configurazione con il
+ * QR): [vpnSetupOpen] dice se è aperta e [onCloseVpnSetup] la chiude, così
+ * Indietro dalla configurazione torna alla pagina VPN e solo da lì alla griglia.
+ *
+ * @param entryFocusRequester focus d'ingresso dal menu laterale: va sulla prima
+ *   card della griglia.
+ * @param downloadInProgress mentre scarica un aggiornamento il tasto Indietro
+ *   appartiene alla schermata (annulla lo scaricamento), non alla navigazione.
+ */
+@Composable
+internal fun SettingsNavigation(
+    cardsState: SettingsCardsState,
+    scale: UiScale,
+    modifier: Modifier = Modifier,
+    entryFocusRequester: FocusRequester? = null,
+    cardFocusRequesters: Map<SettingsCard, FocusRequester> = rememberSettingsCardFocusRequesters(),
+    downloadInProgress: Boolean = false,
+    vpnSetupOpen: Boolean = false,
+    onCloseVpnSetup: () -> Unit = {},
+    accountPage: @Composable (Modifier) -> Unit = {},
+    appearancePage: @Composable (Modifier) -> Unit = {},
+    protectedPage: @Composable (Modifier, () -> Unit) -> Unit = { _, _ -> },
+    vpnPage: @Composable (Modifier) -> Unit = {},
+    vpnSetupPage: @Composable (Modifier) -> Unit = {},
+    catalogPage: @Composable (Modifier) -> Unit = {},
+    appPage: @Composable (Modifier) -> Unit = {},
+) {
+    // La card aperta decide cosa occupa l'area dei contenuti; [lastOpenedCard]
+    // resta anche dopo la chiusura, così il focus torna sulla card di ingresso.
+    var openCard by remember { mutableStateOf<SettingsCard?>(null) }
+    var lastOpenedCard by remember { mutableStateOf<SettingsCard?>(null) }
+
+    LaunchedEffect(openCard) {
+        val card = lastOpenedCard
+        if (openCard == null && card != null) {
+            withFrameNanos { }
+            runCatching { cardFocusRequesters[card]?.requestFocus() }
+        }
+    }
+
+    // Tornare alla griglia chiude anche l'eventuale configurazione della VPN.
+    val closePage: () -> Unit = {
+        onCloseVpnSetup()
+        openCard = null
+    }
+
+    // Indietro da una pagina torna alla griglia, e chiude anche l'eventuale
+    // configurazione della VPN. Due casi non passano di qui: "Contenuti
+    // protetti" e la configurazione della VPN gestiscono il tasto da sole e
+    // chiamano [closePage] quando è il momento di tornare indietro, mentre
+    // durante lo scaricamento di un aggiornamento Indietro appartiene alla
+    // schermata, che annulla lo scaricamento.
+    //
+    // Il tasto si prende con onPreviewKeyEvent sul contenitore della pagina e
+    // non con un BackHandler: la pagina protetta e la configurazione della VPN
+    // restano libere di gestirlo (qui si restituisce false), e i test iniettano
+    // i tasti nell'albero Compose, che non raggiunge il gestore Indietro
+    // dell'Activity.
+    val pageHandlesBack = openCard != SettingsCard.Protected &&
+        !(openCard == SettingsCard.Vpn && vpnSetupOpen) &&
+        !downloadInProgress
+
+    when {
+        openCard == null -> SettingsGrid(
+            state = cardsState,
+            scale = scale,
+            modifier = modifier,
+            cardFocusRequesters = cardFocusRequesters,
+            entryFocusRequester = entryFocusRequester,
+            onOpenCard = { card ->
+                lastOpenedCard = card
+                openCard = card
+            },
+        )
+
+        else -> Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .onPreviewKeyEvent { event ->
+                    if (event.key != Key.Back || !pageHandlesBack) return@onPreviewKeyEvent false
+                    when (event.type) {
+                        // Come nelle altre schermate: la pressione si consuma e
+                        // l'azione avviene al rilascio, senza doppi effetti.
+                        KeyEventType.KeyDown -> true
+                        KeyEventType.KeyUp -> {
+                            closePage()
+                            true
+                        }
+                        else -> false
+                    }
+                },
+        ) {
+            when (openCard) {
+                SettingsCard.Protected -> protectedPage(modifier, closePage)
+                SettingsCard.Vpn -> if (vpnSetupOpen) vpnSetupPage(modifier) else vpnPage(modifier)
+                SettingsCard.Account -> accountPage(modifier)
+                SettingsCard.Appearance -> appearancePage(modifier)
+                SettingsCard.Catalog -> catalogPage(modifier)
+                SettingsCard.App -> appPage(modifier)
+                null -> Unit
+            }
+        }
+    }
+}
+
 @Composable
 internal fun SettingsExitConfirmContent(
     clearUserData: Boolean,
@@ -404,16 +563,12 @@ const val SETTINGS_EXIT_LABEL = "Esci dall'account"
 const val SETTINGS_EXIT_CLEAR_DATA_LABEL = "Cancella anche preferiti e cronologia"
 const val SETTINGS_EXIT_CLEAR_DATA_TAG = "settings_exit_clear_data"
 
-/** Riquadro "Aspetto": dimensione dell'interfaccia sulle TV da 50" in su. */
+/** Pagina "Aspetto": dimensione dell'interfaccia sulle TV da 50" in su. */
 const val SETTINGS_APPEARANCE_TITLE = "Aspetto"
 const val SETTINGS_APPEARANCE_SECTION_TAG = "settings_appearance_section"
 
-/** Riquadro "Contenuti protetti": PIN ed elenco nascosti per l'account. */
+/** Titolo della card "Contenuti protetti": la card apre direttamente la schermata. */
 const val SETTINGS_PROTECTED_TITLE = "Contenuti protetti"
-const val SETTINGS_PROTECTED_SECTION_TAG = "settings_protected_section"
-const val SETTINGS_PROTECTED_SUMMARY_TAG = "settings_protected_summary"
-const val SETTINGS_PROTECTED_MANAGE_LABEL = "Gestisci"
-const val SETTINGS_PROTECTED_OPEN_TAG = "settings_protected_open"
 
 /** Etichetta della riga che raccoglie i pulsanti della dimensione interfaccia. */
 const val SETTINGS_INTERFACE_SIZE_LABEL = "Dimensione interfaccia"
@@ -421,7 +576,7 @@ const val SETTINGS_INTERFACE_SIZE_LABEL = "Dimensione interfaccia"
 /** Prefisso del pulsante della dimensione attiva. */
 const val INTERFACE_SIZE_ACTIVE_PREFIX = "✓ "
 
-/** Tag di test del pulsante di [size] nel riquadro Aspetto. */
+/** Tag di test del pulsante di [size] nella pagina Aspetto. */
 fun interfaceSizeTag(size: InterfaceSize): String = "settings_interface_size_${size.storageKey}"
 
 /** Etichetta del pulsante: il nome della dimensione, con "✓ " se è quella attiva. */
@@ -437,485 +592,3 @@ const val SETTINGS_UPDATE_BUTTON_TAG = "settings_update_button"
 const val SETTINGS_UPDATE_STATUS_TAG = "settings_update_status"
 
 fun updateAvailableLabel(version: String): String = "Disponibile la versione $version"
-
-/** Righe della schermata che ricevono il focus, per il bringIntoView. */
-private const val SETTINGS_ROW_ACCOUNT = 0
-private const val SETTINGS_ROW_APP = 1
-private const val SETTINGS_ROW_ACTIONS = 2
-private const val SETTINGS_ROW_PAIRING = 3
-
-/**
- * Contenuto della schermata Impostazioni, senza ViewModel: così i riquadri
- * Account, Aspetto e App si possono comporre e provare senza rete né archivi.
- *
- * Il contenuto scorre in verticale: con le righe compatte e i margini del focus
- * non tutto sta in una schermata, e senza lo scorrimento gli ultimi pulsanti
- * non sarebbero raggiungibili con il telecomando.
- */
-@Composable
-internal fun SettingsContent(
-    state: SettingsUiState,
-    scale: UiScale,
-    modifier: Modifier = Modifier,
-    contentFocusRequester: FocusRequester? = null,
-    /** Dimensione dell'interfaccia attiva, evidenziata con "✓ ". */
-    interfaceSize: InterfaceSize = InterfaceSize.COMPACT,
-    onInterfaceSizeSelected: (InterfaceSize) -> Unit = {},
-    catalogRefreshing: Boolean = false,
-    catalogLastUpdateMillis: Long? = null,
-    onRefreshCatalog: () -> Unit = {},
-    onUpdateClicked: () -> Unit = {},
-    onExitClicked: () -> Unit = {},
-    onRenewCode: () -> Unit = {},
-    /** Stato del PIN per la riga del riquadro. */
-    protectedSummary: ProtectedSummary = ProtectedSummary(),
-    onOpenProtected: () -> Unit = {},
-    /** Focus da riportare sul pulsante "Gestisci" al rientro dalla schermata. */
-    protectedManageFocus: FocusRequester? = null,
-    /** Stato della VPN per il riquadro "VPN". */
-    vpnState: VpnState = VpnState.NoConfig,
-    onVpnToggle: () -> Unit = {},
-    onVpnConfigure: () -> Unit = {},
-    onVpnRemove: () -> Unit = {},
-    /** Focus da riportare su "Configura" al rientro dalla pagina della VPN. */
-    vpnConfigureFocus: FocusRequester? = null,
-) {
-    // Come in Novità: il contenuto scorre in verticale e la riga che riceve il
-    // focus viene portata interamente in vista, così anche gli ultimi pulsanti
-    // (uscita dall'account compresa) restano raggiungibili con Su/Giù.
-    val scrollState = rememberScrollState()
-    val rowsBringIntoView = rememberRowsBringIntoViewer()
-    val updateButtonFocus = remember { FocusRequester() }
-    var wasDownloading by remember { mutableStateOf(false) }
-    val isDownloadingNow = state.updateStatus is AppUpdateStatus.Downloading
-
-    LaunchedEffect(isDownloadingNow, state.updateStatus) {
-        if (wasDownloading && state.updateStatus is AppUpdateStatus.Available) {
-            withFrameNanos { }
-            runCatching { updateButtonFocus.requestFocus() }
-        }
-        wasDownloading = isDownloadingNow
-    }
-
-    fun Modifier.rowInView(row: Int): Modifier = this
-        .then(rowsBringIntoView.rowModifier(row))
-        .onFocusChanged { focusState -> if (focusState.hasFocus) rowsBringIntoView.onRowFocused(row) }
-
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(scrollState)
-            .padding(horizontal = scale.dp(24f), vertical = scale.dp(16f)),
-        verticalArrangement = Arrangement.spacedBy(scale.settingsBlockSpacing),
-    ) {
-        Text(text = "Impostazioni", color = FvpColors.TextPrimary, fontSize = scale.sp(22f), fontWeight = FontWeight.Bold)
-
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .rowInView(SETTINGS_ROW_ACCOUNT)
-                .clip(RoundedCornerShape(scale.dp(14f)))
-                .background(FvpColors.Surface)
-                .padding(scale.settingsSectionPadding),
-            verticalArrangement = Arrangement.spacedBy(scale.settingsRowSpacing),
-        ) {
-            Text(text = "Account", color = FvpColors.TextPrimary, fontSize = scale.sp(16f), fontWeight = FontWeight.SemiBold)
-            SettingsRow(label = "Utente", value = state.username, scale = scale)
-            SettingsRow(label = "Stato", value = state.status, scale = scale)
-            SettingsRow(label = "Scadenza", value = formatExpiry(state.expiresAtEpochSeconds), scale = scale)
-            SettingsRow(
-                label = "Connessioni in uso (tutti i dispositivi)",
-                value = formatConnections(state.activeConnections, state.maxConnections),
-                scale = scale,
-                rowTestTag = "settings_connections_row",
-            )
-            SettingsRow(label = "Server", value = state.serverLabel, scale = scale, rowTestTag = "settings_server_row")
-            // Uscita dall'account: ultimo elemento del riquadro, subito dopo la
-            // riga "Server", allineata a sinistra come gli altri pulsanti secondari.
-            FvpSecondaryButton(
-                text = SETTINGS_EXIT_LABEL,
-                onClick = onExitClicked,
-                scale = scale,
-                modifier = Modifier
-                    .padding(top = scale.settingsRowSpacing)
-                    .testTag(SETTINGS_EXIT_TAG),
-            )
-        }
-
-        // Riquadro Aspetto subito dopo Account: dimensione dell'interfaccia.
-        // La scelta si applica all'istante (OK la salva e la usa FvpApp) e il
-        // focus resta sul pulsante premuto, così si può cambiare ancora. È il
-        // focus a portare in vista i pulsanti: non richiedere anche la vista
-        // dell'intero riquadro, per evitare richieste di scorrimento concorrenti.
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(scale.dp(14f)))
-                .background(FvpColors.Surface)
-                .padding(scale.settingsSectionPadding)
-                .testTag(SETTINGS_APPEARANCE_SECTION_TAG),
-            verticalArrangement = Arrangement.spacedBy(scale.settingsRowSpacing),
-        ) {
-            Text(
-                text = SETTINGS_APPEARANCE_TITLE,
-                color = FvpColors.TextPrimary,
-                fontSize = scale.sp(16f),
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                text = SETTINGS_INTERFACE_SIZE_LABEL,
-                color = FvpColors.TextSecondary,
-                fontSize = scale.settingsRowText,
-            )
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(scale.dp(8f)),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                InterfaceSize.entries.forEach { size ->
-                    FvpCompactButton(
-                        text = interfaceSizeButtonLabel(size = size, active = interfaceSize),
-                        onClick = { onInterfaceSizeSelected(size) },
-                        scale = scale,
-                        modifier = Modifier.testTag(interfaceSizeTag(size)),
-                    )
-                }
-            }
-        }
-
-        // Riquadro "Contenuti protetti" subito dopo Aspetto, stesso stile: una
-        // riga di riepilogo e il pulsante che apre la schermata di gestione.
-        // Come per Aspetto, il focus dei pulsanti porta in vista le righe: qui
-        // non serve rowInView sul riquadro.
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(scale.dp(14f)))
-                .background(FvpColors.Surface)
-                .padding(scale.settingsSectionPadding)
-                .testTag(SETTINGS_PROTECTED_SECTION_TAG),
-            verticalArrangement = Arrangement.spacedBy(scale.settingsRowSpacing),
-        ) {
-            Text(
-                text = SETTINGS_PROTECTED_TITLE,
-                color = FvpColors.TextPrimary,
-                fontSize = scale.sp(16f),
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                text = protectedSettingsLine(protectedSummary),
-                color = FvpColors.TextSecondary,
-                fontSize = scale.settingsRowText,
-                modifier = Modifier.testTag(SETTINGS_PROTECTED_SUMMARY_TAG),
-            )
-            FvpCompactButton(
-                text = SETTINGS_PROTECTED_MANAGE_LABEL,
-                onClick = onOpenProtected,
-                scale = scale,
-                modifier = Modifier
-                    .then(
-                        if (protectedManageFocus != null) {
-                            Modifier.focusRequester(protectedManageFocus)
-                        } else {
-                            Modifier
-                        },
-                    )
-                    .testTag(SETTINGS_PROTECTED_OPEN_TAG),
-            )
-        }
-
-        // Riquadro "VPN" subito dopo "Contenuti protetti", stesso stile.
-        VpnSettingsSection(
-            state = vpnState,
-            scale = scale,
-            onToggle = onVpnToggle,
-            onConfigure = onVpnConfigure,
-            onRemove = onVpnRemove,
-            configureFocus = vpnConfigureFocus,
-        )
-
-        // Riquadro App subito sotto Account: versione installata e aggiornamenti.
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .rowInView(SETTINGS_ROW_APP)
-                .clip(RoundedCornerShape(scale.dp(14f)))
-                .background(FvpColors.Surface)
-                .padding(scale.settingsSectionPadding)
-                .testTag("settings_app_section"),
-            verticalArrangement = Arrangement.spacedBy(scale.settingsRowSpacing),
-        ) {
-            Text(
-                text = "App",
-                color = FvpColors.TextPrimary,
-                fontSize = scale.sp(16f),
-                fontWeight = FontWeight.SemiBold,
-            )
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("settings_version_row"),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "Versione",
-                    color = FvpColors.TextSecondary,
-                    fontSize = scale.settingsRowText,
-                )
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(scale.dp(4f)),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = state.versionName,
-                        color = FvpColors.TextPrimary,
-                        fontSize = scale.settingsRowText,
-                        modifier = Modifier.testTag("settings_version_name"),
-                    )
-                    Text(
-                        text = "(${state.versionCode})",
-                        color = FvpColors.TextSecondary,
-                        fontSize = scale.settingsRowText,
-                        modifier = Modifier.testTag("settings_version_code"),
-                    )
-                }
-            }
-
-            when (val update = state.updateStatus) {
-                AppUpdateStatus.Checking -> {
-                    Text(
-                        text = UPDATE_STATUS_CHECKING,
-                        color = FvpColors.TextSecondary,
-                        fontSize = scale.settingsRowText,
-                        modifier = Modifier.testTag(SETTINGS_UPDATE_STATUS_TAG),
-                    )
-                }
-
-                AppUpdateStatus.UpToDate -> {
-                    Text(
-                        text = UPDATE_STATUS_UP_TO_DATE,
-                        color = FvpColors.TextSecondary,
-                        fontSize = scale.settingsRowText,
-                        modifier = Modifier.testTag(SETTINGS_UPDATE_STATUS_TAG),
-                    )
-                }
-
-                AppUpdateStatus.CheckFailed -> {
-                    Text(
-                        text = UPDATE_STATUS_ERROR,
-                        color = FvpColors.Error,
-                        fontSize = scale.settingsRowText,
-                        modifier = Modifier.testTag(SETTINGS_UPDATE_STATUS_TAG),
-                    )
-                }
-
-                is AppUpdateStatus.Available -> {
-                    Text(
-                        text = updateAvailableLabel(update.release.version),
-                        color = FvpColors.Green,
-                        fontSize = scale.settingsRowText,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.testTag(SETTINGS_UPDATE_STATUS_TAG),
-                    )
-                    update.noticeMessage?.let { notice ->
-                        Text(
-                            text = notice,
-                            color = FvpColors.TextSecondary,
-                            fontSize = scale.settingsRowText,
-                            modifier = Modifier.testTag("settings_update_notice"),
-                        )
-                    }
-                    update.errorMessage?.let { err ->
-                        Text(
-                            text = err,
-                            color = FvpColors.Error,
-                            fontSize = scale.settingsRowText,
-                            modifier = Modifier.testTag("settings_update_error"),
-                        )
-                    }
-                    FvpPrimaryButton(
-                        text = SETTINGS_UPDATE_BUTTON_LABEL,
-                        onClick = onUpdateClicked,
-                        scale = scale,
-                        enabled = true,
-                        modifier = Modifier
-                            .padding(top = scale.settingsRowSpacing)
-                            .focusRequester(updateButtonFocus)
-                            .testTag(SETTINGS_UPDATE_BUTTON_TAG),
-                    )
-                }
-
-                is AppUpdateStatus.Downloading -> {
-                    val clampedPercent = update.progressPercent.coerceIn(0, 100)
-                    Text(
-                        text = "Scaricamento aggiornamento… $clampedPercent%",
-                        color = FvpColors.TextPrimary,
-                        fontSize = scale.settingsRowText,
-                        modifier = Modifier.testTag(SETTINGS_UPDATE_STATUS_TAG),
-                    )
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(scale.dp(6f))
-                            .clip(RoundedCornerShape(scale.dp(3f)))
-                            .background(FvpColors.SurfaceElevated)
-                            .testTag("settings_update_progress_bar"),
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth(clampedPercent / 100f)
-                                .fillMaxHeight()
-                                .background(FvpColors.Green),
-                        )
-                    }
-                    Text(
-                        text = "Premi Indietro per annullare lo scaricamento.",
-                        color = FvpColors.TextSecondary,
-                        fontSize = scale.sp(12f),
-                    )
-                    FvpPrimaryButton(
-                        text = SETTINGS_UPDATE_BUTTON_LABEL,
-                        onClick = onUpdateClicked,
-                        scale = scale,
-                        enabled = false,
-                        modifier = Modifier
-                            .padding(top = scale.settingsRowSpacing)
-                            .focusRequester(updateButtonFocus)
-                            .testTag(SETTINGS_UPDATE_BUTTON_TAG),
-                    )
-                }
-
-                is AppUpdateStatus.Installing -> {
-                    Text(
-                        text = "Installazione aggiornamento…",
-                        color = FvpColors.TextPrimary,
-                        fontSize = scale.settingsRowText,
-                        modifier = Modifier.testTag(SETTINGS_UPDATE_STATUS_TAG),
-                    )
-                    FvpPrimaryButton(
-                        text = SETTINGS_UPDATE_BUTTON_LABEL,
-                        onClick = onUpdateClicked,
-                        scale = scale,
-                        enabled = false,
-                        modifier = Modifier
-                            .padding(top = scale.settingsRowSpacing)
-                            .focusRequester(updateButtonFocus)
-                            .testTag(SETTINGS_UPDATE_BUTTON_TAG),
-                    )
-                }
-            }
-        }
-
-        // "Aggiorna catalogo" da solo nella sua riga, con l'ultimo aggiornamento.
-        Row(
-            modifier = Modifier.fillMaxWidth().rowInView(SETTINGS_ROW_ACTIONS),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(scale.dp(12f)),
-        ) {
-            FvpPrimaryButton(
-                text = if (catalogRefreshing) "Aggiornamento…" else "Aggiorna catalogo",
-                onClick = onRefreshCatalog,
-                scale = scale,
-                enabled = !catalogRefreshing,
-                modifier = Modifier
-                    .then(if (contentFocusRequester != null) Modifier.focusRequester(contentFocusRequester) else Modifier)
-                    .testTag("settings_refresh")
-            )
-            val lastUpdate = catalogLastUpdateMillis ?: state.lastUpdateMillis
-            Text(
-                text = lastUpdate?.let { "Ultimo aggiornamento: ${formatTimestamp(it)}" } ?: "Mai aggiornato",
-                color = FvpColors.TextSecondary,
-                fontSize = scale.sp(13f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
-            )
-        }
-
-        val accountReadAt = state.lastAccountReadMillis
-        if (accountReadAt != null) {
-            Text(
-                text = if (state.isReadingAccount) {
-                    "Aggiornamento dati account…"
-                } else {
-                    "Dati account aggiornati alle ${formatClock(accountReadAt)}"
-                },
-                color = FvpColors.TextSecondary,
-                fontSize = scale.sp(13f),
-                modifier = Modifier.testTag("settings_account_read"),
-            )
-        } else if (state.isReadingAccount) {
-            Text(text = "Aggiornamento dati account…", color = FvpColors.TextSecondary, fontSize = scale.sp(13f))
-        }
-
-        if (state.connectionsWarning) {
-            Text(
-                text = ConnectionsAdvisory.MESSAGE,
-                color = FvpColors.Error,
-                fontSize = scale.sp(14f),
-                modifier = Modifier.testTag("settings_connections_warning"),
-            )
-        }
-
-        state.message?.let { FvpStatusText(message = it, scale = scale) }
-        state.error?.let { Text(text = it, color = FvpColors.Error, fontSize = scale.sp(14f)) }
-
-        // Riquadro compatto: spaziature ridotte, il QR è più piccolo (vedi PairingPanel).
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .rowInView(SETTINGS_ROW_PAIRING)
-                .clip(RoundedCornerShape(scale.dp(14f)))
-                .background(FvpColors.Surface)
-                .padding(scale.settingsSectionPadding),
-            verticalArrangement = Arrangement.spacedBy(scale.dp(6f)),
-        ) {
-            Text(text = "Configura da remoto", color = FvpColors.TextPrimary, fontSize = scale.sp(16f), fontWeight = FontWeight.SemiBold)
-            PairingPanel(state = state.pairing, scale = scale, modifier = Modifier.fillMaxWidth())
-            if (state.pairing.isExpired) {
-                FvpSecondaryButton(text = "Mostra un nuovo codice", onClick = onRenewCode, scale = scale)
-            }
-        }
-    }
-}
-
-@Composable
-private fun SettingsRow(label: String, value: String, scale: UiScale, rowTestTag: String? = null) {
-    Row(modifier = Modifier.fillMaxWidth().then(if (rowTestTag != null) Modifier.testTag(rowTestTag) else Modifier), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(text = label, color = FvpColors.TextSecondary, fontSize = scale.settingsRowText)
-        Text(text = value, color = FvpColors.TextPrimary, fontSize = scale.settingsRowText)
-    }
-}
-
-private fun formatExpiry(epochSeconds: Long?): String {
-    if (epochSeconds == null || epochSeconds <= 0L) return "Nessuna scadenza indicata"
-    val date = AccessViewModel.formatDate(epochSeconds) ?: return "Nessuna scadenza indicata"
-    val days = AccessViewModel.daysRemaining(epochSeconds)
-    return when {
-        days == null -> date
-        days < 0L -> "$date (scaduto)"
-        days == 0L -> "$date (oggi)"
-        else -> "$date (${days} giorni)"
-    }
-}
-
-private fun formatConnections(active: Int?, max: Int?): String = when {
-    active != null && max != null -> "$active di $max"
-    max != null -> "massimo $max"
-    active != null -> "$active in uso"
-    else -> "Non indicato dal server"
-}
-
-private fun formatClock(millis: Long): String {
-    return try {
-        val formatter = DateTimeFormatter.ofPattern("HH:mm")
-        formatter.format(Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()))
-    } catch (_: Exception) { "" }
-}
-
-private fun formatTimestamp(millis: Long): String {
-    return try {
-        val formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")
-        formatter.format(Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()))
-    } catch (_: Exception) { "" }
-}
