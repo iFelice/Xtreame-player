@@ -17,6 +17,7 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.test.printToString
 import androidx.compose.ui.test.requestFocus
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import it.felixvision.tv.data.catalog.Category
@@ -95,9 +96,7 @@ class CategoryConfirmFocusTest {
 
     /** Tag presenti nell'albero, in ordine: rende leggibile un errore della CI. */
     private fun tagsInTree(): String = runCatching {
-        val root = rule.onRoot(useUnmergedTree = true)
-        root.fetchSemanticsNode()
-        val printed: String = root.printToString()
+        val printed: String = rule.onRoot(useUnmergedTree = true).printToString()
         printed.lines()
             .filter { "Tag:" in it }
             .map { it.substringAfter("Tag:").trim().removeSurrounding("'") }
