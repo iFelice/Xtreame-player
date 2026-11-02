@@ -141,9 +141,11 @@ class SettingsCatalogProgressDialogTest {
                 .assertTextEquals("Elaborazione…")
             rule.onNodeWithTag("settings_catalog_${key}_bar_fill").assertExists()
             rule.onNodeWithTag("settings_catalog_${key}_bar_indeterminate").assertDoesNotExist()
+            val processingBarWidth = rule.onNodeWithTag("settings_catalog_${key}_bar")
+                .fetchSemanticsNode().boundsInRoot.width
             val processingFillWidth = rule.onNodeWithTag("settings_catalog_${key}_bar_fill")
                 .fetchSemanticsNode().boundsInRoot.width
-            assertEquals(barWidth, processingFillWidth, 1f)
+            assertEquals(processingBarWidth, processingFillWidth, 1f)
 
             // 4) Completato: barra piena e "Completato · 21.277 elementi"
             sections = CatalogRefresh.apply(
@@ -160,9 +162,11 @@ class SettingsCatalogProgressDialogTest {
             rule.onNodeWithTag("settings_catalog_${key}_status")
                 .assertTextEquals("Completato · 21.277 elementi")
             rule.onNodeWithTag("settings_catalog_${key}_bar_fill").assertExists()
+            val completedBarWidth = rule.onNodeWithTag("settings_catalog_${key}_bar")
+                .fetchSemanticsNode().boundsInRoot.width
             val completedFillWidth = rule.onNodeWithTag("settings_catalog_${key}_bar_fill")
                 .fetchSemanticsNode().boundsInRoot.width
-            assertEquals(barWidth, completedFillWidth, 1f)
+            assertEquals(completedBarWidth, completedFillWidth, 1f)
         }
 
         // Fine aggiornamento: "Chiudi" diventa attivo e chiude la finestra
