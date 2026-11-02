@@ -26,6 +26,7 @@ import it.felixvision.mobile.ui.access.LOGIN_PASSWORD_FIELD_TAG
 import it.felixvision.mobile.ui.access.LOGIN_SERVER_FIELD_TAG
 import it.felixvision.mobile.ui.access.LOGIN_SUBMIT_BUTTON_TAG
 import it.felixvision.mobile.ui.access.LOGIN_USERNAME_FIELD_TAG
+import it.felixvision.mobile.ui.components.fvpFieldEditorTag
 import it.felixvision.mobile.ui.main.AppSection
 import java.io.File
 import java.io.FileOutputStream
@@ -90,13 +91,13 @@ class EmulatorTabletJourneyTest {
         rotateDisplay(landscape = false)
         composeRule.waitUntil(timeoutMillis = 10_000) { nodeExists(LOGIN_SERVER_FIELD_TAG) }
 
-        // Accesso: solo l'indirizzo del simulatore e le credenziali demo.
-        composeRule.onNodeWithTag(LOGIN_SERVER_FIELD_TAG).performTextClearance()
-        composeRule.onNodeWithTag(LOGIN_SERVER_FIELD_TAG).performTextInput(MOCK_SERVER)
-        composeRule.onNodeWithTag(LOGIN_USERNAME_FIELD_TAG).performTextClearance()
-        composeRule.onNodeWithTag(LOGIN_USERNAME_FIELD_TAG).performTextInput(DEMO_USER)
-        composeRule.onNodeWithTag(LOGIN_PASSWORD_FIELD_TAG).performTextClearance()
-        composeRule.onNodeWithTag(LOGIN_PASSWORD_FIELD_TAG).performTextInput(DEMO_PASSWORD)
+        // Accesso: solo l'indirizzo del simulatore e le credenziali demo. Il
+        // tag del campo identifica il contenitore cliccabile: il testo si
+        // scrive sull'editor interno (fvpFieldEditorTag), che ha i semantici
+        // di modifica del testo.
+        typeIntoLoginField(LOGIN_SERVER_FIELD_TAG, MOCK_SERVER)
+        typeIntoLoginField(LOGIN_USERNAME_FIELD_TAG, DEMO_USER)
+        typeIntoLoginField(LOGIN_PASSWORD_FIELD_TAG, DEMO_PASSWORD)
         composeRule.onNodeWithTag(LOGIN_SUBMIT_BUTTON_TAG).performClick()
         waitForHome()
     }
@@ -259,6 +260,13 @@ class EmulatorTabletJourneyTest {
     }
 
     // --- Navigazione ---
+
+    /** Scrive nel campo di testo dell'accesso (l'editor interno al tag). */
+    private fun typeIntoLoginField(fieldTag: String, text: String) {
+        val editorTag = fvpFieldEditorTag(fieldTag)
+        composeRule.onNodeWithTag(editorTag).performTextClearance()
+        composeRule.onNodeWithTag(editorTag).performTextInput(text)
+    }
 
     /** Attende la schermata principale con il catalogo pronto. */
     private fun waitForHome(timeout: Long = 90_000) {
