@@ -179,9 +179,10 @@ fun PreferitiSection(
 
     Column(modifier = modifier.fillMaxWidth()) {
         // --- Barra delle schede ---
+        val tabIndex = FavoritesTab.entries.indexOf(tab)
         SecondaryTabRow(
-            selectedTabIndex = FavoritesTab.entries.indexOf(tab),
-            onTabSelected = { index -> viewModel.selectFavoritesTab(FavoritesTab.entries[index]) },
+            selectedTabIndex = tabIndex,
+            onTabClick = { index -> viewModel.selectFavoritesTab(FavoritesTab.entries[index]) },
             modifier = Modifier.fillMaxWidth(),
         ) {
             FavoritesTab.entries.forEach { entry ->
@@ -402,16 +403,17 @@ private fun FavoritesFilmSeriesTab(
                         imageLoader = imageLoader,
                         viewModel = viewModel,
                         testTag = "preferiti_row_film",
-                    ) { favorite ->
-                        val vodId = favorite.id.removePrefix("vod_")
-                        val vod = catalog?.vodStreams.orEmpty().firstOrNull { it.streamId == vodId }
-                        if (vod != null) viewModel.openDetail(DetailTarget.Film(vod))
-                    }
-                    { favorite ->
-                        val vodId = favorite.id.removePrefix("vod_")
-                        val vod = catalog?.vodStreams.orEmpty().firstOrNull { it.streamId == vodId }
-                        if (vod != null) viewModel.openActions(ActionTarget.Film(vod))
-                    }
+                        onClick = { favorite ->
+                            val vodId = favorite.id.removePrefix("vod_")
+                            val vod = catalog?.vodStreams.orEmpty().firstOrNull { it.streamId == vodId }
+                            if (vod != null) viewModel.openDetail(DetailTarget.Film(vod))
+                        },
+                        onLongClick = { favorite ->
+                            val vodId = favorite.id.removePrefix("vod_")
+                            val vod = catalog?.vodStreams.orEmpty().firstOrNull { it.streamId == vodId }
+                            if (vod != null) viewModel.openActions(ActionTarget.Film(vod))
+                        },
+                    )
                 }
                 if (seriesFavorites.isNotEmpty()) {
                     RowTitle(text = "Serie")
@@ -422,16 +424,17 @@ private fun FavoritesFilmSeriesTab(
                         imageLoader = imageLoader,
                         viewModel = viewModel,
                         testTag = "preferiti_row_serie",
-                    ) { favorite ->
-                        val seriesId = favorite.id.removePrefix("series_")
-                        val series = catalog?.series.orEmpty().firstOrNull { it.seriesId == seriesId }
-                        if (series != null) viewModel.openDetail(DetailTarget.Series(series))
-                    }
-                    { favorite ->
-                        val seriesId = favorite.id.removePrefix("series_")
-                        val series = catalog?.series.orEmpty().firstOrNull { it.seriesId == seriesId }
-                        if (series != null) viewModel.openActions(ActionTarget.Series(series))
-                    }
+                        onClick = { favorite ->
+                            val seriesId = favorite.id.removePrefix("series_")
+                            val series = catalog?.series.orEmpty().firstOrNull { it.seriesId == seriesId }
+                            if (series != null) viewModel.openDetail(DetailTarget.Series(series))
+                        },
+                        onLongClick = { favorite ->
+                            val seriesId = favorite.id.removePrefix("series_")
+                            val series = catalog?.series.orEmpty().firstOrNull { it.seriesId == seriesId }
+                            if (series != null) viewModel.openActions(ActionTarget.Series(series))
+                        },
+                    )
                 }
             }
         }
