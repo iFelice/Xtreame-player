@@ -23,7 +23,6 @@ import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.theme.FvpTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -37,8 +36,9 @@ import org.robolectric.annotation.Config
  * `focusChannelId` (il canale guardato) + `focusChannelTick`, con
  * `onChannelFocusRestored` che azzera il segnaposto. Dati inventati.
  *
- * Un solo `setContent` per test. I clic tv-material si fanno con
- * `performSemanticsAction(SemanticsActions.OnClick)`.
+ * Una categoria è "aperta" quando la lista canali mostra un canale che
+ * appartiene solo a quella categoria (sonda). Un solo `setContent` per test.
+ * I clic tv-material si fanno con `performSemanticsAction(SemanticsActions.OnClick)`.
  */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [34], qualifiers = "w1920dp-h1080dp-land-television-mdpi")
@@ -71,6 +71,13 @@ class LivePlayerReturnFocusTest {
         LiveStream(num = 51, name = "Canale 51", streamId = "501", categoryId = null, categoryIds = listOf("002")),
     )
 
+    // Sonda: un canale che appartiene solo a quella categoria.
+    private val categoryProbe = mapOf(
+        "001" to "101",
+        "002" to "201",
+        "003" to "301",
+    )
+
     // Stato del ritorno dal player, come in FvpMainScreen: canale guardato
     // (returnLiveChannelId) e tick (playerReturnTick); onChannelFocusRestored
     // azzera il segnaposto.
@@ -101,25 +108,17 @@ class LivePlayerReturnFocusTest {
         rule.onNodeWithTag("live_channel_101").requestFocus()
         rule.waitForIdle()
         rule.onNodeWithTag("live_channel_101").assertIsFocused()
-        assertCategorySelected("001")
+        assertCategoryOpen("001")
     }
 
-    /**
-     * La categoria corrente (debounced) è esposta dal tag della colonna:
-     * `live_category_column_<id>_expanded` oppure `_collapsed` a seconda che
-     * la colonna sia espansa (focus su una categoria) o collassata (focus sui
-     * canali). La voce collassata non ha semantica "selected".
-     */
-    private fun assertCategorySelected(categoryId: String) {
-        val found = listOf("_expanded", "_collapsed").any { suffix ->
-            try {
-                rule.onNodeWithTag("live_category_column_${categoryId}$suffix").assertExists()
-                true
-            } catch (_: AssertionError) {
-                false
-            }
-        }
-        assertTrue("Categoria $categoryId non selezionata (tag colonna)", found)
+    /** La categoria [categoryId] è aperta: la lista mostra il suo canale sonda. */
+    private fun assertCategoryOpen(categoryId: String) {
+        rule.onNodeWithTag("live_channel_${categoryProbe.getValue(categoryId)}").assertExists()
+    }
+
+    /** La categoria con il canale sonda non è aperta: la lista non lo mostra. */
+    private fun assertCategoryClosed(categoryId: String) {
+        rule.onNodeWithTag("live_channel_${categoryProbe.getValue(categoryId)}").assertDoesNotExist()
     }
 
     /** Uscita dal player dopo aver digitato il numero: torna il canale guardato. */
@@ -157,7 +156,8 @@ class LivePlayerReturnFocusTest {
         // Canale 11 (num 11) in "002", mentre è aperta "001".
         returnFromPlayer("201")
 
-        assertCategorySelected("002")
+        assertCategoryOpen("002")
+        assertCategoryClosed("001")
         rule.onNodeWithTag("live_channel_201").assertIsFocused()
         // Il segnaposto è stato consumato: non può più guidare il focus.
         assertNull(returnChannelId.value)
@@ -170,7 +170,7 @@ class LivePlayerReturnFocusTest {
         // Canale 2 (num 2), stessa categoria "001" già aperta.
         returnFromPlayer("102")
 
-        assertCategorySelected("001")
+        assertCategoryOpen("001")
         rule.onNodeWithTag("live_channel_102").assertIsFocused()
         assertNull(returnChannelId.value)
     }
@@ -182,7 +182,8 @@ class LivePlayerReturnFocusTest {
         // Canale 41: principale "099" assente dalle categorie, appartiene a "002".
         returnFromPlayer("401")
 
-        assertCategorySelected("002")
+        assertCategoryOpen("002")
+        assertCategoryClosed("001")
         rule.onNodeWithTag("live_channel_401").assertIsFocused()
         assertNull(returnChannelId.value)
     }
@@ -194,7 +195,8 @@ class LivePlayerReturnFocusTest {
         // Canale 51: categoryId null, appartiene a "002" tramite category_ids.
         returnFromPlayer("501")
 
-        assertCategorySelected("002")
+        assertCategoryOpen("002")
+        assertCategoryClosed("001")
         rule.onNodeWithTag("live_channel_501").assertIsFocused()
         assertNull(returnChannelId.value)
     }
@@ -206,7 +208,7 @@ class LivePlayerReturnFocusTest {
         // Canale 31: principale "003", presente anche in "001" (aperta ora).
         returnFromPlayer("302")
 
-        assertCategorySelected("003")
+        assertCategoryOpen("003")
         rule.onNodeWithTag("live_channel_302").assertIsFocused()
         assertNull(returnChannelId.value)
     }
@@ -216,13 +218,13 @@ class LivePlayerReturnFocusTest {
         showLiveSection()
         returnFromPlayer("201")
         rule.onNodeWithTag("live_channel_201").assertIsFocused()
-        assertCategorySelected("002")
+        assertCategoryOpen("002")
 
         // Giù: focus sul canale successivo della stessa categoria.
         rule.onNodeWithTag("live_channel_201").performKeyInput { pressKey(Key.DirectionDown) }
         rule.waitForIdle()
         rule.onNodeWithTag("live_channel_202").assertIsFocused()
-        assertCategorySelected("002")
+        assertCategoryOpen("002")
 
         // Sinistra: focus sulla voce della categoria aperta, a menu espanso.
         rule.onNodeWithTag("live_channel_202").performKeyInput { pressKey(Key.DirectionLeft) }
@@ -235,13 +237,15 @@ class LivePlayerReturnFocusTest {
         rule.mainClock.advanceTimeBy(400) // debounce della categoria
         rule.waitForIdle()
         rule.onNodeWithTag("live_category_003").assertIsFocused()
-        assertCategorySelected("003")
+        assertCategoryOpen("003")
+        assertCategoryClosed("002")
 
         // Dopo qualche secondo la categoria resta quella scelta dall'utente
         // e il focus non salta da solo tra menu e lista.
         rule.mainClock.advanceTimeBy(3_000)
         rule.waitForIdle()
-        assertCategorySelected("003")
+        assertCategoryOpen("003")
+        assertCategoryClosed("002")
         rule.onNodeWithTag("live_category_003").assertIsFocused()
         assertNull(returnChannelId.value)
     }
@@ -258,7 +262,7 @@ class LivePlayerReturnFocusTest {
         closePlayerAfterListClick()
 
         rule.onNodeWithTag("live_channel_102").assertIsFocused()
-        assertCategorySelected("001")
+        assertCategoryOpen("001")
         assertNull(returnChannelId.value)
     }
 }
