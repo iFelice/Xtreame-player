@@ -640,7 +640,7 @@ fun FvpMainScreen(
     fun hideContinueEntry(entry: ContinueEntry) {
         scope.launch {
             container.continueWatchingStore.hide(currentServer, currentUsername, entry.key)
-            favoritesMessage = "Rimosso da Continua a guardare"
+            favoritesMessage = "Rimosso da Riprendi"
         }
     }
 

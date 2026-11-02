@@ -26,8 +26,8 @@ import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 
 /**
- * Menu della pressione lunga in "Continua a guardare": non toglie più la
- * voce subito, apre "Apri scheda" e "Rimuovi da Continua a guardare".
+ * Menu della pressione lunga in "Riprendi": non toglie più la
+ * voce subito, apre "Apri scheda" e "Rimuovi da Riprendi".
  * La pressione lunga è quella del test Dpad: keyDown di OK, orologio fermo
  * per 700 ms, keyUp.
  */
@@ -105,7 +105,7 @@ class ContinueWatchingMenuTest {
 
         rule.onNodeWithTag("continue_menu").assertIsDisplayed()
         rule.onNodeWithText("Apri scheda").assertIsDisplayed()
-        rule.onNodeWithText("Rimuovi da Continua a guardare").assertIsDisplayed()
+        rule.onNodeWithText("Rimuovi da Riprendi").assertIsDisplayed()
         rule.onNodeWithTag("continue_menu_open").assertIsFocused()
         // Nessuna azione ancora: la pressione lunga non rimuove più da sola.
         assertTrue(removeCalls.isEmpty())
