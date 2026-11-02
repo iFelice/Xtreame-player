@@ -752,7 +752,6 @@ fun FvpMainScreen(
                                     progress = watchProgress,
                                     refocusTick = playerReturnTick,
                                     focusEpisodeId = returnEpisodeId,
-                                    sortStorage = categorySortStore,
                                     modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
                                 )
                                 DrawerSection.ContinuaAGuardare -> ContinueWatchingSection(
@@ -842,6 +841,7 @@ fun FvpMainScreen(
                                     progress = watchProgress,
                                     refocusTick = playerReturnTick,
                                     focusEpisodeId = returnEpisodeId,
+                                    sortStorage = categorySortStore,
                                     modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
                                 )
                                 DrawerSection.Preferiti -> {
