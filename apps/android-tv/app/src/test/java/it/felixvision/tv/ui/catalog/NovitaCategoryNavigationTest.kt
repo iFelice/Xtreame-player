@@ -45,13 +45,10 @@ class NovitaCategoryNavigationTest {
 
     /**
      * OK su una categoria, come il telecomando: la categoria diventa subito
-     * quella scelta e il focus passa alla prima copertina. Va chiamato con
-     * `mainClock.autoAdvance = false`, perché OK non deve avere bisogno dei
-     * 300 ms di debounce del focus.
+     * quella scelta e il focus passa alla prima copertina.
      */
     private fun confirmCategory(tag: String) {
         rule.onNodeWithTag(tag).performSemanticsAction(SemanticsActions.OnClick)
-        rule.mainClock.advanceTimeBy(100)
         rule.waitForIdle()
     }
 
@@ -81,17 +78,15 @@ class NovitaCategoryNavigationTest {
         rule.onNodeWithTag("film_002_fav_star", useUnmergedTree = true).assertExists()
         rule.onNodeWithTag("film_002_seen", useUnmergedTree = true).assertExists()
 
-        // OK sulla categoria del provider, senza attendere il debounce: il
-        // focus va sulla sua prima copertina.
-        rule.mainClock.autoAdvance = false
+        // OK sulla categoria del provider: il focus va sulla sua prima
+        // copertina, che si vede e si può confermare con il telecomando.
         confirmCategory("film_category_001")
         provider.assertIsSelected()
         rule.onNodeWithTag("film_001").assertIsDisplayed().assertIsFocused()
         rule.onNodeWithTag("film_002").assertDoesNotExist()
 
+        // OK su Novità: torna il film recente, con il focus.
         confirmCategory("film_category_$NOVITA_CATEGORY_ID")
-        rule.mainClock.autoAdvance = true
-        rule.waitForIdle()
         novita.assertIsSelected()
         rule.onNodeWithTag("film_002").assertIsFocused()
         rule.onNodeWithTag("film_002").performKeyInput { pressKey(Key.DirectionLeft) }
@@ -123,17 +118,15 @@ class NovitaCategoryNavigationTest {
         rule.onNodeWithTag("serie_001").assertDoesNotExist()
         rule.onNodeWithTag("serie_002_fav_star", useUnmergedTree = true).assertExists()
 
-        // OK sulla categoria del provider, senza attendere il debounce: il
-        // focus va sulla sua prima copertina.
-        rule.mainClock.autoAdvance = false
+        // OK sulla categoria del provider: il focus va sulla sua prima
+        // copertina, che si vede e si può confermare con il telecomando.
         confirmCategory("serie_category_001")
         provider.assertIsSelected()
         rule.onNodeWithTag("serie_001").assertIsDisplayed().assertIsFocused()
         rule.onNodeWithTag("serie_002").assertDoesNotExist()
 
+        // OK su Novità: torna la serie recente, con il focus.
         confirmCategory("serie_category_$NOVITA_CATEGORY_ID")
-        rule.mainClock.autoAdvance = true
-        rule.waitForIdle()
         novita.assertIsSelected()
         rule.onNodeWithTag("serie_002").assertIsFocused()
         rule.onNodeWithTag("serie_002").performKeyInput { pressKey(Key.DirectionLeft) }
