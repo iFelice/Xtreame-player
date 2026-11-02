@@ -88,15 +88,6 @@ const val LIVE_LIST_WIDTH_FRACTION = 0.8f
 const val CHANNEL_ROW_ALPHA = 0.8f
 
 /**
- * Timeout del ripristino del focus sul canale guardato dopo il ritorno dal
- * player (2 s): trascorso quello, il segnaposto viene consumato comunque.
- */
-private const val PLAYER_RETURN_FOCUS_TIMEOUT_MILLIS = 2_000L
-
-/** Passo di attesa del canale nell'elenco durante il ripristino del focus. */
-private const val PLAYER_RETURN_FOCUS_POLL_MILLIS = 50L
-
-/**
  * Canali Live della categoria scelta, nell'ordine dell'elenco del provider.
  *
  * Appartenenza, non uguaglianza: un canale compare in OGNI categoria che il
@@ -168,11 +159,8 @@ fun LiveSection(
     val scheduleNow = rememberMinuteNow(clock)
     // Indice del canale con il focus, per il contatore "N / Totale".
     var focusedChannelIndex by remember(filtered) { mutableStateOf<Int?>(null) }
-    // Requester per streamId su tutti i canali (non solo quelli filtrati):
-    // restano validi quando il ripristino del focus cambia categoria e
-    // `filtered` viene ricreato.
-    val channelFocusRequesters = remember(streams) {
-        streams.associate { it.streamId to FocusRequester() }
+    val channelFocusRequesters = remember(filtered) {
+        filtered.associate { it.streamId to FocusRequester() }
     }
 
     val categoryFocusRequesters = remember(categories) {
@@ -202,58 +190,42 @@ fun LiveSection(
         }
     }
 
-    val latestStreams by rememberUpdatedState(streams)
-    val latestCategories by rememberUpdatedState(categories)
-
-    // Ritorno dal player: apre la categoria del canale guardato e gli dà il
-    // focus. La categoria da aprire è la principale del canale, oppure la
-    // prima delle sue categorie (allCategoryIds, che mette la principale in
-    // testa) presente tra quelle del catalogo. L'elenco usa l'appartenenza
-    // (`categoryId in allCategoryIds`), non l'uguaglianza: si aspetta che il
-    // canale compaia in `filtered` prima di dargli il focus. Il segnaposto
-    // (`focusChannelId`) viene consumato SEMPRE — ripristino riuscito,
-    // impossibile o dopo 2 s di timeout — così non può più guidare il focus
-    // dopo (per esempio quando l'utente cambia categoria a mano: questo
-    // effetto non riparte al cambio di categoria).
+    // Ritorno dal player: apre la categoria del canale guardato.
     LaunchedEffect(focusChannelId, focusChannelTick) {
         val targetId = focusChannelId ?: return@LaunchedEffect
-        val target = latestStreams.firstOrNull { it.streamId == targetId }
-        if (target == null) {
-            onChannelFocusRestored()
-            return@LaunchedEffect
-        }
-        val categoryIds = latestCategories.mapTo(HashSet()) { it.categoryId }
-        val targetCategory = target.allCategoryIds.firstOrNull { it in categoryIds }
-        val restoreCategory = targetCategory ?: debouncedCategoryId
-        if (targetCategory != null) {
-            val index = latestCategories.indexOfFirst { it.categoryId == targetCategory }
+        val targetCategory = streams.firstOrNull { it.streamId == targetId }?.categoryId
+        if (targetCategory != null &&
+            (targetCategory != focusedCategoryId || targetCategory != debouncedCategoryId)
+        ) {
+            val index = categories.indexOfFirst { it.categoryId == targetCategory }
             if (index >= 0) categoryListState.scrollToItem(index)
             focusedCategoryId = targetCategory
             debouncedCategoryId = targetCategory
         }
-        var waitedMillis = 0L
-        while (waitedMillis < PLAYER_RETURN_FOCUS_TIMEOUT_MILLIS) {
-            val current = liveStreamsForCategory(debouncedCategoryId, latestStreams)
-            val index = current.indexOfFirst { it.streamId == targetId }
-            if (index >= 0 && debouncedCategoryId == restoreCategory) {
-                // Scorre solo quando la lista ha già ricaricato la categoria.
-                if (index < channelsListState.layoutInfo.totalItemsCount) {
-                    channelsListState.scrollToItem(index)
-                }
-                withFrameNanos { }
-                // Il focus va dato solo quando la riga del canale è composta.
-                if (channelsListState.layoutInfo.visibleItemsInfo.any { it.key == targetId }) {
-                    categoryExpanded = false
-                    if (channelFocusRequesters[targetId]?.requestFocus() == true) break
-                }
+    }
+
+    // Ritorno dal player: focus sull'ultimo canale guardato.
+    LaunchedEffect(filtered, focusChannelId) {
+        val targetId = focusChannelId ?: return@LaunchedEffect
+        val target = filtered.firstOrNull { it.streamId == targetId }
+        if (target == null) {
+            val expectedCategory = streams.firstOrNull { it.streamId == targetId }?.categoryId
+            if (expectedCategory == null || expectedCategory == debouncedCategoryId) {
+                onChannelFocusRestored()
             }
-            delay(PLAYER_RETURN_FOCUS_POLL_MILLIS)
-            waitedMillis += PLAYER_RETURN_FOCUS_POLL_MILLIS
+            return@LaunchedEffect
         }
+        val index = filtered.indexOfFirst { it.streamId == targetId }
+        channelsListState.scrollToItem(index)
+        withFrameNanos { }
+        channelFocusRequesters[targetId]?.requestFocus()
+        categoryExpanded = false
         onChannelFocusRestored()
     }
 
     val scope = rememberCoroutineScope()
+    val latestStreams by rememberUpdatedState(streams)
+    val latestCategories by rememberUpdatedState(categories)
     val latestOnSelectChannel by rememberUpdatedState(onSelectChannel)
     val channelNumberSession = remember { ChannelNumberSession() }
     var channelNumberOverlay by remember { mutableStateOf<ChannelNumberOverlay?>(null) }
