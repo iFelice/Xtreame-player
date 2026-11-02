@@ -88,8 +88,11 @@ data class ZappingState(
  * al canale successivo della lista corrente, salta subito un canale che non
  * parte entro 5 secondi e, arrivato in fondo, chiede se ripartire dal primo.
  *
- * Classe pura: nessuna dipendenza da Android, orologio iniettabile ([clock]) e
- * avanzamento a passi ([tick]), così i test usano un orologio finto. Il player
+ * Classe pura: nessuna dipendenza da Android. L'orologio è iniettabile
+ * ([clock]) e lo scheduler è il chiamante: il controller non accende timer, ma
+ * avanza solo quando arriva un [tick]. In produzione il ciclo è quello del
+ * player (ogni mezzo secondo, come il refresh della posizione); nei test il
+ * passo lo dà il test, con orologio finto e nessuna attesa reale. Il player
  * applica i [ZappingCommand] restituiti.
  */
 class ZappingController(
