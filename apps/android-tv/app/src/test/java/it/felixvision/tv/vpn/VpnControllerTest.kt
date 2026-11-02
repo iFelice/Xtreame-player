@@ -10,6 +10,7 @@ import com.wireguard.android.backend.Tunnel
 import com.wireguard.config.Config
 import com.wireguard.crypto.Key
 import it.felixvision.tv.core.Clock
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import kotlin.coroutines.CoroutineContext
@@ -89,8 +90,8 @@ class VpnControllerTest {
         private val handshake: Boolean,
         private val failUp: Boolean = false,
     ) : Backend {
-        val states = mutableListOf<Tunnel.State>()
-        val stateThreads = mutableListOf<String>()
+        val states = CopyOnWriteArrayList<Tunnel.State>()
+        val stateThreads = CopyOnWriteArrayList<String>()
         var lastTunnel: Tunnel? = null
 
         override fun getRunningTunnelNames(): Set<String> = emptySet()
@@ -165,6 +166,22 @@ class VpnControllerTest {
         )
     }
 
+    /**
+     * Attende (tempo reale, con timeout) che [condition] diventi vero. Serve dopo
+     * [awaitState(VpnState.Off)] o [awaitState(VpnState.NoConfig)]: il controller
+     * imposta lo stato prima che il thread "vpn-io-test" scriva il DOWN su
+     * [FakeBackend.states], quindi bisogna attendere che l'arrivo del DOWN sia
+     * visibile prima di leggere states/stateThreads dal thread di test.
+     */
+    private fun awaitCondition(timeoutMillis: Long = 5000, description: String, condition: () -> Boolean) {
+        val deadline = System.nanoTime() + timeoutMillis * 1_000_000
+        while (System.nanoTime() < deadline) {
+            if (condition()) return
+            Thread.sleep(20)
+        }
+        throw AssertionError("condizione non raggiunta entro ${timeoutMillis}ms: $description")
+    }
+
     /** Inizia a raccogliere gli avvisi di [currentController.messages]. */
     private fun startCollectingMessages() {
         messagesBuffer.clear()
@@ -230,10 +247,14 @@ class VpnControllerTest {
         assertTrue("stop() non deve lavorare sul chiamante",
             backend.stateThreads.none { it == testThread })
         awaitState(VpnState.Off)
+        // Il DOWN è scritto dal thread "vpn-io-test" dopo che lo stato Off è visibile.
+        awaitCondition(description = "DOWN arrivato al backend") {
+            backend.states.lastOrNull() == Tunnel.State.DOWN
+        }
 
         assertFalse("il backend deve essere stato invocato", backend.stateThreads.isEmpty())
         // Tutte le chiamate al backend sono eseguite sul dispatcher IO dedicato.
-        assertTrue("tutte le chiamate del backend devono essere su vpn-io-test",
+        assertTrue("tutte le chiamate del backend devono essere su vpn-io-test: ${backend.stateThreads}",
             backend.stateThreads.all { it == "vpn-io-test" })
 
         // Ordine preservato: UP prima di DOWN.
@@ -280,9 +301,13 @@ class VpnControllerTest {
         awaitState(VpnState.Connected(VpnTestVectors.SERVER_NAME))
         controller.stop()
         awaitState(VpnState.Off)
+        awaitCondition(description = "DOWN arrivato al backend") {
+            backend.states.lastOrNull() == Tunnel.State.DOWN
+        }
 
         assertEquals(listOf(Tunnel.State.UP, Tunnel.State.DOWN), backend.states)
-        assertTrue("backend su vpn-io-test", backend.stateThreads.all { it == "vpn-io-test" })
+        assertTrue("backend su vpn-io-test: ${backend.stateThreads}",
+            backend.stateThreads.all { it == "vpn-io-test" })
         testScheduler.advanceUntilIdle()
         assertTrue("nessun avviso", messagesBuffer.isEmpty())
         assertTrue(store.isEnabled)
@@ -394,6 +419,9 @@ class VpnControllerTest {
 
         controller.disable()
         awaitState(VpnState.Off)
+        awaitCondition(description = "DOWN arrivato al backend") {
+            backend.states.lastOrNull() == Tunnel.State.DOWN
+        }
         testScheduler.advanceUntilIdle()
 
         assertEquals(VpnState.Off, currentController.state.value)
@@ -418,6 +446,10 @@ class VpnControllerTest {
         val elapsed = System.currentTimeMillis() - disableStart
         assertTrue("disable() deve portare lo stato a Off entro 1 secondo (handshakeTimeoutMillis=5000)",
             elapsed < 1000)
+        // Il DOWN è scritto dal thread "vpn-io-test" dopo che lo stato Off è visibile.
+        awaitCondition(description = "DOWN arrivato al backend") {
+            backend.states.lastOrNull() == Tunnel.State.DOWN
+        }
         testScheduler.advanceUntilIdle()
 
         assertEquals(VpnState.Off, currentController.state.value)
@@ -435,6 +467,9 @@ class VpnControllerTest {
 
         controller.removeConfig()
         awaitState(VpnState.NoConfig)
+        awaitCondition(description = "DOWN arrivato al backend") {
+            backend.states.lastOrNull() == Tunnel.State.DOWN
+        }
         testScheduler.advanceUntilIdle()
 
         assertEquals(VpnState.NoConfig, currentController.state.value)
