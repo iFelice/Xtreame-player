@@ -38,9 +38,10 @@ class MultiCategoryMembershipTest {
 
         assertEquals(listOf(filmDoppio, filmSoloUno), filmsForCategory("001", streams, emptyList()))
         assertEquals(listOf(filmDoppio, filmSoloDue), filmsForCategory("002", streams, emptyList()))
-        // Ordine del provider, non quello dell'elenco delle categorie.
+        // Ordine del provider, non quello dell'elenco delle categorie: la
+        // filter conserva l'ordine della lista che riceve.
         assertEquals(
-            listOf(filmDoppio, filmSoloDue),
+            listOf(filmSoloDue, filmDoppio),
             filmsForCategory("002", listOf(filmSoloDue, filmDoppio), emptyList()),
         )
         assertTrue(filmsForCategory("003", streams, emptyList()).isEmpty())
