@@ -86,13 +86,16 @@ class NovitaCategoryNavigationTest {
         rule.onNodeWithTag("film_001").assertIsDisplayed().assertIsFocused()
         rule.onNodeWithTag("film_002").assertDoesNotExist()
 
-        // OK su Novità: torna il film recente, con il focus.
-        confirmCategory("film_category_$NOVITA_CATEGORY_ID")
-        novita.assertIsSelected()
-        rule.onNodeWithTag("film_002").assertIsFocused()
-        rule.onNodeWithTag("film_002").performKeyInput { pressKey(Key.DirectionLeft) }
+        // Freccia sinistra: si torna alla colonna, che si riapre sulla voce
+        // della categoria scelta (le voci compattate non rispondono a OK).
+        rule.onNodeWithTag("film_001").performKeyInput { pressKey(Key.DirectionLeft) }
         rule.waitForIdle()
-        novita.assertIsFocused()
+        provider.assertIsFocused()
+
+        // OK su Novità: torna il film recente, e il focus ci va sopra.
+        confirmCategory("film_category_$NOVITA_CATEGORY_ID")
+        rule.onNodeWithTag("film_002").assertIsDisplayed().assertIsFocused()
+        rule.onNodeWithTag("film_001").assertDoesNotExist()
     }
 
     @Test
@@ -127,13 +130,16 @@ class NovitaCategoryNavigationTest {
         rule.onNodeWithTag("serie_001").assertIsDisplayed().assertIsFocused()
         rule.onNodeWithTag("serie_002").assertDoesNotExist()
 
-        // OK su Novità: torna la serie recente, con il focus.
-        confirmCategory("serie_category_$NOVITA_CATEGORY_ID")
-        novita.assertIsSelected()
-        rule.onNodeWithTag("serie_002").assertIsFocused()
-        rule.onNodeWithTag("serie_002").performKeyInput { pressKey(Key.DirectionLeft) }
+        // Freccia sinistra: si torna alla colonna, che si riapre sulla voce
+        // della categoria scelta (le voci compattate non rispondono a OK).
+        rule.onNodeWithTag("serie_001").performKeyInput { pressKey(Key.DirectionLeft) }
         rule.waitForIdle()
-        novita.assertIsFocused()
+        provider.assertIsFocused()
+
+        // OK su Novità: torna la serie recente, e il focus ci va sopra.
+        confirmCategory("serie_category_$NOVITA_CATEGORY_ID")
+        rule.onNodeWithTag("serie_002").assertIsDisplayed().assertIsFocused()
+        rule.onNodeWithTag("serie_001").assertDoesNotExist()
     }
 
     @Test
