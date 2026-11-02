@@ -5,14 +5,24 @@ import android.content.ActivityNotFoundException
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -26,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -302,75 +313,20 @@ fun SettingsScreen(
     )
 
     if (showCatalogDialog) {
-        LaunchedEffect(catalogRefreshing) {
-            if (!catalogRefreshing) {
-                withFrameNanos { }
-                runCatching { catalogCloseFocus.requestFocus() }
-            }
-        }
         Dialog(
             onDismissRequest = { showCatalogDialog = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
+            properties = DialogProperties(usePlatformDefaultWidth = false),
         ) {
             // Indietro chiude la finestra senza interrompere l'aggiornamento:
             // il lavoro continua nel CatalogViewModel.
             BackHandler { showCatalogDialog = false }
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(FvpColors.Background.copy(alpha = 0.8f))
-                    .padding(scale.dp(32f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    modifier = Modifier
-                        .background(FvpColors.Surface, shape = RoundedCornerShape(scale.dp(12f)))
-                        .padding(scale.dp(20f))
-                        .fillMaxWidth(0.5f)
-                        .testTag("settings_catalog_dialog"),
-                    verticalArrangement = Arrangement.spacedBy(scale.dp(10f))
-                ) {
-                    Text(
-                        text = "Aggiornamento catalogo",
-                        color = FvpColors.TextPrimary,
-                        fontSize = scale.sp(18f),
-                        fontWeight = FontWeight.Bold
-                    )
-                    catalogSections.forEach { section ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("settings_catalog_${section.section.name.lowercase()}"),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(text = section.section.label, color = FvpColors.TextPrimary, fontSize = scale.sp(15f))
-                            Text(
-                                text = section.statusLabel,
-                                color = if (section.status == CatalogSectionStatus.ERROR) {
-                                    FvpColors.Error
-                                } else {
-                                    FvpColors.TextSecondary
-                                },
-                                fontSize = scale.sp(14f),
-                                modifier = Modifier.testTag(
-                                    "settings_catalog_${section.section.name.lowercase()}_status"
-                                )
-                            )
-                        }
-                    }
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        FvpPrimaryButton(
-                            text = "Chiudi",
-                            onClick = { showCatalogDialog = false },
-                            scale = scale,
-                            enabled = !catalogRefreshing,
-                            modifier = Modifier
-                                .focusRequester(catalogCloseFocus)
-                                .testTag("settings_catalog_close")
-                        )
-                    }
-                }
-            }
+            CatalogRefreshDialogContent(
+                catalogSections = catalogSections,
+                catalogRefreshing = catalogRefreshing,
+                scale = scale,
+                closeFocusRequester = catalogCloseFocus,
+                onDismiss = { showCatalogDialog = false },
+            )
         }
     }
 
@@ -526,6 +482,180 @@ internal fun SettingsNavigation(
                 )
                 SettingsCard.App -> appPage(modifier, pageEntryFocusRequesters.getValue(SettingsCard.App))
                 null -> Unit
+            }
+        }
+    }
+}
+
+/**
+ * Contenuto della finestra di avanzamento dell'aggiornamento del catalogo
+ * (Impostazioni › Catalogo): per ogni sezione Live, Film, Serie mostra il nome,
+ * la barra di avanzamento e il testo di stato a destra, oltre al pulsante
+ * "Chiudi" attivo a fine aggiornamento.
+ */
+@Composable
+internal fun CatalogRefreshDialogContent(
+    catalogSections: List<CatalogSectionProgress>,
+    catalogRefreshing: Boolean,
+    scale: UiScale,
+    modifier: Modifier = Modifier,
+    closeFocusRequester: FocusRequester? = null,
+    onDismiss: () -> Unit = {},
+) {
+    val localCloseFocus = remember { FocusRequester() }
+    val closeFocus = closeFocusRequester ?: localCloseFocus
+    LaunchedEffect(catalogRefreshing) {
+        if (!catalogRefreshing) {
+            withFrameNanos { }
+            runCatching { closeFocus.requestFocus() }
+        }
+    }
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(FvpColors.Background.copy(alpha = 0.8f))
+            .padding(scale.dp(32f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            modifier = Modifier
+                .background(FvpColors.Surface, shape = RoundedCornerShape(scale.dp(12f)))
+                .padding(scale.dp(20f))
+                .fillMaxWidth(0.55f)
+                .testTag("settings_catalog_dialog"),
+            verticalArrangement = Arrangement.spacedBy(scale.dp(12f)),
+        ) {
+            Text(
+                text = "Aggiornamento catalogo",
+                color = FvpColors.TextPrimary,
+                fontSize = scale.sp(18f),
+                fontWeight = FontWeight.Bold,
+            )
+            catalogSections.forEach { section ->
+                CatalogSectionProgressRow(
+                    section = section,
+                    scale = scale,
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                FvpPrimaryButton(
+                    text = "Chiudi",
+                    onClick = onDismiss,
+                    scale = scale,
+                    enabled = !catalogRefreshing,
+                    modifier = Modifier
+                        .focusRequester(closeFocus)
+                        .testTag("settings_catalog_close"),
+                )
+            }
+        }
+    }
+}
+
+/** Riga di avanzamento di una sezione (nome, barra, testo di stato a destra). */
+@Composable
+internal fun CatalogSectionProgressRow(
+    section: CatalogSectionProgress,
+    scale: UiScale,
+    modifier: Modifier = Modifier,
+) {
+    val sectionKey = section.section.name.lowercase()
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("settings_catalog_$sectionKey"),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(scale.dp(12f)),
+    ) {
+        Text(
+            text = section.section.label,
+            color = FvpColors.TextPrimary,
+            fontSize = scale.sp(15f),
+            modifier = Modifier.width(scale.dp(56f)),
+        )
+        CatalogSectionProgressBar(
+            section = section,
+            sectionKey = sectionKey,
+            scale = scale,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = section.statusLabel,
+            color = if (section.status == CatalogSectionStatus.ERROR) {
+                FvpColors.Error
+            } else {
+                FvpColors.TextSecondary
+            },
+            fontSize = scale.sp(14f),
+            maxLines = 1,
+            modifier = Modifier.testTag("settings_catalog_${sectionKey}_status"),
+        )
+    }
+}
+
+/**
+ * Barra di avanzamento disegnata con [Box] nello stile dell'app:
+ * [FvpColors.Green] (oppure [FvpColors.Error] in caso di errore) su fondo
+ * [FvpColors.SurfaceElevated], con angoli arrotondati.
+ */
+@Composable
+internal fun CatalogSectionProgressBar(
+    section: CatalogSectionProgress,
+    sectionKey: String,
+    scale: UiScale,
+    modifier: Modifier = Modifier,
+) {
+    val shape = RoundedCornerShape(scale.dp(3f))
+    Box(
+        modifier = modifier
+            .height(scale.dp(6f))
+            .clip(shape)
+            .background(FvpColors.SurfaceElevated)
+            .testTag("settings_catalog_${sectionKey}_bar"),
+    ) {
+        if (section.isIndeterminate) {
+            val transition = rememberInfiniteTransition(label = "catalog_progress_$sectionKey")
+            val offset by transition.animateFloat(
+                initialValue = 0.001f,
+                targetValue = 0.999f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = 1_000, easing = LinearEasing),
+                    repeatMode = RepeatMode.Reverse,
+                ),
+                label = "catalog_progress_offset_$sectionKey",
+            )
+            val leftWeight = offset.coerceIn(0.001f, 0.999f)
+            val rightWeight = (1f - leftWeight).coerceIn(0.001f, 0.999f)
+            Row(modifier = Modifier.fillMaxSize()) {
+                Spacer(modifier = Modifier.weight(leftWeight))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.35f)
+                        .fillMaxHeight()
+                        .clip(shape)
+                        .background(FvpColors.Green)
+                        .testTag("settings_catalog_${sectionKey}_bar_indeterminate"),
+                )
+                Spacer(modifier = Modifier.weight(rightWeight))
+            }
+        } else {
+            val fraction = section.progressFraction.coerceIn(0f, 1f)
+            val barColor = if (section.status == CatalogSectionStatus.ERROR) {
+                FvpColors.Error
+            } else {
+                FvpColors.Green
+            }
+            if (fraction > 0f) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(fraction)
+                        .fillMaxHeight()
+                        .background(barColor)
+                        .testTag("settings_catalog_${sectionKey}_bar_fill"),
+                )
             }
         }
     }
