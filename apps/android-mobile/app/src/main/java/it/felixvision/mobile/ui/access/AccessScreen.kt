@@ -7,6 +7,10 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -57,6 +61,10 @@ fun AccessScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(FvpColors.Background)
+            // Sfondo a tutto schermo, contenuto dentro le barre di sistema e
+            // sopra la tastiera quando i campi sono in modifica.
+            .windowInsetsPadding(WindowInsets.safeDrawing)
+            .imePadding()
             .padding(horizontal = 32.dp, vertical = 24.dp),
     ) {
         val sideBySide = maxWidth >= 840.dp

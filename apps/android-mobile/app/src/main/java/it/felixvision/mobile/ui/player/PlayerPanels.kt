@@ -5,9 +5,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -63,6 +66,10 @@ fun PlayerOverlayPanel(
             Column(
                 modifier = Modifier
                     .fillMaxSize(.72f)
+                    // Pannello dentro l'area sicura: nessun contenuto sotto il
+                    // ritaglio della fotocamera o sotto le barre di sistema
+                    // quando ricompaiono con lo scorrimento dal bordo.
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
                     .background(FvpColors.Background.copy(alpha = .98f))
                     .padding(18.dp),
             ) {

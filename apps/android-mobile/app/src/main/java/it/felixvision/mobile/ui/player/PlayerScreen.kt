@@ -12,8 +12,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -67,6 +71,10 @@ fun PlayerScreen(
     var guideLoading by remember { mutableStateOf(false) }
     var movieInfo by remember { mutableStateOf<VodInfoResponse?>(null) }
     val density = LocalDensity.current.density
+    // Volume e luminosità reali, iniettati nello strato dei gesti: la
+    // luminosità viene ripristinata all'uscita dal player.
+    val volumeControl = rememberVolumeControl(context)
+    val brightnessControl = rememberBrightnessControl(context, activity?.window)
 
     LaunchedEffect(engine) {
         engine.start()
@@ -130,7 +138,7 @@ fun PlayerScreen(
             lifecycleOwner.lifecycle.removeObserver(observer)
             engine.close()
             activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            activity?.window?.applyBrightness(PlayerLayoutRules.restoredBrightness())
+            brightnessControl.restore()
         }
     }
     DisposableEffect(activity) {
@@ -191,6 +199,8 @@ fun PlayerScreen(
                 density = density,
                 context = context,
                 activity = activity,
+                volumeControl = volumeControl,
+                brightnessControl = brightnessControl,
                 onToggleControls = { engine.setControls(!engine.state.controls) },
                 onSeekBy = engine::seekBy,
                 onSeekTo = engine::seekTo,
@@ -244,7 +254,9 @@ fun PlayerScreen(
                         image = FvpIcons.Live,
                         description = "Torna alla diretta",
                         onClick = engine::returnToLive,
-                        modifier = Modifier.align(Alignment.BottomCenter),
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .windowInsetsPadding(WindowInsets.safeDrawing),
                     )
                 }
             }
@@ -286,7 +298,7 @@ fun PlayerScreen(
 
 @androidx.media3.common.util.UnstableApi
 @Composable
-private fun BoxScope.ControlsOverlay(
+internal fun BoxScope.ControlsOverlay(
     state: MobilePlayerState,
     guidePrograms: List<EpgProgram>,
     fit: Boolean,
@@ -304,7 +316,10 @@ private fun BoxScope.ControlsOverlay(
     Column(
         modifier = Modifier
             .align(Alignment.TopCenter)
-            .fillMaxWidth(),
+            .fillMaxWidth()
+            // Comandi dentro l'area sicura: fuori dal ritaglio della fotocamera
+            // e dalle barre di sistema quando ricompaiono con lo scorrimento.
+            .windowInsetsPadding(WindowInsets.safeDrawing),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         PlayerControls(
@@ -381,7 +396,14 @@ private fun PortraitPlayerLayout(
     onEnterFullScreen: () -> Unit,
     onExit: () -> Unit,
 ) {
-    Column(Modifier.fillMaxSize().background(Color.Black)) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            // In verticale le barre restano visibili: il video comincia sotto
+            // la barra di stato, senza finirci sotto.
+            .windowInsetsPadding(WindowInsets.statusBars),
+    ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -628,7 +650,6 @@ private fun ConfigureImmersiveWindow(
             androidx.core.view.WindowCompat.getInsetsController(window, it)
         }
         if (immersive) {
-            window?.let { androidx.core.view.WindowCompat.setDecorFitsSystemWindows(it, false) }
             controller?.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
             controller?.systemBarsBehavior =
                 androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
@@ -641,11 +662,9 @@ private fun ConfigureImmersiveWindow(
                 }
             }
         } else {
-            window?.let { androidx.core.view.WindowCompat.setDecorFitsSystemWindows(it, true) }
             controller?.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
         }
         onDispose {
-            window?.let { androidx.core.view.WindowCompat.setDecorFitsSystemWindows(it, true) }
             controller?.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
         }
     }
@@ -655,8 +674,4 @@ private fun android.content.Context.findActivity(): Activity? = when (this) {
     is Activity -> this
     is android.content.ContextWrapper -> baseContext.findActivity()
     else -> null
-}
-
-private fun android.view.Window.applyBrightness(value: Float) {
-    attributes = attributes.apply { screenBrightness = value }
 }

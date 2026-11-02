@@ -71,6 +71,86 @@ class TouchGestureRulesTest {
     }
 
     @Test
+    fun dragModeIsDecidedOnceAtTheThreshold() {
+        // Sotto la soglia di 48dp non c'è ancora nessuna modalità.
+        assertNull(dragMode(deltaY = 40f))
+        // Metà destra: volume. Metà sinistra: luminosità.
+        assertEquals(TouchGestureRules.DragMode.VOLUME, dragMode(startX = 700f, deltaY = -60f))
+        assertEquals(TouchGestureRules.DragMode.BRIGHTNESS, dragMode(startX = 300f, deltaY = -60f))
+        // Orizzontale: cambio canale sul Live, spostamento nel tempo sui film.
+        assertEquals(
+            TouchGestureRules.DragMode.CHANNEL,
+            dragMode(deltaX = -80f, type = MobilePlaybackType.LIVE),
+        )
+        assertEquals(
+            TouchGestureRules.DragMode.SCRUB,
+            dragMode(deltaX = -80f, type = MobilePlaybackType.MOVIE),
+        )
+    }
+
+    @Test
+    fun verticalValueStartsFromTheThresholdWithoutJump() {
+        // Trascinando di 48dp (la soglia) il valore non è ancora cambiato.
+        assertEquals(
+            .5f,
+            TouchGestureRules.verticalDragValue(.5f, -48f, -48f, 600f),
+            .0001f,
+        )
+        // Oltre la soglia conta solo il tratto eccedente: 48 + 150 px su 600.
+        assertEquals(
+            .5f + 150f / 600f,
+            TouchGestureRules.verticalDragValue(.5f, -198f, -48f, 600f),
+            .0001f,
+        )
+    }
+
+    @Test
+    fun volumeLevelRoundsToTheNearestStepAndStopsAtTheBounds() {
+        // 5 + (0.6 passi) = 5.6 → 6: arrotondamento al più vicino, non verso il basso.
+        assertEquals(
+            6,
+            TouchGestureRules.volumeLevel(
+                startLevel = 5,
+                maxLevel = 15,
+                totalDeltaY = -88f,
+                thresholdDeltaY = -48f,
+                heightPx = 1_000f,
+            ),
+        )
+        // Alla soglia il livello resta quello di partenza.
+        assertEquals(
+            5,
+            TouchGestureRules.volumeLevel(
+                startLevel = 5,
+                maxLevel = 15,
+                totalDeltaY = -48f,
+                thresholdDeltaY = -48f,
+                heightPx = 1_000f,
+            ),
+        )
+        assertEquals(
+            15,
+            TouchGestureRules.volumeLevel(
+                startLevel = 5,
+                maxLevel = 15,
+                totalDeltaY = -5_000f,
+                thresholdDeltaY = -48f,
+                heightPx = 1_000f,
+            ),
+        )
+        assertEquals(
+            0,
+            TouchGestureRules.volumeLevel(
+                startLevel = 5,
+                maxLevel = 15,
+                totalDeltaY = 5_000f,
+                thresholdDeltaY = 48f,
+                heightPx = 1_000f,
+            ),
+        )
+    }
+
+    @Test
     fun totalVerticalDragIsAppliedFromGestureStart() {
         assertEquals(
             .75f,
@@ -106,6 +186,22 @@ class TouchGestureRulesTest {
         assertEquals(10, TouchGestureRules.seekBurst(20, 1_000, -1, 1, 1_200))
         assertEquals(10, TouchGestureRules.seekBurst(20, 1_000, -1, -1, 2_600))
     }
+
+    private fun dragMode(
+        startX: Float = 500f,
+        deltaX: Float = 0f,
+        deltaY: Float = 0f,
+        type: MobilePlaybackType = MobilePlaybackType.MOVIE,
+    ): TouchGestureRules.DragMode? = TouchGestureRules.dragMode(
+        widthPx = 1_000f,
+        heightPx = 600f,
+        density = 1f,
+        startX = startX,
+        startY = 300f,
+        deltaX = deltaX,
+        deltaY = deltaY,
+        playbackType = type,
+    )
 
     private fun classify(
         startX: Float = 500f,

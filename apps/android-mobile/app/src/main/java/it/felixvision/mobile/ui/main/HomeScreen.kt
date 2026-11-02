@@ -9,7 +9,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.SnackbarHost
@@ -200,6 +208,27 @@ fun HomeScreen(
                 widthIsAtLeast600 = maxWidth >= 600.dp,
             )
 
+            // Edge-to-edge (obbligatorio da targetSdk 35): lo sfondo riempie
+            // tutto lo schermo, il contenuto si sposta dentro le barre.
+            // La barra laterale prende systemBars e displayCutout su start,
+            // top e bottom; l'intestazione e il contenuto prendono safeDrawing
+            // sui lati non coperti dalla barra laterale o da quella in basso.
+            // I getter di WindowInsets sono @Composable: si leggono qui, non
+            // dentro un remember.
+            val railInsets = WindowInsets.systemBars.only(
+                WindowInsetsSides.Start + WindowInsetsSides.Top + WindowInsetsSides.Bottom,
+            )
+            val cutoutInsets = WindowInsets.displayCutout.only(
+                WindowInsetsSides.Start + WindowInsetsSides.Top + WindowInsetsSides.Bottom,
+            )
+            val contentInsets = WindowInsets.safeDrawing.only(
+                if (wideLayout) {
+                    WindowInsetsSides.Top + WindowInsetsSides.End + WindowInsetsSides.Bottom
+                } else {
+                    WindowInsetsSides.Top + WindowInsetsSides.Start + WindowInsetsSides.End
+                },
+            )
+
             if (detailTarget != null) {
                 DetailHost(
                     target = detailTarget,
@@ -217,9 +246,17 @@ fun HomeScreen(
                         HomeNavigationRail(
                             current = section,
                             onSelect = catalogViewModel::selectSection,
+                            modifier = Modifier
+                                .windowInsetsPadding(railInsets)
+                                .windowInsetsPadding(cutoutInsets),
                         )
                     }
-                    Column(modifier = Modifier.weight(1f).fillMaxSize()) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxSize()
+                            .windowInsetsPadding(contentInsets),
+                    ) {
                         if (!wideLayout) {
                             HomeCompactHeader(
                                 current = section,
@@ -260,6 +297,11 @@ fun HomeScreen(
                             HomeBottomBar(
                                 current = section,
                                 onSelect = catalogViewModel::selectSection,
+                                // La barra in basso lascia fuori il contenuto
+                                // solo lo spazio della barra di navigazione.
+                                modifier = Modifier.windowInsetsPadding(
+                                    WindowInsets.navigationBars,
+                                ),
                             )
                         }
                     }
@@ -276,6 +318,9 @@ fun HomeScreen(
             hostState = snackbarHostState,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
+                .windowInsetsPadding(
+                    WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom),
+                )
                 .padding(bottom = 24.dp)
                 .testTag("home_snackbar"),
         )

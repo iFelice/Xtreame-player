@@ -1,5 +1,7 @@
 package it.felixvision.mobile.ui.player
 
+import kotlin.math.roundToInt
+
 /** Pure rules shared by the production pointer handler and JVM tests. */
 object TouchGestureRules {
     const val EDGE_DP = 32f
@@ -24,6 +26,13 @@ object TouchGestureRules {
 
     enum class ZoomMode { FILL, FIT }
 
+    /**
+     * Natura di un trascinamento, decisa una sola volta al superamento della
+     * soglia e mantenuta fino al rilascio: un gesto verticale resta verticale
+     * anche se poi devia in orizzontale, e viceversa.
+     */
+    enum class DragMode { VOLUME, BRIGHTNESS, SCRUB, CHANNEL }
+
     fun classify(
         widthPx: Float,
         heightPx: Float,
@@ -40,15 +49,19 @@ object TouchGestureRules {
         if (widthPx <= 0f || heightPx <= 0f || density <= 0f) return Action.IGNORE
         if (pointerCount != 1) return Action.IGNORE
 
-        val edge = EDGE_DP * density
-        val isAtEdge = startX < edge || startX > widthPx - edge ||
-            startY < edge || startY > heightPx - edge
-        if (isAtEdge) return Action.IGNORE
+        if (isAtEdge(widthPx, heightPx, density, startX, startY)) return Action.IGNORE
 
-        val horizontal = kotlin.math.abs(deltaX)
-        val vertical = kotlin.math.abs(deltaY)
-        val threshold = MIN_DRAG_DP * density
-        if (horizontal < threshold && vertical < threshold) {
+        val mode = dragMode(
+            widthPx = widthPx,
+            heightPx = heightPx,
+            density = density,
+            startX = startX,
+            startY = startY,
+            deltaX = deltaX,
+            deltaY = deltaY,
+            playbackType = playbackType,
+        )
+        if (mode == null) {
             if (isDoubleTap && playbackType.supportsSeeking) {
                 return when {
                     startX < widthPx * SEEK_ZONE -> Action.SEEK_BACK
@@ -59,22 +72,92 @@ object TouchGestureRules {
             return if (!isDoubleTap && elapsedMillis < 500L) Action.TAP else Action.IGNORE
         }
 
-        if (horizontal >= vertical) {
-            return when (playbackType) {
-                MobilePlaybackType.LIVE -> classifyChannelSwipe(
-                    widthPx = widthPx,
-                    deltaX = deltaX,
-                    elapsedMillis = elapsedMillis,
-                    density = density,
-                )
-                MobilePlaybackType.CATCHUP,
-                MobilePlaybackType.MOVIE,
-                MobilePlaybackType.EPISODE,
-                -> Action.SCRUB
-            }
+        return when (mode) {
+            DragMode.CHANNEL -> channelAction(
+                widthPx = widthPx,
+                deltaX = deltaX,
+                elapsedMillis = elapsedMillis,
+                density = density,
+            )
+            DragMode.SCRUB -> Action.SCRUB
+            DragMode.VOLUME -> Action.VOLUME
+            DragMode.BRIGHTNESS -> Action.BRIGHTNESS
         }
+    }
 
-        return if (startX >= widthPx / 2f) Action.VOLUME else Action.BRIGHTNESS
+    /**
+     * Natura del trascinamento, o `null` se la soglia non è ancora stata
+     * superata (o se il gesto parte dai bordi, riservati ai gesti di sistema).
+     */
+    fun dragMode(
+        widthPx: Float,
+        heightPx: Float,
+        density: Float,
+        startX: Float,
+        startY: Float,
+        deltaX: Float,
+        deltaY: Float,
+        playbackType: MobilePlaybackType,
+    ): DragMode? {
+        if (widthPx <= 0f || heightPx <= 0f || density <= 0f) return null
+        if (isAtEdge(widthPx, heightPx, density, startX, startY)) return null
+
+        val horizontal = kotlin.math.abs(deltaX)
+        val vertical = kotlin.math.abs(deltaY)
+        val threshold = MIN_DRAG_DP * density
+        if (horizontal < threshold && vertical < threshold) return null
+
+        if (horizontal >= vertical) {
+            return if (playbackType == MobilePlaybackType.LIVE) DragMode.CHANNEL else DragMode.SCRUB
+        }
+        return if (startX >= widthPx / 2f) DragMode.VOLUME else DragMode.BRIGHTNESS
+    }
+
+    /** Esito del cambio canale, valutato al rilascio di un gesto orizzontale. */
+    fun channelAction(
+        widthPx: Float,
+        deltaX: Float,
+        elapsedMillis: Long,
+        density: Float,
+    ): Action = classifyChannelSwipe(
+        widthPx = widthPx,
+        deltaX = deltaX,
+        elapsedMillis = elapsedMillis,
+        density = density,
+    )
+
+    /**
+     * Valore di una regolazione verticale (0..1) misurato DALLA soglia: il
+     * tratto percorso prima di superarla non conta, così non c'è salto
+     * iniziale fra il valore di partenza e il primo valore applicato.
+     */
+    fun verticalDragValue(
+        initialValue: Float,
+        totalDeltaY: Float,
+        thresholdDeltaY: Float,
+        heightPx: Float,
+    ): Float = dragScaleValue(
+        initialValue = initialValue,
+        totalDeltaY = totalDeltaY - thresholdDeltaY,
+        heightPx = heightPx,
+        invert = true,
+    )
+
+    /**
+     * Livello di volume più vicino al valore del gesto, sempre misurato dalla
+     * soglia: arrotondamento al più vicino (non verso il basso) e limiti dello
+     * stream.
+     */
+    fun volumeLevel(
+        startLevel: Int,
+        maxLevel: Int,
+        totalDeltaY: Float,
+        thresholdDeltaY: Float,
+        heightPx: Float,
+    ): Int {
+        if (heightPx <= 0f || maxLevel <= 0) return startLevel.coerceIn(0, maxLevel.coerceAtLeast(0))
+        val fraction = -(totalDeltaY - thresholdDeltaY) / heightPx
+        return (startLevel + fraction * maxLevel).roundToInt().coerceIn(0, maxLevel)
     }
 
     fun dragScaleValue(
@@ -106,6 +189,19 @@ object TouchGestureRules {
         val continues = previousDirection == direction &&
             nowMillis - previousAtMillis in 0..1_500L
         return if (continues) previousSeconds + stepSeconds else stepSeconds
+    }
+
+    /** I bordi sono riservati ai gesti di sistema: nessuna regolazione da lì. */
+    private fun isAtEdge(
+        widthPx: Float,
+        heightPx: Float,
+        density: Float,
+        startX: Float,
+        startY: Float,
+    ): Boolean {
+        val edge = EDGE_DP * density
+        return startX < edge || startX > widthPx - edge ||
+            startY < edge || startY > heightPx - edge
     }
 
     private fun classifyChannelSwipe(
