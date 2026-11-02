@@ -10,8 +10,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.tv.material3.DrawerValue
@@ -157,11 +159,12 @@ class DrawerUpdateBadgeTest {
         // Non focalizzabile: il nodo non ha azioni, quindi il telecomando lo salta.
         assertFalse(SemanticsActions.OnClick in badge.fetchSemanticsNode().config)
         // A menu chiuso l'etichetta non c'è, quindi nemmeno il suo pallino.
-        rule.onNodeWithTag(DRAWER_UPDATE_BADGE_LABEL_TAG, useUnmergedTree = true).assertDoesNotExist()
+        rule.onAllNodesWithTag("drawer_update_badge_label", useUnmergedTree = true)
+            .assertCountEquals(0)
     }
 
     @Test
-    fun `a menu aperto il pallino compare anche accanto all etichetta Impostazioni`() {
+    fun `a menu aperto il pallino resta solo sull icona`() {
         val (checker, client) = newChecker(ReleaseCheckResult.Available(releaseFor("1.0.3")))
         checker.checkNow()
         awaitCondition { checker.state.value is UpdateCheckState.Available }
@@ -170,7 +173,9 @@ class DrawerUpdateBadgeTest {
 
         assertEquals(1, client.calls)
         rule.onNodeWithTag(DRAWER_UPDATE_BADGE_ICON_TAG, useUnmergedTree = true).assertIsDisplayed()
-        rule.onNodeWithTag(DRAWER_UPDATE_BADGE_LABEL_TAG, useUnmergedTree = true).assertIsDisplayed()
+        // Nessun pallino accanto all'etichetta "Impostazioni".
+        rule.onAllNodesWithTag("drawer_update_badge_label", useUnmergedTree = true)
+            .assertCountEquals(0)
     }
 
     @Test
@@ -187,7 +192,8 @@ class DrawerUpdateBadgeTest {
 
         assertEquals(UpdateCheckState.UpToDate, checker.state.value)
         rule.onNodeWithTag(DRAWER_UPDATE_BADGE_ICON_TAG, useUnmergedTree = true).assertDoesNotExist()
-        rule.onNodeWithTag(DRAWER_UPDATE_BADGE_LABEL_TAG, useUnmergedTree = true).assertDoesNotExist()
+        rule.onAllNodesWithTag("drawer_update_badge_label", useUnmergedTree = true)
+            .assertCountEquals(0)
     }
 
     @Test
@@ -201,7 +207,8 @@ class DrawerUpdateBadgeTest {
 
         assertEquals(UpdateCheckState.Failed, checker.state.value)
         rule.onNodeWithTag(DRAWER_UPDATE_BADGE_ICON_TAG, useUnmergedTree = true).assertDoesNotExist()
-        rule.onNodeWithTag(DRAWER_UPDATE_BADGE_LABEL_TAG, useUnmergedTree = true).assertDoesNotExist()
+        rule.onAllNodesWithTag("drawer_update_badge_label", useUnmergedTree = true)
+            .assertCountEquals(0)
     }
 
     @Test

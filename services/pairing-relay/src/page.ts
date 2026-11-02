@@ -533,10 +533,11 @@ export function renderVpnPage(): string {
 
       <div class="field">
         <label for="vpn-file">File .conf</label>
-        <input id="vpn-file" name="file" type="file" accept=".conf,text/plain" />
+        <input id="vpn-file" name="file" type="file" />
       </div>
 
       <button type="submit" id="submit-btn" class="submit-btn" disabled>Invia alla TV</button>
+      <p class="hint">Su iPhone il file si trova nell'app File, di solito in Download</p>
     </form>
 
     <div id="status-box" class="status" role="status" aria-live="polite"></div>
@@ -586,6 +587,8 @@ export function renderVpnPage(): string {
 
       function isWireGuardConfiguration(text) {
         if (new TextEncoder().encode(text).byteLength > ${VPN_MAX_PLAINTEXT_BYTES}) return false;
+        // Carattere di sostituzione (U+FFFD): il file non era testo UTF-8.
+        if (text.indexOf('\\uFFFD') !== -1) return false;
         return text.indexOf('[Interface]') !== -1 &&
           text.indexOf('PrivateKey') !== -1 &&
           text.indexOf('[Peer]') !== -1 &&

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -83,6 +84,8 @@ fun SerieSection(
     focusEpisodeId: String? = null,
     modifier: Modifier = Modifier,
     recentSeries: List<SeriesItem> = emptyList(),
+    /** Stato della griglia: i test lo passano dall'esterno per pilotare lo scorrimento. */
+    gridState: LazyGridState = rememberLazyGridState(),
 ) {
     val displayCategories = remember(categories) { withNovitaCategory(categories) }
     var debouncedCategoryId by remember { mutableStateOf(NOVITA_CATEGORY_ID) }
@@ -133,7 +136,9 @@ fun SerieSection(
     }
 
     val categoryListState = rememberLazyListState()
-    val gridState = rememberLazyGridState()
+    // Il cambio categoria deve ripartire dalla cima: l'ultimo valore applicato
+    // alla griglia serve a distinguerlo dalla prima composizione.
+    var lastGridCategoryId by remember { mutableStateOf(debouncedCategoryId) }
     val categoryFocusRequesters = remember(displayCategories) {
         displayCategories.associate { it.categoryId to FocusRequester() }
     }
@@ -170,6 +175,18 @@ fun SerieSection(
     }
     // Indice dell'elemento con il focus, per il contatore "N / Totale".
     var focusedItemIndex by remember(filtered) { mutableStateOf<Int?>(null) }
+    // Cambio categoria: la nuova lista riparte dalla cima, non dall'altezza in
+    // cui era rimasta la precedente. Alla prima composizione non si tocca nulla
+    // e la posizione della categoria (scheda chiusa o ritorno dal player) resta.
+    LaunchedEffect(debouncedCategoryId) {
+        if (debouncedCategoryId == lastGridCategoryId) return@LaunchedEffect
+        lastGridCategoryId = debouncedCategoryId
+        focusedItemIndex = null
+        // Con la categoria vuota la griglia non è composta (al suo posto c'è il
+        // messaggio): non c'è niente da riportare in cima.
+        if (filtered.isEmpty()) return@LaunchedEffect
+        gridState.scrollToItem(0)
+    }
     val restoreHelper = rememberGridDetailFocusRestore(
         gridState = gridState,
         focusRequesters = { itemFocusRequesters },

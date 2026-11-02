@@ -380,7 +380,13 @@ describe('services/pairing-relay', () => {
     const html = await response.text();
     expect(html).toContain('<title>VPN per FelixVP</title>');
     expect(html).toContain('Incolla il contenuto del file .conf WireGuard');
-    expect(html).toContain('accept=".conf,text/plain"');
+    // Nessun filtro per tipo: su iPhone `accept=".conf,text/plain"` rendeva il
+    // file .conf grigio e non selezionabile. L'input resta un campo file.
+    expect(html).toContain('type="file"');
+    expect(html).toContain('id="vpn-file"');
+    expect(html).not.toContain('accept=');
+    expect(html).toContain("Su iPhone il file si trova nell'app File, di solito in Download");
+    expect(html).toContain(String.raw`if (text.indexOf('\uFFFD') !== -1) return false;`);
     expect(html).not.toContain('console.log');
     expect(html).not.toContain('482910');
     expect(html).toContain("replace(/\\+/g, '-').replace(/\\//g, '_')");
