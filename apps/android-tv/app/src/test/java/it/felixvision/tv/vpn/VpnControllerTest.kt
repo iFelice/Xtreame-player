@@ -10,7 +10,6 @@ import com.wireguard.android.backend.Tunnel
 import com.wireguard.config.Config
 import com.wireguard.crypto.Key
 import it.felixvision.tv.core.SystemClock
-import java.util.Collections
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import kotlin.coroutines.CoroutineContext
@@ -85,8 +84,8 @@ class VpnControllerTest {
         private val handshake: Boolean,
         private val failUp: Boolean = false,
     ) : Backend {
-        val states = Collections.synchronizedList(mutableListOf<Tunnel.State>())
-        val stateThreads = Collections.synchronizedList(mutableListOf<String>())
+        val states = mutableListOf<Tunnel.State>()
+        val stateThreads = mutableListOf<String>()
         var lastTunnel: Tunnel? = null
 
         override fun getRunningTunnelNames(): Set<String> = emptySet()
@@ -170,7 +169,7 @@ class VpnControllerTest {
         testScheduler.advanceUntilIdle()
     }
 
-    private val messagesBuffer = Collections.synchronizedList(mutableListOf<String>())
+    private val messagesBuffer = mutableListOf<String>()
 
     /** Invoca il metodo privato evictConnections tramite reflection Java (no kotlin-reflect). */
     private fun invokeEvictConnections(controller: VpnController) {
@@ -492,7 +491,7 @@ class VpnControllerTest {
         val store = savedStore(enabled = true)
         val backend = FakeBackend(handshake = true)
         // Avvolgimento di `io` che registra il thread di ogni dispatch.
-        val dispatchedThreads = Collections.synchronizedList(mutableListOf<String>())
+        val dispatchedThreads = mutableListOf<String>()
         val recordingIo = object : CoroutineDispatcher() {
             override fun dispatch(context: CoroutineContext, block: Runnable) {
                 dispatchedThreads.add(Thread.currentThread().name)
