@@ -128,7 +128,13 @@ internal fun Modifier.playerOverlay(
         shape = RoundedCornerShape(scale.surfaceCorner),
     )
 
-/** Banner canale: numero, nome, categoria e logo, visibile per 4 secondi. */
+/**
+ * Banner canale: numero, nome, categoria e logo, visibile per 4 secondi.
+ *
+ * Con [onZapping] la barra info mostra anche il pulsante "Zapping" (solo Live:
+ * film e serie non aprono questo banner). [zappingModifier] serve al player per
+ * il focus del pulsante, senza spostare qui il resto della gestione dei tasti.
+ */
 @Composable
 fun PlayerChannelBanner(
     banner: ChannelBanner,
@@ -138,6 +144,8 @@ fun PlayerChannelBanner(
     ffmpegActive: Boolean = false,
     schedulePrograms: List<EpgProgram>? = null,
     scheduleNowMillis: Long = 0L,
+    onZapping: (() -> Unit)? = null,
+    zappingModifier: Modifier = Modifier,
 ) {
     Row(
         modifier = modifier
@@ -194,6 +202,14 @@ fun PlayerChannelBanner(
                     testTagPrefix = "player_banner_schedule",
                 )
             }
+        }
+        onZapping?.let { startZapping ->
+            FvpCompactButton(
+                text = PlayerZappingTexts.BUTTON,
+                onClick = startZapping,
+                scale = scale,
+                modifier = zappingModifier.testTag("player_zapping_button"),
+            )
         }
     }
 }

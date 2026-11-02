@@ -54,6 +54,8 @@ import it.felixvision.tv.data.playback.ChannelNumbering
 import it.felixvision.tv.data.playback.SeekAcceleration
 import it.felixvision.tv.data.playback.SeekAccumulator
 import it.felixvision.tv.data.playback.SeekFeedback
+import it.felixvision.tv.player.ZappingChannelStatus
+import it.felixvision.tv.player.ZappingController
 import it.felixvision.tv.ui.catalog.MyChannelDialog
 import it.felixvision.tv.ui.components.ChannelNumberIndicator
 import it.felixvision.tv.ui.components.fvpLongPress
@@ -63,6 +65,9 @@ import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.theme.FvpColors
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
+/** Ogni quanto il player fa avanzare il conto dello zapping automatico. */
+private const val ZAPPING_TICK_MILLIS = 500L
 
 /**
  * Schermata player a tutto schermo, in una finestra Dialog sopra la scheda di
@@ -101,6 +106,48 @@ fun PlayerScreen(
     var lastSeekAt by remember { mutableStateOf(0L) }
     var seekFeedback by remember { mutableStateOf<SeekFeedback?>(null) }
     val playerScope = rememberCoroutineScope()
+
+    // Zapping automatico del Live: pulsante nella barra info, indicatore dei
+    // secondi e domanda di fine lista. Il controller è puro e usa l'orologio
+    // dell'app, così i test possono simulare il tempo.
+    val zapping = remember(session.id) {
+        PlayerZapping(
+            controller = ZappingController(clock = container.clock),
+            onSwitchChannel = { index -> engine.selectChannel(index) },
+        )
+    }
+    val zappingFocus = remember { FocusRequester() }
+    var zappingButtonFocused by remember { mutableStateOf(false) }
+    val zappingState = zapping.state
+
+    /**
+     * Avvia lo zapping dal canale in onda, con l'intervallo salvato in
+     * [it.felixvision.tv.player.PlayerPreferences]. La barra info si chiude
+     * subito: il primo cambio arriva dopo l'intervallo scelto.
+     */
+    fun startZapping() {
+        if (session.source !is PlaybackSource.Live || state.isReplay) return
+        val size = state.liveChannels.size
+        if (size <= 0) return
+        engine.hideBanner()
+        zapping.start(
+            seconds = container.playerPreferences.zappingSeconds,
+            index = state.currentChannelIndex,
+            size = size,
+        )
+        rootFocus.requestFocus()
+    }
+
+    /**
+     * Stato del canale in onda per lo zapping: un errore o il caricamento
+     * iniziale (posizione ancora a zero, non un buffering a metà visione)
+     * fanno saltare subito il canale dopo i primi 5 secondi.
+     */
+    fun zappingChannelStatus(current: PlayerUiState): ZappingChannelStatus = when {
+        current.errorMessage != null -> ZappingChannelStatus.ERROR
+        current.isPlaying || current.positionMillis > 0L -> ZappingChannelStatus.PLAYING
+        else -> ZappingChannelStatus.LOADING
+    }
 
     // "I miei canali" dal player Live: pressione lunga sul canale in onda.
     val myChannelsRevision by container.myChannelsStore.revision.collectAsState()
@@ -188,6 +235,18 @@ fun PlayerScreen(
         }
     }
 
+    // Zapping automatico (solo Live): la logica sta in [ZappingController], qui
+    // si applicano i comandi al player. Ogni schermata ha il suo stato: alla
+    // riapertura del player lo zapping non riparte da solo.
+    LaunchedEffect(engine, zapping) {
+        while (true) {
+            delay(ZAPPING_TICK_MILLIS)
+            // Stato letto a ogni giro: la lambda del ciclo non può usare la
+            // fotografia della composizione iniziale.
+            zapping.tick(status = zappingChannelStatus(engine.state))
+        }
+    }
+
     LaunchedEffect(engine) {
         while (true) {
             delay(10_000L)
@@ -200,7 +259,12 @@ fun PlayerScreen(
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_START -> engine.onHostStart()
-                Lifecycle.Event.ON_STOP -> engine.onHostStop()
+                Lifecycle.Event.ON_STOP -> {
+                    // Uscita dal player: lo zapping automatico si ferma e non
+                    // riparte da solo alla riapertura.
+                    zapping.stop()
+                    engine.onHostStop()
+                }
                 else -> Unit
             }
         }
@@ -325,7 +389,24 @@ fun PlayerScreen(
                         if (engine.onAirChannel != null) longPressMenuOpen = true
                     }
                 }
+                // Qualsiasi tasto ferma lo zapping e viene consumato; sta prima
+                // di ogni altro gestore, così il tasto non fa altro.
+                .playerZappingKeys(zapping)
                 .onPreviewKeyEvent { event ->
+                    // Focus sul pulsante "Zapping" della barra info: le frecce
+                    // tornano al player senza cambiare canale, OK resta al
+                    // pulsante che lo attiva.
+                    if (zappingButtonFocused) {
+                        if (event.type == KeyEventType.KeyDown &&
+                            event.key != Key.DirectionCenter &&
+                            event.key != Key.Enter
+                        ) {
+                            zappingButtonFocused = false
+                            rootFocus.requestFocus()
+                            return@onPreviewKeyEvent true
+                        }
+                        return@onPreviewKeyEvent false
+                    }
                     val native = event.nativeKeyEvent
                     if (session.source is PlaybackSource.Live && !state.isReplay && !state.hasModalOverlay) {
                         if (engine.onChannelNumberKey(
@@ -429,11 +510,15 @@ fun PlayerScreen(
                                 }
                                 Key.DirectionRight -> {
                                     if (session.source is PlaybackSource.Live && !state.isReplay) {
-                                        // Live: Destra apre il volume, solo con lista
-                                        // canali e banner chiusi.
-                                        if (!state.channelListVisible && state.banner == null &&
+                                        if (state.banner != null) {
+                                            // Barra info aperta: Destra porta al
+                                            // pulsante "Zapping".
+                                            runCatching { zappingFocus.requestFocus() }
+                                        } else if (!state.channelListVisible &&
                                             !state.volumePanelVisible
                                         ) {
+                                            // Live: Destra apre il volume, solo con
+                                            // lista canali e banner chiusi.
                                             engine.openVolumePanel()
                                         }
                                     } else {
@@ -482,6 +567,16 @@ fun PlayerScreen(
             // Chiuso il menu della pressione lunga (o la finestra di "I miei
             // canali") il focus torna al player: i tasti continuano a
             // funzionare anche con la guida appena aperta.
+            // La barra info sparisce da sola dopo 4 secondi: se il focus era
+            // sul pulsante "Zapping", torna al player, che altrimenti resterebbe
+            // senza tasti.
+            LaunchedEffect(state.banner) {
+                if (state.banner == null && zappingButtonFocused) {
+                    withFrameNanos { }
+                    runCatching { rootFocus.requestFocus() }
+                }
+            }
+
             LaunchedEffect(longPressMenuOpen, myChannelEdit) {
                 if (longPressMenuOpen || myChannelEdit != null) return@LaunchedEffect
                 // Con un pannello aperto (per esempio il formato, scelto dal
@@ -586,6 +681,16 @@ fun PlayerScreen(
                         ffmpegActive = state.ffmpegActive,
                         schedulePrograms = currentLiveChannel?.let { bannerSchedulePrograms[it.streamId] },
                         scheduleNowMillis = bannerScheduleNow,
+                        // "Zapping" solo nel Live: film e serie non hanno questo
+                        // banner (e con la replica del Live resta spento).
+                        onZapping = if (session.source is PlaybackSource.Live && !state.isReplay) {
+                            { startZapping() }
+                        } else {
+                            null
+                        },
+                        zappingModifier = Modifier
+                            .focusRequester(zappingFocus)
+                            .onFocusChanged { zappingButtonFocused = it.isFocused },
                     )
                 }
             }
@@ -635,6 +740,33 @@ fun PlayerScreen(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(scale.dp(28f)),
+                )
+            }
+
+            // Indicatore dello zapping automatico, in alto a destra sopra il
+            // video: sparisce appena lo zapping si ferma.
+            if (zappingState != null && !zappingState.awaitingEndOfList && !state.hasModalOverlay) {
+                PlayerZappingIndicator(
+                    remainingSeconds = zappingState.remainingSeconds,
+                    scale = scale,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(scale.dp(28f)),
+                )
+            }
+
+            // Fine della lista: invece di riproporre il primo canale, chiede.
+            if (zappingState?.awaitingEndOfList == true) {
+                PlayerZappingEndDialog(
+                    scale = scale,
+                    onYes = {
+                        zapping.answer(restart = true)
+                        runCatching { rootFocus.requestFocus() }
+                    },
+                    onNo = {
+                        zapping.answer(restart = false)
+                        runCatching { rootFocus.requestFocus() }
+                    },
                 )
             }
 
