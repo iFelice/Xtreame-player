@@ -4,6 +4,7 @@ import it.felixvision.tv.data.catalog.Catalog
 import it.felixvision.tv.data.catalog.LiveStream
 import it.felixvision.tv.data.catalog.SeriesItem
 import it.felixvision.tv.data.catalog.VodStream
+import it.felixvision.tv.data.catalog.allCategoryIds
 import it.felixvision.tv.data.channels.MyChannel
 import it.felixvision.tv.data.continuewatching.ContinueEntry
 import it.felixvision.tv.data.favorites.FavoriteItem
@@ -16,7 +17,15 @@ import it.felixvision.tv.data.favorites.FavoriteItem
  *
  * Le regole provengono da [ProtectedContentRules]: una categoria nascosta
  * porta via anche tutti i suoi contenuti, un contenuto singolo sparisce da
- * solo. Ogni funzione, quando [ProtectedContentData.hiddenCategories] e
+ * solo.
+ *
+ * Un contenuto con più categorie (`category_id` + `category_ids`) è nascosto
+ * se è nascosta UNA QUALSIASI delle sue categorie: nascondere "Ultimi usciti"
+ * toglie il film anche da "Azione", non solo dalla categoria principale.
+ * L'id del contenuto resta l'unico criterio di
+ * [ProtectedContentRules.isItemHidden].
+ *
+ * Ogni funzione, quando [ProtectedContentData.hiddenCategories] e
  * [ProtectedContentData.hiddenItems] sono entrambe vuote, restituisce la
  * stessa istanza ricevuta (nessuna copia, nessuna allocazione).
  */
@@ -39,13 +48,13 @@ object ProtectedFilter {
             ProtectedContentRules.isCategoryHidden(data, ProtectedKind.SERIES, it.categoryId)
         }
         val liveStreams = catalog.liveStreams.filterNot {
-            ProtectedContentRules.isItemHidden(data, ProtectedKind.LIVE, it.streamId, it.categoryId)
+            isItemHidden(data, ProtectedKind.LIVE, it.streamId, it.allCategoryIds)
         }
         val vodStreams = catalog.vodStreams.filterNot {
-            ProtectedContentRules.isItemHidden(data, ProtectedKind.VOD, it.streamId, it.categoryId)
+            isItemHidden(data, ProtectedKind.VOD, it.streamId, it.allCategoryIds)
         }
         val series = catalog.series.filterNot {
-            ProtectedContentRules.isItemHidden(data, ProtectedKind.SERIES, it.seriesId, it.categoryId)
+            isItemHidden(data, ProtectedKind.SERIES, it.seriesId, it.allCategoryIds)
         }
         if (
             liveCategories.size == catalog.liveCategories.size &&
@@ -72,7 +81,7 @@ object ProtectedFilter {
     fun filterVodStreams(list: List<VodStream>, data: ProtectedContentData): List<VodStream> {
         if (isEmpty(data)) return list
         val filtered = list.filterNot {
-            ProtectedContentRules.isItemHidden(data, ProtectedKind.VOD, it.streamId, it.categoryId)
+            isItemHidden(data, ProtectedKind.VOD, it.streamId, it.allCategoryIds)
         }
         return if (filtered.size == list.size) list else filtered
     }
@@ -81,7 +90,7 @@ object ProtectedFilter {
     fun filterSeries(list: List<SeriesItem>, data: ProtectedContentData): List<SeriesItem> {
         if (isEmpty(data)) return list
         val filtered = list.filterNot {
-            ProtectedContentRules.isItemHidden(data, ProtectedKind.SERIES, it.seriesId, it.categoryId)
+            isItemHidden(data, ProtectedKind.SERIES, it.seriesId, it.allCategoryIds)
         }
         return if (filtered.size == list.size) list else filtered
     }
@@ -100,6 +109,10 @@ object ProtectedFilter {
 
     private fun hidden(data: ProtectedContentData, favorite: FavoriteItem): Boolean =
         when (favorite.type) {
+            // FavoriteItem.categoryId resta la categoria principale salvata
+            // insieme al preferito (nessuna chiave di salvataggio cambia): qui
+            // non si conoscono le altre categorie del contenuto, quindi questa
+            // voce segue le regole di sempre.
             FavoriteItem.VOD -> ProtectedContentRules.isItemHidden(
                 data = data,
                 kind = ProtectedKind.VOD,
@@ -167,8 +180,9 @@ object ProtectedFilter {
 
     /**
      * "I miei canali": [MyChannel] non ha la categoria, quindi si ricava dai
-     * canali Live del catalogo (mappa streamId → categoryId costruita una sola
-     * volta).
+     * canali Live del catalogo (mappa streamId → tutte le sue categorie
+     * costruita una sola volta). Se il canale ha più categorie e una qualsiasi
+     * di queste è nascosta, il canale sparisce.
      */
     fun filterMyChannels(
         list: List<MyChannel>,
@@ -176,15 +190,30 @@ object ProtectedFilter {
         liveStreams: List<LiveStream>,
     ): List<MyChannel> {
         if (isEmpty(data) || list.isEmpty()) return list
-        val categoryById = liveStreams.associate { it.streamId to it.categoryId }
+        val categoriesById = liveStreams.associate { it.streamId to it.allCategoryIds }
         val filtered = list.filterNot { channel ->
-            ProtectedContentRules.isItemHidden(
+            isItemHidden(
                 data = data,
                 kind = ProtectedKind.LIVE,
                 itemId = channel.streamId,
-                categoryId = categoryById[channel.streamId],
+                categoryIds = categoriesById[channel.streamId].orEmpty(),
             )
         }
         return if (filtered.size == list.size) list else filtered
+    }
+
+    /**
+     * Contenuto nascosto per id oppure perché è nascosta una QUALSIASI delle
+     * sue categorie: `isCategoryHidden` su ciascun id dell'insieme, così
+     * l'appartenenza non dipende dalla categoria principale.
+     */
+    private fun isItemHidden(
+        data: ProtectedContentData,
+        kind: ProtectedKind,
+        itemId: String,
+        categoryIds: Set<String>,
+    ): Boolean {
+        if (ProtectedContentRules.isItemHidden(data, kind, itemId, categoryId = null)) return true
+        return categoryIds.any { ProtectedContentRules.isCategoryHidden(data, kind, it) }
     }
 }

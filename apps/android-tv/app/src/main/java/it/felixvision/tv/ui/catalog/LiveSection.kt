@@ -48,6 +48,7 @@ import androidx.tv.material3.ListItemDefaults
 import androidx.tv.material3.Text
 import it.felixvision.tv.data.catalog.Category
 import it.felixvision.tv.data.catalog.LiveStream
+import it.felixvision.tv.data.catalog.allCategoryIds
 import it.felixvision.tv.data.favorites.FavoriteItem
 import it.felixvision.tv.data.playback.ChannelKeyOutcome
 import it.felixvision.tv.data.playback.ChannelLookupResult
@@ -86,6 +87,18 @@ const val LIVE_LIST_WIDTH_FRACTION = 0.8f
 /** Opacità delle righe dei canali: la superficie attuale all'80%. */
 const val CHANNEL_ROW_ALPHA = 0.8f
 
+/**
+ * Canali Live della categoria scelta, nell'ordine dell'elenco del provider.
+ *
+ * Appartenenza, non uguaglianza: un canale compare in OGNI categoria che il
+ * provider gli assegna (`category_id` principale + `category_ids`), non solo
+ * nella principale. Categoria non scelta = nessun canale.
+ */
+fun liveStreamsForCategory(categoryId: String?, streams: List<LiveStream>): List<LiveStream> {
+    if (categoryId == null) return emptyList()
+    return streams.filter { categoryId in it.allCategoryIds }
+}
+
 @Composable
 fun LiveSection(
     categories: List<Category>,
@@ -123,8 +136,7 @@ fun LiveSection(
     }
 
     val filtered = remember(streams, debouncedCategoryId) {
-        if (debouncedCategoryId == null) emptyList()
-        else streams.filter { it.categoryId == debouncedCategoryId }
+        liveStreamsForCategory(debouncedCategoryId, streams)
     }
 
     val categoryListState = rememberLazyListState()

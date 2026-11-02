@@ -169,6 +169,10 @@ data class LiveStream(
     @SerialName("stream_icon") val streamIcon: String? = null,
     @Serializable(with = NullableFlexibleStringSerializer::class)
     @SerialName("category_id") val categoryId: String? = null,
+    // Elenco completo delle categorie del contenuto: alcuni pannelli (XUI e
+    // simili) lo mandano accanto a `category_id`, che resta la principale.
+    @Serializable(with = FlexibleStringListSerializer::class)
+    @SerialName("category_ids") val categoryIds: List<String> = emptyList(),
     @Serializable(with = NullableFlexibleStringSerializer::class)
     @SerialName("epg_channel_id") val epgChannelId: String? = null,
     @Serializable(with = NullableFlexibleStringSerializer::class) val added: String? = null,
@@ -191,6 +195,9 @@ data class VodStream(
     @Serializable(with = NullableFlexibleStringSerializer::class) val added: String? = null,
     @Serializable(with = NullableFlexibleStringSerializer::class)
     @SerialName("category_id") val categoryId: String? = null,
+    // Elenco completo delle categorie del contenuto (vedi LiveStream).
+    @Serializable(with = FlexibleStringListSerializer::class)
+    @SerialName("category_ids") val categoryIds: List<String> = emptyList(),
     @Serializable(with = NullableFlexibleStringSerializer::class)
     @SerialName("container_extension") val containerExtension: String? = null,
     @Serializable(with = NullableFlexibleStringSerializer::class) val year: String? = null,
@@ -217,6 +224,9 @@ data class SeriesItem(
     val rating: String? = null,
     @Serializable(with = NullableFlexibleStringSerializer::class)
     @SerialName("category_id") val categoryId: String? = null,
+    // Elenco completo delle categorie del contenuto (vedi LiveStream).
+    @Serializable(with = FlexibleStringListSerializer::class)
+    @SerialName("category_ids") val categoryIds: List<String> = emptyList(),
     @Serializable(with = NullableFlexibleStringSerializer::class) val added: String? = null,
 )
 

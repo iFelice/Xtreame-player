@@ -5,6 +5,7 @@ import it.felixvision.tv.core.Clock
 import it.felixvision.tv.core.SystemClock
 import it.felixvision.tv.data.catalog.Category
 import it.felixvision.tv.data.catalog.LiveStream
+import it.felixvision.tv.data.catalog.allCategoryIds
 
 /**
  * Indicatore mostrato in alto a destra durante il cambio canale numerico:
@@ -183,8 +184,10 @@ object ChannelNumberInput {
     ): LiveStream? = allStreams.firstOrNull { it.num == number }
 
     /**
-     * Costruisce la lista di zapping nella categoria del canale scelto,
-     * mantenendo l'ordine del catalogo.
+     * Costruisce la lista di zapping nella categoria principale del canale
+     * scelto, mantenendo l'ordine del catalogo. Un canale che il provider
+     * assegna a più categorie appartiene alla stessa lista di tutte: conta
+     * l'appartenenza (`allCategoryIds`), non l'uguaglianza.
      */
     fun resolveZappingTarget(
         channel: LiveStream,
@@ -193,7 +196,7 @@ object ChannelNumberInput {
     ): LiveZappingTarget {
         val categoryId = channel.categoryId
         val categoryChannels = allStreams
-            .filter { it.categoryId == categoryId }
+            .filter { categoryId in it.allCategoryIds }
             .ifEmpty { listOf(channel) }
         val byReference = categoryChannels.indexOfFirst { it === channel }
         val foundIndex = if (byReference >= 0) {

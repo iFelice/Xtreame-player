@@ -45,6 +45,7 @@ import androidx.tv.material3.Text
 import it.felixvision.tv.core.Clock
 import it.felixvision.tv.data.catalog.Catalog
 import it.felixvision.tv.data.catalog.Category
+import it.felixvision.tv.data.catalog.allCategoryIds
 import it.felixvision.tv.data.protection.ProtectedContentData
 import it.felixvision.tv.data.protection.ProtectedContentRules
 import it.felixvision.tv.data.protection.ProtectedContentStore
@@ -893,6 +894,11 @@ internal fun categoriesForKind(catalog: Catalog?, kind: ProtectedKind): List<Cat
 /**
  * Contenuti di una categoria nell'ordine del catalogo, senza doppioni sul
  * loro id (stesso motivo della lista categorie: chiavi lazy uniche).
+ *
+ * Vale l'appartenenza (`category_id` + `category_ids`): un contenuto che il
+ * provider assegna a più categorie compare nell'elenco di ognuna, così lo si
+ * può nascondere partendo da quella che si sta guardando. `distinctBy` tiene
+ * una sola voce anche quando lo stesso id è raggiunto da più categorie.
  */
 internal fun itemsForCategory(
     catalog: Catalog?,
@@ -900,12 +906,12 @@ internal fun itemsForCategory(
     categoryId: String,
 ): List<ProtectableItem> = when (kind) {
     ProtectedKind.LIVE -> catalog?.liveStreams.orEmpty()
-        .filter { it.categoryId == categoryId }
+        .filter { categoryId in it.allCategoryIds }
         .map { ProtectableItem(itemId = it.streamId, name = it.name) }
     ProtectedKind.VOD -> catalog?.vodStreams.orEmpty()
-        .filter { it.categoryId == categoryId }
+        .filter { categoryId in it.allCategoryIds }
         .map { ProtectableItem(itemId = it.streamId, name = it.name) }
     ProtectedKind.SERIES -> catalog?.series.orEmpty()
-        .filter { it.categoryId == categoryId }
+        .filter { categoryId in it.allCategoryIds }
         .map { ProtectableItem(itemId = it.seriesId, name = it.name) }
 }.distinctBy { it.itemId }
