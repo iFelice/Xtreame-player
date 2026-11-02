@@ -8,6 +8,7 @@ on:
       - "apps/android-tv/app/src/main/java/it/felixvision/tv/core/**"
       - "apps/android-tv/gradle/libs.versions.toml"
       - ".github/workflows/android-mobile-ci.yml"
+      - ".github/scripts/**"
   pull_request:
     branches:
       - main
@@ -17,6 +18,7 @@ on:
       - "apps/android-tv/app/src/main/java/it/felixvision/tv/core/**"
       - "apps/android-tv/gradle/libs.versions.toml"
       - ".github/workflows/android-mobile-ci.yml"
+      - ".github/scripts/**"
   workflow_dispatch:
 
 concurrency:
@@ -284,6 +286,9 @@ jobs:
           curl -s http://127.0.0.1:3333/health
           echo "Mock server in ascolto su 127.0.0.1:3333 (raggiunto dall'app come 10.0.2.2)."
 
+      # Nota: l'action esegue script e pre-script UNA RIGA PER VOLTA con
+      # /bin/sh (dash): nessun blocco multilinea. Tutta la logica vive in
+      # .github/scripts/*.bash, richiamati con una riga sola.
       - name: Test strumentati del tablet su emulatore (API 35)
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -298,41 +303,8 @@ jobs:
           emulator-boot-timeout: 1200
           # Osserva l'avvio: campiona dispositivi adb e processo dell'emulatore
           # ogni 20 s, per capire se è lento, bloccato o morto.
-          pre-emulator-launch-script: |
-            grep -E "hw.lcd|hw.ramSize|hw.device.name|avd.ini" "$HOME/.android/avd/test.avd/config.ini" 2>/dev/null || cat "$HOME/.android/avd/test.avd/config.ini" 2>/dev/null || echo "config.ini non trovato"
-            nohup bash -c 'while true; do echo "== $(date -Is) =="; adb devices; ps -eo pid,pcpu,pmem,etime,args | grep [e]mulator | grep -v grep | head -2; sleep 20; done' > /tmp/emulator-watch.log 2>&1 &
-            echo "Watcher dell'avvio avviato (pid $!)"
-          script: |
-            set -o pipefail
-            sha="$(git rev-parse HEAD)"
-            export FVP_VERSION_NAME="0.1.0-${sha:0:7}"
-            export FVP_VERSION_CODE='${{ github.run_number }}'
-            echo "::notice::APK di test su emulatore: versione ${FVP_VERSION_NAME} (${FVP_VERSION_CODE})"
-
-            cd apps/android-mobile
-            timeout 1800 ./gradlew connectedDebugAndroidTest --console=plain --stacktrace 2>&1 | tee /tmp/fvp-connected.log
-            status=$?
-            cd "$GITHUB_WORKSPACE"
-
-            # Screenshot salvati dall'app dentro filesDir/screenshots (build di
-            # debug: accessibili con run-as, senza adb root).
-            mkdir -p emulator-artifacts
-            adb exec-out run-as it.felixvision.mobile tar c -C files screenshots > emulator-artifacts/screenshots.tar || true
-            if [ -s emulator-artifacts/screenshots.tar ]; then
-              mkdir -p emulator-artifacts/screenshots
-              tar -xf emulator-artifacts/screenshots.tar -C emulator-artifacts/screenshots || true
-              rm -f emulator-artifacts/screenshots.tar
-            fi
-            # Piano B: sulle immagini google_apis adb root è consentito.
-            if [ ! -d emulator-artifacts/screenshots ] || [ -z "$(ls -A emulator-artifacts/screenshots 2> /dev/null)" ]; then
-              adb root > /dev/null 2>&1 || true
-              adb wait-for-device
-              adb pull /data/data/it.felixvision.mobile/files/screenshots emulator-artifacts/screenshots || true
-            fi
-            ls -R emulator-artifacts || true
-            cp /tmp/fvp-connected.log emulator-artifacts/gradle-connected.log || true
-            cp /tmp/fvp-mock-server.log emulator-artifacts/mock-server.log || true
-            exit "$status"
+          pre-emulator-launch-script: nohup bash .github/scripts/emulator-boot-watch.sh > /tmp/emulator-watch.log 2>&1 &
+          script: bash .github/scripts/run-emulator-tests.sh
 
       # Se l'emulatore non parte o i test falliscono, raccoglie indizi
       # (dispositivi adb, AVD, spazio, memoria, log del mock server) e li
