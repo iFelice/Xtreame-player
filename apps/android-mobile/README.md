@@ -233,20 +233,9 @@ TV, perché il tablet compila quei sorgenti. Nessun segreto nel workflow.
   `CatalogViewModel.onPlayRequest`, l'unico punto di ingresso che questo PR
   fa confluire nello snackbar "Riproduzione disponibile nel prossimo
   aggiornamento"; nessun URL di stream viene costruito o loggato (arriva nel PR3).
-- **Impostazioni** (5 schede, ordine TV senza "Aspetto" e VPN): Account
-  (utente, stato, scadenza, connessioni in uso con ConnectionsAdvisory,
-  server, "Esci" con conferma e pulizia opzionale), Protetti (riepilogo +
-  "Gestisci" → contenuti protetti), Catalogo (ultimo aggiornamento +
-  "Aggiorna catalogo"), App (versione; aggiornamento in-app a PR4),
-  Configurabile da remoto (codice + QR, rinnovo, attivo solo mentre
-  visibile).
-- **Contenuti protetti (locali, nessuna sync TV)**: PIN touch (≥48dp),
-  creazione con conferma, verifica con blocco 30s dopo 5 tentativi, PIN
-  dimenticato (password provider → nuovo PIN), pagina principale con
-  interruttore, Aggiungi, Cambia PIN e elenco Nascosti; sessione bloccata
-  nasconde i contenuti in tutte le sezioni. Archivio è locale dell'account.
-- **VPN**: via app WireGuard ufficiale (non in questa app); config "Includi
-  solo FelixVP".
+- **Impostazioni**: account (utente, stato, scadenza, connessioni in uso con
+  ConnectionsAdvisory), server, Aggiorna catalogo con avanzamento, versione
+  dell'app, Esci verso l'accesso con pulizia opzionale dei dati utente.
 - **Abbinamento remoto**: QR e PIN dal servizio di relay
   (`BuildConfig.PAIRING_RELAY_URL`, stesso della TV), rinnovo del codice,
   accesso automatico alla ricezione delle credenziali; il polling è attivo

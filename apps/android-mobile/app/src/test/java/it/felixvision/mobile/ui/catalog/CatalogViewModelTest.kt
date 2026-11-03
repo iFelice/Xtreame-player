@@ -443,6 +443,23 @@ class CatalogViewModelTest {
             assertEquals(BackAction.EXIT_APP, viewModel.onBackPressed())
         }
 
+    @Test
+    fun `scheda Preferiti sopravvive al cambio sezione e la categoria Live riapre la scheda Categorie Live`() =
+        runTest(scheduler) {
+            val viewModel = newViewModel()
+            advanceUntilIdle()
+
+            viewModel.selectFavoritesTab(FavoritesTab.FILM_SERIES)
+            viewModel.selectSection(AppSection.LIVE)
+            assertEquals(FavoritesTab.FILM_SERIES, viewModel.favoritesTab.value)
+
+            viewModel.selectFavoritesTab(FavoritesTab.MY_CHANNELS)
+            viewModel.selectLiveCategory("c2")
+            assertEquals(AppSection.LIVE, viewModel.selectedSection.value)
+            assertEquals(FavoritesTab.LIVE_CATEGORIES, viewModel.favoritesTab.value)
+            assertEquals("c2", viewModel.sectionStates.selectedCategory("live"))
+        }
+
     // --- Dati di esempio (solo demo/demo su http://server.esempio:8080) ---
 }
 

@@ -519,6 +519,7 @@ class CatalogViewModel(
 
     /** Dai Preferiti: apre la sezione Live sulla categoria scelta. */
     fun selectLiveCategory(categoryId: String) {
+        _favoritesTab.value = FavoritesTab.LIVE_CATEGORIES
         sectionStates.selectCategory("live", categoryId)
         sectionStates.closeAllHeaders()
         _selectedSection.value = AppSection.LIVE
