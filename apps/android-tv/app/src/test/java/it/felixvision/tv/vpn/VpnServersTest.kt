@@ -44,7 +44,7 @@ class VpnServersTest {
         assertEquals(1, first.servers.size)
         assertEquals("Demo", first.serverName)
         assertTrue(first.isEnabled)
-        assertEquals(text, first.loadConfigText())
+        assertTrue("configuration round trip", text == first.loadConfigText())
         val migrated = preferences.all
         assertEquals(first.servers, store().servers)
         assertEquals(migrated, preferences.all)
@@ -110,12 +110,13 @@ class VpnServersTest {
         val scope = CoroutineScope(SupervisorJob() + dispatcher)
         val worker = Executors.newSingleThreadExecutor()
         val store = store().apply {
-            saveConfig(config(), "Primo"); saveConfig(config(), "Secondo")
+            saveConfig(config(), "Primo"); saveConfig(config().replace("192.168.1.10", "192.168.1.11"), "Secondo")
             activate(servers.first().id); setEnabled(true)
         }
         var successOn = 2
         var ups = 0
         val calls = mutableListOf<Tunnel.State>()
+        val hosts = mutableListOf<String>()
         val backend = object : Backend {
             override fun getRunningTunnelNames() = emptySet<String>()
             override fun getState(tunnel: Tunnel) = calls.lastOrNull() ?: Tunnel.State.DOWN
@@ -124,7 +125,10 @@ class VpnServersTest {
             override fun isLockdownEnabled() = false
             override fun setState(tunnel: Tunnel, state: Tunnel.State, config: Config?): Tunnel.State {
                 calls += state
-                if (state == Tunnel.State.UP) ups++
+                if (state == Tunnel.State.UP) {
+                    ups++
+                    hosts += requireNotNull(config).peers.single().endpoint.get().host
+                }
                 return state
             }
             override fun getStatistics(tunnel: Tunnel): Statistics {
@@ -151,6 +155,7 @@ class VpnServersTest {
         assertEquals(VpnState.Connected("Secondo"), controller.state.value)
         assertEquals(listOf(Tunnel.State.UP, Tunnel.State.DOWN, Tunnel.State.UP), calls)
         assertEquals(listOf("Primo non risponde: ora è attivo Secondo"), messages)
+        assertEquals(listOf("192.168.1.10", "192.168.1.11"), hosts)
     }
 
     @Test fun `manual activation stops before starting and never falls back`() = scenario {
@@ -160,6 +165,7 @@ class VpnServersTest {
         controller.activateServer(store.servers[1].id); finish()
         assertEquals(listOf(Tunnel.State.UP, Tunnel.State.DOWN, Tunnel.State.UP, Tunnel.State.DOWN), calls)
         assertEquals(2, ups)
+        assertEquals(listOf("192.168.1.10", "192.168.1.11"), hosts)
         assertEquals(listOf("Secondo non risponde"), messages)
         assertEquals("Secondo", store.serverName)
     }
@@ -172,6 +178,32 @@ class VpnServersTest {
         assertEquals("Primo", store.serverName)
         assertEquals(VpnState.NotConnected(VpnController.NOT_CONNECTED_REASON), controller.state.value)
         assertEquals(listOf(VpnController.NOT_CONNECTED_MESSAGE), messages)
+    }
+
+    @Test fun `removing active server restarts on first remaining and removing all disables VPN`() = scenario {
+        successOn = 1
+        controller.startIfEnabled(); finish()
+        successOn = 2
+        controller.removeServers(setOf(store.activeId!!)); finish()
+        assertEquals("Secondo", store.serverName)
+        assertEquals(VpnState.Connected("Secondo"), controller.state.value)
+        assertEquals(listOf(Tunnel.State.UP, Tunnel.State.DOWN, Tunnel.State.UP), calls)
+        controller.removeServers(store.servers.map { it.id }.toSet()); finish()
+        assertEquals(VpnState.NoConfig, controller.state.value)
+        assertFalse(store.isEnabled)
+        assertTrue(store.servers.isEmpty())
+        assertEquals(Tunnel.State.DOWN, calls.last())
+    }
+
+    @Test fun `removing all during startup cancels before the timeout`() = scenario {
+        successOn = -1
+        controller.startIfEnabled(); current()
+        controller.removeServers(store.servers.map { it.id }.toSet()); finish()
+        assertEquals(0L, scheduler.currentTime)
+        assertEquals(1, ups)
+        assertEquals(VpnState.NoConfig, controller.state.value)
+        assertFalse(store.isEnabled)
+        assertTrue(messages.isEmpty())
     }
 
     @Test fun `disable cancels fallback immediately with no virtual timeout elapsed`() = scenario {

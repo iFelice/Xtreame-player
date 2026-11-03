@@ -211,6 +211,7 @@ class VpnController(
 
     /** Avvia il tunnel con la configurazione salvata, se il permesso c'è già. */
     fun start() {
+        if (_state.value == VpnState.Connecting || _state.value is VpnState.Connected) return
         cancelStart()
         startJob = launchOperation { startLocked() }
     }
@@ -229,12 +230,14 @@ class VpnController(
      * configurazione. Non chiede mai il permesso e non scavalca un'altra VPN.
      */
     fun startIfEnabled() {
+        if (_state.value == VpnState.Connecting || _state.value is VpnState.Connected) return
         cancelStart()
         startJob = launchOperation { startIfEnabledLocked() }
     }
 
     /** "Accendi" dalle Impostazioni, con il permesso già concesso. */
     fun enable() {
+        if (_state.value == VpnState.Connecting || _state.value is VpnState.Connected) return
         cancelStart()
         startJob = launchOperation {
             store.setEnabled(true)

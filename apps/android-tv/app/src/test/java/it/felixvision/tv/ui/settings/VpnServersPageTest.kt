@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.onNodeWithTag
@@ -80,6 +81,17 @@ class VpnServersPageTest {
         rule.waitUntil { store.guideShown }
     }
 
+    @Test fun `Back closes guide without starting setup and next add skips it`() {
+        var setups = 0
+        show { setups++ }
+        click("Aggiungi server")
+        rule.onNodeWithText("Continua").performKeyInput { pressKey(Key.Back) }
+        rule.onNodeWithText("Come aggiungere un server VPN").assertDoesNotExist()
+        assertEquals(0, setups)
+        click("Aggiungi server")
+        assertEquals(1, setups)
+    }
+
     @Test fun `guide button continue also opens setup`() {
         var setups = 0
         show { setups++ }
@@ -122,10 +134,10 @@ class VpnServersPageTest {
         store.saveConfig(config(), "Uno")
         show()
         click("Rimuovi server"); click("Uno")
-        rule.onRoot().performKeyInput { pressKey(Key.Back) }
+        rule.onNode(isRoot()).performKeyInput { pressKey(Key.Back) }
         rule.onNodeWithText("Rimuovi selezionati", substring = true).assertDoesNotExist()
         rule.onNodeWithText("Rimuovi server").assertDoesNotExist()
-        rule.onRoot().performKeyInput { pressKey(Key.Back) }
+        rule.onNode(isRoot()).performKeyInput { pressKey(Key.Back) }
         rule.onNodeWithText("Rimuovi server").assertExists()
     }
 
