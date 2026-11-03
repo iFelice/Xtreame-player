@@ -7,6 +7,8 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.Interceptor
 import okhttp3.Response
 import okhttp3.mockwebserver.Dispatcher
@@ -98,21 +100,34 @@ internal class DelayInterceptor(
 /**
  * Tiene bloccate le azioni indicate finché la chiamata OkHttp non viene
  * annullata: serve a verificare che un errore o la cancellazione del
- * caricamento chiuda tutte e tre le richieste in corso.
+ * caricamento chiuda tutte le richieste in corso.
+ *
+ * [releaseAction] aspetta che tutte le azioni bloccate siano partite prima di
+ * proseguire verso il server: rende deterministico il test dell'errore (la
+ * sezione che fallisce arriva quando le altre due sono già in volo).
+ *
+ * Il thread di I/O di OkHttp può bloccarsi su [started], ma
+ * [awaitStarted] è suspend: non blocca mai l'event loop di runBlocking su cui
+ * partono le tre coroutine delle sezioni.
  */
 internal class CancelAwareInterceptor(
-    trackedActions: Set<String>,
+    blockedActions: Set<String>,
     private val waitMillis: Long = 5_000L,
+    private val releaseAction: String? = null,
 ) : Interceptor {
 
-    private val tracked = trackedActions.toSet()
-    val started = CountDownLatch(trackedActions.size)
+    private val blocked = blockedActions.toSet()
+    private val started = CountDownLatch(blockedActions.size)
     val cancelled: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val action = request.url.queryParameter("action") ?: ""
-        if (action !in tracked) return chain.proceed(request)
+        if (action == releaseAction) {
+            started.await(waitMillis, TimeUnit.MILLISECONDS)
+            return chain.proceed(request)
+        }
+        if (action !in blocked) return chain.proceed(request)
         started.countDown()
         val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(waitMillis)
         while (System.nanoTime() < deadline) {
@@ -125,7 +140,11 @@ internal class CancelAwareInterceptor(
         return chain.proceed(request)
     }
 
-    fun awaitStarted(): Boolean = started.await(waitMillis, TimeUnit.MILLISECONDS)
+    suspend fun awaitStarted(): Boolean =
+        withTimeoutOrNull(waitMillis) {
+            while (started.count > 0L) delay(5L)
+            true
+        } ?: false
 }
 
 /**

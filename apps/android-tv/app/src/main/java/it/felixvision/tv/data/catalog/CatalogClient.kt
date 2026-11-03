@@ -14,20 +14,24 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
+import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -367,16 +371,8 @@ class CatalogClient(
             .addQueryParameter("action", action)
             .build()
         val request = Request.Builder().url(url).get().header("Accept", "application/json").build()
-        val call = http.newCall(request)
-        // Se il caricamento viene annullato (dall'utente o perché un'altra
-        // sezione è fallita) chiudiamo anche la richiesta OkHttp in corso:
-        // execute() è bloccante e non sentirebbe la cancellazione da sola.
-        // Il corpo resta letto in streaming su file temporaneo, come prima.
-        val cancellationHandle = currentCoroutineContext()[Job]?.invokeOnCompletion { cause ->
-            if (cause != null) call.cancel()
-        }
         try {
-            call.execute().use { response ->
+            executeCancellable(request).use { response ->
                 if (response.code != 200) {
                     return@withContext FetchResult.Failure("Il server ha risposto con un errore (HTTP ${response.code}).")
                 }
@@ -402,7 +398,9 @@ class CatalogClient(
                 var lastEmittedBytes = 0L
                 var lastEmittedPercent = 0
                 var lastEmittedAtMillis = downloadStartMillis
-                val tempFile = File.createTempFile("fvp_catalog_", ".json")
+                // Prefisso univoco per sezione: con tre sezioni in parallelo
+                // nessun file temporaneo può essere condiviso o sovrascritto.
+                val tempFile = File.createTempFile("fvp_catalog_${UUID.randomUUID()}_", ".json")
                 try {
                     body.byteStream().use { input ->
                         tempFile.outputStream().use { fileOut ->
@@ -525,10 +523,33 @@ class CatalogClient(
         } catch (ioe: IOException) {
             currentCoroutineContext().ensureActive()
             FetchResult.Failure("Server non raggiungibile. Controlla l'indirizzo e la connessione.")
-        } finally {
-            cancellationHandle?.dispose()
         }
     }
+
+    /**
+     * Esegue una richiesta in modo annullabile: se il caricamento viene
+     * annullato (dall'utente o dopo l'errore di un'altra sezione) la
+     * [Call] OkHttp viene chiusa subito, anche mentre il body è in lettura.
+     * Il corpo resta comunque letto in streaming su file temporaneo.
+     */
+    private suspend fun executeCancellable(request: Request): Response =
+        suspendCancellableCoroutine { continuation ->
+            val call = http.newCall(request)
+            call.enqueue(object : Callback {
+                override fun onFailure(call: Call, e: IOException) {
+                    if (continuation.isActive) continuation.resumeWith(Result.failure(e))
+                }
+
+                override fun onResponse(call: Call, response: Response) {
+                    if (continuation.isActive) {
+                        continuation.resumeWith(Result.success(response))
+                    } else {
+                        response.close()
+                    }
+                }
+            })
+            continuation.invokeOnCancellation { call.cancel() }
+        }
 
     private sealed interface FetchResult<out T> {
         data class Success<T>(

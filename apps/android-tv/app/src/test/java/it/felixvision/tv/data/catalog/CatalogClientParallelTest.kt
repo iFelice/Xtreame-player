@@ -208,11 +208,15 @@ class CatalogClientParallelTest {
 
     @Test
     fun `errore di una sezione restituisce lo stesso errore di oggi e annulla le altre richieste`() = runBlocking {
-        // Live e Serie restano bloccate nella richiesta categorie; Film fallisce
-        // subito con HTTP 500. L'aggiornamento deve interrompersi senza riprove
-        // e chiudere le due richieste ancora in volo.
+        // Live e Serie restano bloccate nella richiesta categorie; Film parte
+        // solo quando entrambe sono in volo e fallisce con HTTP 500.
+        // L'aggiornamento deve interrompersi senza riprove e chiudere le due
+        // richieste ancora in corso.
         val tracked = setOf("get_live_categories", "get_series_categories")
-        val cancelAware = CancelAwareInterceptor(tracked)
+        val cancelAware = CancelAwareInterceptor(
+            blockedActions = tracked,
+            releaseAction = "get_vod_categories",
+        )
         val okHttp = http.newBuilder().addInterceptor(cancelAware).build()
         server.dispatcher = ActionDispatcher(
             bodies = bodies,
@@ -246,7 +250,7 @@ class CatalogClientParallelTest {
             "get_vod_categories",
             "get_series_categories",
         )
-        val cancelAware = CancelAwareInterceptor(tracked)
+        val cancelAware = CancelAwareInterceptor(blockedActions = tracked)
         val okHttp = http.newBuilder().addInterceptor(cancelAware).build()
         server.dispatcher = ActionDispatcher(bodies = bodies)
 

@@ -5,6 +5,8 @@ import it.felixvision.tv.core.FvpJson
 import it.felixvision.tv.core.HttpClientFactory
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.json.decodeFromStream
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -52,7 +54,12 @@ class CatalogClientTest {
             clock = clock,
         )
 
-    /** Costruisce un JSON valido di `LiveStream` della dimensione minima indicata. */
+    /**
+     * Costruisce un JSON valido di `LiveStream` della dimensione minima
+     * indicata. Il riempimento sta DENTRO il valore `name` del primo
+     * elemento: nessuno spazio dopo la parentesi di chiusura, così il
+     * parsing in streaming non incontra byte di coda.
+     */
     private fun buildLiveStreamsJson(itemCount: Int, minBytes: Int): String {
         val sb = StringBuilder(minBytes + 1024)
         sb.append('[')
@@ -62,13 +69,25 @@ class CatalogClientTest {
                 .append("""","name":"Canale """).append(i)
                 .append("""","category_id":"1"}""")
         }
-        val currentLen = sb.length + 1
-        if (currentLen < minBytes) {
-            // Spazi validi nel JSON prima della parentesi di chiusura
-            repeat(minBytes - currentLen) { sb.append(' ') }
-        }
         sb.append(']')
+        val padding = minBytes - sb.length
+        if (padding > 0) {
+            val marker = "\"Canale 1\""
+            val insertAt = sb.indexOf(marker) + marker.length - 1
+            sb.insert(insertAt, " ".repeat(padding))
+        }
         return sb.toString()
+    }
+
+    /** Il corpo di prova deve essere decodificabile anche da stream puro. */
+    @OptIn(ExperimentalSerializationApi::class)
+    private fun assertDecodable(body: String, expectedItems: Int) {
+        val decoded = FvpJson.decodeFromStream<List<LiveStream>>(body.byteInputStream())
+        assertEquals(
+            "il JSON di prova deve decodificarsi in streaming",
+            expectedItems,
+            decoded.size,
+        )
     }
 
     @Test
@@ -76,6 +95,7 @@ class CatalogClientTest {
         val categoriesJson = """[{"category_id":"1","category_name":"Generale"}]"""
         val liveBody = buildLiveStreamsJson(itemCount = 25, minBytes = 256 * 1024)
         val expectedTotalBytes = liveBody.toByteArray(Charsets.UTF_8).size.toLong()
+        assertDecodable(liveBody, 25)
 
         server.dispatcher = ActionDispatcher(
             bodies = mapOf(
@@ -122,7 +142,7 @@ class CatalogClientTest {
         assertEquals(expectedTotalBytes, tail[0].bytesTotal)
 
         assertEquals(CatalogSectionStatus.COMPLETED, tail[1].status)
-        assertEquals(25, tail[1].itemCount)
+        assertEquals("tappe LIVE: $liveStages", 25, tail[1].itemCount)
         assertEquals(expectedTotalBytes, tail[1].bytesReceived)
         assertEquals(expectedTotalBytes, tail[1].bytesTotal)
     }
@@ -132,6 +152,7 @@ class CatalogClientTest {
         val categoriesJson = """[{"category_id":"1","category_name":"Generale"}]"""
         val liveBody = buildLiveStreamsJson(itemCount = 15, minBytes = 128 * 1024)
         val expectedTotalBytes = liveBody.toByteArray(Charsets.UTF_8).size.toLong()
+        assertDecodable(liveBody, 15)
 
         // Orologio che avanza di 50 ms ad ogni lettura per verificare anche le emissioni intermedie ogni 200 ms
         val fakeNow = AtomicLong(1_000L)
@@ -176,7 +197,7 @@ class CatalogClientTest {
         assertEquals(CatalogSectionStatus.COMPLETED, completedStage.status)
         assertNull(completedStage.bytesTotal)
         assertEquals(expectedTotalBytes, completedStage.bytesReceived)
-        assertEquals(15, completedStage.itemCount)
+        assertEquals("tappe LIVE: $liveStages", 15, completedStage.itemCount)
     }
 
     @Test
@@ -186,6 +207,7 @@ class CatalogClientTest {
         val fiveMbJson = buildLiveStreamsJson(itemCount = 40, minBytes = fiveMbBytes)
         val actualBytes = fiveMbJson.toByteArray(Charsets.UTF_8).size.toLong()
         assertTrue("il corpo deve essere di almeno 5 MB", actualBytes >= fiveMbBytes.toLong())
+        assertDecodable(fiveMbJson, 40)
 
         // Orologio stabile durante lo scaricamento veloce: conta solo la soglia dell'1%
         val fixedClock = Clock { 10_000L }
