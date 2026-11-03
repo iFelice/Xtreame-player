@@ -18,6 +18,20 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class PlayerLifecycleControllerTest {
     @Test
+    fun tenRapidChannelChangesNeverRequestPauseOrRelease() = runTest {
+        val source = MobilePlaybackSource.Live(demoChannels, 0, "001")
+        val fixture = fixture(source)
+        fixture.controller.start(autoResume = false)
+        repeat(10) { index ->
+            if (index % 2 == 0) fixture.controller.nextChannel()
+            else fixture.controller.previousChannel()
+        }
+        assertEquals(11, fixture.player.opens.size)
+        assertEquals(0, fixture.player.pauseCount)
+        assertEquals(0, fixture.player.releaseCount)
+    }
+
+    @Test
     fun savedProgressPromptsThenResumesTheSavedPosition() = runTest {
         val source = movieSource()
         val fixture = fixture(source, savedProgress = WatchProgress(positionMillis = 60_000L))

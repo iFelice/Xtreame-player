@@ -72,12 +72,12 @@ object PlayerNetworkConfig {
     /**
      * Fabbrica delle sorgenti del player: stessi estrattori di
      * `DefaultMediaSourceFactory(context)`, con la sorgente HTTP configurata e
-     * la politica degli errori [PlayerLoadErrorPolicy]. [streamUrl] serve solo
-     * ai log, sempre oscurato con [StreamUrls.redactStreamUrl].
+     * la politica degli errori [PlayerLoadErrorPolicy]. Gli URL nei log sono
+     * sempre oscurati con [StreamUrls.redactStreamUrl].
      */
-    fun mediaSourceFactory(context: Context, streamUrl: String?): DefaultMediaSourceFactory =
+    fun mediaSourceFactory(context: Context): DefaultMediaSourceFactory =
         DefaultMediaSourceFactory(DefaultDataSource.Factory(context, httpDataSourceFactory()))
-            .setLoadErrorHandlingPolicy(PlayerLoadErrorPolicy(streamUrl))
+            .setLoadErrorHandlingPolicy(PlayerLoadErrorPolicy())
 }
 
 /** Riconoscimento degli errori di rete, separati dalle risposte HTTP del server. */
@@ -173,9 +173,7 @@ object PlayerNetworkErrors {
  * il caricamento. Ogni log porta il numero del tentativo e l'URL oscurato.
  */
 @androidx.media3.common.util.UnstableApi
-class PlayerLoadErrorPolicy(
-    private val streamUrl: String?,
-) : DefaultLoadErrorHandlingPolicy(PlayerNetworkConfig.MAX_NETWORK_RETRIES) {
+class PlayerLoadErrorPolicy : DefaultLoadErrorHandlingPolicy(PlayerNetworkConfig.MAX_NETWORK_RETRIES) {
 
     override fun getRetryDelayMsFor(loadErrorInfo: LoadErrorHandlingPolicy.LoadErrorInfo): Long {
         val error = loadErrorInfo.exception
@@ -184,7 +182,7 @@ class PlayerLoadErrorPolicy(
         val delayMillis = PlayerNetworkErrors.retryDelayMillis(error, attempt)
         val httpCode = PlayerNetworkErrors.httpResponseCode(error)
         val cause = PlayerNetworkErrors.causeName(error)
-        val target = StreamUrls.redactStreamUrl(streamUrl)
+        val target = StreamUrls.redactStreamUrl(loadErrorInfo.loadEventInfo.uri.toString())
         val reason = when {
             httpCode != null -> "risposta HTTP $httpCode"
             PlayerNetworkErrors.isNetworkOrTimeout(error) -> "errore di rete ($cause)"

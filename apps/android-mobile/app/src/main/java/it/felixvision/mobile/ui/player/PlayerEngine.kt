@@ -1,9 +1,7 @@
 package it.felixvision.mobile.ui.player
 
 import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
-import android.media.AudioManager
+import android.os.SystemClock
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -41,6 +39,9 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.yield
 
 sealed interface MobilePlaybackSource {
     data class Live(
@@ -129,12 +130,13 @@ class PlayerEngine(
     val session: MobilePlayerSession,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     private var started = false
     private var hostStopped = false
     private var released = false
     private var trackSelector: DefaultTrackSelector? = null
     private val liveAutoRestart = LiveAutoRestart()
+    private var watchdog: Job? = null
+    private var sourceGeneration = 0
     private var currentSource: MobilePlaybackSource = session.source
     private val liveChannels = when (val source = session.source) {
         is MobilePlaybackSource.Live -> source.channels
@@ -174,7 +176,9 @@ class PlayerEngine(
                         else -> Unit
                     }
                     syncSourceState()
+                    sourceGeneration++
                     buildPlayer(positionMillis, autoplay)
+                    startLiveWatchdog()
                 }
 
                 override fun seekTo(positionMillis: Long) {
@@ -226,15 +230,6 @@ class PlayerEngine(
             serverTimezone = session.serverTimezone,
         )
     }
-    private val noisyReceiver = object : android.content.BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            pause()
-        }
-    }
-    private val audioFocusListener = AudioManager.OnAudioFocusChangeListener { change ->
-        if (change <= AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) pause()
-    }
-
     var player by mutableStateOf<ExoPlayer?>(null)
         private set
 
@@ -258,12 +253,12 @@ class PlayerEngine(
     private val listener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             state = state.copy(playing = isPlaying)
+            if (isPlaying) liveAutoRestart.reset()
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) {
             state = state.copy(buffering = playbackState == Player.STATE_BUFFERING)
             if (playbackState == Player.STATE_READY) {
-                liveAutoRestart.reset()
                 state = state.copy(duration = player?.duration?.coerceAtLeast(0L) ?: 0L)
             }
             if (playbackState == Player.STATE_ENDED) nextEpisode()
@@ -273,7 +268,11 @@ class PlayerEngine(
             when (liveAutoRestart.onPlayerError(currentSource.playbackKind(), error)) {
                 PlayerErrorAction.SILENT_RESTART -> {
                     state = state.copy(error = null, buffering = true)
-                    scope.launch { buildPlayer(0L, autoplay = true) }
+                    val generation = sourceGeneration
+                    scope.launch {
+                        yield()
+                        if (generation == sourceGeneration && !released) buildPlayer(0L, autoplay = true)
+                    }
                 }
                 PlayerErrorAction.SHOW_ERROR -> {
                     state = state.copy(error = "Impossibile riprodurre questo contenuto", buffering = false)
@@ -318,28 +317,31 @@ class PlayerEngine(
         }
 
         AppLog.info("Mobile player: apertura ${StreamUrls.redactStreamUrl(url)}")
-        player?.removeListener(listener)
-        player?.release()
-        val renderers = DefaultRenderersFactory(context)
-            .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
-        val selector = DefaultTrackSelector(context)
-        trackSelector = selector
-        val instance = ExoPlayer.Builder(context)
-            .setRenderersFactory(renderers)
-            .setTrackSelector(selector)
-            .setMediaSourceFactory(PlayerNetworkConfig.mediaSourceFactory(context, url))
-            .build()
-
-        instance.addListener(listener)
-        instance.addAnalyticsListener(analytics)
-        instance.setAudioAttributes(
-            AudioAttributes.Builder()
-                .setUsage(C.USAGE_MEDIA)
-                .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
-                .build(),
-            true,
-        )
-        instance.setHandleAudioBecomingNoisy(true)
+        val instance = player ?: run {
+            val renderers = DefaultRenderersFactory(context)
+                .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+            val selector = DefaultTrackSelector(context)
+            trackSelector = selector
+            ExoPlayer.Builder(context)
+                .setRenderersFactory(renderers)
+                .setTrackSelector(selector)
+                .setMediaSourceFactory(PlayerNetworkConfig.mediaSourceFactory(context))
+                .build().also { created ->
+                    player = created
+                    created.addListener(listener)
+                    created.addAnalyticsListener(analytics)
+                    created.setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(C.USAGE_MEDIA)
+                            .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+                            .build(),
+                        true,
+                    )
+                    created.setHandleAudioBecomingNoisy(true)
+                }
+        }
+        instance.stop()
+        instance.clearMediaItems()
         val item = MediaItem.Builder()
             .setUri(url)
             .setMediaMetadata(MediaMetadata.Builder().setTitle(title()).build())
@@ -347,8 +349,6 @@ class PlayerEngine(
         instance.setMediaItem(item, position.coerceAtLeast(0L))
         instance.prepare()
         instance.playWhenReady = autoplay
-        player = instance
-        requestAudioFocus()
         container.playbackActivity.setActive(true)
         state = state.copy(
             error = null,
@@ -399,11 +399,8 @@ class PlayerEngine(
 
     fun togglePlayback() {
         val currentPlayer = player ?: return
-        if (currentPlayer.isPlaying) {
+        togglePlayerPlayback(currentPlayer, currentSource is MobilePlaybackSource.Live) {
             lifecycleController.pause()
-        } else {
-            requestAudioFocus()
-            currentPlayer.play()
         }
     }
 
@@ -472,8 +469,10 @@ class PlayerEngine(
 
     fun retry() {
         liveAutoRestart.reset()
+        sourceGeneration++
         state = state.copy(error = null)
         buildPlayer(0L, true)
+        startLiveWatchdog()
     }
 
     fun resumeFromSaved() {
@@ -609,12 +608,11 @@ class PlayerEngine(
     }
 
     private fun releasePlayerResources() {
+        watchdog?.cancel()
         player?.removeListener(listener)
         player?.release()
         player = null
         container.playbackActivity.setActive(false)
-        audioManager.abandonAudioFocus(audioFocusListener)
-        runCatching { context.unregisterReceiver(noisyReceiver) }
     }
 
     private suspend fun recordContinueWatching(
@@ -700,14 +698,29 @@ class PlayerEngine(
         is MobilePlaybackSource.Catchup -> source.title
     }
 
-    private fun requestAudioFocus() {
-        runCatching { context.registerReceiver(noisyReceiver, IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY)) }
-        @Suppress("DEPRECATION")
-        audioManager.requestAudioFocus(
-            audioFocusListener,
-            AudioManager.STREAM_MUSIC,
-            AudioManager.AUDIOFOCUS_GAIN,
-        )
+    private fun startLiveWatchdog() {
+        watchdog?.cancel()
+        if (currentSource !is MobilePlaybackSource.Live) return
+        watchdog = scope.launch {
+            val detector = LiveStallDetector()
+            while (!released) {
+                val current = player ?: break
+                val status = current.playbackState
+                val stalled = current.playWhenReady && !current.isPlaying &&
+                    current.playbackSuppressionReason == Player.PLAYBACK_SUPPRESSION_REASON_NONE &&
+                    state.error == null
+                if (detector.timedOut(status, stalled, SystemClock.elapsedRealtime())) {
+                    when (liveAutoRestart.onPlayerError(PlaybackKind.LIVE, networkError = true)) {
+                        PlayerErrorAction.SILENT_RESTART -> buildPlayer(0L, autoplay = true)
+                        PlayerErrorAction.SHOW_ERROR -> {
+                            current.stop()
+                            state = state.copy(error = "Impossibile riprodurre questo contenuto", buffering = false)
+                        }
+                    }
+                }
+                delay(500L)
+            }
+        }
     }
 
     private fun refreshTracks(tracks: Tracks) {
@@ -758,4 +771,40 @@ private fun MobilePlaybackSource.playbackKind(): PlaybackKind = when (this) {
     is MobilePlaybackSource.Catchup -> PlaybackKind.CATCHUP
     is MobilePlaybackSource.Movie -> PlaybackKind.MOVIE
     is MobilePlaybackSource.Episode -> PlaybackKind.EPISODE
+}
+
+/** Resuming live deliberately discards any position accumulated while paused. */
+internal fun togglePlayerPlayback(player: Player, live: Boolean, pause: () -> Unit) {
+    if (player.isPlaying) {
+        pause()
+    } else {
+        if (live) player.seekToDefaultPosition()
+        player.play()
+    }
+}
+
+/** Measures continuous stalls independently for READY and BUFFERING. */
+@androidx.media3.common.util.UnstableApi
+internal class LiveStallDetector {
+    private var since: Long? = null
+    private var previousState = Player.STATE_IDLE
+
+    fun timedOut(playbackState: Int, eligible: Boolean, nowMillis: Long): Boolean {
+        val timeout = when (playbackState) {
+            Player.STATE_READY -> 5_000L
+            Player.STATE_BUFFERING -> PlayerNetworkConfig.READ_TIMEOUT_MILLIS.toLong()
+            else -> null
+        }
+        if (!eligible || timeout == null) {
+            since = null
+            return false
+        }
+        if (since == null || previousState != playbackState) {
+            since = nowMillis
+            previousState = playbackState
+        }
+        if (nowMillis - since!! <= timeout) return false
+        since = null
+        return true
+    }
 }
