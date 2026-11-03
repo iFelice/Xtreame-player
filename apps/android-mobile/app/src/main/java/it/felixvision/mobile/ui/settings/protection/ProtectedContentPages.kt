@@ -181,8 +181,8 @@ private fun PinEntryPage(
         }
 
         androidx.compose.material3.OutlinedTextField(
-            value = textField.value,
-            onValueChange = { if (it.all { c -> c.isDigit() } && it.length <= 8) { textField.update(it) } },
+            value = textField.text,
+            onValueChange = { if (it.all { c -> c.isDigit() } && it.length <= 8) { textField.replace(text = it) } },
             label = { Text("PIN", color = FvpColors.TextSecondary) },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword, imeAction = ImeAction.Done),
@@ -196,7 +196,7 @@ private fun PinEntryPage(
             (0..9).forEach { digit ->
                 PinKey(
                     digit = digit.toString(),
-                    onClick = { textField.update(textField.value + digit.toString()) },
+                    onClick = { textField.replace(text = textField.text + digit.toString()) },
                     modifier = Modifier.testTag("protected_pin_key_${digit}"),
                 )
             }
@@ -207,12 +207,12 @@ private fun PinEntryPage(
         ) {
             PinKey(
                 digit = "Cancella",
-                onClick = { textField.update("") },
+                onClick = { textField.replace(text = "") },
                 modifier = Modifier.testTag("protected_pin_clear"),
             )
             PinKey(
                 digit = "OK",
-                onClick = { onSubmit(textField.value) },
+                onClick = { onSubmit(textField.text) },
                 modifier = Modifier.testTag("protected_pin_submit"),
             )
         }
@@ -257,23 +257,23 @@ private fun ForgotPinPage(
             Text(text = error, color = FvpColors.Error, fontSize = 15.sp, modifier = Modifier.testTag("protected_forgot_error"))
         }
         androidx.compose.material3.OutlinedTextField(
-            value = passwordField.value,
-            onValueChange = { passwordField.update(it) },
+            value = passwordField.text,
+            onValueChange = { passwordField.replace(text = it) },
             label = { Text("Password provider", color = FvpColors.TextSecondary) },
             singleLine = true,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             modifier = Modifier.fillMaxWidth().testTag("protected_forgot_password"),
         )
         androidx.compose.material3.OutlinedTextField(
-            value = pinField.value,
-            onValueChange = { if (it.all { c -> c.isDigit() } && it.length <= 8) pinField.update(it) },
+            value = pinField.text,
+            onValueChange = { if (it.all { c -> c.isDigit() } && it.length <= 8) pinField.replace(text = it) },
             label = { Text("Nuovo PIN", color = FvpColors.TextSecondary) },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword, imeAction = ImeAction.Done),
             modifier = Modifier.fillMaxWidth().testTag("protected_forgot_pin_field"),
         )
         TextButton(onClick = {
-            val pin = pinField.value
+            val pin = pinField.text
             if (pin.length < 4) { error = "Il PIN deve avere almeno 4 cifre"; return@TextButton }
             onSuccess(pin)
         }) {
