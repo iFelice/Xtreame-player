@@ -3,7 +3,14 @@ package it.felixvision.tv.ui.settings
 import android.content.Context
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performSemanticsAction
@@ -18,6 +25,7 @@ import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.qr.QrBitmap
 import it.felixvision.tv.ui.settings.vpn.VPN_GUIDE_URL
 import it.felixvision.tv.ui.settings.vpn.VpnServersPage
+import it.felixvision.tv.ui.settings.vpn.VpnRenameDialog
 import it.felixvision.tv.ui.theme.FvpTheme
 import it.felixvision.tv.vpn.*
 import java.security.SecureRandom
@@ -108,6 +116,39 @@ class VpnServersPageTest {
         click("Aggiungi server")
         rule.onNodeWithText(VpnStore.LIMIT_MESSAGE).assertExists()
         assertEquals(before, store.servers)
+    }
+
+    @Test fun `Back clears selection then exits selection mode`() {
+        store.saveConfig(config(), "Uno")
+        show()
+        click("Rimuovi server"); click("Uno")
+        rule.onRoot().performKeyInput { pressKey(Key.Back) }
+        rule.onNodeWithText("Rimuovi selezionati", substring = true).assertDoesNotExist()
+        rule.onNodeWithText("Rimuovi server").assertDoesNotExist()
+        rule.onRoot().performKeyInput { pressKey(Key.Back) }
+        rule.onNodeWithText("Rimuovi server").assertExists()
+    }
+
+    @Test fun `rename disables blank and overlong values and saves trimmed name`() {
+        val open = mutableStateOf(true)
+        val saved = mutableStateOf("Prima")
+        rule.setContent {
+            FvpTheme {
+                if (open.value) VpnRenameDialog("Prima", UiScale(1f), { open.value = false }) {
+                    saved.value = it; open.value = false
+                } else androidx.tv.material3.Text(saved.value)
+            }
+        }
+        rule.waitForIdle()
+        rule.onNodeWithTag("vpn_server_name").performSemanticsAction(SemanticsActions.OnClick)
+        rule.onNodeWithTag("vpn_server_name_editor").performTextReplacement("   ")
+        rule.onNodeWithText("Salva").assertIsNotEnabled()
+        rule.onNodeWithTag("vpn_server_name_editor").performTextReplacement("x".repeat(31))
+        rule.onNodeWithText("Salva").assertIsNotEnabled()
+        rule.onNodeWithTag("vpn_server_name_editor").performTextReplacement("  Nuovo nome  ")
+        click("Salva")
+        assertEquals("Nuovo nome", saved.value)
+        rule.onNodeWithText("Nuovo nome").assertExists()
     }
 
     @Test fun `guide QR decodes exact Proton account URL`() {

@@ -153,8 +153,12 @@ class VpnController(
     val activeId = _activeId.asStateFlow()
     private val _tryingServer = MutableStateFlow<String?>(null)
     val tryingServer = _tryingServer.asStateFlow()
-    val guideShown get() = store.guideShown
-    fun markGuideShown() { launchOperation { store.markGuideShown() } }
+    @Volatile private var guideSeen = store.guideShown
+    val guideShown get() = guideSeen
+    fun markGuideShown() {
+        guideSeen = true
+        launchOperation { store.markGuideShown() }
+    }
     private fun refreshServers() {
         _servers.value = store.servers
         _activeId.value = store.activeId
@@ -207,6 +211,7 @@ class VpnController(
 
     /** Avvia il tunnel con la configurazione salvata, se il permesso c'è già. */
     fun start() {
+        cancelStart()
         startJob = launchOperation { startLocked() }
     }
 
@@ -224,11 +229,13 @@ class VpnController(
      * configurazione. Non chiede mai il permesso e non scavalca un'altra VPN.
      */
     fun startIfEnabled() {
+        cancelStart()
         startJob = launchOperation { startIfEnabledLocked() }
     }
 
     /** "Accendi" dalle Impostazioni, con il permesso già concesso. */
     fun enable() {
+        cancelStart()
         startJob = launchOperation {
             store.setEnabled(true)
             startWithFallbackLocked()
@@ -257,6 +264,10 @@ class VpnController(
      * @return `false` se il salvataggio cifrato non è riuscito.
      */
     suspend fun saveConfig(text: String, serverName: String): Boolean {
+        if (_servers.value.size >= VpnStore.MAX_SERVERS) {
+            postMessage(VpnStore.LIMIT_MESSAGE)
+            return false
+        }
         cancelStart()
         val saved = withContext(serial) {
             operations.withLock {

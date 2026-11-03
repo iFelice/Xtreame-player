@@ -41,6 +41,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
@@ -455,8 +456,9 @@ internal fun SettingsNavigation(
         else -> Box(
             modifier = Modifier
                 .fillMaxSize()
-                .onPreviewKeyEvent { event ->
-                    if (event.key != Key.Back || !pageHandlesBack) return@onPreviewKeyEvent false
+                .onKeyEvent { event ->
+                    // Let nested VPN selection consume Back before returning to the grid.
+                    if (event.key != Key.Back || !pageHandlesBack) return@onKeyEvent false
                     when (event.type) {
                         // Come nelle altre schermate: la pressione si consuma e
                         // l'azione avviene al rilascio, senza doppi effetti.

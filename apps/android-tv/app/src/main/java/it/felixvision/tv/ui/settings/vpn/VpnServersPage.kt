@@ -33,6 +33,12 @@ internal fun VpnServersPage(
     configureFocus: FocusRequester? = null,
     entryFocus: FocusRequester? = null,
 ) {
+    val localFocus = remember { FocusRequester() }
+    val addFocus = configureFocus ?: localFocus
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
+        (entryFocus ?: addFocus).requestFocus()
+    }
     val servers by controller.servers.collectAsState()
     val active by controller.activeId.collectAsState()
     val state by controller.state.collectAsState()
@@ -71,7 +77,7 @@ internal fun VpnServersPage(
         servers.forEach { server ->
             var held by remember(server.id) { mutableStateOf(false) }
             val status = if (server.id == active) " · Attivo · ${vpnStatusLine(state)}" else ""
-            val attempt = if (state == VpnState.Connecting && trying != null) " · Connessione… · $trying" else ""
+            val attempt = if (state == VpnState.Connecting && trying != null) " · $trying" else ""
             FvpCompactButton(
                 text = (if (server.id in selected) "✓ " else "") + server.name + status +
                     (if (server.id == active) attempt else ""),
@@ -94,7 +100,7 @@ internal fun VpnServersPage(
             )
         }
         FvpCompactButton("Aggiungi server", { add() }, scale, modifier = Modifier
-            .then(if (configureFocus != null) Modifier.focusRequester(configureFocus) else Modifier)
+            .focusRequester(addFocus)
             .then(if (entryFocus != null) Modifier.focusRequester(entryFocus) else Modifier))
         if (servers.isNotEmpty() && !removing) FvpCompactButton("Rimuovi server", { removing = true }, scale)
         if (selected.isNotEmpty()) FvpCompactButton("Rimuovi selezionati (${selected.size})", { confirm = true }, scale)
@@ -120,17 +126,26 @@ internal fun VpnServersPage(
         }
     }
     renaming?.let { server ->
-        val name = rememberTextFieldState(server.name)
-        VpnDialog(scale, { renaming = null }) { focus ->
-            FvpTextField("Nome server", name, "Nome server", scale, focusRequester = focus, openKeyboardOnOk = true)
-            FvpCompactButton("Salva", { controller.renameServer(server.id, name.text.toString()); renaming = null }, scale,
-                enabled = name.text.toString().trim().length in 1..30)
+        VpnRenameDialog(server.name, scale, { renaming = null }) { name ->
+            controller.renameServer(server.id, name)
+            renaming = null
         }
     }
     if (guide) VpnGuide(scale, onContinue = {
         guide = false
         if (servers.size >= VpnStore.MAX_SERVERS) limit = true else onSetup()
     }, onClose = { guide = false })
+}
+
+@Composable
+internal fun VpnRenameDialog(initialName: String, scale: UiScale, onClose: () -> Unit, onSave: (String) -> Unit) {
+    val name = rememberTextFieldState(initialName)
+    VpnDialog(scale, onClose) { focus ->
+        FvpTextField("Nome server", name, "Nome server", scale, focusRequester = focus, openKeyboardOnOk = true,
+            fieldTag = "vpn_server_name")
+        FvpCompactButton("Salva", { onSave(name.text.toString().trim()) }, scale,
+            enabled = name.text.toString().trim().length in 1..30)
+    }
 }
 
 @Composable
