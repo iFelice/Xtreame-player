@@ -788,7 +788,7 @@ class SettingsLayoutTest {
                     RemoteCredentials(
                         server = SERVER,
                         username = "demo",
-                        password = "demo-sbagliata",
+                        password = "demo",
                         serverCode = "001",
                     ),
                 ),
