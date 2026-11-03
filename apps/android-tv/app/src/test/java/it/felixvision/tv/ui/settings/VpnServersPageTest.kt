@@ -5,6 +5,8 @@ import androidx.activity.ComponentActivity
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -59,7 +61,7 @@ class VpnServersPageTest {
         rule.waitForIdle()
     }
     private fun click(text: String) {
-        rule.onNodeWithText(text, substring = true).performSemanticsAction(SemanticsActions.OnClick)
+        rule.onNode(hasText(text, substring = true) and hasClickAction()).performSemanticsAction(SemanticsActions.OnClick)
         rule.waitForIdle()
     }
     private fun config(): String {

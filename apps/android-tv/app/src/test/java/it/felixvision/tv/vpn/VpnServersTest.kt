@@ -49,7 +49,8 @@ class VpnServersTest {
         assertEquals(first.servers, store().servers)
         assertEquals(migrated, preferences.all)
         assertFalse(preferences.contains("config"))
-        assertTrue(preferences.getString("servers", "")!!.contains(blob))
+        assertTrue("migration copies the ciphertext unchanged",
+            org.json.JSONArray(preferences.getString("servers", "[]")).getJSONObject(0).getString("blob") == blob)
         assertFalse(preferences.all.toString().contains("PrivateKey"))
     }
 
