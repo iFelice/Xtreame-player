@@ -9,6 +9,7 @@ package it.felixvision.mobile.ui.main
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasContentDescription
@@ -324,22 +325,25 @@ class HomeScreenTest {
         rule.onNodeWithTag("home_bottom_bar").assertDoesNotExist()
         listOf(
             "rail_item_novita",
-            "rail_item_continua",
+            "rail_item_preferiti",
             "rail_item_live",
             "rail_item_film",
             "rail_item_serie",
-            "rail_item_preferiti",
+            "rail_item_riprendi",
             "rail_item_cerca",
             "rail_item_impostazioni",
         ).forEach { rule.onNodeWithTag(it).assertIsDisplayed() }
         assertEquals(8, AppSection.entries.size)
+        assertEquals(
+            listOf("Novità", "Preferiti", "Live", "Film", "Serie", "Riprendi", "Cerca", "Impostazioni"),
+            AppSection.entries.map { it.title },
+        )
     }
 
     /**
      * Barra laterale: tutte le voci hanno lo stesso centro orizzontale e la
      * stessa larghezza (icone in colonna), e nessuna etichetta va a capo o
-     * viene troncata. L'etichetta della sezione "Continua a guardare" è
-     * "Continua"; titolo della pagina e descrizione accessibile non cambiano.
+     * viene troncata. L'etichetta e il titolo della sezione sono "Riprendi".
      */
     @Test
     @Config(sdk = [34], qualifiers = "w1280dp-h800dp-land-mdpi")
@@ -382,13 +386,11 @@ class HomeScreenTest {
             assertFalse("${section.name}: etichetta troncata", layout.hasVisualOverflow)
         }
 
-        // "Continua" nella barra, ma il nome accessibile della voce e il
-        // titolo della sezione restano "Continua a guardare".
-        assertEquals("Continua", AppSection.CONTINUA.railLabel)
-        assertEquals("Continua a guardare", AppSection.CONTINUA.title)
+        assertEquals("Riprendi", AppSection.RIPRENDI.railLabel)
+        assertEquals("Riprendi", AppSection.RIPRENDI.title)
         rule.onNode(
-            hasTestTag("rail_item_continua") and
-                hasContentDescription("Continua a guardare"),
+            hasTestTag("rail_item_riprendi") and
+                hasContentDescription("Riprendi"),
         ).assertExists()
     }
 
@@ -401,13 +403,17 @@ class HomeScreenTest {
         rule.onNodeWithTag("home_header").assertIsDisplayed()
         listOf(
             "nav_item_novita",
+            "nav_item_preferiti",
             "nav_item_live",
             "nav_item_film",
             "nav_item_serie",
-            "nav_item_preferiti",
         ).forEach { rule.onNodeWithTag(it).assertIsDisplayed() }
         rule.onNodeWithTag("header_cerca").assertIsDisplayed()
         rule.onNodeWithTag("header_impostazioni").assertIsDisplayed()
+        assertEquals(
+            listOf("Novità", "Preferiti", "Live", "Film", "Serie"),
+            AppSection.bottomBarSections.map { it.title },
+        )
     }
 
     // --- Categorie a scomparsa (verticale) ---
@@ -425,6 +431,23 @@ class HomeScreenTest {
         rule.waitForIdle()
         rule.onNodeWithTag("category_panel_film").assertDoesNotExist()
         rule.onNodeWithTag("category_header_film").assertIsDisplayed()
+    }
+
+    @Test
+    @Config(sdk = [34], qualifiers = "w1280dp-h800dp-land-mdpi")
+    fun `Preferiti mostra tre schede e conserva la selezione cambiando sezione`() {
+        mount()
+        rule.onNodeWithTag("rail_item_preferiti").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithTag("favorites_tab_my_channels", useUnmergedTree = true).assertIsDisplayed()
+        rule.onNodeWithTag("favorites_tab_film_series", useUnmergedTree = true).performClick()
+        rule.onNodeWithTag("favorites_tab_film_series", useUnmergedTree = true).assertIsSelected()
+        rule.onNodeWithTag("favorites_tab_live_categories", useUnmergedTree = true).assertIsDisplayed()
+
+        rule.onNodeWithTag("rail_item_live").performClick()
+        rule.onNodeWithTag("rail_item_preferiti").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithTag("favorites_tab_film_series", useUnmergedTree = true).assertIsSelected()
     }
 
     // --- Pannello azioni (pressione lunga) ---

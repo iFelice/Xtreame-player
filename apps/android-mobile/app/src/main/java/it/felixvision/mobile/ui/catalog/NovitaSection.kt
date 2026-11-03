@@ -23,7 +23,7 @@ import it.felixvision.mobile.ui.components.rememberSectionListState
 import it.felixvision.tv.data.progress.ProgressKeys
 
 /**
- * Sezione "Novità": prima la riga "Continua a guardare" (se non vuota), poi
+ * Sezione "Novità": prima la riga "Riprendi" (se non vuota), poi
  * "Ultimi film" e "Ultime serie" — stesso contenuto della NovitaSection
  * della TV (liste recenti calcolate dal ViewModel). Tocco orizzontale.
  */

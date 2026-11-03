@@ -12,7 +12,9 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -30,6 +32,11 @@ import it.felixvision.mobile.ui.components.rememberSectionGridState
  * orizzontale, intestazione a scomparsa in verticale) con griglia di copertine
  * adattiva. Tocco apre il dettaglio (stagioni/episodi/continuo), pressione
  * lunga il pannello azioni.
+ *
+ * La prima categoria è "Novità" (come nella TV): mostra le serie recenti del
+ * catalogo. Un contenuto assegnato a più categorie compare in ognuna di loro
+ * (appartenenza, non uguaglianza). Al cambio di categoria la griglia torna in
+ * cima.
  */
 @Composable
 fun SerieSection(
@@ -42,23 +49,32 @@ fun SerieSection(
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
 
     val catalog = catalogState.catalog
-    val categories = catalog?.seriesCategories.orEmpty()
+    val displayCategories = remember(catalog?.seriesCategories) {
+        withNovitaCategory(catalog?.seriesCategories.orEmpty())
+    }
     val streams = catalog?.series.orEmpty()
 
     val sectionKey = "serie"
     val selectedCategoryId = viewModel.sectionStates.selectedCategory(sectionKey)
-        ?: categories.firstOrNull()?.categoryId
+        ?: displayCategories.firstOrNull()?.categoryId
     val headerOpen = viewModel.sectionStates.isHeaderOpen(sectionKey)
-    val filtered = if (selectedCategoryId == null) {
-        emptyList()
-    } else {
-        streams.filter { it.categoryId == selectedCategoryId }
+    val filtered = remember(streams, catalogState.recentSeries, selectedCategoryId) {
+        if (selectedCategoryId == null) {
+            emptyList()
+        } else {
+            seriesForCategory(selectedCategoryId, streams, catalogState.recentSeries)
+        }
     }
 
     val gridState = rememberSectionGridState(viewModel.sectionStates, "serie_grid")
 
+    // Al cambio di categoria la griglia torna in cima (stessa regola della TV).
+    LaunchedEffect(selectedCategoryId) {
+        gridState.scrollToItem(0)
+    }
+
     val grid: @Composable (Modifier) -> Unit = { gridModifier ->
-        if (categories.isEmpty()) {
+        if (displayCategories.isEmpty()) {
             EmptyState(
                 title = "Nessuna categoria",
                 description = "Il server non ha restituito categorie.",
@@ -103,7 +119,7 @@ fun SerieSection(
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             CategorySideColumn(
-                categories = categories,
+                categories = displayCategories,
                 selectedCategoryId = selectedCategoryId,
                 onSelect = { category ->
                     viewModel.sectionStates.selectCategory(sectionKey, category.categoryId)
@@ -116,7 +132,7 @@ fun SerieSection(
         Box(modifier = modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 CollapsingCategoryHeader(
-                    categories = categories,
+                    categories = displayCategories,
                     selectedCategoryId = selectedCategoryId,
                     open = headerOpen,
                     onToggleOpen = {
@@ -128,7 +144,7 @@ fun SerieSection(
             }
             if (headerOpen) {
                 CollapsingCategoryPanel(
-                    categories = categories,
+                    categories = displayCategories,
                     selectedCategoryId = selectedCategoryId,
                     onSelect = { category ->
                         viewModel.sectionStates.selectCategory(sectionKey, category.categoryId)

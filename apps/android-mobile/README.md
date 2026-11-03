@@ -3,9 +3,10 @@
 App Android per tablet di FelixVisionPlayer, in Kotlin e Jetpack Compose
 (material3, solo tema scuro). PR1: progetto Gradle, dati condivisi con l'app
 TV, tema, accesso completo e CI. PR2: schermata principale adattiva con le 8
-sezioni (Novità, Continua a guardare, Live, Film, Serie, Preferiti, Cerca,
-Impostazioni), cataloghi con categorie, dettagli a schermo intero e gesti a
-pressione lunga. Player: PR3. Aggiornamento in-app: PR4.
+sezioni (Novità, Preferiti, Live, Film, Serie, Riprendi, Cerca,
+Impostazioni), cataloghi con categorie (inclusa Novità), dettagli a schermo
+intero e gesti a pressione lunga. Preferiti in tre schede (I miei canali,
+Film e Serie, Categorie Live). Player: PR3. Aggiornamento in-app: PR4.
 
 - `applicationId`: `it.felixvision.mobile`
 - nome visualizzato: **FelixVP**
@@ -212,19 +213,20 @@ TV, perché il tablet compila quei sorgenti. Nessun segreto nel workflow.
   valutazione, stella dei preferiti e "Riproduci"; le serie hanno il selettore
   di stagioni e l'elenco episodi con avanzamento (regole
   ProgressStore/WatchRules; ordine di `SeasonLogic` = TV).
-- **Novità e Continua a guardare**: stesse regole della TV (ultimi
-  film/serie; voci dell'archivio condiviso, una per film/serie), con
-  scorrimento tocco orizzontale; una voce si toglie con la pressione lunga.
-- **Preferiti**: "I miei canali" numerati per primi, poi Categorie Live, Film
-  e Serie come sulla TV. Modalità Modifica: trascinamento delle righe con le
-  maniglie (scorrimento automatico vicino ai bordi), salvataggio su rilascio
-  via MyChannelsStore e rinumerazione in PHP; in modifica sono mostrati anche
-  Rimuovi e "Sposta in posizione n°".
+- **Novità e Riprendi**: stesse regole della TV (ultimi film/serie; voci
+  dell'archivio condiviso, una per film/serie), con scorrimento tocco
+  orizzontale; una voce si toglie con la pressione lunga. "Riprendi"
+  rimpiazza "Continua a guardare" in tutte le voci (barra, titolo, riga
+  Novità, "Rimuovi da Riprendi", messaggi).
+- **Preferiti in tre schede**: "I miei canali" (numerati, con modifica e
+  trascinamento come prima), "Film e Serie" e "Categorie Live". La scheda
+  scelta si conserva tra cambi di sezione e rotazioni; tornando da Live dopo
+  aver aperto una categoria preferita si torna su "Categorie Live".
 - **Gesti**: tocco = azione principale; pressione lunga su canali, film,
-  serie, voci di Continua a guardare e categorie → pannello dal basso con
-  azioni esplicite (aggiungi/togli preferito, I miei canali, "Sposta in
-  posizione n°", rimozione riservata a Continua a guardare); ogni azione mostra
-  uno snackbar breve.
+  serie, voci di Riprendi e categorie → pannello dal basso con azioni
+  esplicite (aggiungi/togli preferito, I miei canali, "Sposta in posizione
+  n°", rimozione riservata a Riprendi); ogni azione mostra uno snackbar
+  breve.
 - **Ricerca con debounce** (~300 ms, nel ViewModel) su CatalogSearch con
   risultati in gruppi Live/Film/Serie.
 - **Riproduzione provvisoria**: ogni "Riproduci" in ogni schermata passa da
