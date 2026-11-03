@@ -14,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -21,6 +22,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -81,6 +83,7 @@ class PlayerZappingTest {
             FvpTheme {
                 var bannerVisible by remember { mutableStateOf(false) }
                 var controlsVisible by remember { mutableStateOf(false) }
+                var zappingButtonFocused by remember { mutableStateOf(false) }
                 val rootFocus = remember { FocusRequester() }
                 val zappingFocus = remember { FocusRequester() }
                 val audioFocus = remember { FocusRequester() }
@@ -88,6 +91,19 @@ class PlayerZappingTest {
                 LaunchedEffect(Unit) {
                     withFrameNanos { }
                     runCatching { rootFocus.requestFocus() }
+                }
+                // Come in PlayerScreen: all'apertura della barra info nel Live
+                // il focus iniziale va sul pulsante "Zapping"; alla chiusura
+                // torna alla radice del player.
+                LaunchedEffect(bannerVisible) {
+                    if (bannerVisible && live()) {
+                        withFrameNanos { }
+                        runCatching { zappingFocus.requestFocus() }
+                    }
+                    if (!bannerVisible && zappingButtonFocused) {
+                        withFrameNanos { }
+                        runCatching { rootFocus.requestFocus() }
+                    }
                 }
                 Box(
                     modifier = Modifier
@@ -130,7 +146,9 @@ class PlayerZappingTest {
                                     size = listSize(),
                                 )
                             },
-                            zappingModifier = Modifier.focusRequester(zappingFocus),
+                            zappingModifier = Modifier
+                                .focusRequester(zappingFocus)
+                                .onFocusChanged { zappingButtonFocused = it.isFocused },
                         )
                     }
                     if (!live() && controlsVisible) {
@@ -214,6 +232,45 @@ class PlayerZappingTest {
         rule.waitForIdle()
         rule.onNodeWithTag("player_controls_bar").assertExists()
         rule.onNodeWithTag("player_zapping_button").assertDoesNotExist()
+    }
+
+    /**
+     * All'apertura della barra info con OK nel Live il focus va sul pulsante
+     * "Zapping" e un secondo OK (l'azione OnClick del pulsante focalizzato)
+     * avvia lo zapping.
+     */
+    @Test
+    fun `OK apre la barra info con il focus su Zapping e il secondo OK avvia lo zapping`() {
+        val clock = FakeClock()
+        val switched = mutableListOf<Int>()
+        val zapping = PlayerZapping(
+            controller = ZappingController(clock = clock),
+            onSwitchChannel = { index -> switched += index },
+        )
+        showPlayer(live = { true }, zapping = zapping)
+
+        // Primo OK: la barra info si apre e il focus va su "Zapping".
+        rule.onNodeWithTag("harness_player_root").performKeyInput { pressKey(Key.DirectionCenter) }
+        rule.waitForIdle()
+        rule.onNodeWithTag("player_channel_banner").assertExists()
+        rule.waitUntil(timeoutMillis = 2_000) {
+            runCatching {
+                rule.onNodeWithTag("player_zapping_button").fetchSemanticsNode()
+                    .config.contains(SemanticsProperties.Focused)
+            }.getOrDefault(false)
+        }
+        rule.onNodeWithTag("player_zapping_button").assertIsFocused()
+        // Lo zapping non è ancora partito.
+        rule.onNodeWithTag("player_zapping_indicator").assertDoesNotExist()
+
+        // Secondo OK sul pulsante focalizzato: lo zapping parte.
+        rule.onNodeWithTag("player_zapping_button")
+            .performSemanticsAction(SemanticsActions.OnClick)
+        rule.waitForIdle()
+        rule.onNodeWithTag("player_channel_banner").assertDoesNotExist()
+        rule.onNodeWithTag("player_zapping_indicator").assertExists()
+        rule.onNodeWithTag("player_zapping_indicator").assertTextEquals("Zapping · 10")
+        assertTrue(switched.isEmpty())
     }
 
     @Test

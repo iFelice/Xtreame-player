@@ -22,6 +22,22 @@ const val SERIES_SORT_BUTTON_TAG = "series_sort_button"
  */
 const val SORT_ROW_HEIGHT_BASE = 34f
 
+/**
+ * Margine verticale interno del pulsante di ordinamento, in unità di progetto:
+ * più basso del valore predefinedito dei pulsanti compatti, così la cornice
+ * resta bassa.
+ */
+const val SORT_BUTTON_VERTICAL_PADDING_BASE = 4f
+
+/**
+ * Altezza massima del pulsante di ordinamento, in unità di progetto: scavalca
+ * l'altezza minima di 40 dp che tv-material impone a ogni pulsante, così la
+ * cornice (anche ingrandita dal focus) non arriva sulla prima riga di
+ * copertine. Il testo resta leggibile: dentro restano 14sp di testo più il
+ * margine.
+ */
+const val SORT_BUTTON_MAX_HEIGHT_BASE = 32f
+
 /** [SORT_ROW_HEIGHT_BASE] nella scala corrente. */
 val UiScale.sortRowHeight: Dp get() = dp(SORT_ROW_HEIGHT_BASE)
 
@@ -48,5 +64,7 @@ fun CatalogSortButton(
         scale = scale,
         modifier = modifier,
         fontWeight = FvpCompactButtonStyle.SECONDARY_WEIGHT,
+        verticalPaddingBase = SORT_BUTTON_VERTICAL_PADDING_BASE,
+        maxHeightBase = SORT_BUTTON_MAX_HEIGHT_BASE,
     )
 }

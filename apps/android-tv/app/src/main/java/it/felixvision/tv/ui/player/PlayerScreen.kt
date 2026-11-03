@@ -577,6 +577,17 @@ fun PlayerScreen(
                 }
             }
 
+            // All'apertura della barra info con OK nel Live (pulsante "Zapping"
+            // presente) il focus iniziale va su "Zapping": un secondo OK avvia
+            // lo zapping. Film e serie non aprono questa barra e restano
+            // invariati.
+            LaunchedEffect(state.banner) {
+                if (state.banner != null && session.source is PlaybackSource.Live && !state.isReplay) {
+                    withFrameNanos { }
+                    runCatching { zappingFocus.requestFocus() }
+                }
+            }
+
             LaunchedEffect(longPressMenuOpen, myChannelEdit) {
                 if (longPressMenuOpen || myChannelEdit != null) return@LaunchedEffect
                 // Con un pannello aperto (per esempio il formato, scelto dal

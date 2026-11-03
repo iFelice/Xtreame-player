@@ -15,6 +15,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import it.felixvision.tv.data.update.ReleaseInfo
 import it.felixvision.tv.ui.components.UPDATE_BADGE_TAG
 import it.felixvision.tv.ui.components.UiScale
+import it.felixvision.tv.ui.theme.FvpColors
 import it.felixvision.tv.ui.theme.FvpTheme
 import it.felixvision.tv.vpn.VpnState
 import java.time.ZoneId
@@ -28,9 +29,9 @@ import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 
 /**
- * Griglia delle Impostazioni: sei card, quattro per riga, nell'ordine Account,
- * Aspetto, Contenuti protetti, VPN, Catalogo, App, ognuna con la sua riga di
- * stato calcolata da dati finti (nessun dato reale di server o account).
+ * Griglia delle Impostazioni: sette card, quattro per riga, nell'ordine Account,
+ * Aspetto, Contenuti protetti, VPN, Catalogo, Player, App, ognuna con la sua
+ * riga di stato calcolata da dati finti (nessun dato reale di server o account).
  *
  * La griglia si compone senza ViewModel ([SettingsGrid]): le card sono [Card]
  * di tv-material, quindi OK si prova con l'azione semantica
@@ -90,7 +91,7 @@ class SettingsCardsGridTest {
     }
 
     @Test
-    fun `la griglia ha il titolo e le sei card nell'ordine indicato`() {
+    fun `la griglia ha il titolo e le sette card nell'ordine indicato`() {
         showGrid()
 
         rule.onNodeWithTag(SETTINGS_TITLE_TAG).assertTextEquals(SETTINGS_TITLE)
@@ -102,6 +103,7 @@ class SettingsCardsGridTest {
             SETTINGS_CARD_PROTECTED_TAG,
             SETTINGS_CARD_VPN_TAG,
             SETTINGS_CARD_CATALOG_TAG,
+            SETTINGS_CARD_PLAYER_TAG,
             SETTINGS_CARD_APP_TAG,
         )
         assertEquals(
@@ -126,15 +128,17 @@ class SettingsCardsGridTest {
             )
         }
 
-        // Seconda riga: Catalogo e App, sotto la prima e larghe come le altre.
+        // Seconda riga: Catalogo, Player e App, sotto la prima e larghe come le altre.
         val catalog = rule.onNodeWithTag(SETTINGS_CARD_CATALOG_TAG).fetchSemanticsNode().boundsInRoot
+        val player = rule.onNodeWithTag(SETTINGS_CARD_PLAYER_TAG).fetchSemanticsNode().boundsInRoot
         val app = rule.onNodeWithTag(SETTINGS_CARD_APP_TAG).fetchSemanticsNode().boundsInRoot
         assertTrue("Catalogo non sta sotto la prima riga", catalog.top >= account.bottom - 1f)
-        assertTrue("App non sta a destra di Catalogo", app.left > catalog.left)
-        assertTrue("Catalogo non è larga come Account", abs(catalog.width - account.width) <= 0.5f)
-        assertTrue("App non è larga come Account", abs(app.width - account.width) <= 0.5f)
-        assertTrue("Catalogo non è alta come Account", abs(catalog.height - account.height) <= 0.5f)
-        assertTrue("App non è alta come Account", abs(app.height - account.height) <= 0.5f)
+        assertTrue("Player non sta a destra di Catalogo", player.left > catalog.left)
+        assertTrue("App non sta a destra di Player", app.left > player.left)
+        listOf(catalog, player, app).forEach { bounds ->
+            assertTrue("la card non è larga come Account", abs(bounds.width - account.width) <= 0.5f)
+            assertTrue("la card non è alta come Account", abs(bounds.height - account.height) <= 0.5f)
+        }
     }
 
     @Test
@@ -155,6 +159,9 @@ class SettingsCardsGridTest {
 
         rule.onNodeWithTag(SettingsCard.Catalog.titleTag, useUnmergedTree = true).assertTextEquals("Catalogo")
         rule.onNodeWithTag(SettingsCard.Catalog.statusTag, useUnmergedTree = true).assertTextEquals("Aggiornato alle 14:05")
+
+        rule.onNodeWithTag(SettingsCard.Player.titleTag, useUnmergedTree = true).assertTextEquals("Player")
+        rule.onNodeWithTag(SettingsCard.Player.statusTag, useUnmergedTree = true).assertTextEquals("Zapping ogni 10 s")
 
         rule.onNodeWithTag(SettingsCard.App.titleTag, useUnmergedTree = true).assertTextEquals("App")
         rule.onNodeWithTag(SettingsCard.App.statusTag, useUnmergedTree = true).assertTextEquals("Versione 1.0.2")
@@ -190,6 +197,40 @@ class SettingsCardsGridTest {
         rule.onAllNodesWithTag("settings_update_badge", useUnmergedTree = true).assertCountEquals(0)
     }
 
+    /**
+     * Con un aggiornamento disponibile l'icona della card App è arancione; il
+     * colore si legge dalla chiave semantica [SettingsCardIconTintKey]
+     * esposta dall'icona. Gli stati Downloading e Installing sono coperti dalla
+     * stessa regola pura [hasActiveUpdate], provata nell'ultimo test.
+     */
+    @Test
+    fun `icona della card App arancione con aggiornamento disponibile`() {
+        val release = ReleaseInfo(
+            version = "1.0.3",
+            downloadUrl = "http://server.esempio:8080/FelixVP.apk",
+            sizeBytes = 1024L,
+        )
+        showGrid(cardsState(updateStatus = AppUpdateStatus.Available(release = release)))
+
+        val tint = rule.onNodeWithTag(SettingsCard.App.iconTag, useUnmergedTree = true)
+            .fetchSemanticsNode().config[SettingsCardIconTintKey]
+        assertEquals(FvpColors.Orange, tint)
+    }
+
+    /** Senza aggiornamento l'icona della card App torna al colore normale. */
+    @Test
+    fun `icona della card App al colore normale senza aggiornamento`() {
+        showGrid(cardsState(updateStatus = AppUpdateStatus.UpToDate))
+
+        val tint = rule.onNodeWithTag(SettingsCard.App.iconTag, useUnmergedTree = true)
+            .fetchSemanticsNode().config[SettingsCardIconTintKey]
+        assertEquals(FvpColors.TextPrimary, tint)
+        // Anche le altre card restano al colore normale.
+        val playerTint = rule.onNodeWithTag(SettingsCard.Player.iconTag, useUnmergedTree = true)
+            .fetchSemanticsNode().config[SettingsCardIconTintKey]
+        assertEquals(FvpColors.TextPrimary, playerTint)
+    }
+
     @Test
     fun `il focus d'ingresso va sulla prima card`() {
         val entryFocus = FocusRequester()
@@ -215,7 +256,24 @@ class SettingsCardsGridTest {
     }
 
     @Test
-    fun `righe di stato delle sei card`() {
+    fun `righe di stato delle sette card e regola dell'icona arancione`() {
+        val release = ReleaseInfo(
+            version = "1.0.3",
+            downloadUrl = "http://server.esempio:8080/FelixVP.apk",
+            sizeBytes = 1024L,
+        )
+        // L'icona arancione scatta negli stati con aggiornamento in corso.
+        assertTrue(AppUpdateStatus.Available(release = release).hasActiveUpdate())
+        assertTrue(AppUpdateStatus.Downloading(release = release, progressPercent = 40).hasActiveUpdate())
+        assertTrue(AppUpdateStatus.Installing(release = release).hasActiveUpdate())
+        assertTrue(!AppUpdateStatus.UpToDate.hasActiveUpdate())
+        assertTrue(!AppUpdateStatus.Checking.hasActiveUpdate())
+        assertTrue(!AppUpdateStatus.CheckFailed.hasActiveUpdate())
+        assertEquals("Zapping ogni 10 s", playerStatusLine(10))
+        assertEquals("Zapping ogni 30 s", playerStatusLine(30))
+        // Un valore non ammesso torna al predefinito.
+        assertEquals("Zapping ogni 10 s", playerStatusLine(7))
+
         assertEquals("demo · scade 15/03/2027", accountStatusLine("demo", expiryEpochSeconds))
         assertEquals("demo", accountStatusLine("demo", null))
         assertEquals("Interfaccia compatta", appearanceStatusLine(InterfaceSize.COMPACT))

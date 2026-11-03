@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -542,6 +543,13 @@ object FvpCompactButtonStyle {
  * ([FontWeight.SemiBold]) dal secondario ([FontWeight.Medium]).
  *
  * @param fontWeight peso del testo: l'unica differenza tra primario e secondario.
+ * @param verticalPaddingBase margine verticale interno in unità di progetto
+ *   (predefinito [FvpCompactButtonStyle.VERTICAL_PADDING_BASE]).
+ * @param maxHeightBase altezza massima del pulsante in unità di progetto, oppure
+ *   `null` per non imporla: serve a scavalcare l'altezza minima di 40 dp che
+ *   tv-material impone a ogni [Button] (`BaseButtonDefaults.MinHeight`), così
+ *   il pulsante di ordinamento resta basso e non copre la prima riga di
+ *   copertine.
  */
 @Composable
 fun FvpCompactButton(
@@ -551,6 +559,8 @@ fun FvpCompactButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     fontWeight: FontWeight = FvpCompactButtonStyle.PRIMARY_WEIGHT,
+    verticalPaddingBase: Float = FvpCompactButtonStyle.VERTICAL_PADDING_BASE,
+    maxHeightBase: Float? = null,
 ) {
     val shape = FvpCompactButtonStyle.shape
     val restBorder = Border(
@@ -569,7 +579,9 @@ fun FvpCompactButton(
     )
     Button(
         onClick = onClick,
-        modifier = modifier,
+        modifier = modifier.then(
+            if (maxHeightBase != null) Modifier.heightIn(max = scale.dp(maxHeightBase)) else Modifier,
+        ),
         enabled = enabled,
         scale = ButtonDefaults.scale(focusedScale = FvpCompactButtonStyle.FOCUSED_SCALE),
         shape = ButtonDefaults.shape(
@@ -596,7 +608,7 @@ fun FvpCompactButton(
         ),
         contentPadding = PaddingValues(
             horizontal = scale.dp(FvpCompactButtonStyle.HORIZONTAL_PADDING_BASE),
-            vertical = scale.dp(FvpCompactButtonStyle.VERTICAL_PADDING_BASE),
+            vertical = scale.dp(verticalPaddingBase),
         ),
     ) {
         Text(

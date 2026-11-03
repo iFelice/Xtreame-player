@@ -18,6 +18,13 @@ object FvpColors {
     val Error = Color(0xFFFF453A)
 
     /**
+     * Arancione della palette (come il pallino di aggiornamento e la voce Live
+     * del menu laterale): icona della card App quando c'è un aggiornamento
+     * disponibile, in scaricamento o in installazione.
+     */
+    val Orange = Color(0xFFFF9F0A)
+
+    /**
      * Contenitori "a vetro" senza sfocatura (per esempio la lista canali Live):
      * riempimento bianco al 4% e bordo bianco al 10% sullo sfondo dell'area.
      */

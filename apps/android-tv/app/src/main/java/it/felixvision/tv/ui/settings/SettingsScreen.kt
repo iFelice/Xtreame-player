@@ -67,9 +67,9 @@ import it.felixvision.tv.ui.theme.FvpColors
 import it.felixvision.tv.vpn.VpnState
 
 /**
- * Schermata Impostazioni: una griglia di sei card (Account, Aspetto, Contenuti
- * protetti, VPN, Catalogo, App) e, per ogni card, la pagina della sua funzione
- * a tutto schermo nell'area dei contenuti.
+ * Schermata Impostazioni: una griglia di sette card (Account, Aspetto, Contenuti
+ * protetti, VPN, Catalogo, Player, App) e, per ogni card, la pagina della sua
+ * funzione a tutto schermo nell'area dei contenuti.
  *
  * Il contenuto dei vecchi riquadri sta nelle pagine ([SettingsAccountPage],
  * [SettingsAppearancePage], [SettingsVpnPage], [SettingsCatalogPage],
@@ -197,6 +197,7 @@ fun SettingsScreen(
             vpnState = vpnState,
             catalogLastUpdateMillis = catalogLastUpdateMillis ?: state.lastUpdateMillis,
             catalogRefreshing = catalogRefreshing,
+            zappingSeconds = viewModel.playerPreferences.zappingSeconds,
             versionName = state.versionName,
             updateStatus = state.updateStatus,
         ),
@@ -298,6 +299,16 @@ fun SettingsScreen(
                 entryFocusRequester = entryFocus,
             )
         },
+        playerPage = { pageModifier, _ ->
+            SettingsPlayerPage(
+                scale = scale,
+                modifier = pageModifier,
+                zappingSeconds = viewModel.playerPreferences.zappingSeconds,
+                onZappingSecondsSelected = { seconds ->
+                    viewModel.playerPreferences.zappingSeconds = seconds
+                },
+            )
+        },
         appPage = { pageModifier, entryFocus ->
             SettingsAppPage(
                 state = state,
@@ -376,6 +387,7 @@ internal fun SettingsNavigation(
     vpnPage: @Composable (Modifier, FocusRequester?) -> Unit = { _, _ -> },
     vpnSetupPage: @Composable (Modifier) -> Unit = {},
     catalogPage: @Composable (Modifier, FocusRequester?) -> Unit = { _, _ -> },
+    playerPage: @Composable (Modifier, FocusRequester?) -> Unit = { _, _ -> },
     appPage: @Composable (Modifier, FocusRequester?) -> Unit = { _, _ -> },
 ) {
     // La card aperta decide cosa occupa l'area dei contenuti; [lastOpenedCard]
@@ -478,6 +490,10 @@ internal fun SettingsNavigation(
                 SettingsCard.Catalog -> catalogPage(
                     modifier,
                     pageEntryFocusRequesters.getValue(SettingsCard.Catalog),
+                )
+                SettingsCard.Player -> playerPage(
+                    modifier,
+                    pageEntryFocusRequesters.getValue(SettingsCard.Player),
                 )
                 SettingsCard.App -> appPage(modifier, pageEntryFocusRequesters.getValue(SettingsCard.App))
                 null -> Unit

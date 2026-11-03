@@ -31,6 +31,7 @@ import it.felixvision.tv.data.update.apkFileForVersion
 import it.felixvision.tv.data.xtream.LoginResult
 import it.felixvision.tv.data.xtream.ServerAddress
 import it.felixvision.tv.data.xtream.ServerInput
+import it.felixvision.tv.player.PlayerPreferences
 import it.felixvision.tv.ui.access.statusLabel
 import it.felixvision.tv.vpn.VpnController
 import it.felixvision.tv.vpn.VpnRelayApi
@@ -163,6 +164,12 @@ class SettingsViewModel(
      */
     val vpnController: VpnController get() = container.vpnController
     val vpnRelayClient: VpnRelayApi get() = container.vpnRelayClient
+
+    /**
+     * Preferenze del player (durata dello zapping): la pagina "Player" le legge
+     * e le scrive. Getter: costruire il ViewModel non le crea.
+     */
+    val playerPreferences: PlayerPreferences get() = container.playerPreferences
 
     /** Riepilogo per la riga del riquadro "Contenuti protetti". */
     private val _protectedSummary = MutableStateFlow(ProtectedSummary())
