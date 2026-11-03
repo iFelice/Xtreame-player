@@ -19,7 +19,7 @@ import it.felixvision.tv.data.progress.ProgressKeys
 import it.felixvision.tv.data.progress.WatchProgress
 
 /**
- * Riga "Continua a guardare" usata come prima riga di Novità (in entrambe le
+ * Riga "Riprendi" usata come prima riga di Novità (in entrambe le
  * modalità) e dalla sezione dedicata. Le voci arrivano già filtrate e
  * ordinate da [CatalogViewModel.continueEntries] (regole
  * ContinueWatchingStore condivise).
@@ -43,7 +43,7 @@ fun ContinueWatchingRow(
     if (entries.isEmpty()) return
     Column(modifier = modifier.fillMaxWidth()) {
         if (showTitle) {
-            RowTitle(text = "Continua a guardare")
+            RowTitle(text = "Riprendi")
         }
         val rowState = rememberSectionListState(scrollStore, listKey)
         LazyRow(
