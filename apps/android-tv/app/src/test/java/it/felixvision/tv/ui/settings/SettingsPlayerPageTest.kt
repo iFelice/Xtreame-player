@@ -256,11 +256,12 @@ class SettingsPlayerPageTest {
      * [ZappingRepeat.START_DELAY_MILLIS] e poi ogni [ZappingRepeat.STEP_MILLIS],
      * finché il tasto non si rilascia.
      *
-     * Il primo OK cambia subito (10 → 11). Il primo frame dopo l'OK dà il via
-     * allo scorrimento e l'attesa di 500 ms parte da lì: a frame 16 ms l'attesa
-     * scade al frame 531 e i cambi cadono ai frame 531, 631, 731, 831 e 931 —
-     * a 1000 ms dall'OK il valore è quindi cresciuto di 1 + 5 = 6 secondi
-     * (11 → 16). Il rilascio non aggiunge nessun altro cambio.
+     * Il primo OK cambia subito (10 → 11). Dopo la prima ripetizione il valore
+     * comincia a scorrere: il via lo dà il primo frame (16 ms), l'attesa di
+     * 500 ms scade sul primo frame successivo e ogni passo cade sul primo frame
+     * dopo i 100 ms. Con i frame allineati ai multipli di 16 ms i cambi sono ai
+     * frame 544, 656, 768, 880 e 992 ms: a 1000 ms dall'OK il valore è quindi
+     * 16, cioè 1 cambio all'OK più 5 passi. Il rilascio non aggiunge nulla.
      */
     @Test
     fun `OK tenuto premuto su piu fa scorrere il valore e il rilascio lo ferma`() {
@@ -268,15 +269,18 @@ class SettingsPlayerPageTest {
         showNavigation(prefs)
         openPlayerPage()
 
-        // Frame dei test e tempi attesi: un frame è 16 ms, quindi il primo
-        // frame dopo l'OK dà il via allo scorrimento e la soglia scade al
-        // primo frame >= 16 + 500 = 516 ms, cioè a 528 ms.
         val frameMillis = ZAPPING_TEST_FRAME_MILLIS
-        val startFrame = firstFrameAtOrAfter(ZappingRepeat.START_DELAY_MILLIS + frameMillis, frameMillis)
-        val steps = (ZAPPING_HOLD_MILLIS - startFrame).coerceAtLeast(0L) / ZappingRepeat.STEP_MILLIS
-        val expected = 10 + 1 + steps
-
+        // All'inizio del test l'orologio non parte da zero (le attese dei
+        // fotogrammi lo hanno già avanzato): lo si riallinea ai multipli del
+        // frame, così i tempi dei passi sono calcolabili.
         rule.mainClock.autoAdvance = false
+        val misalignment = rule.mainClock.currentTime % frameMillis
+        if (misalignment != 0L) {
+            rule.mainClock.advanceTimeBy(frameMillis - misalignment, ignoreFrameDuration = true)
+        }
+        val t0 = rule.mainClock.currentTime
+        assertEquals(0L, t0 % frameMillis)
+
         // OK giù: il primo cambio è immediato (10 → 11). Il valore si legge
         // dalle preferenze, che è ciò che conta per lo zapping; il testo si
         // controlla alla fine, quando l'orologio torna automatico.
@@ -286,41 +290,46 @@ class SettingsPlayerPageTest {
         assertEquals(11, prefs.zappingSeconds)
 
         // Prima ripetizione del sistema: comincia lo scorrimento.
+        val repeatAt = rule.mainClock.currentTime
         rule.onNodeWithTag(ZAPPING_INCREASE_TAG)
             .performKeyPress(okKey(AndroidKeyEvent.ACTION_DOWN, repeatCount = 1))
-        rule.waitForIdle()
 
-        // Un frame prima della soglia il valore non è ancora cambiato.
-        rule.mainClock.advanceTimeBy(startFrame - 2 * frameMillis)
-        assertEquals(startFrame - frameMillis, rule.mainClock.currentTime)
+        // I cambi cadono sui frame: il primo dopo l'attesa di 500 ms, poi uno
+        // ogni 100 ms, fino ai 1000 ms dall'OK.
+        val stepFrames = repeatStepFrames(repeatAt, ZAPPING_HOLD_MILLIS, frameMillis)
+        val firstStep = stepFrames.first()
+        val expected = 10 + 1 + stepFrames.size
+        assertEquals(listOf(it + 0L, 112L, 224L, 336L, 448L).map { d -> firstStep + d }, stepFrames)
+        assertEquals(5, stepFrames.size)
+        assertEquals(16L, expected)
+
+        // Fino a un frame prima del primo passo il valore non è ancora cambiato.
+        rule.mainClock.advanceTimeBy(firstStep - frameMillis - rule.mainClock.currentTime)
         assertEquals(11, prefs.zappingSeconds)
 
-        // Fino ai 1000 ms dall'OK i cambi sono quelli calcolati: nessuno in più
-        // e nessuno in meno. A ogni frame il valore è il passo atteso; da qui ai
-        // 1000 ms servono (1000 − 528) / 16 ≈ 30 frame.
+        // Fino ai 1000 ms dall'OK, frame per frame, il valore è sempre quello
+        // dei punti di cambio già passati: nessun cambio in più né in meno.
+        // I cambi cadono sui frame (112 ms reali per passo) e sono in [stepFrames].
         val guard = 200
         var frames = 0
-        while (rule.mainClock.currentTime < ZAPPING_HOLD_MILLIS && frames < guard) {
+        var passed = 0
+        while (rule.mainClock.currentTime - repeatAt < ZAPPING_HOLD_MILLIS && frames < guard) {
             rule.mainClock.advanceTimeBy(frameMillis)
             frames++
-            val elapsed = rule.mainClock.currentTime
-            val expectedSteps = if (elapsed < startFrame) {
-                0L
-            } else {
-                (elapsed - startFrame) / ZappingRepeat.STEP_MILLIS
+            if (passed < stepFrames.size && rule.mainClock.currentTime >= stepFrames[passed]) {
+                passed++
             }
-            assertEquals(10 + 1 + expectedSteps.toInt(), prefs.zappingSeconds)
+            assertEquals(11 + passed, prefs.zappingSeconds)
         }
-        assertTrue(rule.mainClock.currentTime >= ZAPPING_HOLD_MILLIS)
-        // Atteso dai tempi: 1 cambio all'OK più i passi da 528 a 1000 ms.
-        assertEquals(16L, expected)
-        assertEquals(16, prefs.zappingSeconds)
+        assertTrue(rule.mainClock.currentTime - repeatAt >= ZAPPING_HOLD_MILLIS)
+        assertEquals(stepFrames.size, passed)
+        assertEquals(expected.toInt(), prefs.zappingSeconds)
 
         // Rilascio: nessun altro incremento, anche facendo passare altro tempo.
         rule.onNodeWithTag(ZAPPING_INCREASE_TAG)
             .performKeyPress(okKey(AndroidKeyEvent.ACTION_UP))
         rule.mainClock.advanceTimeBy(1_000L)
-        assertEquals(16, prefs.zappingSeconds)
+        assertEquals(expected.toInt(), prefs.zappingSeconds)
 
         // Orologio di nuovo automatico: il valore mostrato è quello raggiunto.
         rule.mainClock.autoAdvance = true
@@ -338,6 +347,28 @@ class SettingsPlayerPageTest {
     private fun firstFrameAtOrAfter(millis: Long, frameMillis: Long): Long {
         val remainder = millis % frameMillis
         return if (remainder == 0L) millis else millis + (frameMillis - remainder)
+    }
+
+    /**
+     * Istanze dei cambi con OK tenuto premuto da [repeatAtMillis] per
+     * [holdMillis]: il primo frame dopo la ripetizione dà il via, l'attesa di
+     * 500 ms scade sul primo frame successivo e ogni passo cade sul primo frame
+     * dopo 100 ms.
+     */
+    private fun repeatStepFrames(
+        repeatAtMillis: Long,
+        holdMillis: Long,
+        frameMillis: Long,
+    ): List<Long> {
+        val startFrame = firstFrameAtOrAfter(repeatAtMillis + frameMillis, frameMillis) +
+            ZappingRepeat.START_DELAY_MILLIS
+        var at = firstFrameAtOrAfter(startFrame, frameMillis)
+        val frames = mutableListOf<Long>()
+        while (at <= repeatAtMillis + holdMillis) {
+            frames += at
+            at = firstFrameAtOrAfter(at + ZappingRepeat.STEP_MILLIS, frameMillis)
+        }
+        return frames
     }
 
     /**
