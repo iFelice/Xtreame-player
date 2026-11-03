@@ -784,6 +784,7 @@ internal fun togglePlayerPlayback(player: Player, live: Boolean, pause: () -> Un
 }
 
 /** Measures continuous stalls independently for READY and BUFFERING. */
+@androidx.media3.common.util.UnstableApi
 internal class LiveStallDetector {
     private var since: Long? = null
     private var previousState = Player.STATE_IDLE
