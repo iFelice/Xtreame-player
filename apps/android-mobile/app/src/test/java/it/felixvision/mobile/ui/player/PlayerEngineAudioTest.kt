@@ -5,6 +5,8 @@ package it.felixvision.mobile.ui.player
 import android.app.Application
 import android.content.Context
 import android.media.AudioManager
+import androidx.media3.common.Player
+import java.lang.reflect.Proxy
 import androidx.test.core.app.ApplicationProvider
 import it.felixvision.mobile.AppContainer
 import it.felixvision.tv.data.catalog.LiveStream
@@ -21,6 +23,20 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class PlayerEngineAudioTest {
+    @Test
+    fun playOnPausedLiveSeeksToDefaultBeforePlaying() {
+        val calls = mutableListOf<String>()
+        val fake = Proxy.newProxyInstance(Player::class.java.classLoader, arrayOf(Player::class.java)) { _, method, _ ->
+            when (method.name) {
+                "isPlaying" -> false
+                "seekToDefaultPosition", "play" -> { calls.add(method.name); null }
+                else -> error("Unexpected player method: ${method.name}")
+            }
+        } as Player
+        togglePlayerPlayback(fake, live = true) { error("Unexpected pause") }
+        assertEquals(listOf("seekToDefaultPosition", "play"), calls)
+    }
+
     @Test
     fun rapidZappingKeepsPlayerAndOnlyExoplayerOwnsFocusAndNoisyReceiver() {
         val app = ApplicationProvider.getApplicationContext<Application>()

@@ -399,11 +399,8 @@ class PlayerEngine(
 
     fun togglePlayback() {
         val currentPlayer = player ?: return
-        if (currentPlayer.isPlaying) {
+        togglePlayerPlayback(currentPlayer, currentSource is MobilePlaybackSource.Live) {
             lifecycleController.pause()
-        } else {
-            if (currentSource is MobilePlaybackSource.Live) currentPlayer.seekToDefaultPosition()
-            currentPlayer.play()
         }
     }
 
@@ -705,32 +702,19 @@ class PlayerEngine(
         watchdog?.cancel()
         if (currentSource !is MobilePlaybackSource.Live) return
         watchdog = scope.launch {
-            var stalledSince: Long? = null
-            var stalledState = Player.STATE_IDLE
+            val detector = LiveStallDetector()
             while (!released) {
                 val current = player ?: break
                 val status = current.playbackState
                 val stalled = current.playWhenReady && !current.isPlaying &&
                     current.playbackSuppressionReason == Player.PLAYBACK_SUPPRESSION_REASON_NONE &&
-                    (status == Player.STATE_READY || status == Player.STATE_BUFFERING)
-                val now = SystemClock.elapsedRealtime()
-                if (!stalled || state.error != null) {
-                    stalledSince = null
-                } else {
-                    if (stalledSince == null || stalledState != status) {
-                        stalledSince = now
-                        stalledState = status
-                    }
-                    val timeout = if (status == Player.STATE_READY) 5_000L
-                        else PlayerNetworkConfig.READ_TIMEOUT_MILLIS.toLong()
-                    if (now - stalledSince > timeout) {
-                        stalledSince = null
-                        when (liveAutoRestart.onPlayerError(PlaybackKind.LIVE, networkError = true)) {
-                            PlayerErrorAction.SILENT_RESTART -> buildPlayer(0L, autoplay = true)
-                            PlayerErrorAction.SHOW_ERROR -> {
-                                current.stop()
-                                state = state.copy(error = "Impossibile riprodurre questo contenuto", buffering = false)
-                            }
+                    state.error == null
+                if (detector.timedOut(status, stalled, SystemClock.elapsedRealtime())) {
+                    when (liveAutoRestart.onPlayerError(PlaybackKind.LIVE, networkError = true)) {
+                        PlayerErrorAction.SILENT_RESTART -> buildPlayer(0L, autoplay = true)
+                        PlayerErrorAction.SHOW_ERROR -> {
+                            current.stop()
+                            state = state.copy(error = "Impossibile riprodurre questo contenuto", buffering = false)
                         }
                     }
                 }
@@ -787,4 +771,39 @@ private fun MobilePlaybackSource.playbackKind(): PlaybackKind = when (this) {
     is MobilePlaybackSource.Catchup -> PlaybackKind.CATCHUP
     is MobilePlaybackSource.Movie -> PlaybackKind.MOVIE
     is MobilePlaybackSource.Episode -> PlaybackKind.EPISODE
+}
+
+/** Resuming live deliberately discards any position accumulated while paused. */
+internal fun togglePlayerPlayback(player: Player, live: Boolean, pause: () -> Unit) {
+    if (player.isPlaying) {
+        pause()
+    } else {
+        if (live) player.seekToDefaultPosition()
+        player.play()
+    }
+}
+
+/** Measures continuous stalls independently for READY and BUFFERING. */
+internal class LiveStallDetector {
+    private var since: Long? = null
+    private var previousState = Player.STATE_IDLE
+
+    fun timedOut(playbackState: Int, eligible: Boolean, nowMillis: Long): Boolean {
+        val timeout = when (playbackState) {
+            Player.STATE_READY -> 5_000L
+            Player.STATE_BUFFERING -> PlayerNetworkConfig.READ_TIMEOUT_MILLIS.toLong()
+            else -> null
+        }
+        if (!eligible || timeout == null) {
+            since = null
+            return false
+        }
+        if (since == null || previousState != playbackState) {
+            since = nowMillis
+            previousState = playbackState
+        }
+        if (nowMillis - since!! <= timeout) return false
+        since = null
+        return true
+    }
 }
