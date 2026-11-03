@@ -53,6 +53,17 @@ fun FvpApp(container: AppContainer) {
             password = viewModel.getCurrentCredentials()?.password.orEmpty(),
             banner = screen.banner,
             onSignOut = viewModel::signOut,
+            // Riquadro "Configura da remoto" delle Impostazioni: le credenziali
+            // ricevute aggiornano la sessione dell'app come nella TV.
+            onRemoteCredentials = { newServer, newUsername, newPassword, account ->
+                viewModel.updateCredentialsFromRemote(
+                    server = newServer,
+                    username = newUsername,
+                    password = newPassword,
+                    account = account,
+                    storedUsername = newUsername,
+                )
+            },
             channelScheduleLoader = container.channelScheduleLoader,
             imageLoader = container.imageLoader,
         )
