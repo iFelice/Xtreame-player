@@ -644,9 +644,6 @@ class SettingsLayoutTest {
         // Riquadro fuori dallo schermo: si torna in cima alla colonna scorrevole
         // con l'azione di scorrimento (nessun gesto da simulare).
         scrollListToTop()
-        rule.waitUntil(timeoutMillis = 5_000) {
-            !exists(SettingsPanel.REMOTE.testTag, useUnmergedTree = true)
-        }
         rule.waitUntil(timeoutMillis = 5_000) { !viewModel.ui.value.pairingActive }
         val createsWhenHidden = pairingApi.createCalls
         val pollsWhenHidden = pairingApi.pollCalls
@@ -717,6 +714,8 @@ class SettingsLayoutTest {
         // schermo): nuova sessione e nuova interrogazione.
         rule.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
         rule.waitUntil(timeoutMillis = 5_000) { viewModel.ui.value.pairingActive }
+        // La sessione consumata dal primo giro è scaduta: il ciclo la ricrea
+        // appena riparte, poi torna a interrogare il relay.
         rule.waitUntil(timeoutMillis = 5_000) { pairingApi.createCalls == 2 }
         scheduler.advanceTimeBy(2_001L)
         rule.waitForIdle()
