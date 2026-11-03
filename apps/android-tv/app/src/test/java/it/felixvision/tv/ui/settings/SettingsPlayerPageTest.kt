@@ -327,7 +327,7 @@ class SettingsPlayerPageTest {
         assertTrue("i cambi sono più di uno", changeTimes.size > 1)
         // 1 cambio all'OK + i cambi della pressione prolungata.
         val expected = 11 + changeTimes.size
-        assertEquals("più di un secondo in più", true, expected - ZappingRepeat.DEFAULT > 1)
+        assertTrue("più di un secondo in più", expected - ZappingSeconds.DEFAULT > 1)
         assertEquals(expected, prefs.zappingSeconds.toInt())
 
         // Rilascio: nessun altro incremento, anche facendo passare altro tempo.
