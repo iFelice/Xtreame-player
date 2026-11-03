@@ -19,9 +19,12 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.Implementation
+import org.robolectric.annotation.Implements
+import org.robolectric.shadows.ShadowAudioManager
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
+@Config(sdk = [34], shadows = [CountingAudioManager::class])
 class PlayerEngineAudioTest {
     @Test
     fun playOnPausedLiveSeeksToDefaultBeforePlaying() {
@@ -54,7 +57,13 @@ class PlayerEngineAudioTest {
             engine.start()
             val player = engine.player
             assertNotNull(player)
-            val audio = shadowOf(app.getSystemService(Context.AUDIO_SERVICE) as AudioManager)
+            val audio = shadowOf(app.getSystemService(Context.AUDIO_SERVICE) as AudioManager) as CountingAudioManager
+            var unintendedPauses = 0
+            player!!.addListener(object : Player.Listener {
+                override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                    if (!playWhenReady) unintendedPauses++
+                }
+            })
             val firstFocus = audio.lastAudioFocusRequest
             // Media3 may not request focus until preparation advances. Any observed
             // request on API 34 must use its AudioFocusRequest, not the legacy overload.
@@ -62,7 +71,9 @@ class PlayerEngineAudioTest {
             repeat(10) { index ->
                 if (index % 2 == 0) engine.nextChannel() else engine.previousChannel()
                 assertSame(player, engine.player)
-                assertTrue(player!!.playWhenReady)
+                assertTrue(player.playWhenReady)
+                assertEquals(0, audio.legacyRequests)
+                assertEquals(0, unintendedPauses)
                 val focus = audio.lastAudioFocusRequest
                 if (focus != null) {
                     assertNotNull(focus.audioFocusRequest)
@@ -77,5 +88,21 @@ class PlayerEngineAudioTest {
         } finally {
             engine.close()
         }
+    }
+}
+
+@Implements(AudioManager::class)
+class CountingAudioManager : ShadowAudioManager() {
+    var legacyRequests = 0
+        private set
+
+    @Implementation
+    override fun requestAudioFocus(
+        listener: AudioManager.OnAudioFocusChangeListener?,
+        streamType: Int,
+        durationHint: Int,
+    ): Int {
+        legacyRequests++
+        return super.requestAudioFocus(listener, streamType, durationHint)
     }
 }
