@@ -13,6 +13,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -630,6 +631,88 @@ class SettingsLayoutTest {
         // Codice e QR del pannello di abbinamento del login sono nel riquadro.
         rule.onNodeWithTag("settings_card_remote").assertExists()
         rule.onNodeWithText("Abbinamento da telefono", useUnmergedTree = true).assertExists()
+    }
+
+    @Test
+    fun `configura da remoto - senza riquadro visibile il ciclo non parte`() {
+        pairingApi.creates.addLast(
+            ApiResult.Ok(
+                PairingSession(
+                    code = "001001",
+                    pollToken = "token-001001",
+                    expiresAtMillis = virtualClock.nowMillis() + 600_000L,
+                ),
+            ),
+        )
+        pairingApi.statuses.addLast(ApiResult.Ok(PairingStatus.Waiting))
+        val viewModel = createSettingsViewModel()
+        scheduler.advanceTimeBy(100L)
+        rule.waitForIdle()
+
+        // Nessuna richiesta al relay finché il riquadro non è visibile.
+        assertEquals(0, pairingApi.createCalls)
+        assertEquals(0, pairingApi.pollCalls)
+        assertFalse(viewModel.ui.value.pairingActive)
+    }
+
+    @Test
+    fun `configura da remoto - riquadro non visibile - il ciclo si ferma subito`() {
+        pairingApi.creates.addLast(
+            ApiResult.Ok(
+                PairingSession(
+                    code = "001001",
+                    pollToken = "token-001001",
+                    expiresAtMillis = virtualClock.nowMillis() + 600_000L,
+                ),
+            ),
+        )
+        pairingApi.statuses.addLast(ApiResult.Ok(PairingStatus.Waiting))
+        val viewModel = createSettingsViewModel()
+        scheduler.advanceTimeBy(100L)
+        rule.waitForIdle()
+
+        // Il riquadro è visibile: parte e interroga.
+        viewModel.onRemoteCardVisible()
+        assertTrue(viewModel.ui.value.pairingActive)
+        assertEquals(1, pairingApi.createCalls)
+        scheduler.advanceTimeBy(2_001L)
+        rule.waitForIdle()
+        assertEquals(1, pairingApi.pollCalls)
+
+        // Non più visibile: il ciclo si ferma e non tocca più il relay, anche
+        // facendo passare altri intervalli e ricreando l'istanza.
+        viewModel.onRemoteCardHidden()
+        assertFalse(viewModel.ui.value.pairingActive)
+        val createsWhenHidden = pairingApi.createCalls
+        val pollsWhenHidden = pairingApi.pollCalls
+        scheduler.advanceTimeBy(30_000L)
+        rule.waitForIdle()
+        assertEquals(createsWhenHidden, pairingApi.createCalls)
+        assertEquals(pollsWhenHidden, pairingApi.pollCalls)
+
+        // Tornando visibile riparte dalla sessione già valida.
+        viewModel.onRemoteCardVisible()
+        assertTrue(viewModel.ui.value.pairingActive)
+        scheduler.advanceTimeBy(2_001L)
+        rule.waitForIdle()
+        assertEquals(1, pairingApi.createCalls)
+        assertEquals(pollsWhenHidden + 1, pairingApi.pollCalls)
+        viewModel.onRemoteCardHidden()
+    }
+
+    @Test
+    fun `visibilita' del riquadro - regola dell'intervallo visibile`() {
+        val viewport = Rect(top = 0f, bottom = 800f, left = 0f, right = 1000f)
+
+        // Interamente dentro, parzialmente dentro e appena sotto il bordo.
+        assertTrue(isRemoteCardVisible(Rect(top = 100f, bottom = 300f, left = 0f, right = 100f), viewport))
+        assertTrue(isRemoteCardVisible(Rect(top = 700f, bottom = 1100f, left = 0f, right = 100f), viewport))
+        assertFalse(isRemoteCardVisible(Rect(top = 800f, bottom = 1200f, left = 0f, right = 100f), viewport))
+        assertFalse(isRemoteCardVisible(Rect(top = -400f, bottom = 0f, left = 0f, right = 100f), viewport))
+
+        // Riquadro o schermata non ancora misurati: conta come visibile.
+        assertTrue(isRemoteCardVisible(Rect.Zero, viewport))
+        assertTrue(isRemoteCardVisible(Rect(top = 100f, bottom = 300f, left = 0f, right = 100f), Rect.Zero))
     }
 
     @Test

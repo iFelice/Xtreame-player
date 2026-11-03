@@ -106,6 +106,16 @@ const val EXIT_CLEAR_USER_DATA_LABEL = "Cancella anche preferiti e cronologia"
  */
 private val LocalSettingsScrollState = staticCompositionLocalOf<ScrollStateHolder?> { null }
 
+/**
+ * Vero quando il riquadro "Configura da remoto" è dentro l'intervallo visibile
+ * delle Impostazioni. Un riquadro non ancora misurato ([Rect.Zero], altezza
+ * nulla) conta come visibile: la misurazione arriva al primo fotogramma.
+ */
+internal fun isRemoteCardVisible(card: Rect, viewport: Rect): Boolean {
+    if (card.height <= 0f || viewport.height <= 0f) return true
+    return card.bottom > viewport.top && card.top < viewport.bottom
+}
+
 /** Contenitore scorrevole corrente e suo intervallo verticale a schermo. */
 class ScrollStateHolder {
 
@@ -411,11 +421,11 @@ internal fun RemoteConfigCard(
     var inViewport by remember { mutableStateOf(true) }
     var started by remember { mutableStateOf(false) }
 
-    LaunchedEffect(scrollHolder, bounds) {
-        val holder = scrollHolder ?: return@LaunchedEffect
-        val viewport = holder.viewport
-        inViewport = bounds.height <= 0f ||
-            (bounds.bottom > viewport.top && bounds.top < viewport.bottom)
+    // Il polling gira solo con il riquadro dentro l'intervallo visibile: qui si
+    // osserva la posizione del riquadro e quella della schermata.
+    val currentViewport = scrollHolder?.viewport ?: Rect.Zero
+    LaunchedEffect(currentViewport, bounds) {
+        inViewport = isRemoteCardVisible(bounds, currentViewport)
     }
 
     LifecycleStartEffect(Unit) {
