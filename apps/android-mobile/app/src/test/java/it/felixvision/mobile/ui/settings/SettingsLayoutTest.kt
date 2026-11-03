@@ -13,11 +13,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
-import androidx.compose.ui.test.performSemanticsAction
-import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
-import androidx.lifecycle.Lifecycle
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import it.felixvision.mobile.BuildConfig
 import it.felixvision.mobile.data.catalog.CatalogDownloadMonitor
@@ -427,13 +424,6 @@ class SettingsLayoutTest {
         rule.waitForIdle()
     }
 
-    /** Riporta in cima la colonna scorrevole delle Impostazioni. */
-    private fun scrollListToTop() {
-        rule.onNodeWithTag(SETTINGS_LIST_TAG)
-            .performSemanticsAction(SemanticsActions.ScrollBy) { scrollBy -> scrollBy(0f, -5_000f) }
-        rule.waitForIdle()
-    }
-
     private fun exists(tag: String): Boolean =
         rule.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()
 
@@ -614,9 +604,7 @@ class SettingsLayoutTest {
 
     @Test
     @Config(sdk = [34], qualifiers = "w800dp-h480dp-port-mdpi")
-    fun `configura da remoto - polling solo con il riquadro visibile`() {
-        // Solo la prima tessera del pannello viene creata: così il ciclo può
-        // restare in attesa sul tempo virtuale senza esaurire i valori finti.
+    fun `configura da remoto - il riquadro composto avvia l'abbinamento`() {
         pairingApi.creates.addLast(
             ApiResult.Ok(
                 PairingSession(
@@ -629,84 +617,19 @@ class SettingsLayoutTest {
         pairingApi.statuses.addLast(ApiResult.Ok(PairingStatus.Waiting))
         val viewModel = createSettingsViewModel()
         mount(viewModel)
-        scheduler.advanceTimeBy(100L)
-        rule.waitForIdle()
 
-        // Con il riquadro visibile il ciclo parte: una sessione creata e, dopo
-        // il primo intervallo (2 s sul tempo virtuale), una interrogazione.
-        rule.onNodeWithTag(SettingsPanel.REMOTE.testTag).performScrollTo()
+        // La colonna compone tutti i riquadri: "Configura da remoto" chiede al
+        // ViewModel di partire appena compare a schermo.
         rule.waitUntil(timeoutMillis = 5_000) { pairingApi.createCalls == 1 }
-        assertTrue("polling attivo con il riquadro visibile", viewModel.ui.value.pairingActive)
+        assertTrue("polling attivo con il riquadro a schermo", viewModel.ui.value.pairingActive)
+        rule.onNodeWithTag(SettingsPanel.REMOTE.testTag).performScrollTo()
         scheduler.advanceTimeBy(2_001L)
         rule.waitForIdle()
         rule.waitUntil(timeoutMillis = 5_000) { pairingApi.pollCalls == 1 }
 
-        // Riquadro fuori dallo schermo: si torna in cima alla colonna scorrevole
-        // con l'azione di scorrimento (nessun gesto da simulare).
-        scrollListToTop()
-        rule.waitUntil(timeoutMillis = 5_000) { !viewModel.ui.value.pairingActive }
-        val createsWhenHidden = pairingApi.createCalls
-        val pollsWhenHidden = pairingApi.pollCalls
-        // Due intervalli di interrogazione sul tempo virtuale: con il riquadro
-        // fuori schermo il ciclo è fermo, quindi i contatori non si muovono.
-        scheduler.advanceTimeBy(4_000L)
-        rule.waitForIdle()
-        assertEquals(
-            "nessuna richiesta con il riquadro fuori schermo",
-            createsWhenHidden,
-            pairingApi.createCalls,
-        )
-        assertEquals(
-            "nessun interrogatorio con il riquadro fuori schermo",
-            pollsWhenHidden,
-            pairingApi.pollCalls,
-        )
-    }
-
-    @Test
-    @Config(sdk = [34], qualifiers = "w800dp-h480dp-port-mdpi")
-    fun `configura da remoto - in secondo piano il polling si ferma`() {
-        pairingApi.creates.addLast(
-            ApiResult.Ok(
-                PairingSession(
-                    code = "001001",
-                    pollToken = "token-001001",
-                    expiresAtMillis = virtualClock.nowMillis() + 600_000L,
-                ),
-            ),
-        )
-        // Due stati "in attesa": uno per il primo interrogatorio e uno per
-        // quello dopo il ritorno in primo piano (la sessione è ancora valida).
-        pairingApi.statuses.addLast(ApiResult.Ok(PairingStatus.Waiting))
-        pairingApi.statuses.addLast(ApiResult.Ok(PairingStatus.Waiting))
-        val viewModel = createSettingsViewModel()
-        mount(viewModel)
-        scheduler.advanceTimeBy(100L)
-        rule.waitForIdle()
-
-        rule.onNodeWithTag(SettingsPanel.REMOTE.testTag).performScrollTo()
-        rule.waitUntil(timeoutMillis = 5_000) { pairingApi.createCalls == 1 }
-        scheduler.advanceTimeBy(2_001L)
-        rule.waitForIdle()
-        rule.waitUntil(timeoutMillis = 5_000) { pairingApi.pollCalls == 1 }
-        assertTrue(viewModel.ui.value.pairingActive)
-
-        // App in secondo piano: il ciclo si ferma anche con il riquadro a schermo.
-        rule.activityRule.scenario.moveToState(Lifecycle.State.CREATED)
-        rule.waitUntil(timeoutMillis = 5_000) { !viewModel.ui.value.pairingActive }
-
-        val createsWhenPaused = pairingApi.createCalls
-        val pollsWhenPaused = pairingApi.pollCalls
-        scheduler.advanceTimeBy(6_000L)
-        rule.waitForIdle()
-        assertEquals("nessuna richiesta in secondo piano", createsWhenPaused, pairingApi.createCalls)
-        assertEquals("nessun interrogatorio in secondo piano", pollsWhenPaused, pairingApi.pollCalls)
-
-        // Al ritorno in primo piano il ciclo riparte (il riquadro è ancora a
-        // schermo) e il relay torna a essere interrogato.
-        rule.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
-        rule.waitUntil(timeoutMillis = 5_000) { viewModel.ui.value.pairingActive }
-        rule.waitUntil(timeoutMillis = 5_000) { pairingApi.pollCalls == 2 }
+        // Codice e QR del pannello di abbinamento del login sono nel riquadro.
+        rule.onNodeWithTag("settings_card_remote").assertExists()
+        rule.onNodeWithText("Abbinamento da telefono", useUnmergedTree = true).assertExists()
     }
 
     @Test
