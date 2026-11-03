@@ -269,7 +269,7 @@ class SettingsPlayerPageTest {
         showNavigation(prefs)
         openPlayerPage()
 
-        val frameMillis = ZAPPING_TEST_FRAME_MILLIS
+        val frameMillis: Long = ZAPPING_TEST_FRAME_MILLIS
         // All'inizio del test l'orologio non parte da zero (le attese dei
         // fotogrammi lo hanno già avanzato): lo si riallinea ai multipli del
         // frame, così i tempi dei passi sono calcolabili.
@@ -298,13 +298,15 @@ class SettingsPlayerPageTest {
         // ogni 100 ms, fino ai 1000 ms dall'OK.
         val stepFrames = repeatStepFrames(repeatAt, ZAPPING_HOLD_MILLIS, frameMillis)
         val firstStep = stepFrames.first()
-        val expected = 10 + 1 + stepFrames.size
-        assertEquals(listOf(it + 0L, 112L, 224L, 336L, 448L).map { d -> firstStep + d }, stepFrames)
+        val expected: Long = 10L + 1L + stepFrames.size.toLong()
+        // Un passo ogni 100 ms: ai frame di 16 ms i cambi cadono a 112 ms l'uno
+        // dall'altro.
+        assertEquals(listOf(0L, 112L, 224L, 336L, 448L).map { it + firstStep }, stepFrames)
         assertEquals(5, stepFrames.size)
         assertEquals(16L, expected)
 
         // Fino a un frame prima del primo passo il valore non è ancora cambiato.
-        rule.mainClock.advanceTimeBy(firstStep - frameMillis - rule.mainClock.currentTime)
+        rule.mainClock.advanceTimeBy((firstStep - frameMillis - rule.mainClock.currentTime).coerceAtLeast(0L))
         assertEquals(11, prefs.zappingSeconds)
 
         // Fino ai 1000 ms dall'OK, frame per frame, il valore è sempre quello
