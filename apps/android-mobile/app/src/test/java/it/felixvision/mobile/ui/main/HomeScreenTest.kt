@@ -9,6 +9,7 @@ package it.felixvision.mobile.ui.main
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasContentDescription
@@ -430,6 +431,23 @@ class HomeScreenTest {
         rule.waitForIdle()
         rule.onNodeWithTag("category_panel_film").assertDoesNotExist()
         rule.onNodeWithTag("category_header_film").assertIsDisplayed()
+    }
+
+    @Test
+    @Config(sdk = [34], qualifiers = "w1280dp-h800dp-land-mdpi")
+    fun `Preferiti mostra tre schede e conserva la selezione cambiando sezione`() {
+        mount()
+        rule.onNodeWithTag("rail_item_preferiti").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithTag("favorites_tab_my_channels", useUnmergedTree = true).assertIsDisplayed()
+        rule.onNodeWithTag("favorites_tab_film_series", useUnmergedTree = true).performClick()
+        rule.onNodeWithTag("favorites_tab_film_series", useUnmergedTree = true).assertIsSelected()
+        rule.onNodeWithTag("favorites_tab_live_categories", useUnmergedTree = true).assertIsDisplayed()
+
+        rule.onNodeWithTag("rail_item_live").performClick()
+        rule.onNodeWithTag("rail_item_preferiti").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithTag("favorites_tab_film_series", useUnmergedTree = true).assertIsSelected()
     }
 
     // --- Pannello azioni (pressione lunga) ---
