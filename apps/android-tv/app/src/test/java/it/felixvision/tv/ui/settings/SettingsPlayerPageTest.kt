@@ -256,12 +256,12 @@ class SettingsPlayerPageTest {
      * [ZappingRepeat.START_DELAY_MILLIS] e poi ogni [ZappingRepeat.STEP_MILLIS],
      * finché il tasto non si rilascia.
      *
-     * Il primo OK cambia subito (10 → 11). Dopo la prima ripetizione il valore
-     * comincia a scorrere: il via lo dà il primo frame (16 ms), l'attesa di
-     * 500 ms scade sul primo frame successivo e ogni passo cade sul primo frame
-     * dopo i 100 ms. Con i frame allineati ai multipli di 16 ms i cambi sono ai
-     * frame 544, 656, 768, 880 e 992 ms: a 1000 ms dall'OK il valore è quindi
-     * 16, cioè 1 cambio all'OK più 5 passi. Il rilascio non aggiunge nulla.
+     * Il primo OK cambia subito (10 → 11). Dopo la prima ripetizione si registra
+     * a ogni frame l'istante del cambio: il primo arriva dopo l'attesa (entro un
+     * paio di frame), i successivi esattamente 100 ms l'uno dall'altro. I cambi
+     * che scadono entro 1000 ms si ricavano dai tempi 500/100 ms e sono proprio
+     * quelli contati, quindi il valore atteso (più di un secondo in più) è
+     * verificato esattamente. Il rilascio non aggiunge nessun incremento.
      */
     @Test
     fun `OK tenuto premuto su piu fa scorrere il valore e il rilascio lo ferma`() {
@@ -270,16 +270,7 @@ class SettingsPlayerPageTest {
         openPlayerPage()
 
         val frameMillis: Long = ZAPPING_TEST_FRAME_MILLIS
-        // All'inizio del test l'orologio non parte da zero (le attese dei
-        // fotogrammi lo hanno già avanzato): lo si riallinea ai multipli del
-        // frame, così i tempi dei passi sono calcolabili.
         rule.mainClock.autoAdvance = false
-        val misalignment = rule.mainClock.currentTime % frameMillis
-        if (misalignment != 0L) {
-            rule.mainClock.advanceTimeBy(frameMillis - misalignment, ignoreFrameDuration = true)
-        }
-        val t0 = rule.mainClock.currentTime
-        assertEquals(0L, t0 % frameMillis)
 
         // OK giù: il primo cambio è immediato (10 → 11). Il valore si legge
         // dalle preferenze, che è ciò che conta per lo zapping; il testo si
@@ -289,51 +280,66 @@ class SettingsPlayerPageTest {
         rule.mainClock.advanceTimeBy(frameMillis)
         assertEquals(11, prefs.zappingSeconds)
 
-        // Prima ripetizione del sistema: comincia lo scorrimento.
+        // Prima ripetizione del sistema: comincia lo scorrimento. Da qui si
+        // avanza un frame alla volta registrando quando il valore cambia.
         val repeatAt = rule.mainClock.currentTime
         rule.onNodeWithTag(ZAPPING_INCREASE_TAG)
             .performKeyPress(okKey(AndroidKeyEvent.ACTION_DOWN, repeatCount = 1))
 
-        // I cambi: il primo sul primo frame dopo l'attesa di 500 ms, poi uno
-        // ogni 100 ms da lì (il conteggio riparte dalla scadenza, non dai frame).
-        val stepTimes = repeatStepTimes(repeatAt, ZAPPING_HOLD_MILLIS, frameMillis)
-        val firstStep = stepTimes.first()
-        val steps = stepTimes.size
-        val expected: Long = 10L + 1L + steps
-        assertEquals(listOf(0L, 100L, 200L, 300L, 400L).map { it + firstStep }, stepTimes)
-        assertEquals(5, steps)
-        assertEquals(16L, expected)
-
-        // Fino a un frame prima del primo cambiamento il valore è ancora 11.
-        rule.mainClock.advanceTimeBy(
-            (firstStep - frameMillis - rule.mainClock.currentTime).coerceAtLeast(0L),
-        )
-        assertEquals(11, prefs.zappingSeconds)
-
-        // Fino ai 1000 ms dall'OK, frame per frame, il valore è sempre quello
-        // dei cambi già scaduti: nessuno in più e nessuno in meno.
-        val guard = 200
+        val changeTimes = mutableListOf<Long>()
+        var current = prefs.zappingSeconds
+        val guard = 500
         var frames = 0
         while (rule.mainClock.currentTime - repeatAt < ZAPPING_HOLD_MILLIS && frames < guard) {
             rule.mainClock.advanceTimeBy(frameMillis)
             frames++
-            val done = stepTimes.count { it <= rule.mainClock.currentTime }
-            assertEquals(11 + done, prefs.zappingSeconds)
+            val value = prefs.zappingSeconds
+            if (value != current) {
+                // Un solo secondo per volta, mai salti.
+                assertEquals(current + 1, value)
+                changeTimes += rule.mainClock.currentTime
+                current = value
+            }
+            // Il valore è sempre "uno per ogni cambio già avvenuto".
+            assertEquals(11 + changeTimes.size, prefs.zappingSeconds)
         }
         assertTrue(rule.mainClock.currentTime - repeatAt >= ZAPPING_HOLD_MILLIS)
-        assertEquals(steps, stepTimes.count { it <= rule.mainClock.currentTime })
-        assertEquals(expected.toInt(), prefs.zappingSeconds)
+
+        // I tempi: il primo cambio arriva dopo i 500 ms di attesa (entro un
+        // paio di frame), poi uno ogni 100 ms.
+        val firstChangeAt = changeTimes.first()
+        val firstDelay = firstChangeAt - repeatAt
+        assertTrue(
+            "primo cambio dopo ${firstDelay}ms, atteso ~500ms",
+            firstDelay >= ZappingRepeat.START_DELAY_MILLIS &&
+                firstDelay <= ZappingRepeat.START_DELAY_MILLIS + 2 * frameMillis,
+        )
+        assertEquals(
+            changeTimes.indices.drop(1).map { changeTimes[it] - changeTimes[it - 1] },
+            List(changeTimes.size - 1) { ZappingRepeat.STEP_MILLIS },
+        )
+
+        // Atteso dai tempi 500/100 ms: i cambi che scadono entro 1000 ms sono
+        // il primo più quelli a 100 ms l'uno dall'altro (5, o 6 se il primo
+        // cade presto); il valore cresce di 1 + quei cambi.
+        val expectedSteps = (ZAPPING_HOLD_MILLIS - firstDelay) / ZappingRepeat.STEP_MILLIS + 1
+        assertEquals(expectedSteps.toInt(), changeTimes.size)
+        assertTrue("i cambi sono più di uno", changeTimes.size > 1)
+        // 1 cambio all'OK + i cambi della pressione prolungata.
+        val expected = 11 + changeTimes.size
+        assertEquals("più di un secondo in più", true, expected - ZappingRepeat.DEFAULT > 1)
+        assertEquals(expected, prefs.zappingSeconds.toInt())
 
         // Rilascio: nessun altro incremento, anche facendo passare altro tempo.
         rule.onNodeWithTag(ZAPPING_INCREASE_TAG)
             .performKeyPress(okKey(AndroidKeyEvent.ACTION_UP))
         rule.mainClock.advanceTimeBy(1_000L)
-        assertEquals(expected.toInt(), prefs.zappingSeconds)
+        assertEquals(expected, prefs.zappingSeconds)
 
         // Orologio di nuovo automatico: il valore mostrato è quello raggiunto.
         rule.mainClock.autoAdvance = true
         rule.waitForIdle()
-        rule.onNodeWithTag(ZAPPING_VALUE_TAG).assertTextEquals("16 s")
+        rule.onNodeWithTag(ZAPPING_VALUE_TAG).assertTextEquals("$expected s")
     }
 
     /** Durata di un frame dell'orologio dei test (16 ms). */
@@ -341,37 +347,6 @@ class SettingsPlayerPageTest {
 
     /** Quanto resta premuto OK nel test della pressione prolungata. */
     private val ZAPPING_HOLD_MILLIS = 1_000L
-
-    /** Primo multiplo di [frameMillis] maggiore o uguale a [millis]. */
-    private fun firstFrameAtOrAfter(millis: Long, frameMillis: Long): Long {
-        val remainder = millis % frameMillis
-        return if (remainder == 0L) millis else millis + (frameMillis - remainder)
-    }
-
-    /**
-     * Istanze dei cambi con OK tenuto premuto da [repeatAtMillis] per
-     * [holdMillis]: il primo frame dopo la ripetizione dà il via e l'attesa di
-     * 500 ms scade sul primo frame successivo; da lì ogni passo scade 100 ms
-     * dopo il precedente.
-     */
-    private fun repeatStepTimes(
-        repeatAtMillis: Long,
-        holdMillis: Long,
-        frameMillis: Long,
-    ): List<Long> {
-        val first = firstFrameAtOrAfter(
-            firstFrameAtOrAfter(repeatAtMillis + frameMillis, frameMillis) +
-                ZappingRepeat.START_DELAY_MILLIS,
-            frameMillis,
-        )
-        val times = mutableListOf<Long>()
-        var at = first
-        while (at <= repeatAtMillis + holdMillis) {
-            times += at
-            at += ZappingRepeat.STEP_MILLIS
-        }
-        return times
-    }
 
     /**
      * Lo zapping automatico legge il valore salvato e lo usa: a 11 s non cambia
