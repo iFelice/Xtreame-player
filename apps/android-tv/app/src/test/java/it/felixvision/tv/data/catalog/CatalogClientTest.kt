@@ -65,7 +65,7 @@ class CatalogClientTest {
         sb.append('[')
         for (i in 1..itemCount) {
             if (i > 1) sb.append(',')
-            sb.append("""{"stream_id":""").append(i)
+            sb.append("""{"stream_id":"""").append(i)
                 .append("""","name":"Canale """).append(i)
                 .append("""","category_id":"1"}""")
         }
