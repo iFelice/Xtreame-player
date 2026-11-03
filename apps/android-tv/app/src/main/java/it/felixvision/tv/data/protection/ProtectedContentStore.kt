@@ -126,6 +126,19 @@ class ProtectedContentStore(
         ProtectedContentRules.removeItem(it, kind, itemId)
     }
 
+    /**
+     * Rimuove tutte le voci selezionate con UNA sola scrittura: `mutate`
+     * persiste una volta e incrementa [revision] una volta. Con nessuna voce
+     * (o con voci già assenti) non scrive nulla, come le altre operazioni.
+     */
+    suspend fun removeSelected(
+        server: String,
+        username: String,
+        keys: Collection<ProtectedEntryKey>,
+    ): ProtectedContentData = mutate(server, username) {
+        ProtectedContentRules.removeAll(it, keys)
+    }
+
     private suspend fun mutate(
         server: String,
         username: String,

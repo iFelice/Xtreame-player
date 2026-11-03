@@ -247,7 +247,12 @@ fun FvpMainScreen(
     DisposableEffect(context, container) {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(receiverContext: Context?, intent: Intent?) {
-                if (intent?.action == Intent.ACTION_SCREEN_OFF) container.protectedSession.lock()
+                if (intent?.action == Intent.ACTION_SCREEN_OFF) {
+                    container.protectedSession.lock()
+                    // La visita alla pagina di gestione finisce con lo standby:
+                    // al ritorno serve di nuovo il PIN.
+                    container.protectedPageAccess.revoke()
+                }
             }
         }
         val registered = runCatching {
@@ -266,7 +271,12 @@ fun FvpMainScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, container) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP) container.protectedSession.lock()
+            if (event == Lifecycle.Event.ON_STOP) {
+                container.protectedSession.lock()
+                // Stesso punto del riblocco: anche l'autorizzazione alla pagina
+                // "Contenuti protetti" si perde, senza toccare il PIN.
+                container.protectedPageAccess.revoke()
+            }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }

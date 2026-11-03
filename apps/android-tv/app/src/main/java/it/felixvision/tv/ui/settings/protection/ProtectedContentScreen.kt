@@ -2,6 +2,7 @@ package it.felixvision.tv.ui.settings.protection
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +18,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -33,11 +35,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.tv.material3.Border
 import androidx.tv.material3.DenseListItem
 import androidx.tv.material3.ListItemDefaults
@@ -49,7 +58,9 @@ import it.felixvision.tv.data.catalog.allCategoryIds
 import it.felixvision.tv.data.protection.ProtectedContentData
 import it.felixvision.tv.data.protection.ProtectedContentRules
 import it.felixvision.tv.data.protection.ProtectedContentStore
+import it.felixvision.tv.data.protection.ProtectedEntryKey
 import it.felixvision.tv.data.protection.ProtectedKind
+import it.felixvision.tv.data.protection.ProtectedPageAccess
 import it.felixvision.tv.data.protection.ProtectedSession
 import it.felixvision.tv.data.store.CredentialStore
 import it.felixvision.tv.ui.components.FvpCompactButton
@@ -74,6 +85,39 @@ internal fun protectedKindLabel(kind: ProtectedKind): String = when (kind) {
 /** Tipo a partire dalla chiave salvata negli elenchi; null se sconosciuta. */
 internal fun protectedKindFromStorageKey(key: String): ProtectedKind? =
     ProtectedKind.entries.firstOrNull { it.storageKey == key }
+
+/** Tag del pulsante di rimozione multipla e della sua finestra di conferma. */
+internal const val PROTECTED_REMOVE_SELECTED_TAG = "protected_remove_selected"
+internal const val PROTECTED_REMOVE_DIALOG_TAG = "protected_remove_dialog"
+internal const val PROTECTED_REMOVE_TEXT_TAG = "protected_remove_dialog_text"
+internal const val PROTECTED_REMOVE_YES_TAG = "protected_remove_yes"
+internal const val PROTECTED_REMOVE_NO_TAG = "protected_remove_no"
+
+/** Testo del pulsante e della domanda di conferma, con il numero di voci. */
+internal fun removeSelectedLabel(count: Int): String = "Rimuovi selezionati ($count)"
+internal fun removeConfirmationText(count: Int): String =
+    "Rimuovere $count elementi dai contenuti protetti?"
+
+/**
+ * Decisione dell'interruttore Mostra/Nascondi: [onUnlock] è il solo punto in
+ * cui la pagina chiama `session.unlock()`, ed è raggiungibile SOLO con
+ * un'autorizzazione valida. Senza autorizzazione si torna alla verifica del
+ * PIN: il riblocco della sessione (ON_STOP, ACTION_SCREEN_OFF) non può essere
+ * aggirato premendo "Mostra". [onLock] ("Nascondi") non revoca l'autorizzazione.
+ */
+internal fun handleProtectedVisibilityToggle(
+    authorized: Boolean,
+    unlocked: Boolean,
+    onUnlock: () -> Unit,
+    onLock: () -> Unit,
+    onUnauthorized: () -> Unit,
+) {
+    when {
+        !authorized -> onUnauthorized()
+        unlocked -> onLock()
+        else -> onUnlock()
+    }
+}
 
 /** Pagine della schermata; la prima della pila è la radice. */
 internal sealed interface ProtectedPage {
@@ -107,11 +151,19 @@ internal enum class CreateOrigin { Initial, Change, ForgotBackToVerify, ForgotBa
  * pagina principale con interruttore "Mostra/Nascondi contenuti protetti",
  * "Aggiungi", "Cambia PIN" ed elenco "Nascosti".
  *
- * L'interruttore cambia SOLO lo stato di sessione [ProtectedSession]: in
- * questa PR il resto dell'app non filtra ancora nulla (lo farà la PR 2).
- * Entrare nella pagina non sblocca i contenuti. Indietro torna al livello
- * precedente e dalla radice alle Impostazioni ([onExit]). PIN e password non
- * sono mai mostrati né scritti nei log.
+ * L'interruttore cambia SOLO lo stato di sessione [ProtectedSession]: non
+ * sblocca mai i contenuti senza un'autorizzazione valida ([ProtectedPageAccess]
+ * concessa dal PIN per la sola visita in corso). Entrare nella pagina non
+ * sblocca i contenuti. Indietro torna al livello precedente; con una selezione
+ * attiva azzera la selezione senza uscire; dalla radice torna alle
+ * Impostazioni ([onExit]) e revoca l'autorizzazione. PIN e password non sono
+ * mai mostrati né scritti nei log.
+ *
+ * Nell'elenco "Nascosti" OK seleziona/deseleziona una riga: la rimozione
+ * avviene solo dopo l'unica conferma "Rimuovere N elementi..." e con una sola
+ * scrittura sull'archivio. La selezione non è persistita e si azzera uscendo
+ * dalla pagina o quando l'autorizzazione viene revocata (ON_STOP,
+ * ACTION_SCREEN_OFF).
  *
  * Nel flusso "Aggiungi" l'ultima voce aperta resta memorizzata per tutta la
  * durata della schermata: tornando indietro da una categoria, l'elenco delle
@@ -122,6 +174,7 @@ internal enum class CreateOrigin { Initial, Change, ForgotBackToVerify, ForgotBa
 fun ProtectedContentScreen(
     store: ProtectedContentStore,
     session: ProtectedSession,
+    access: ProtectedPageAccess,
     credentialStore: CredentialStore,
     clock: Clock,
     server: String,
@@ -139,8 +192,12 @@ fun ProtectedContentScreen(
     }
 
     val unlocked by session.unlocked.collectAsState()
+    val authorized by access.authorized.collectAsState()
 
     val stack = remember { mutableStateListOf<ProtectedPage>() }
+    // Selezione solo della schermata: non salvata, azzerata all'uscita.
+    val selected = remember { mutableStateListOf<ProtectedEntryKey>() }
+    var showRemoveConfirm by remember { mutableStateOf(false) }
     var firstPin by remember { mutableStateOf<String?>(null) }
     var pinError by remember { mutableStateOf<String?>(null) }
     var createOrigin by remember { mutableStateOf(CreateOrigin.Initial) }
@@ -157,28 +214,6 @@ fun ProtectedContentScreen(
         mutableStateMapOf<ProtectedKind, LazyListState>()
     }
 
-    // La pagina iniziale dipende dall'archivio: senza PIN si crea, con PIN e
-    // sessione bloccata si verifica, altrimenti si apre la pagina principale.
-    LaunchedEffect(data) {
-        if (stack.isEmpty() && data != null) {
-            val current = data ?: return@LaunchedEffect
-            stack.add(
-                when {
-                    !current.hasPin -> {
-                        createOrigin = CreateOrigin.Initial
-                        ProtectedPage.CreatePin
-                    }
-                    !session.unlocked.value -> ProtectedPage.VerifyPin
-                    else -> ProtectedPage.Main
-                },
-            )
-        }
-    }
-
-    BackHandler {
-        if (stack.size > 1) stack.removeAt(stack.lastIndex) else onExit()
-    }
-
     fun replaceTop(pageToSelect: ProtectedPage) {
         if (stack.isEmpty()) stack.add(pageToSelect) else stack[stack.lastIndex] = pageToSelect
     }
@@ -186,8 +221,80 @@ fun ProtectedContentScreen(
         stack.clear()
         stack.add(pageToSelect)
     }
+    fun toggleSelection(key: ProtectedEntryKey) {
+        val index = selected.indexOf(key)
+        if (index >= 0) selected.removeAt(index) else selected.add(key)
+    }
+    fun clearSelection() {
+        selected.clear()
+        showRemoveConfirm = false
+    }
+    fun returnToPinPage() {
+        clearSelection()
+        goToRoot(if (data?.hasPin == true) ProtectedPage.VerifyPin else ProtectedPage.CreatePin)
+    }
 
     val page = stack.lastOrNull()
+
+    // La pagina iniziale dipende dall'archivio E dall'autorizzazione: senza PIN
+    // si crea, con PIN ma senza autorizzazione si verifica (a ogni nuova visita,
+    // anche se la sessione è ancora sbloccata), altrimenti si apre la pagina
+    // principale.
+    LaunchedEffect(data) {
+        val current = data ?: return@LaunchedEffect
+        if (stack.isEmpty()) {
+            stack.add(
+                when {
+                    !current.hasPin -> {
+                        createOrigin = CreateOrigin.Initial
+                        ProtectedPage.CreatePin
+                    }
+                    !authorized -> ProtectedPage.VerifyPin
+                    else -> ProtectedPage.Main
+                },
+            )
+        }
+    }
+
+    // Solo una REVOCA mentre la pagina è aperta (ON_STOP / ACTION_SCREEN_OFF,
+    // gli stessi eventi che ribloccano la sessione) riporta alla verifica del
+    // PIN e azzera la selezione: vale per la pagina principale, il flusso
+    // Aggiungi, la selezione e la finestra di conferma. Il semplice stato
+    // iniziale "non autorizzato" non è una revoca e non disturba la creazione
+    // del PIN.
+    var previousAuthorized by remember { mutableStateOf<Boolean?>(null) }
+    LaunchedEffect(authorized) {
+        val previous = previousAuthorized
+        previousAuthorized = authorized
+        if (previous == true && !authorized && stack.isNotEmpty()) {
+            clearSelection()
+            goToRoot(if (data?.hasPin == true) ProtectedPage.VerifyPin else ProtectedPage.CreatePin)
+        }
+    }
+
+    // Uscire dalla pagina (in qualunque modo) chiude la visita autorizzata:
+    // al rientro serve di nuovo il PIN. ON_STOP e ACTION_SCREEN_OFF revocano
+    // lo stesso stato in FvpMainScreen.
+    DisposableEffect(Unit) {
+        onDispose { access.revoke() }
+    }
+
+    BackHandler {
+        when {
+            // Indietro nella conferma: si chiude senza modifiche, selezione
+            // conservata (il dialog ha anche onPreviewKeyEvent + BackHandler).
+            showRemoveConfirm -> showRemoveConfirm = false
+            // Indietro sulla pagina principale con una selezione: si azzera e
+            // non si esce.
+            page == ProtectedPage.Main && selected.isNotEmpty() -> selected.clear()
+            stack.size > 1 -> stack.removeAt(stack.lastIndex)
+            else -> {
+                clearSelection()
+                access.revoke()
+                onExit()
+            }
+        }
+    }
 
     // Il focus iniziale della pagina principale va sul primo pulsante; le
     // pagine PIN ricevono il focus sul "1" dentro [PinEntry].
@@ -212,7 +319,21 @@ fun ProtectedContentScreen(
                 unlocked = unlocked,
                 scale = scale,
                 firstFocus = mainFirstFocus,
-                onToggleVisibility = { if (unlocked) session.lock() else session.unlock() },
+                selected = selected,
+                onToggleSelection = { key -> toggleSelection(key) },
+                onRemoveSelected = { showRemoveConfirm = true },
+                onToggleVisibility = {
+                    // L'interruttore non può MAI sbloccare senza autorizzazione:
+                    // onUnlock è l'unico punto che chiama session.unlock().
+                    // "Nascondi" (onLock) non revoca l'autorizzazione.
+                    handleProtectedVisibilityToggle(
+                        authorized = authorized,
+                        unlocked = unlocked,
+                        onUnlock = { session.unlock() },
+                        onLock = { session.lock() },
+                        onUnauthorized = { returnToPinPage() },
+                    )
+                },
                 onAdd = {
                     pinError = null
                     stack.add(ProtectedPage.AddKind)
@@ -220,12 +341,6 @@ fun ProtectedContentScreen(
                 onChangePin = {
                     pinError = null
                     stack.add(ProtectedPage.VerifyPin)
-                },
-                onRemoveCategory = { kind, categoryId ->
-                    scope.launch { store.removeCategory(server, username, kind, categoryId) }
-                },
-                onRemoveItem = { kind, itemId ->
-                    scope.launch { store.removeItem(server, username, kind, itemId) }
                 },
             )
 
@@ -260,6 +375,10 @@ fun ProtectedContentScreen(
                             store.setPin(server, username, pin)
                             firstPin = null
                             pinError = null
+                            // Il PIN appena creato autorizza la visita corrente,
+                            // salvo il recupero che rimanda alla verifica del
+                            // nuovo PIN: lì autorizza onVerified.
+                            if (returnTo == ProtectedPage.Main) access.grant()
                             goToRoot(returnTo)
                         }
                     }
@@ -278,6 +397,8 @@ fun ProtectedContentScreen(
                 onMessage = { pinError = it },
                 onVerified = {
                     pinError = null
+                    // Il PIN verificato autorizza SOLO la visita in corso.
+                    access.grant()
                     if (stack.size > 1) {
                         // Verifica richiesta da "Cambia PIN": si crea il nuovo PIN.
                         createOrigin = CreateOrigin.Change
@@ -367,21 +488,119 @@ fun ProtectedContentScreen(
                 },
             )
         }
+
+        // Una sola finestra di conferma per l'intera selezione: "Sì" scrive
+        // l'archivio una sola volta, "No" e Indietro non modificano nulla.
+        if (showRemoveConfirm && authorized && page == ProtectedPage.Main && selected.isNotEmpty()) {
+            ProtectedRemoveConfirmDialog(
+                count = selected.size,
+                scale = scale,
+                onYes = {
+                    val keys = selected.toList()
+                    clearSelection()
+                    scope.launch { store.removeSelected(server, username, keys) }
+                },
+                onNo = { showRemoveConfirm = false },
+            )
+        }
     }
 }
 
-/** Pagina principale: interruttore di visibilità, gestione PIN ed elenco "Nascosti". */
+/**
+ * Unica finestra di conferma della rimozione multipla: focus iniziale su "No".
+ * Indietro chiude senza modifiche: `onPreviewKeyEvent(Key.Back)` sulla radice
+ * consuma KeyDown e agisce su KeyUp, con [BackHandler] come riserva quando il
+ * focus è uscito dalla finestra.
+ */
+@Composable
+private fun ProtectedRemoveConfirmDialog(
+    count: Int,
+    scale: UiScale,
+    onYes: () -> Unit,
+    onNo: () -> Unit,
+) {
+    // FocusRequester sempre dentro remember: focus iniziale sul "No" (sicuro).
+    val noFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
+        runCatching { noFocus.requestFocus() }
+    }
+
+    Dialog(
+        onDismissRequest = onNo,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        BackHandler { onNo() }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(FvpColors.Background.copy(alpha = 0.85f))
+                .onPreviewKeyEvent { event ->
+                    if (event.key != Key.Back) return@onPreviewKeyEvent false
+                    when (event.type) {
+                        KeyEventType.KeyDown -> true
+                        KeyEventType.KeyUp -> {
+                            onNo()
+                            true
+                        }
+                        else -> false
+                    }
+                }
+                .testTag(PROTECTED_REMOVE_DIALOG_TAG),
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(
+                modifier = Modifier
+                    .background(FvpColors.Surface, shape = RoundedCornerShape(scale.dp(12f)))
+                    .padding(scale.dp(20f)),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(scale.dp(14f)),
+            ) {
+                Text(
+                    text = removeConfirmationText(count),
+                    color = FvpColors.TextPrimary,
+                    fontSize = scale.sp(18f),
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.testTag(PROTECTED_REMOVE_TEXT_TAG),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(scale.dp(12f))) {
+                    FvpCompactButton(
+                        text = "Sì",
+                        onClick = onYes,
+                        scale = scale,
+                        modifier = Modifier.testTag(PROTECTED_REMOVE_YES_TAG),
+                    )
+                    FvpCompactButton(
+                        text = "No",
+                        onClick = onNo,
+                        scale = scale,
+                        modifier = Modifier
+                            .focusRequester(noFocus)
+                            .testTag(PROTECTED_REMOVE_NO_TAG),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Pagina principale: interruttore di visibilità, gestione PIN, pulsante di
+ * rimozione multipla (solo con una selezione) ed elenco "Nascosti". OK su una
+ * riga la seleziona o la deseleziona con il segno di spunta: NON rimuove nulla.
+ */
 @Composable
 private fun ProtectedMainPage(
     data: ProtectedContentData?,
     unlocked: Boolean,
     scale: UiScale,
     firstFocus: FocusRequester,
+    selected: List<ProtectedEntryKey>,
+    onToggleSelection: (ProtectedEntryKey) -> Unit,
+    onRemoveSelected: () -> Unit,
     onToggleVisibility: () -> Unit,
     onAdd: () -> Unit,
     onChangePin: () -> Unit,
-    onRemoveCategory: (ProtectedKind, String) -> Unit,
-    onRemoveItem: (ProtectedKind, String) -> Unit,
 ) {
     Column(
         modifier = Modifier.fillMaxSize(),
@@ -415,6 +634,16 @@ private fun ProtectedMainPage(
                 scale = scale,
                 modifier = Modifier.testTag("protected_change_pin"),
             )
+            // Compare solo con almeno una riga selezionata: una sola finestra
+            // di conferma per tutte le voci.
+            if (selected.isNotEmpty()) {
+                FvpCompactButton(
+                    text = removeSelectedLabel(selected.size),
+                    onClick = onRemoveSelected,
+                    scale = scale,
+                    modifier = Modifier.testTag(PROTECTED_REMOVE_SELECTED_TAG),
+                )
+            }
         }
         Text(
             text = "Nascosti",
@@ -442,9 +671,12 @@ private fun ProtectedMainPage(
                 items(hiddenCategories, key = { "hidden_cat_${it.kind}_${it.categoryId}" }) { hidden ->
                     val kind = protectedKindFromStorageKey(hidden.kind)
                     if (kind != null) {
+                        val key = ProtectedEntryKey(kind, hidden.categoryId, isCategory = true)
+                        val checked = key in selected
                         ProtectionRow(
-                            headline = "Categoria · ${protectedKindLabel(kind)} · ${hidden.name}",
-                            onClick = { onRemoveCategory(kind, hidden.categoryId) },
+                            headline = (if (checked) CHECK_PREFIX else "") +
+                                "Categoria · ${protectedKindLabel(kind)} · ${hidden.name}",
+                            onClick = { onToggleSelection(key) },
                             scale = scale,
                             modifier = Modifier.testTag(
                                 "protected_hidden_cat_${hidden.kind}_${hidden.categoryId}",
@@ -455,9 +687,12 @@ private fun ProtectedMainPage(
                 items(hiddenItems, key = { "hidden_item_${it.kind}_${it.itemId}" }) { hidden ->
                     val kind = protectedKindFromStorageKey(hidden.kind)
                     if (kind != null) {
+                        val key = ProtectedEntryKey(kind, hidden.itemId, isCategory = false)
+                        val checked = key in selected
                         ProtectionRow(
-                            headline = "${protectedKindLabel(kind)} · ${hidden.name}",
-                            onClick = { onRemoveItem(kind, hidden.itemId) },
+                            headline = (if (checked) CHECK_PREFIX else "") +
+                                "${protectedKindLabel(kind)} · ${hidden.name}",
+                            onClick = { onToggleSelection(key) },
                             scale = scale,
                             modifier = Modifier.testTag(
                                 "protected_hidden_item_${hidden.kind}_${hidden.itemId}",

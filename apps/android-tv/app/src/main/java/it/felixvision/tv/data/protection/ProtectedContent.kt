@@ -31,6 +31,19 @@ data class HiddenItem(
 )
 
 /**
+ * Chiave di una riga dell'elenco "Nascosti" selezionata per la rimozione:
+ * [isCategory] distingue una categoria intera da un contenuto singolo.
+ * Serve a rimuovere più voci con una sola trasformazione dell'archivio, quindi
+ * una sola scrittura e una sola revisione. Tipo puro: nessun Android e nessuna
+ * dipendenza da `ui/` o da tv-material (compilato anche dall'app mobile).
+ */
+data class ProtectedEntryKey(
+    val kind: ProtectedKind,
+    val id: String,
+    val isCategory: Boolean,
+)
+
+/**
  * Archivio dei contenuti protetti per server+utente: PIN (solo come hash
  * PBKDF2, mai in chiaro) ed elenchi di categorie e contenuti nascosti.
  */
@@ -133,4 +146,30 @@ object ProtectedContentRules {
     /** Toglie il contenuto dall'elenco "Nascosti" (il contenuto riappare). */
     fun removeItem(data: ProtectedContentData, kind: ProtectedKind, itemId: String): ProtectedContentData =
         data.copy(hiddenItems = data.hiddenItems.filterNot { it.kind == kind.storageKey && it.itemId == itemId })
+
+    /**
+     * Toglie tutte le voci [keys] con una sola trasformazione: usata dall'unica
+     * scrittura della rimozione multipla, così l'archivio avanza di una sola
+     * revisione. Le chiavi delle categorie non si applicano ai contenuti e
+     * viceversa; con nessuna chiave l'archivio resta identico (nessuna
+     * scrittura).
+     */
+    fun removeAll(
+        data: ProtectedContentData,
+        keys: Collection<ProtectedEntryKey>,
+    ): ProtectedContentData {
+        if (keys.isEmpty()) return data
+        val categoryKeys = keys.filter { it.isCategory }
+            .map { it.kind.storageKey to it.id }.toSet()
+        val itemKeys = keys.filterNot { it.isCategory }
+            .map { it.kind.storageKey to it.id }.toSet()
+        return data.copy(
+            hiddenCategories = data.hiddenCategories.filterNot {
+                (it.kind to it.categoryId) in categoryKeys
+            },
+            hiddenItems = data.hiddenItems.filterNot {
+                (it.kind to it.itemId) in itemKeys
+            },
+        )
+    }
 }
