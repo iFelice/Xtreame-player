@@ -13,8 +13,11 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
+import androidx.lifecycle.Lifecycle
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import it.felixvision.mobile.BuildConfig
 import it.felixvision.mobile.data.catalog.CatalogDownloadMonitor
@@ -424,6 +427,16 @@ class SettingsLayoutTest {
         rule.waitForIdle()
     }
 
+    /** Riporta in cima la colonna scorrevole delle Impostazioni. */
+    private fun scrollListToTop() {
+        rule.onNodeWithTag(SETTINGS_LIST_TAG)
+            .performSemanticsAction(SemanticsActions.ScrollBy) { scrollBy -> scrollBy(0f, -5_000f) }
+        rule.waitForIdle()
+    }
+
+    /** Vero quando il ciclo, dopo il ritorno in primo piano, ha interrogato ancora. */
+    private fun FakePairingApi.pollsWhenResumed(expected: Int): Boolean = pollCalls >= expected + 1
+
     private fun exists(tag: String): Boolean =
         rule.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()
 
@@ -630,8 +643,9 @@ class SettingsLayoutTest {
         rule.waitForIdle()
         rule.waitUntil(timeoutMillis = 5_000) { pairingApi.pollCalls == 1 }
 
-        // Riquadro fuori dallo schermo (scorrimento in alto): il polling si ferma.
-        rule.onNodeWithTag(SettingsPanel.ACCOUNT.testTag).performScrollTo()
+        // Riquadro fuori dallo schermo: si torna in cima alla colonna scorrevole
+        // con l'azione di scorrimento (nessun gesto da simulare).
+        scrollListToTop()
         rule.waitUntil(timeoutMillis = 5_000) {
             !exists(SettingsPanel.REMOTE.testTag, useUnmergedTree = true)
         }
@@ -652,6 +666,47 @@ class SettingsLayoutTest {
             pollsWhenHidden,
             pairingApi.pollCalls,
         )
+    }
+
+    @Test
+    fun `configura da remoto - in secondo piano il polling si ferma`() {
+        pairingApi.creates.addLast(
+            ApiResult.Ok(
+                PairingSession(
+                    code = "001001",
+                    pollToken = "token-001001",
+                    expiresAtMillis = virtualClock.nowMillis() + 600_000L,
+                ),
+            ),
+        )
+        pairingApi.statuses.addLast(ApiResult.Ok(PairingStatus.Waiting))
+        val viewModel = createSettingsViewModel()
+        mount(viewModel)
+        scheduler.advanceTimeBy(100L)
+        rule.waitForIdle()
+
+        rule.onNodeWithTag(SettingsPanel.REMOTE.testTag).performScrollTo()
+        rule.waitUntil(timeoutMillis = 5_000) { pairingApi.createCalls == 1 }
+        scheduler.advanceTimeBy(2_001L)
+        rule.waitForIdle()
+        rule.waitUntil(timeoutMillis = 5_000) { pairingApi.pollCalls == 1 }
+        assertTrue(viewModel.ui.value.pairingActive)
+
+        // App in secondo piano: il ciclo si ferma anche con il riquadro a schermo.
+        rule.activityRule.scenario.moveToState(Lifecycle.State.CREATED)
+        rule.waitUntil(timeoutMillis = 5_000) { !viewModel.ui.value.pairingActive }
+
+        val createsWhenPaused = pairingApi.createCalls
+        val pollsWhenPaused = pairingApi.pollCalls
+        scheduler.advanceTimeBy(6_000L)
+        rule.waitForIdle()
+        assertEquals("nessuna richiesta in secondo piano", createsWhenPaused, pairingApi.createCalls)
+        assertEquals("nessun interrogatorio in secondo piano", pollsWhenPaused, pairingApi.pollCalls)
+
+        // Al ritorno in primo piano il ciclo riparte (il riquadro è ancora lì).
+        rule.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
+        rule.waitUntil(timeoutMillis = 5_000) { viewModel.ui.value.pairingActive }
+        rule.waitUntil(timeoutMillis = 5_000) { pairingApi.pollsWhenResumed(1) }
     }
 
     @Test
