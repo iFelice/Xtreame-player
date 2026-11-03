@@ -151,7 +151,7 @@ private fun PinEntryPage(
     onForgot: () -> Unit = {},
     errorMessage: String = "",
 ) {
-    val textField = rememberTextFieldState("")
+    var pinText by remember { mutableStateOf("") }
     val isLocked = lockedUntilMillis > clock.nowMillis()
 
     Column(
@@ -181,8 +181,8 @@ private fun PinEntryPage(
         }
 
         androidx.compose.material3.OutlinedTextField(
-            value = textField.text,
-            onValueChange = { if (it.all { c -> c.isDigit() } && it.length <= 8) { textField.replace(text = it) } },
+            value = pinText,
+            onValueChange = { if (it.all { c -> c.isDigit() } && it.length <= 8) { pinText = it } },
             label = { Text("PIN", color = FvpColors.TextSecondary) },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword, imeAction = ImeAction.Done),
@@ -196,7 +196,7 @@ private fun PinEntryPage(
             (0..9).forEach { digit ->
                 PinKey(
                     digit = digit.toString(),
-                    onClick = { textField.replace(text = textField.text + digit.toString()) },
+                    onClick = { pinText = pinText + digit.toString() },
                     modifier = Modifier.testTag("protected_pin_key_${digit}"),
                 )
             }
@@ -207,12 +207,12 @@ private fun PinEntryPage(
         ) {
             PinKey(
                 digit = "Cancella",
-                onClick = { textField.replace(text = "") },
+                onClick = { pinText = "" },
                 modifier = Modifier.testTag("protected_pin_clear"),
             )
             PinKey(
                 digit = "OK",
-                onClick = { onSubmit(textField.text) },
+                onClick = { onSubmit(pinText) },
                 modifier = Modifier.testTag("protected_pin_submit"),
             )
         }
@@ -246,8 +246,8 @@ private fun ForgotPinPage(
     onSuccess: (String) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
-    val passwordField = rememberTextFieldState("")
-    val pinField = rememberTextFieldState("")
+    var passwordText by remember { mutableStateOf("") }
+    var newPinText by remember { mutableStateOf("") }
     var error by remember { mutableStateOf("") }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -257,23 +257,23 @@ private fun ForgotPinPage(
             Text(text = error, color = FvpColors.Error, fontSize = 15.sp, modifier = Modifier.testTag("protected_forgot_error"))
         }
         androidx.compose.material3.OutlinedTextField(
-            value = passwordField.text,
-            onValueChange = { passwordField.replace(text = it) },
+            value = passwordText,
+            onValueChange = { passwordText = it },
             label = { Text("Password provider", color = FvpColors.TextSecondary) },
             singleLine = true,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             modifier = Modifier.fillMaxWidth().testTag("protected_forgot_password"),
         )
         androidx.compose.material3.OutlinedTextField(
-            value = pinField.text,
-            onValueChange = { if (it.all { c -> c.isDigit() } && it.length <= 8) pinField.replace(text = it) },
+            value = newPinText,
+            onValueChange = { if (it.all { c -> c.isDigit() } && it.length <= 8) newPinText = it },
             label = { Text("Nuovo PIN", color = FvpColors.TextSecondary) },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword, imeAction = ImeAction.Done),
             modifier = Modifier.fillMaxWidth().testTag("protected_forgot_pin_field"),
         )
         TextButton(onClick = {
-            val pin = pinField.text
+            val pin = newPinText
             if (pin.length < 4) { error = "Il PIN deve avere almeno 4 cifre"; return@TextButton }
             onSuccess(pin)
         }) {
