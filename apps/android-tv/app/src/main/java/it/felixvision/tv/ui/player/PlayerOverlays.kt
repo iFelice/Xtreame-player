@@ -87,6 +87,7 @@ import it.felixvision.tv.ui.components.FvpPrimaryButton
 import it.felixvision.tv.ui.components.FvpSecondaryButton
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.components.focusSafePadding
+import it.felixvision.tv.ui.components.ignoreHeldOkUntilReleased
 import it.felixvision.tv.ui.components.rememberChannelSchedulePrograms
 import it.felixvision.tv.ui.components.rememberMinuteNow
 import it.felixvision.tv.ui.theme.FvpColors
@@ -134,6 +135,12 @@ internal fun Modifier.playerOverlay(
  * Con [onZapping] la barra info mostra anche il pulsante "Zapping" (solo Live:
  * film e serie non aprono questo banner). [zappingModifier] serve al player per
  * il focus del pulsante, senza spostare qui il resto della gestione dei tasti.
+ *
+ * La barra si apre con OK mentre il tasto è ancora giù e il focus passa subito
+ * su "Zapping": [ignoreHeldOkUntilReleased] consuma le ripetizioni e il rilascio
+ * di quel tasto, così lo zapping parte solo con un OK nuovo e completo. Lo
+ * stato del blocco vive quanto la composizione della barra, quindi riparte a
+ * ogni apertura.
  */
 @Composable
 fun PlayerChannelBanner(
@@ -149,6 +156,9 @@ fun PlayerChannelBanner(
 ) {
     Row(
         modifier = modifier
+            // L'OK che ha aperto la barra non deve attivare "Zapping": il
+            // blocco sta sul contenitore della barra, prima del pulsante.
+            .ignoreHeldOkUntilReleased()
             .playerOverlay(scale)
             .padding(horizontal = scale.dp(18f), vertical = scale.dp(14f))
             .testTag("player_channel_banner"),

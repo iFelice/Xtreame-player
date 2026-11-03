@@ -112,6 +112,10 @@ fun SettingsScreen(
     // "Configura"/"Cambia configurazione".
     val vpnController = viewModel.vpnController
     val vpnState by vpnController.state.collectAsState()
+
+    // Durata dello zapping salvata: la riga di stato della card Player la legge
+    // da questo stato osservato, così tornando dalla pagina è già aggiornata.
+    val zappingSeconds by viewModel.zappingSeconds.collectAsState()
     var showVpnSetup by remember { mutableStateOf(false) }
     val vpnConfigureFocus = remember { FocusRequester() }
     var wasVpnSetupOpen by remember { mutableStateOf(false) }
@@ -197,7 +201,7 @@ fun SettingsScreen(
             vpnState = vpnState,
             catalogLastUpdateMillis = catalogLastUpdateMillis ?: state.lastUpdateMillis,
             catalogRefreshing = catalogRefreshing,
-            zappingSeconds = viewModel.playerPreferences.zappingSeconds,
+            zappingSeconds = zappingSeconds,
             versionName = state.versionName,
             updateStatus = state.updateStatus,
         ),
@@ -304,10 +308,8 @@ fun SettingsScreen(
             SettingsPlayerPage(
                 scale = scale,
                 modifier = pageModifier,
-                zappingSeconds = viewModel.playerPreferences.zappingSeconds,
-                onZappingSecondsSelected = { seconds ->
-                    viewModel.playerPreferences.zappingSeconds = seconds
-                },
+                zappingSeconds = zappingSeconds,
+                onZappingSecondsSelected = { seconds -> viewModel.onZappingSecondsSelected(seconds) },
             )
         },
         appPage = { pageModifier, entryFocus ->

@@ -1,5 +1,6 @@
 package it.felixvision.tv.ui.player
 
+import android.view.KeyEvent as AndroidKeyEvent
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
@@ -16,6 +17,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -28,6 +30,7 @@ import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performKeyPress
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.requestFocus
@@ -313,4 +316,128 @@ class PlayerZappingTest {
         rule.onNodeWithTag("player_zapping_indicator").assertDoesNotExist()
         assertEquals(listOf(2), switched)
     }
+
+    /**
+     * Il bug del doppio OK: il primo OK apre la barra info e sposta il focus su
+     * "Zapping" mentre il tasto è ancora giù. Il rilascio dello stesso OK (e le
+     * ripetizioni, se il tasto resta premuto) arrivano al pulsante focalizzato e
+     * non devono avviare lo zapping: lo avvia solo un OK nuovo e completo.
+     */
+    @Test
+    fun `il rilascio dell OK che apre la barra e le ripetizioni non avviano lo zapping`() {
+        val clock = FakeClock()
+        val switched = mutableListOf<Int>()
+        val zapping = PlayerZapping(
+            controller = ZappingController(clock = clock),
+            onSwitchChannel = { index -> switched += index },
+        )
+        showPlayer(live = { true }, zapping = zapping)
+
+        // Primo OK: KeyDown con repeatCount 0 sulla radice del player.
+        rule.onNodeWithTag("harness_player_root")
+            .performKeyPress(okKey(AndroidKeyEvent.ACTION_DOWN))
+        rule.waitForIdle()
+        rule.onNodeWithTag("player_channel_banner").assertExists()
+        rule.waitUntil(timeoutMillis = 2_000) { isFocused("player_zapping_button") }
+        rule.onNodeWithTag("player_zapping_button").assertIsFocused()
+        rule.onNodeWithTag("player_zapping_indicator").assertDoesNotExist()
+
+        // KeyUp dello stesso OK: arriva al pulsante "Zapping" e non fa nulla.
+        rule.onNodeWithTag("player_zapping_button")
+            .performKeyPress(okKey(AndroidKeyEvent.ACTION_UP))
+        rule.waitForIdle()
+        rule.onNodeWithTag("player_zapping_indicator").assertDoesNotExist()
+        rule.onNodeWithTag("player_channel_banner").assertExists()
+        assertTrue(switched.isEmpty())
+
+        // Ripetizioni del tasto tenuto premuto, prima del rilascio: ancora nulla.
+        rule.onNodeWithTag("player_zapping_button")
+            .performKeyPress(okKey(AndroidKeyEvent.ACTION_DOWN, repeatCount = 1))
+        rule.onNodeWithTag("player_zapping_button")
+            .performKeyPress(okKey(AndroidKeyEvent.ACTION_DOWN, repeatCount = 2))
+        rule.waitForIdle()
+        rule.onNodeWithTag("player_zapping_indicator").assertDoesNotExist()
+        rule.onNodeWithTag("player_channel_banner").assertExists()
+        assertTrue(switched.isEmpty())
+
+        // Un OK nuovo e completo: lo zapping parte.
+        rule.onNodeWithTag("player_zapping_button")
+            .performKeyPress(okKey(AndroidKeyEvent.ACTION_DOWN))
+        rule.onNodeWithTag("player_zapping_button")
+            .performKeyPress(okKey(AndroidKeyEvent.ACTION_UP))
+        rule.waitForIdle()
+        rule.onNodeWithTag("player_zapping_indicator").assertExists()
+        rule.onNodeWithTag("player_zapping_indicator").assertTextEquals("Zapping · 10")
+        rule.onNodeWithTag("player_channel_banner").assertDoesNotExist()
+        assertTrue(switched.isEmpty())
+    }
+
+    /**
+     * Ogni apertura della barra ha il suo blocco: chiusa e riaperta, il rilascio
+     * dell'OK che l'ha riaperta non avvia lo zapping; lo avvia solo un OK nuovo
+     * e completo.
+     */
+    @Test
+    fun `ogni apertura della barra riparte con il blocco dell OK tenuto`() {
+        val clock = FakeClock()
+        val zapping = PlayerZapping(
+            controller = ZappingController(clock = clock),
+            onSwitchChannel = {},
+        )
+        showPlayer(live = { true }, zapping = zapping)
+
+        // Prima apertura: OK giù sulla radice, focus su "Zapping", OK su che non
+        // avvia nulla.
+        rule.onNodeWithTag("harness_player_root")
+            .performKeyPress(okKey(AndroidKeyEvent.ACTION_DOWN))
+        rule.waitForIdle()
+        rule.waitUntil(timeoutMillis = 2_000) { isFocused("player_zapping_button") }
+        rule.onNodeWithTag("player_zapping_button")
+            .performKeyPress(okKey(AndroidKeyEvent.ACTION_UP))
+        rule.waitForIdle()
+        rule.onNodeWithTag("player_zapping_indicator").assertDoesNotExist()
+
+        // Un OK nuovo e completo avvia lo zapping.
+        rule.onNodeWithTag("player_zapping_button")
+            .performKeyPress(okKey(AndroidKeyEvent.ACTION_DOWN))
+        rule.onNodeWithTag("player_zapping_button")
+            .performKeyPress(okKey(AndroidKeyEvent.ACTION_UP))
+        rule.waitForIdle()
+        rule.onNodeWithTag("player_zapping_indicator").assertExists()
+
+        // Un tasto qualsiasi ferma lo zapping e la barra si riapre con OK: il
+        // rilascio di quell'OK resta bloccato anche nel nuovo contenuto.
+        rule.onNodeWithTag("harness_player_root").performKeyInput { pressKey(Key.DirectionDown) }
+        rule.waitForIdle()
+        rule.onNodeWithTag("player_zapping_indicator").assertDoesNotExist()
+        rule.onNodeWithTag("harness_player_root")
+            .performKeyPress(okKey(AndroidKeyEvent.ACTION_DOWN))
+        rule.waitForIdle()
+        rule.waitUntil(timeoutMillis = 2_000) { isFocused("player_zapping_button") }
+        rule.onNodeWithTag("player_zapping_button")
+            .performKeyPress(okKey(AndroidKeyEvent.ACTION_UP))
+        rule.waitForIdle()
+        rule.onNodeWithTag("player_zapping_indicator").assertDoesNotExist()
+        rule.onNodeWithTag("player_channel_banner").assertExists()
+
+        // E un altro OK nuovo e completo riavvia lo zapping.
+        rule.onNodeWithTag("player_zapping_button")
+            .performKeyPress(okKey(AndroidKeyEvent.ACTION_DOWN))
+        rule.onNodeWithTag("player_zapping_button")
+            .performKeyPress(okKey(AndroidKeyEvent.ACTION_UP))
+        rule.waitForIdle()
+        rule.onNodeWithTag("player_zapping_indicator").assertExists()
+    }
+
+    /** Vero se il nodo con il tag dato ha il focus. */
+    private fun isFocused(tag: String): Boolean = runCatching {
+        rule.onNodeWithTag(tag).fetchSemanticsNode()
+            .config.contains(SemanticsProperties.Focused)
+    }.getOrDefault(false)
+
+    /** Evento OK del telecomando (DPAD_CENTER) con il conteggio di ripetizioni dato. */
+    private fun okKey(action: Int, repeatCount: Int = 0): KeyEvent =
+        KeyEvent(
+            AndroidKeyEvent(0L, 0L, action, AndroidKeyEvent.KEYCODE_DPAD_CENTER, repeatCount),
+        )
 }

@@ -6,20 +6,32 @@ import it.felixvision.tv.core.SystemClock
 /**
  * Valori ammessi per l'intervallo dello zapping automatico, in secondi.
  *
- * Un valore salvato che non è in [ALLOWED] (per esempio da una versione
- * precedente o da un file modificato a mano) torna a [DEFAULT].
+ * L'intervallo va da [MIN] a [MAX] compresi, con [DEFAULT] come valore
+ * iniziale: un valore salvato fuori dall'intervallo (per esempio da una
+ * versione precedente o da un file modificato a mano) torna a [DEFAULT].
+ * I valori salvati dalle versioni con le sole scelte rapide (5, 10, 15 e 30)
+ * restano validi senza migrazione.
  */
 object ZappingSeconds {
 
     /** Intervallo predefinito: 10 secondi per canale. */
     const val DEFAULT = 10
 
-    /** Unici valori ammessi: 5, 10, 15 e 30 secondi. */
-    val ALLOWED: List<Int> = listOf(5, 10, 15, 30)
+    /** Intervallo minimo ammesso, in secondi. */
+    const val MIN = 5
 
-    /** [value] se ammesso, altrimenti [DEFAULT]. */
+    /** Intervallo massimo ammesso, in secondi. */
+    const val MAX = 120
+
+    /** Scelte rapide mostrate sotto il selettore della pagina Player. */
+    val QUICK_CHOICES: List<Int> = listOf(5, 10, 15, 30)
+
+    /** [value] se è tra [MIN] e [MAX], altrimenti [DEFAULT]. */
     fun normalize(value: Int?): Int =
-        if (value != null && ALLOWED.contains(value)) value else DEFAULT
+        if (value != null && value in MIN..MAX) value else DEFAULT
+
+    /** [value] riportato nell'intervallo ammesso (per il selettore + / −). */
+    fun clamp(value: Int): Int = value.coerceIn(MIN, MAX)
 }
 
 /** Stato del canale appena sintonizzato, come lo vede il player. */
@@ -73,7 +85,7 @@ data class ZappingState(
     /** Canale che lo zapping sta per lasciare. */
     val currentIndex: Int,
     val listSize: Int,
-    /** Intervallo scelto, in secondi (5, 10, 15 o 30). */
+    /** Intervallo scelto, in secondi (da [ZappingSeconds.MIN] a [ZappingSeconds.MAX]). */
     val seconds: Int,
     /** Secondi che mancano al prossimo cambio, arrotondati per eccesso. */
     val remainingSeconds: Int,
@@ -117,9 +129,10 @@ class ZappingController(
 
     /**
      * Avvia lo zapping sul canale [index] di una lista di [size] canali, con
-     * l'intervallo [seconds] (un valore non ammesso diventa
-     * [ZappingSeconds.DEFAULT]). Il canale di partenza resta ricordato per la
-     * risposta "No" al dialog di fine lista. Una lista vuota non avvia nulla.
+     * l'intervallo [seconds] (un valore fuori da [ZappingSeconds.MIN]..
+     * [ZappingSeconds.MAX] diventa [ZappingSeconds.DEFAULT]). Il canale di
+     * partenza resta ricordato per la risposta "No" al dialog di fine lista.
+     * Una lista vuota non avvia nulla.
      */
     fun start(
         seconds: Int,

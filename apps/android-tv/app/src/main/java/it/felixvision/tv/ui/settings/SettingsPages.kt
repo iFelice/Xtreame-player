@@ -15,11 +15,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -28,8 +30,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.tv.material3.Text
 import it.felixvision.tv.data.images.CacheCleanup
@@ -40,6 +46,7 @@ import it.felixvision.tv.ui.components.FvpCompactButton
 import it.felixvision.tv.ui.components.FvpPrimaryButton
 import it.felixvision.tv.ui.components.FvpSecondaryButton
 import it.felixvision.tv.ui.components.FvpStatusText
+import it.felixvision.tv.ui.components.HeldOkKeyBlocker
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.theme.FvpColors
 import it.felixvision.tv.ui.theme.settingsBlockSpacing
@@ -50,6 +57,9 @@ import it.felixvision.tv.vpn.VpnState
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /** Tag di test delle pagine delle Impostazioni. */
@@ -70,12 +80,53 @@ const val SETTINGS_ZAPPING_DURATION_LABEL = "Durata zapping"
 /** Tag di test del pulsante di [seconds] nella pagina Player. */
 fun zappingSecondsTag(seconds: Int): String = "settings_zapping_seconds_$seconds"
 
+/** Tag di test del valore al centro della riga, del pulsante "−" e di quello "+". */
+const val ZAPPING_VALUE_TAG = "settings_zapping_value"
+const val ZAPPING_DECREASE_TAG = "settings_zapping_decrease"
+const val ZAPPING_INCREASE_TAG = "settings_zapping_increase"
+
+/** Testi dei due pulsanti che cambiano la durata di un secondo. */
+const val ZAPPING_DECREASE_LABEL = "−"
+const val ZAPPING_INCREASE_LABEL = "+"
+
 /** Prefisso del pulsante della durata di zapping attiva. */
 const val ZAPPING_ACTIVE_PREFIX = "✓ "
+
+/** Valore al centro della riga: "12 s". */
+fun zappingValueLabel(seconds: Int): String = "$seconds s"
 
 /** Etichetta del pulsante: "<n> s", con "✓ " se è il valore attivo. */
 fun zappingSecondsButtonLabel(seconds: Int, active: Int): String =
     if (seconds == active) "$ZAPPING_ACTIVE_PREFIX${seconds} s" else "${seconds} s"
+
+/**
+ * Tempi della ripetizione dei pulsanti "−" e "+" della pagina Player: con OK
+ * tenuto premuto il valore comincia a scorrere dopo [START_DELAY_MILLIS] e poi
+ * cambia di un secondo ogni [STEP_MILLIS], finché il tasto non si rilascia.
+ *
+ * [SYSTEM_REPEAT_COUNT] è il conteggio della prima ripetizione che il sistema
+ * manda per un tasto tenuto premuto: da lì in poi il conto lo fa
+ * [repeatStepCount] e le ripetizioni successive del sistema si ignorano.
+ */
+object ZappingRepeat {
+
+    /** Attesa prima che il valore cominci a scorrere. */
+    const val START_DELAY_MILLIS = 500L
+
+    /** Intervallo tra due cambi durante la pressione prolungata. */
+    const val STEP_MILLIS = 100L
+
+    /** Conteggio della prima ripetizione del sistema: fa partire lo scorrimento. */
+    const val SYSTEM_REPEAT_COUNT = 1
+
+    /**
+     * Vero se la pressione è durata abbastanza da valere la ripetizione,
+     * quando il sistema non ha mandato ripetizioni: `eventTime − downTime`
+     * almeno [START_DELAY_MILLIS].
+     */
+    fun heldLongEnough(eventTime: Long, downTime: Long): Boolean =
+        eventTime - downTime >= START_DELAY_MILLIS
+}
 
 /** Riquadro Account dentro la pagina Account. */
 const val SETTINGS_ACCOUNT_SECTION_TAG = "settings_account_section"
@@ -347,18 +398,29 @@ internal fun SettingsAppearancePage(
 }
 
 /**
- * Pagina "Impostazioni › Player": la durata dello zapping automatico, scelta
- * tra 5, 10, 15 e 30 secondi (predefinita 10). Il valore scelto resta salvato
- * nelle preferenze del player ([it.felixvision.tv.player.PlayerPreferences]) e
- * lo zapping automatico lo legge al suo avvio; la regola "salta i canali che
- * non partono in 5 s" resta invariata.
+ * Pagina "Impostazioni › Player": la durata dello zapping automatico, da
+ * [ZappingSeconds.MIN] a [ZappingSeconds.MAX] secondi (predefinita
+ * [ZappingSeconds.DEFAULT]).
+ *
+ * Al centro della riga c'è il valore attuale, a sinistra il pulsante "−" e a
+ * destra il pulsante "+": ogni OK cambia di un secondo e, tenendo premuto OK su
+ * uno dei due, dopo [ZappingRepeat.START_DELAY_MILLIS] il valore scorre di un
+ * secondo ogni [ZappingRepeat.STEP_MILLIS] finché il tasto non si rilascia. Ai
+ * limiti il pulsante corrispondente non ha effetto e appare disattivato, ma
+ * resta raggiungibile con le frecce. Sotto restano le scelte rapide 5, 10, 15 e
+ * 30 con il segno "✓" sul valore attivo (con un valore diverso nessuna ce l'ha).
+ *
+ * Ogni modifica va subito a [onZappingSecondsSelected], che la salva nelle
+ * preferenze del player ([it.felixvision.tv.player.PlayerPreferences]): lo
+ * zapping automatico la legge al suo avvio e la regola "salta i canali che non
+ * partono in 5 s" resta invariata.
  *
  * La pagina è predisposta per accogliere in futuro lingua audio, sottotitoli e
  * formato video, ma per ora contiene solo la durata dello zapping: niente
  * voci segnaposto.
  *
- * Come la pagina Aspetto, il focus d'ingresso va sul valore attivo con i propri
- * [FocusRequester], così si può cambiare subito e Indietro resta alla pagina.
+ * Il focus d'ingresso va su "+", il primo comando della riga del valore:
+ * Indietro da lì torna alla griglia con il focus sulla card Player.
  */
 @Composable
 internal fun SettingsPlayerPage(
@@ -367,14 +429,22 @@ internal fun SettingsPlayerPage(
     zappingSeconds: Int = ZappingSeconds.DEFAULT,
     onZappingSecondsSelected: (Int) -> Unit = {},
 ) {
-    // Stato locale: la scelta si vede subito (il "✓" si sposta) e resta
-    // salvata nelle preferenze del player.
+    // Stato locale: la modifica si vede subito (valore e "✓") e resta salvata
+    // nelle preferenze del player a ogni passo.
     var selected by remember { mutableStateOf(ZappingSeconds.normalize(zappingSeconds)) }
     val active = selected
-    val secondsFocusRequesters = remember { ZappingSeconds.ALLOWED.associateWith { FocusRequester() } }
+    val plusFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) {
         withFrameNanos { }
-        runCatching { secondsFocusRequesters.getValue(active).requestFocus() }
+        runCatching { plusFocus.requestFocus() }
+    }
+
+    /** Applica [value] (già nell'intervallo) e lo salva. */
+    fun applyValue(value: Int) {
+        val next = ZappingSeconds.clamp(value)
+        if (next == selected) return
+        selected = next
+        onZappingSecondsSelected(next)
     }
 
     SettingsPage(
@@ -403,26 +473,160 @@ internal fun SettingsPlayerPage(
                 color = FvpColors.TextSecondary,
                 fontSize = scale.settingsRowText,
             )
+            // Riga del valore: "−" a sinistra, valore al centro, "+" a destra.
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(scale.dp(12f)),
+            ) {
+                ZappingStepButton(
+                    text = ZAPPING_DECREASE_LABEL,
+                    enabled = active > ZappingSeconds.MIN,
+                    repeatDirection = -1,
+                    currentSeconds = { selected },
+                    onValue = ::applyValue,
+                    scale = scale,
+                    modifier = Modifier.testTag(ZAPPING_DECREASE_TAG),
+                )
+                Text(
+                    text = zappingValueLabel(active),
+                    color = FvpColors.TextPrimary,
+                    fontSize = scale.sp(18f),
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag(ZAPPING_VALUE_TAG),
+                )
+                ZappingStepButton(
+                    text = ZAPPING_INCREASE_LABEL,
+                    enabled = active < ZappingSeconds.MAX,
+                    repeatDirection = 1,
+                    currentSeconds = { selected },
+                    onValue = ::applyValue,
+                    scale = scale,
+                    modifier = Modifier
+                        .focusRequester(plusFocus)
+                        .testTag(ZAPPING_INCREASE_TAG),
+                )
+            }
+            // Scelte rapide: il "✓" solo sul valore attivo, nessuna con un
+            // valore scelto con "+" o "−" che non sia tra queste.
             Row(
                 horizontalArrangement = Arrangement.spacedBy(scale.dp(8f)),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                ZappingSeconds.ALLOWED.forEach { seconds ->
+                ZappingSeconds.QUICK_CHOICES.forEach { seconds ->
                     FvpCompactButton(
                         text = zappingSecondsButtonLabel(seconds = seconds, active = active),
-                        onClick = {
-                            selected = seconds
-                            onZappingSecondsSelected(seconds)
-                        },
+                        onClick = { applyValue(seconds) },
                         scale = scale,
-                        modifier = Modifier
-                            .focusRequester(secondsFocusRequesters.getValue(seconds))
-                            .testTag(zappingSecondsTag(seconds)),
+                        modifier = Modifier.testTag(zappingSecondsTag(seconds)),
                     )
                 }
             }
         }
     }
+}
+
+/**
+ * Pulsante "−" o "+" della riga del valore: un OK cambia di un secondo,
+ * tenendo premuto OK il valore scorre dopo [ZappingRepeat.START_DELAY_MILLIS] e
+ * poi ogni [ZappingRepeat.STEP_MILLIS] finché il tasto non si rilascia.
+ *
+ * Il tasto si legge con `onPreviewKeyEvent` sul pulsante (il primo OK cambia il
+ * valore subito, senza aspettare il rilascio) e ogni evento di OK viene
+ * consumato, così i pulsanti tv-material non aggiungono un secondo cambio al
+ * rilascio. Con [enabled] falso il pulsante resta focalizzabile ma i tasti OK
+ * non fanno nulla: è "disattivato" pur restando raggiungibile con le frecce.
+ *
+ * @param repeatDirection +1 per "+", −1 per "−".
+ * @param currentSeconds legge il valore corrente: la ripetizione parte sempre
+ *   dall'ultimo valore mostrato, anche dopo le scelte rapide.
+ */
+@Composable
+private fun ZappingStepButton(
+    text: String,
+    enabled: Boolean,
+    repeatDirection: Int,
+    currentSeconds: () -> Int,
+    onValue: (Int) -> Unit,
+    scale: UiScale,
+    modifier: Modifier = Modifier,
+) {
+    val repeatScope = rememberCoroutineScope()
+    var repeatJob by remember { mutableStateOf<Job?>(null) }
+    // Con il tasto ancora giù e la pressione lunga, il rilascio non deve
+    // aggiungere un ultimo cambiamento.
+    var repeating by remember { mutableStateOf(false) }
+    val currentDirection by rememberUpdatedState(repeatDirection)
+    val currentOnValue by rememberUpdatedState(onValue)
+    val currentEnabled by rememberUpdatedState(enabled)
+    val currentCurrentSeconds by rememberUpdatedState(currentSeconds)
+
+    fun step() {
+        currentOnValue(currentCurrentSeconds() + currentDirection)
+    }
+
+    fun startRepeat() {
+        repeatJob?.cancel()
+        repeating = true
+        repeatJob = repeatScope.launch {
+            delay(ZappingRepeat.START_DELAY_MILLIS)
+            while (isActive) {
+                step()
+                delay(ZappingRepeat.STEP_MILLIS)
+            }
+        }
+    }
+
+    fun stopRepeat() {
+        repeatJob?.cancel()
+        repeatJob = null
+        repeating = false
+    }
+
+    DisposableEffect(Unit) {
+        onDispose { repeatJob?.cancel() }
+    }
+
+    FvpCompactButton(
+        text = text,
+        onClick = {},
+        scale = scale,
+        enabled = enabled,
+        modifier = modifier.onPreviewKeyEvent { event ->
+            if (!HeldOkKeyBlocker.isOkKey(event.nativeKeyEvent.keyCode)) {
+                return@onPreviewKeyEvent false
+            }
+            when (event.type) {
+                KeyEventType.KeyDown -> {
+                    // Tutte le pressioni di OK finiscono qui, ripetizioni
+                    // comprese: nessuna arriva al pulsante tv-material.
+                    if (!currentEnabled) return@onPreviewKeyEvent true
+                    when (event.nativeKeyEvent.repeatCount) {
+                        0 -> step()
+                        ZappingRepeat.SYSTEM_REPEAT_COUNT -> startRepeat()
+                    }
+                    true
+                }
+
+                KeyEventType.KeyUp -> {
+                    val wasRepeating = repeating
+                    stopRepeat()
+                    if (!currentEnabled || wasRepeating) return@onPreviewKeyEvent true
+                    // Pressione tenuta oltre la soglia senza ripetizioni dal
+                    // sistema: il rilascio vale come un cambio.
+                    if (ZappingRepeat.heldLongEnough(event.nativeKeyEvent.eventTime, event.nativeKeyEvent.downTime)) {
+                        step()
+                    }
+                    true
+                }
+
+                else -> false
+            }
+        },
+    )
 }
 
 /**
