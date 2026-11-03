@@ -296,8 +296,8 @@ class SettingsLayoutTest {
             ): Boolean = true
         },
         myChannelsGateway = object : MyChannelsGateway {
-            private val revision = MutableStateFlow(0L)
-            override val revision: StateFlow<Long> = revision.asStateFlow()
+            private val revisionFlow = MutableStateFlow(0L)
+            override val revision: StateFlow<Long> = revisionFlow.asStateFlow()
 
             override suspend fun getChannels(server: String, username: String): List<MyChannel> =
                 emptyList()
@@ -334,8 +334,8 @@ class SettingsLayoutTest {
             ): Int = 0
         },
         continueGateway = object : ContinueWatchingGateway {
-            private val revision = MutableStateFlow(0L)
-            override val revision: StateFlow<Long> = revision.asStateFlow()
+            private val revisionFlow = MutableStateFlow(0L)
+            override val revision: StateFlow<Long> = revisionFlow.asStateFlow()
 
             override suspend fun getAll(server: String, username: String): List<ContinueEntry> =
                 emptyList()
@@ -343,8 +343,8 @@ class SettingsLayoutTest {
             override suspend fun hide(server: String, username: String, key: String) {}
         },
         progressGateway = object : ProgressGateway {
-            private val revision = MutableStateFlow(0L)
-            override val revision: StateFlow<Long> = revision.asStateFlow()
+            private val revisionFlow = MutableStateFlow(0L)
+            override val revision: StateFlow<Long> = revisionFlow.asStateFlow()
 
             override suspend fun getAll(
                 server: String,
