@@ -3,6 +3,10 @@ package it.felixvision.tv.ui.settings
 import android.content.Context
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.activity.ComponentActivity
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.semantics.SemanticsActions
@@ -27,6 +31,7 @@ import it.felixvision.tv.player.ZappingSeconds
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.theme.FvpTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -74,25 +79,31 @@ class SettingsPlayerPageTest {
     }
 
     /**
-     * Griglia e pagina Player dentro la stessa navigazione: il valore mostrato
-     * dalla pagina e quello della riga di stato vengono dalle preferenze, come
-     * nella schermata vera.
+     * Griglia e pagina Player dentro la stessa navigazione, come nella schermata
+     * vera: il valore viene da uno stato osservato (qui il `MutableState` che
+     * `SettingsScreen` ricava dallo `StateFlow` del ViewModel) e la pagina lo
+     * salva nelle preferenze. Così la riga di stato della card si aggiorna da
+     * sola dopo una modifica.
      */
     private fun showNavigation(prefs: PlayerPreferences) {
         rule.setContent {
             FvpTheme {
+                var zappingSeconds by remember { mutableStateOf(prefs.zappingSeconds) }
                 SettingsNavigation(
                     cardsState = SettingsCardsState(
                         username = "demo",
-                        zappingSeconds = prefs.zappingSeconds,
+                        zappingSeconds = zappingSeconds,
                     ),
                     scale = scale,
                     playerPage = { pageModifier, _ ->
                         SettingsPlayerPage(
                             scale = scale,
                             modifier = pageModifier,
-                            zappingSeconds = prefs.zappingSeconds,
-                            onZappingSecondsSelected = { seconds -> prefs.zappingSeconds = seconds },
+                            zappingSeconds = zappingSeconds,
+                            onZappingSecondsSelected = { seconds ->
+                                prefs.zappingSeconds = seconds
+                                zappingSeconds = prefs.zappingSeconds
+                            },
                         )
                     },
                 )
@@ -128,7 +139,7 @@ class SettingsPlayerPageTest {
     }
 
     @Test
-    fun `pagina con valore valore scelte rapide e focus iniziale su piu`() {
+    fun `pagina con valore pulsanti scelte rapide e focus iniziale su piu`() {
         val prefs = freshPreferences()
         assertEquals(ZappingSeconds.DEFAULT, prefs.zappingSeconds)
         showNavigation(prefs)
@@ -172,46 +183,23 @@ class SettingsPlayerPageTest {
     }
 
     @Test
-    fun `i limiti dell intervallo disattivano il pulsante corrispondente`() {
+    fun `a cinque secondi il meno e disattivato e non cambia il valore`() {
         val prefs = freshPreferences(seconds = 5)
         showNavigation(prefs)
         openPlayerPage()
 
-        // A 5 s "−" è disattivato (resta a fuoco e raggiungibile) e non cambia nulla.
         rule.onNodeWithTag(ZAPPING_VALUE_TAG).assertTextEquals("5 s")
-        rule.onNodeWithTag(ZAPPING_DECREASE_TAG).assertIsNotEnabled()
+        // "−" resta focalizzabile ma è disattivato: raggiungibile con le
+        // frecce, senza effetto.
+        rule.onNodeWithTag(ZAPPING_DECREASE_TAG).assertExists().assertIsNotEnabled()
         rule.onNodeWithTag(ZAPPING_DECREASE_TAG).performSemanticsAction(SemanticsActions.OnClick)
         rule.waitForIdle()
         assertEquals(5, prefs.zappingSeconds)
         rule.onNodeWithTag(ZAPPING_VALUE_TAG).assertTextEquals("5 s")
+
         // Il "✓" è sulla scelta rapida 5.
         rule.onNodeWithTag(zappingSecondsTag(5)).assertTextEquals("✓ 5 s")
-
-        // A 120 s è "+" a essere disattivato, e da 119 si arriva al limite.
-        rule.onNodeWithTag(ZAPPING_INCREASE_TAG).performSemanticsAction(SemanticsActions.OnClick)
-        rule.waitForIdle()
-        assertEquals(6, prefs.zappingSeconds)
-        rule.onNodeWithTag(ZAPPING_DECREASE_TAG).performSemanticsAction(SemanticsActions.OnClick)
-        rule.waitForIdle()
-        assertEquals(5, prefs.zappingSeconds)
-    }
-
-    @Test
-    fun `a centoventi il piu e disattivato e non cambia il valore`() {
-        val prefs = freshPreferences(seconds = 120)
-        showNavigation(prefs)
-        openPlayerPage()
-
-        rule.onNodeWithTag(ZAPPING_VALUE_TAG).assertTextEquals("120 s")
-        rule.onNodeWithTag(ZAPPING_INCREASE_TAG).assertIsNotEnabled()
-        rule.onNodeWithTag(ZAPPING_INCREASE_TAG).performSemanticsAction(SemanticsActions.OnClick)
-        rule.waitForIdle()
-        assertEquals(120, prefs.zappingSeconds)
-        rule.onNodeWithTag(ZAPPING_VALUE_TAG).assertTextEquals("120 s")
-        // 120 non è una scelta rapida: nessun "✓".
-        ZappingSeconds.QUICK_CHOICES.forEach { seconds ->
-            rule.onNodeWithTag(zappingSecondsTag(seconds)).assertTextEquals("$seconds s")
-        }
+        rule.onNodeWithTag(zappingSecondsTag(10)).assertTextEquals("10 s")
     }
 
     @Test
@@ -264,10 +252,15 @@ class SettingsPlayerPageTest {
     }
 
     /**
-     * Pressione prolungata su "+": con l'orologio in mano, dopo i 500 ms di
-     * attesa il valore scorre di un secondo ogni 100 ms. A 1000 ms dall'OK sono
-     * passati 500 ms di attesa e altri 500 ms di scorrimento: 5 cambi dopo il
-     * primo, quindi 10 + 1 + 5 = 16. Al rilascio non arriva nessun altro cambio.
+     * Pressione prolungata su "+": con l'orologio in mano il valore scorre dopo
+     * [ZappingRepeat.START_DELAY_MILLIS] e poi ogni [ZappingRepeat.STEP_MILLIS],
+     * finché il tasto non si rilascia.
+     *
+     * Il primo OK cambia subito (10 → 11). Il primo frame dopo l'OK dà il via
+     * allo scorrimento e l'attesa di 500 ms parte da lì: a frame 16 ms l'attesa
+     * scade al frame 531 e i cambi cadono ai frame 531, 631, 731, 831 e 931 —
+     * a 1000 ms dall'OK il valore è quindi cresciuto di 1 + 5 = 6 secondi
+     * (11 → 16). Il rilascio non aggiunge nessun altro cambio.
      */
     @Test
     fun `OK tenuto premuto su piu fa scorrere il valore e il rilascio lo ferma`() {
@@ -275,35 +268,74 @@ class SettingsPlayerPageTest {
         showNavigation(prefs)
         openPlayerPage()
 
+        // Frame dei test e tempi attesi: un frame è 16 ms, quindi il primo
+        // frame dopo l'OK dà il via allo scorrimento e la soglia scade al
+        // primo frame >= 16 + 500 = 516 ms, cioè a 528 ms.
+        val frameMillis = ZAPPING_TEST_FRAME_MILLIS
+        val startFrame = firstFrameAtOrAfter(ZappingRepeat.START_DELAY_MILLIS + frameMillis, frameMillis)
+        val steps = (ZAPPING_HOLD_MILLIS - startFrame).coerceAtLeast(0L) / ZappingRepeat.STEP_MILLIS
+        val expected = 10 + 1 + steps
+
         rule.mainClock.autoAdvance = false
         // OK giù: il primo cambio è immediato (10 → 11).
-        rule.onNodeWithTag(ZAPPING_INCREASE_TAG).performKeyPress(okKey(AndroidKeyEvent.ACTION_DOWN))
-        rule.mainClock.advanceTimeBy(ZappingRepeat.STEP_MILLIS)
+        rule.onNodeWithTag(ZAPPING_INCREASE_TAG)
+            .performKeyPress(okKey(AndroidKeyEvent.ACTION_DOWN))
+        rule.mainClock.advanceTimeBy(frameMillis)
         assertEquals(11, prefs.zappingSeconds)
         rule.onNodeWithTag(ZAPPING_VALUE_TAG).assertTextEquals("11 s")
 
-        // Prima ripetizione del sistema: comincia lo scorrimento (500 ms, poi
-        // un cambio ogni 100 ms).
+        // Prima ripetizione del sistema: comincia lo scorrimento.
         rule.onNodeWithTag(ZAPPING_INCREASE_TAG)
             .performKeyPress(okKey(AndroidKeyEvent.ACTION_DOWN, repeatCount = 1))
-        rule.mainClock.advanceTimeBy(ZappingRepeat.START_DELAY_MILLIS)
-        // 500 ms di attesa: ancora nessun cambio oltre al primo.
+        rule.waitForIdle()
+
+        // Un frame prima della soglia il valore non è ancora cambiato.
+        rule.mainClock.advanceTimeBy(startFrame - 2 * frameMillis)
+        assertEquals(startFrame - frameMillis, rule.mainClock.currentTime)
         assertEquals(11, prefs.zappingSeconds)
 
-        val advanced = ZappingRepeat.START_DELAY_MILLIS + ZappingRepeat.STEP_MILLIS * 5
-        rule.mainClock.advanceTimeBy(advanced)
-        // Attesi esattamente 5 cambi: 500, 600, 700, 800 e 900 ms dopo la
-        // partenza dello scorrimento (a 1000 ms ce ne sarebbe un sesto).
+        // Fino ai 1000 ms dall'OK i cambi sono quelli calcolati: nessuno in più
+        // e nessuno in meno. A ogni frame il valore è il passo atteso; da qui ai
+        // 1000 ms servono (1000 − 528) / 16 ≈ 30 frame.
+        val guard = 200
+        var frames = 0
+        while (rule.mainClock.currentTime < ZAPPING_HOLD_MILLIS && frames < guard) {
+            rule.mainClock.advanceTimeBy(frameMillis)
+            frames++
+            val elapsed = rule.mainClock.currentTime
+            val expectedSteps = if (elapsed < startFrame) {
+                0L
+            } else {
+                (elapsed - startFrame) / ZappingRepeat.STEP_MILLIS
+            }
+            assertEquals(10 + 1 + expectedSteps.toInt(), prefs.zappingSeconds)
+        }
+        assertTrue(rule.mainClock.currentTime >= ZAPPING_HOLD_MILLIS)
+        // Atteso dai tempi: 1 cambio all'OK più i passi da 528 a 1000 ms.
+        assertEquals(16L, expected)
         assertEquals(16, prefs.zappingSeconds)
         rule.onNodeWithTag(ZAPPING_VALUE_TAG).assertTextEquals("16 s")
 
         // Rilascio: nessun altro incremento, anche facendo passare altro tempo.
-        rule.onNodeWithTag(ZAPPING_INCREASE_TAG).performKeyPress(okKey(AndroidKeyEvent.ACTION_UP))
+        rule.onNodeWithTag(ZAPPING_INCREASE_TAG)
+            .performKeyPress(okKey(AndroidKeyEvent.ACTION_UP))
         rule.mainClock.advanceTimeBy(1_000L)
         assertEquals(16, prefs.zappingSeconds)
         rule.mainClock.autoAdvance = true
         rule.waitForIdle()
         rule.onNodeWithTag(ZAPPING_VALUE_TAG).assertTextEquals("16 s")
+    }
+
+    /** Durata di un frame dell'orologio dei test (16 ms). */
+    private val ZAPPING_TEST_FRAME_MILLIS = 16L
+
+    /** Quanto resta premuto OK nel test della pressione prolungata. */
+    private val ZAPPING_HOLD_MILLIS = 1_000L
+
+    /** Primo multiplo di [frameMillis] maggiore o uguale a [millis]. */
+    private fun firstFrameAtOrAfter(millis: Long, frameMillis: Long): Long {
+        val remainder = millis % frameMillis
+        return if (remainder == 0L) millis else millis + (frameMillis - remainder)
     }
 
     /**

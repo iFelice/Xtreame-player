@@ -572,6 +572,10 @@ private fun ZappingStepButton(
         repeatJob?.cancel()
         repeating = true
         repeatJob = repeatScope.launch {
+            // L'attesa parte da un frame, non dall'istante dell'evento: con
+            // l'orologio dei test in mano (e con i frame che arrivano a scatti)
+            // i passi cadono sui multipli esatti di START_DELAY + STEP.
+            withFrameNanos { }
             delay(ZappingRepeat.START_DELAY_MILLIS)
             while (isActive) {
                 step()
@@ -592,7 +596,10 @@ private fun ZappingStepButton(
 
     FvpCompactButton(
         text = text,
-        onClick = {},
+        // Il clic semantico (e quindi l'accessibilità) fa lo stesso passo di un
+        // OK: i tasti del telecomando arrivano già da onPreviewKeyEvent, che li
+        // consuma prima del pulsante, quindi il passo non si somma mai.
+        onClick = { if (currentEnabled) step() },
         scale = scale,
         enabled = enabled,
         modifier = modifier.onPreviewKeyEvent { event ->

@@ -87,27 +87,36 @@ class PlayerZappingTest {
                 var bannerVisible by remember { mutableStateOf(false) }
                 var controlsVisible by remember { mutableStateOf(false) }
                 var zappingButtonFocused by remember { mutableStateOf(false) }
-                val rootFocus = remember { FocusRequester() }
+                val navFocus = remember { FocusRequester() }
+                val bannerFocus = remember { FocusRequester() }
                 val zappingFocus = remember { FocusRequester() }
                 val audioFocus = remember { FocusRequester() }
                 val progressFocus = remember { FocusRequester() }
+                // Focus iniziale sulla radice del player, come in PlayerScreen.
                 LaunchedEffect(Unit) {
                     withFrameNanos { }
-                    runCatching { rootFocus.requestFocus() }
+                    runCatching { navFocus.requestFocus() }
                 }
                 // Come in PlayerScreen: all'apertura della barra info nel Live
                 // il focus iniziale va sul pulsante "Zapping"; alla chiusura
-                // torna alla radice del player.
+                // torna alla radice del player. Il frame finale serve a dare il
+                // focus già prima che il test mandi il resto della pressione.
                 LaunchedEffect(bannerVisible) {
                     if (bannerVisible && live()) {
+                        withFrameNanos { }
+                        runCatching { bannerFocus.requestFocus() }
                         withFrameNanos { }
                         runCatching { zappingFocus.requestFocus() }
                     }
                     if (!bannerVisible && zappingButtonFocused) {
                         withFrameNanos { }
-                        runCatching { rootFocus.requestFocus() }
+                        runCatching { navFocus.requestFocus() }
                     }
                 }
+                // Contenitore esterno: riceve l'OK solo quando il focus non è già
+                // su un elemento della barra info, come la radice del player
+                // (in PlayerScreen con il focus sul pulsante "Zapping" l'OK non
+                // arriva mai alla radice).
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -125,67 +134,76 @@ class PlayerZappingTest {
                                 controlsVisible = !controlsVisible
                             }
                             true
-                        }
-                        .focusRequester(rootFocus)
-                        .focusable()
-                        .testTag("harness_player_root"),
+                        },
                 ) {
-                    if (live() && bannerVisible) {
-                        PlayerChannelBanner(
-                            banner = ChannelBanner(
-                                number = 1,
-                                name = "Canale 1",
-                                categoryName = "Notizie",
-                                logoUrl = null,
-                            ),
-                            scale = scale,
-                            onZapping = {
-                                // La barra info si chiude subito, come in
-                                // PlayerScreen.startZapping.
-                                bannerVisible = false
-                                zapping.start(
-                                    seconds = 10,
-                                    index = startIndex(),
-                                    size = listSize(),
-                                )
-                            },
-                            zappingModifier = Modifier
-                                .focusRequester(zappingFocus)
-                                .onFocusChanged { zappingButtonFocused = it.isFocused },
-                        )
-                    }
-                    if (!live() && controlsVisible) {
-                        PlayerControlsBar(
-                            state = PlayerUiState(
-                                currentTitle = "Il film inventato",
-                                durationMillis = 120_000L,
-                            ),
-                            scale = scale,
-                            audioFocusRequester = audioFocus,
-                            progressFocusRequester = progressFocus,
-                            onTogglePlay = {},
-                            onSeek = {},
-                            onAudio = {},
-                            onSubtitles = {},
-                            onVolume = {},
-                            onFormat = {},
-                            modifier = Modifier.align(Alignment.BottomCenter),
-                        )
-                    }
-                    val zappingState = zapping.state
-                    if (zappingState != null && !zappingState.awaitingEndOfList) {
-                        PlayerZappingIndicator(
-                            remainingSeconds = zappingState.remainingSeconds,
-                            scale = scale,
-                            modifier = Modifier.align(Alignment.TopEnd),
-                        )
-                    }
-                    if (zappingState?.awaitingEndOfList == true) {
-                        PlayerZappingEndDialog(
-                            scale = scale,
-                            onYes = { zapping.answer(restart = true) },
-                            onNo = { zapping.answer(restart = false) },
-                        )
+                    // Il nodo che prende davvero il focus a barre chiuse: è la
+                    // radice del player (tag "harness_player_root").
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .focusRequester(navFocus)
+                            .focusable()
+                            .testTag("harness_player_root"),
+                        contentAlignment = Alignment.TopStart,
+                    ) {
+                        if (live() && bannerVisible) {
+                            PlayerChannelBanner(
+                                banner = ChannelBanner(
+                                    number = 1,
+                                    name = "Canale 1",
+                                    categoryName = "Notizie",
+                                    logoUrl = null,
+                                ),
+                                scale = scale,
+                                onZapping = {
+                                    // La barra info si chiude subito, come in
+                                    // PlayerScreen.startZapping.
+                                    bannerVisible = false
+                                    zapping.start(
+                                        seconds = 10,
+                                        index = startIndex(),
+                                        size = listSize(),
+                                    )
+                                },
+                                zappingModifier = Modifier
+                                    .focusRequester(bannerFocus)
+                                    .focusRequester(zappingFocus)
+                                    .onFocusChanged { zappingButtonFocused = it.isFocused },
+                            )
+                        }
+                        if (!live() && controlsVisible) {
+                            PlayerControlsBar(
+                                state = PlayerUiState(
+                                    currentTitle = "Il film inventato",
+                                    durationMillis = 120_000L,
+                                ),
+                                scale = scale,
+                                audioFocusRequester = audioFocus,
+                                progressFocusRequester = progressFocus,
+                                onTogglePlay = {},
+                                onSeek = {},
+                                onAudio = {},
+                                onSubtitles = {},
+                                onVolume = {},
+                                onFormat = {},
+                                modifier = Modifier.align(Alignment.BottomCenter),
+                            )
+                        }
+                        val zappingState = zapping.state
+                        if (zappingState != null && !zappingState.awaitingEndOfList) {
+                            PlayerZappingIndicator(
+                                remainingSeconds = zappingState.remainingSeconds,
+                                scale = scale,
+                                modifier = Modifier.align(Alignment.TopEnd),
+                            )
+                        }
+                        if (zappingState?.awaitingEndOfList == true) {
+                            PlayerZappingEndDialog(
+                                scale = scale,
+                                onYes = { zapping.answer(restart = true) },
+                                onNo = { zapping.answer(restart = false) },
+                            )
+                        }
                     }
                 }
             }
@@ -322,6 +340,9 @@ class PlayerZappingTest {
      * "Zapping" mentre il tasto è ancora giù. Il rilascio dello stesso OK (e le
      * ripetizioni, se il tasto resta premuto) arrivano al pulsante focalizzato e
      * non devono avviare lo zapping: lo avvia solo un OK nuovo e completo.
+     *
+     * Gli eventi si mandano alla radice del player (`harness_player_root`): la
+     * consegna segue il focus, non il nodo su cui si chiama `performKeyPress`.
      */
     @Test
     fun `il rilascio dell OK che apre la barra e le ripetizioni non avviano lo zapping`() {
@@ -332,10 +353,10 @@ class PlayerZappingTest {
             onSwitchChannel = { index -> switched += index },
         )
         showPlayer(live = { true }, zapping = zapping)
+        val root = rule.onNodeWithTag("harness_player_root")
 
         // Primo OK: KeyDown con repeatCount 0 sulla radice del player.
-        rule.onNodeWithTag("harness_player_root")
-            .performKeyPress(okKey(AndroidKeyEvent.ACTION_DOWN))
+        root.performKeyPress(okKey(AndroidKeyEvent.ACTION_DOWN))
         rule.waitForIdle()
         rule.onNodeWithTag("player_channel_banner").assertExists()
         rule.waitUntil(timeoutMillis = 2_000) { isFocused("player_zapping_button") }
@@ -343,28 +364,27 @@ class PlayerZappingTest {
         rule.onNodeWithTag("player_zapping_indicator").assertDoesNotExist()
 
         // KeyUp dello stesso OK: arriva al pulsante "Zapping" e non fa nulla.
-        rule.onNodeWithTag("player_zapping_button")
-            .performKeyPress(okKey(AndroidKeyEvent.ACTION_UP))
+        root.performKeyPress(okKey(AndroidKeyEvent.ACTION_UP))
         rule.waitForIdle()
         rule.onNodeWithTag("player_zapping_indicator").assertDoesNotExist()
         rule.onNodeWithTag("player_channel_banner").assertExists()
+        rule.onNodeWithTag("player_zapping_button").assertIsFocused()
         assertTrue(switched.isEmpty())
 
         // Ripetizioni del tasto tenuto premuto, prima del rilascio: ancora nulla.
-        rule.onNodeWithTag("player_zapping_button")
-            .performKeyPress(okKey(AndroidKeyEvent.ACTION_DOWN, repeatCount = 1))
-        rule.onNodeWithTag("player_zapping_button")
-            .performKeyPress(okKey(AndroidKeyEvent.ACTION_DOWN, repeatCount = 2))
+        root.performKeyPress(okKey(AndroidKeyEvent.ACTION_DOWN, repeatCount = 1))
+        rule.waitForIdle()
+        root.performKeyPress(okKey(AndroidKeyEvent.ACTION_DOWN, repeatCount = 2))
         rule.waitForIdle()
         rule.onNodeWithTag("player_zapping_indicator").assertDoesNotExist()
         rule.onNodeWithTag("player_channel_banner").assertExists()
+        rule.onNodeWithTag("player_zapping_button").assertIsFocused()
         assertTrue(switched.isEmpty())
 
         // Un OK nuovo e completo: lo zapping parte.
-        rule.onNodeWithTag("player_zapping_button")
-            .performKeyPress(okKey(AndroidKeyEvent.ACTION_DOWN))
-        rule.onNodeWithTag("player_zapping_button")
-            .performKeyPress(okKey(AndroidKeyEvent.ACTION_UP))
+        root.performKeyPress(okKey(AndroidKeyEvent.ACTION_DOWN))
+        rule.waitForIdle()
+        root.performKeyPress(okKey(AndroidKeyEvent.ACTION_UP))
         rule.waitForIdle()
         rule.onNodeWithTag("player_zapping_indicator").assertExists()
         rule.onNodeWithTag("player_zapping_indicator").assertTextEquals("Zapping · 10")
@@ -379,52 +399,46 @@ class PlayerZappingTest {
      */
     @Test
     fun `ogni apertura della barra riparte con il blocco dell OK tenuto`() {
-        val clock = FakeClock()
         val zapping = PlayerZapping(
-            controller = ZappingController(clock = clock),
+            controller = ZappingController(clock = FakeClock()),
             onSwitchChannel = {},
         )
         showPlayer(live = { true }, zapping = zapping)
+        val root = rule.onNodeWithTag("harness_player_root")
 
         // Prima apertura: OK giù sulla radice, focus su "Zapping", OK su che non
         // avvia nulla.
-        rule.onNodeWithTag("harness_player_root")
-            .performKeyPress(okKey(AndroidKeyEvent.ACTION_DOWN))
+        root.performKeyPress(okKey(AndroidKeyEvent.ACTION_DOWN))
         rule.waitForIdle()
         rule.waitUntil(timeoutMillis = 2_000) { isFocused("player_zapping_button") }
-        rule.onNodeWithTag("player_zapping_button")
-            .performKeyPress(okKey(AndroidKeyEvent.ACTION_UP))
+        root.performKeyPress(okKey(AndroidKeyEvent.ACTION_UP))
         rule.waitForIdle()
         rule.onNodeWithTag("player_zapping_indicator").assertDoesNotExist()
 
         // Un OK nuovo e completo avvia lo zapping.
-        rule.onNodeWithTag("player_zapping_button")
-            .performKeyPress(okKey(AndroidKeyEvent.ACTION_DOWN))
-        rule.onNodeWithTag("player_zapping_button")
-            .performKeyPress(okKey(AndroidKeyEvent.ACTION_UP))
+        root.performKeyPress(okKey(AndroidKeyEvent.ACTION_DOWN))
+        rule.waitForIdle()
+        root.performKeyPress(okKey(AndroidKeyEvent.ACTION_UP))
         rule.waitForIdle()
         rule.onNodeWithTag("player_zapping_indicator").assertExists()
 
-        // Un tasto qualsiasi ferma lo zapping e la barra si riapre con OK: il
-        // rilascio di quell'OK resta bloccato anche nel nuovo contenuto.
-        rule.onNodeWithTag("harness_player_root").performKeyInput { pressKey(Key.DirectionDown) }
+        // Un tasto qualsiasi ferma lo zapping; la barra si riapre con OK e il
+        // rilascio di quell'OK resta bloccato nel nuovo contenuto.
+        root.performKeyInput { pressKey(Key.DirectionDown) }
         rule.waitForIdle()
         rule.onNodeWithTag("player_zapping_indicator").assertDoesNotExist()
-        rule.onNodeWithTag("harness_player_root")
-            .performKeyPress(okKey(AndroidKeyEvent.ACTION_DOWN))
+        root.performKeyPress(okKey(AndroidKeyEvent.ACTION_DOWN))
         rule.waitForIdle()
         rule.waitUntil(timeoutMillis = 2_000) { isFocused("player_zapping_button") }
-        rule.onNodeWithTag("player_zapping_button")
-            .performKeyPress(okKey(AndroidKeyEvent.ACTION_UP))
+        root.performKeyPress(okKey(AndroidKeyEvent.ACTION_UP))
         rule.waitForIdle()
         rule.onNodeWithTag("player_zapping_indicator").assertDoesNotExist()
         rule.onNodeWithTag("player_channel_banner").assertExists()
 
         // E un altro OK nuovo e completo riavvia lo zapping.
-        rule.onNodeWithTag("player_zapping_button")
-            .performKeyPress(okKey(AndroidKeyEvent.ACTION_DOWN))
-        rule.onNodeWithTag("player_zapping_button")
-            .performKeyPress(okKey(AndroidKeyEvent.ACTION_UP))
+        root.performKeyPress(okKey(AndroidKeyEvent.ACTION_DOWN))
+        rule.waitForIdle()
+        root.performKeyPress(okKey(AndroidKeyEvent.ACTION_UP))
         rule.waitForIdle()
         rule.onNodeWithTag("player_zapping_indicator").assertExists()
     }
