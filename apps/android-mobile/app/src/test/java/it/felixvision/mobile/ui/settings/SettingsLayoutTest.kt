@@ -671,8 +671,10 @@ class SettingsLayoutTest {
         scheduler.advanceTimeBy(100L)
         rule.waitForIdle()
 
-        // Il riquadro è visibile: parte e interroga.
+        // Il riquadro è visibile: parte e interroga (il ciclo gira su Main, il
+        // dispatcher di test: si esegue qui).
         viewModel.onRemoteCardVisible()
+        scheduler.runCurrent()
         assertTrue(viewModel.ui.value.pairingActive)
         assertEquals(1, pairingApi.createCalls)
         scheduler.advanceTimeBy(2_001L)
@@ -680,8 +682,9 @@ class SettingsLayoutTest {
         assertEquals(1, pairingApi.pollCalls)
 
         // Non più visibile: il ciclo si ferma e non tocca più il relay, anche
-        // facendo passare altri intervalli e ricreando l'istanza.
+        // facendo passare altri intervalli.
         viewModel.onRemoteCardHidden()
+        scheduler.runCurrent()
         assertFalse(viewModel.ui.value.pairingActive)
         val createsWhenHidden = pairingApi.createCalls
         val pollsWhenHidden = pairingApi.pollCalls
@@ -692,6 +695,7 @@ class SettingsLayoutTest {
 
         // Tornando visibile riparte dalla sessione già valida.
         viewModel.onRemoteCardVisible()
+        scheduler.runCurrent()
         assertTrue(viewModel.ui.value.pairingActive)
         scheduler.advanceTimeBy(2_001L)
         rule.waitForIdle()
