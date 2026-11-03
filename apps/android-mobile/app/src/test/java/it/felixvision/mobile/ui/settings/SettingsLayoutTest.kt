@@ -428,9 +428,6 @@ class SettingsLayoutTest {
     private fun exists(tag: String): Boolean =
         rule.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()
 
-    private fun exists(tag: String, useUnmergedTree: Boolean): Boolean =
-        rule.onAllNodesWithTag(tag, useUnmergedTree = useUnmergedTree).fetchSemanticsNodes().isNotEmpty()
-
     /** Testo del primo nodo con il tag (albero fuso). */
     private fun textOf(tag: String): String =
         rule.onAllNodesWithTag(tag)
