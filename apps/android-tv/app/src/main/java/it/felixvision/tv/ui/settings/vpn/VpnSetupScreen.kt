@@ -294,7 +294,7 @@ private suspend fun receiveConfiguration(
 }
 
 @Composable
-private fun VpnQrImage(payload: String, scale: UiScale) {
+internal fun VpnQrImage(payload: String, scale: UiScale) {
     val density = LocalDensity.current
     val side = scale.dp(VPN_QR_BASE)
     // Arrotondato ai pixel reali: i moduli restano quadrati e il QR leggibile.

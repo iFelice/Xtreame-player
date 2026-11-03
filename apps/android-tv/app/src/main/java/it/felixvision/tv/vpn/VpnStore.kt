@@ -1,86 +1,103 @@
 package it.felixvision.tv.vpn
 
 import android.content.Context
-import android.content.SharedPreferences
 import java.util.Base64
+import java.util.UUID
+import org.json.JSONArray
+import org.json.JSONObject
 
-/**
- * Stato salvato della VPN, in SharedPreferences (`fvp_vpn`):
- * interruttore acceso/spento, configurazione WireGuard cifrata con
- * [VpnConfigCipher] (IV e dati in Base64) e nome del server da mostrare.
- *
- * Il testo in chiaro della configurazione non viene mai scritto su disco né
- * nei log.
- */
+/** Public metadata only: encrypted configuration never leaves the private archive. */
+data class VpnServer(val id: String, val name: String)
+
 class VpnStore(
     context: Context,
     private val cipher: VpnConfigCipher,
     preferencesName: String = PREFERENCES_NAME,
 ) {
+    private val preferences = context.applicationContext.getSharedPreferences(preferencesName, Context.MODE_PRIVATE)
 
-    private val preferences: SharedPreferences = context.applicationContext
-        .getSharedPreferences(preferencesName, Context.MODE_PRIVATE)
-
-    /** Interruttore della VPN scelto dall'utente. */
-    val isEnabled: Boolean
-        get() = preferences.getBoolean(KEY_ENABLED, false)
-
-    fun setEnabled(enabled: Boolean) {
-        preferences.edit().putBoolean(KEY_ENABLED, enabled).apply()
+    init {
+        // Copy the existing ciphertext without decrypting it. One atomic, idempotent migration.
+        if (!preferences.contains("servers") && preferences.contains("config")) {
+            val id = UUID.randomUUID().toString()
+            val records = JSONArray().put(JSONObject().put("id", id)
+                .put("name", preferences.getString("server_name", "Server VPN"))
+                .put("blob", preferences.getString("config", null)))
+            preferences.edit().putString("servers", records.toString()).putString("active", id)
+                .remove("config").remove("server_name").apply()
+        }
     }
 
-    /** Nome del server della configurazione salvata, `null` se non c'è. */
-    val serverName: String?
-        get() = preferences.getString(KEY_SERVER_NAME, null)
+    private fun records() = JSONArray(preferences.getString("servers", "[]"))
+    val servers: List<VpnServer> get() = records().let { array ->
+        List(array.length()) { array.getJSONObject(it).let { VpnServer(it.getString("id"), it.getString("name")) } }
+    }
+    val activeId: String? get() = preferences.getString("active", null)
+    val serverName: String? get() = servers.firstOrNull { it.id == activeId }?.name
+    val isEnabled: Boolean get() = preferences.getBoolean("enabled", false)
+    val guideShown: Boolean get() = preferences.getBoolean("guide_shown", false)
+    fun markGuideShown() { preferences.edit().putBoolean("guide_shown", true).apply() }
+    fun setEnabled(enabled: Boolean) { preferences.edit().putBoolean("enabled", enabled).apply() }
+    fun hasConfig() = servers.isNotEmpty()
 
-    fun hasConfig(): Boolean = preferences.contains(KEY_CONFIG)
-
-    /** Cifra e salva [text]; il buffer in chiaro viene azzerato subito dopo. */
+    @Synchronized
     fun saveConfig(text: String, serverName: String) {
+        check(servers.size < MAX_SERVERS) { LIMIT_MESSAGE }
+        val names = servers.map { it.name }.toSet()
+        var name = serverName
+        var suffix = 2
+        while (name in names) name = "$serverName (${suffix++})"
         val plaintext = text.toByteArray(Charsets.UTF_8)
-        val blob = try {
-            cipher.encrypt(plaintext)
-        } finally {
-            plaintext.fill(0)
-        }
-        preferences.edit()
-            .putString(KEY_CONFIG, Base64.getEncoder().encodeToString(blob))
-            .putString(KEY_SERVER_NAME, serverName)
-            .apply()
+        val blob = try { cipher.encrypt(plaintext) } finally { plaintext.fill(0) }
+        val id = UUID.randomUUID().toString()
+        val array = records().put(JSONObject().put("id", id).put("name", name)
+            .put("blob", Base64.getEncoder().encodeToString(blob)))
+        preferences.edit().putString("servers", array.toString()).putString("active", id).apply()
     }
 
-    /**
-     * Testo della configurazione salvata, `null` se non c'è o se non è più
-     * decifrabile (per esempio chiave del Keystore persa).
-     */
-    fun loadConfigText(): String? {
-        val encoded = preferences.getString(KEY_CONFIG, null) ?: return null
-        val plaintext = try {
-            cipher.decrypt(Base64.getDecoder().decode(encoded))
-        } catch (error: Exception) {
-            return null
-        }
-        return try {
-            String(plaintext, Charsets.UTF_8)
-        } finally {
-            plaintext.fill(0)
-        }
+    fun loadConfigText(id: String? = activeId): String? {
+        val array = records()
+        val record = (0 until array.length()).map { array.getJSONObject(it) }.firstOrNull { it.getString("id") == id } ?: return null
+        val plaintext = try { cipher.decrypt(Base64.getDecoder().decode(record.getString("blob"))) } catch (_: Exception) { return null }
+        return try { String(plaintext, Charsets.UTF_8) } finally { plaintext.fill(0) }
     }
 
-    /** Cancella configurazione, nome del server e interruttore. */
-    fun clear() {
-        preferences.edit()
-            .remove(KEY_CONFIG)
-            .remove(KEY_SERVER_NAME)
-            .remove(KEY_ENABLED)
-            .apply()
+    @Synchronized
+    fun activate(id: String) {
+        require(servers.any { it.id == id })
+        preferences.edit().putString("active", id).apply()
     }
+
+    @Synchronized
+    fun rename(id: String, name: String): Boolean {
+        val cleaned = name.trim()
+        if (cleaned.length !in 1..30) return false
+        val array = records()
+        val record = (0 until array.length()).map { array.getJSONObject(it) }.firstOrNull { it.getString("id") == id } ?: return false
+        record.put("name", cleaned)
+        preferences.edit().putString("servers", array.toString()).apply()
+        return true
+    }
+
+    @Synchronized
+    fun remove(ids: Set<String>) {
+        val old = records()
+        val remaining = JSONArray()
+        for (i in 0 until old.length()) if (old.getJSONObject(i).getString("id") !in ids) remaining.put(old.getJSONObject(i))
+        val editor = preferences.edit()
+        if (remaining.length() == 0) editor.remove("servers").remove("active").remove("enabled")
+        else {
+            editor.putString("servers", remaining.toString())
+            if (activeId in ids) editor.putString("active", remaining.getJSONObject(0).getString("id"))
+        }
+        editor.apply()
+    }
+
+    fun clear() { preferences.edit().remove("servers").remove("active").remove("enabled").apply() }
 
     companion object {
         const val PREFERENCES_NAME = "fvp_vpn"
-
-        private const val KEY_ENABLED = "enabled"
-        private const val KEY_CONFIG = "config"
-        private const val KEY_SERVER_NAME = "server_name"
+        const val MAX_SERVERS = 5
+        const val LIMIT_MESSAGE = "Hai già 5 server: rimuovine uno per aggiungerne un altro"
     }
 }

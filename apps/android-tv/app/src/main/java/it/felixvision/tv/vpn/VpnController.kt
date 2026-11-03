@@ -147,6 +147,56 @@ class VpnController(
     /** Avvisi una tantum, mostrati in basso nella schermata principale. */
     val messages: SharedFlow<String> = _messages.asSharedFlow()
 
+    private val _servers = MutableStateFlow(store.servers)
+    val servers = _servers.asStateFlow()
+    private val _activeId = MutableStateFlow(store.activeId)
+    val activeId = _activeId.asStateFlow()
+    private val _tryingServer = MutableStateFlow<String?>(null)
+    val tryingServer = _tryingServer.asStateFlow()
+    @Volatile private var guideSeen = store.guideShown
+    val guideShown get() = guideSeen
+    fun markGuideShown() {
+        guideSeen = true
+        launchOperation { store.markGuideShown() }
+    }
+    private fun refreshServers() {
+        _servers.value = store.servers
+        _activeId.value = store.activeId
+    }
+    fun activateServer(id: String) {
+        if (_activeId.value == id) return
+        cancelStart()
+        startJob = launchOperation {
+            if (store.activeId != id) {
+                store.activate(id)
+                refreshServers()
+                stopLocked()
+                if (store.isEnabled) startLocked()
+            }
+        }
+    }
+    fun renameServer(id: String, name: String) {
+        launchOperation {
+            if (store.rename(id, name)) {
+                refreshServers()
+                if (id == store.activeId && _state.value is VpnState.Connected) {
+                    _state.value = VpnState.Connected(store.serverName.orEmpty())
+                }
+            }
+        }
+    }
+    fun removeServers(ids: Set<String>) {
+        cancelStart()
+        startJob = launchOperation {
+            val restart = store.activeId in ids || _state.value == VpnState.Connecting
+            if (restart) stopLocked()
+            store.remove(ids)
+            refreshServers()
+            if (!store.hasConfig()) _state.value = VpnState.NoConfig
+            else if (restart && store.isEnabled) startLocked()
+        }
+    }
+
     /** Intent di consenso di Android, `null` se non serve chiedere nulla. */
     fun permissionIntent(): Intent? =
         try {
@@ -161,6 +211,8 @@ class VpnController(
 
     /** Avvia il tunnel con la configurazione salvata, se il permesso c'è già. */
     fun start() {
+        if (_state.value == VpnState.Connecting || _state.value is VpnState.Connected) return
+        cancelStart()
         startJob = launchOperation { startLocked() }
     }
 
@@ -178,14 +230,18 @@ class VpnController(
      * configurazione. Non chiede mai il permesso e non scavalca un'altra VPN.
      */
     fun startIfEnabled() {
+        if (_state.value == VpnState.Connecting || _state.value is VpnState.Connected) return
+        cancelStart()
         startJob = launchOperation { startIfEnabledLocked() }
     }
 
     /** "Accendi" dalle Impostazioni, con il permesso già concesso. */
     fun enable() {
+        if (_state.value == VpnState.Connecting || _state.value is VpnState.Connected) return
+        cancelStart()
         startJob = launchOperation {
             store.setEnabled(true)
-            startLocked()
+            startWithFallbackLocked()
         }
     }
 
@@ -211,16 +267,25 @@ class VpnController(
      * @return `false` se il salvataggio cifrato non è riuscito.
      */
     suspend fun saveConfig(text: String, serverName: String): Boolean {
-        val saved = withContext(io) {
-            try {
-                store.saveConfig(text, serverName)
-                true
-            } catch (error: Exception) {
-                AppLog.warn("VPN: salvataggio della configurazione non riuscito (${error.javaClass.simpleName})")
-                false
+        if (_servers.value.size >= VpnStore.MAX_SERVERS) {
+            postMessage(VpnStore.LIMIT_MESSAGE)
+            return false
+        }
+        cancelStart()
+        val saved = withContext(serial) {
+            operations.withLock {
+                if (store.servers.size >= VpnStore.MAX_SERVERS) {
+                    postMessage(VpnStore.LIMIT_MESSAGE)
+                    false
+                } else try {
+                    store.saveConfig(text, serverName)
+                    refreshServers()
+                    true
+                } catch (_: Exception) { false }
             }
         }
         if (saved) {
+            cancelStart()
             startJob = launchOperation { applySavedConfigLocked() }
         }
         return saved
@@ -263,20 +328,40 @@ class VpnController(
             _state.value = VpnState.Off
             return
         }
-        startLocked()
+        startWithFallbackLocked()
     }
 
-    private suspend fun startLocked() {
+    private suspend fun startWithFallbackLocked() {
+        val original = store.servers.firstOrNull { it.id == store.activeId } ?: return
+        val candidates = listOf(original) + store.servers.filter { it.id != original.id }
+        for (server in candidates) {
+            currentCoroutineContext().ensureActive()
+            startLocked(server.id, reportFailure = false)
+            if (_state.value is VpnState.Connected) {
+                store.activate(server.id)
+                refreshServers()
+                if (server.id != original.id) postMessage("${original.name} non risponde: ora è attivo ${server.name}")
+                return
+            }
+            if (needsPermission()) return
+        }
+        if (store.hasConfig()) markNotConnected() else postMessage(NOT_CONNECTED_MESSAGE)
+    }
+
+    private suspend fun startLocked(id: String? = store.activeId, reportFailure: Boolean = true) {
         val current = _state.value
         if (current is VpnState.Connected || current == VpnState.Connecting) return
 
-        val text = store.loadConfigText()
+        val text = store.loadConfigText(id)
         if (text == null) {
             val wasEnabled = store.isEnabled
             // Configurazione assente o non più decifrabile: si torna a "Nessuna configurazione".
-            if (store.hasConfig()) store.clear()
-            _state.value = VpnState.NoConfig
-            if (wasEnabled) postMessage(NOT_CONNECTED_MESSAGE)
+            if (store.servers.size <= 1) {
+                if (store.hasConfig()) store.clear()
+                refreshServers()
+                _state.value = VpnState.NoConfig
+            } else _state.value = VpnState.NotConnected(NOT_CONNECTED_REASON)
+            if (wasEnabled && reportFailure) postMessage(NOT_CONNECTED_MESSAGE)
             return
         }
 
@@ -290,10 +375,12 @@ class VpnController(
         val parsed = VpnConfigParser.parse(text, packageName)
         if (parsed !is VpnConfigParseResult.Valid) {
             AppLog.warn("VPN: configurazione salvata non valida")
-            markNotConnected()
+            _state.value = VpnState.NotConnected(NOT_CONNECTED_REASON)
+            if (reportFailure) postMessage("${store.servers.firstOrNull { it.id == id }?.name.orEmpty()} non risponde")
             return
         }
 
+        _tryingServer.value = store.servers.firstOrNull { it.id == id }?.name
         _state.value = VpnState.Connecting
         AppLog.info("VPN: avvio del tunnel")
         val connected = try {
@@ -314,11 +401,12 @@ class VpnController(
         }
 
         if (connected) {
-            _state.value = VpnState.Connected(parsed.serverName)
+            _state.value = VpnState.Connected(store.servers.firstOrNull { it.id == id }?.name ?: parsed.serverName)
             AppLog.info("VPN connessa")
         } else {
             bringDown()
-            markNotConnected()
+            _state.value = VpnState.NotConnected(NOT_CONNECTED_REASON)
+            if (reportFailure) postMessage("${store.servers.firstOrNull { it.id == id }?.name.orEmpty()} non risponde")
         }
     }
 
@@ -331,7 +419,7 @@ class VpnController(
         _state.value = VpnState.NoConfig
         bringDown()
         store.clear()
-        store.setEnabled(false)
+        refreshServers()
     }
 
     private suspend fun applySavedConfigLocked() {
