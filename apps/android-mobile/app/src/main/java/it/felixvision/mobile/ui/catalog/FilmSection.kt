@@ -12,7 +12,9 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -31,6 +33,12 @@ import it.felixvision.tv.data.progress.ProgressKeys
  * scomparsa (verticale) e griglia adattiva di locandine (minimo ~140dp) con
  * titolo sotto. Tocco apre il dettaglio a schermo intero; pressione lunga
  * apre il pannello azioni (preferiti).
+ *
+ * La prima categoria è "Novità" (come nella TV): mostra i film recenti del
+ * catalogo. Le categorie del provider seguono nello stesso ordine. Un film
+ * assegnato a più categorie (`category_id` + `category_ids`) compare in ognuna
+ * di loro: il filtro usa l'appartenenza (`categoryId in allCategoryIds`), non
+ * l'uguaglianza. Al cambio di categoria la griglia torna in cima.
  */
 @Composable
 fun FilmSection(
@@ -44,23 +52,32 @@ fun FilmSection(
     val progress by viewModel.watchProgress.collectAsStateWithLifecycle()
 
     val catalog = catalogState.catalog
-    val categories = catalog?.vodCategories.orEmpty()
+    val displayCategories = remember(catalog?.vodCategories) {
+        withNovitaCategory(catalog?.vodCategories.orEmpty())
+    }
     val streams = catalog?.vodStreams.orEmpty()
 
     val sectionKey = "film"
     val selectedCategoryId = viewModel.sectionStates.selectedCategory(sectionKey)
-        ?: categories.firstOrNull()?.categoryId
+        ?: displayCategories.firstOrNull()?.categoryId
     val headerOpen = viewModel.sectionStates.isHeaderOpen(sectionKey)
-    val filtered = if (selectedCategoryId == null) {
-        emptyList()
-    } else {
-        streams.filter { it.categoryId == selectedCategoryId }
+    val filtered = remember(streams, catalogState.recentFilms, selectedCategoryId) {
+        if (selectedCategoryId == null) {
+            emptyList()
+        } else {
+            filmsForCategory(selectedCategoryId, streams, catalogState.recentFilms)
+        }
     }
 
     val gridState = rememberSectionGridState(viewModel.sectionStates, "film_grid")
 
+    // Al cambio di categoria la griglia torna in cima (stessa regola della TV).
+    LaunchedEffect(selectedCategoryId) {
+        gridState.scrollToItem(0)
+    }
+
     val grid: @Composable (Modifier) -> Unit = { gridModifier ->
-        if (categories.isEmpty()) {
+        if (displayCategories.isEmpty()) {
             EmptyState(
                 title = "Nessuna categoria",
                 description = "Il server non ha restituito categorie.",
@@ -108,7 +125,7 @@ fun FilmSection(
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             CategorySideColumn(
-                categories = categories,
+                categories = displayCategories,
                 selectedCategoryId = selectedCategoryId,
                 onSelect = { category ->
                     viewModel.sectionStates.selectCategory(sectionKey, category.categoryId)
@@ -121,7 +138,7 @@ fun FilmSection(
         Box(modifier = modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 CollapsingCategoryHeader(
-                    categories = categories,
+                    categories = displayCategories,
                     selectedCategoryId = selectedCategoryId,
                     open = headerOpen,
                     onToggleOpen = {
@@ -133,7 +150,7 @@ fun FilmSection(
             }
             if (headerOpen) {
                 CollapsingCategoryPanel(
-                    categories = categories,
+                    categories = displayCategories,
                     selectedCategoryId = selectedCategoryId,
                     onSelect = { category ->
                         viewModel.sectionStates.selectCategory(sectionKey, category.categoryId)

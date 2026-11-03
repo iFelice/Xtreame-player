@@ -284,7 +284,7 @@ fun ActionSheetHost(viewModel: CatalogViewModel) {
         is ActionTarget.Continue -> {
             listOf(
                 SheetAction(
-                    label = "Rimuovi da Continua a guardare",
+                    label = "Rimuovi da Riprendi",
                     testTag = "sheet_hide_continue",
                     onClick = {
                         close()
@@ -309,7 +309,7 @@ fun ActionSheetHost(viewModel: CatalogViewModel) {
         is ActionTarget.Film -> "Film"
         is ActionTarget.Series -> "Serie"
         is ActionTarget.LiveCategory -> "Categoria Live"
-        is ActionTarget.Continue -> "Continua a guardare"
+        is ActionTarget.Continue -> "Riprendi"
     }
 
     ActionSheet(

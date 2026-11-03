@@ -22,10 +22,10 @@ import it.felixvision.mobile.ui.components.rememberSectionListState
 import it.felixvision.tv.data.progress.ProgressKeys
 
 /**
- * Sezione dedicata "Continua a guardare" (disponibile solo con la barra
- * laterale, dove le 8 sezioni sono tutte visibili): stesse voci della riga in
- * Novità — una voce per serie/film secondo le regole ContinueWatchingStore —
- * con rimozione da pressione lunga.
+ * Sezione dedicata "Riprendi" (disponibile solo con la barra laterale, dove
+ * le 8 sezioni sono tutte visibili): stesse voci della riga in Novità — una
+ * voce per serie/film secondo le regole ContinueWatchingStore — con rimozione
+ * da pressione lunga.
  */
 @Composable
 fun ContinueWatchingSection(
@@ -53,7 +53,7 @@ fun ContinueWatchingSection(
         modifier = modifier.fillMaxSize().testTag("continua_list"),
     ) {
         item(key = "continua_title") {
-            RowTitle(text = "Continua a guardare")
+            RowTitle(text = "Riprendi")
         }
         item(key = "continua_row") {
             Column(modifier = Modifier.fillMaxWidth()) {

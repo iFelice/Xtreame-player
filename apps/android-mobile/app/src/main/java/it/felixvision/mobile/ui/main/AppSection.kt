@@ -13,8 +13,11 @@ import it.felixvision.mobile.ui.theme.FvpColors
  * Con finestra più larga che alta e larghezza >= 600dp tutte le 8 sezioni
  * stanno nella barra laterale; altrimenti la barra in basso mostra solo
  * [bottomBarSections] e Cerca/Impostazioni si raggiungono dalle icone
- * dell'intestazione in alto ("Continua a guardare" non ha voce propria in
- * questa modalità: compare come prima riga di Novità, se non è vuota).
+ * dell'intestazione in alto. "Riprendi" non ha voce propria in questa
+ * modalità: compare come prima riga di Novità, se non è vuota.
+ *
+ * Ordine della barra laterale (come la TV):
+ * Novità, Preferiti, Live, Film, Serie, Riprendi, Cerca, Impostazioni.
  */
 enum class AppSection(
     val title: String,
@@ -30,17 +33,16 @@ enum class AppSection(
     val railLabel: String = title,
 ) {
     NOVITA("Novità", FvpColors.NovitaActive, FvpIcons.Novita, "novita"),
-    CONTINUA(
-        title = "Continua a guardare",
-        accent = FvpColors.ContinuaActive,
-        icon = FvpIcons.Continua,
-        stateKey = "continua",
-        railLabel = "Continua",
-    ),
+    PREFERITI("Preferiti", FvpColors.PreferitiActive, FvpIcons.Star, "preferiti"),
     LIVE("Live", FvpColors.LiveActive, FvpIcons.Live, "live"),
     FILM("Film", FvpColors.FilmActive, FvpIcons.Film, "film"),
     SERIE("Serie", FvpColors.SerieActive, FvpIcons.Serie, "serie"),
-    PREFERITI("Preferiti", FvpColors.PreferitiActive, FvpIcons.Star, "preferiti"),
+    RIPRENDI(
+        title = "Riprendi",
+        accent = FvpColors.ContinuaActive,
+        icon = FvpIcons.Continua,
+        stateKey = "riprendi",
+    ),
     CERCA("Cerca", FvpColors.CercaActive, FvpIcons.Cerca, "cerca"),
     IMPOSTAZIONI("Impostazioni", FvpColors.ImpostazioniActive, FvpIcons.Impostazioni, "impostazioni"),
     ;
@@ -48,7 +50,7 @@ enum class AppSection(
     companion object {
 
         /** Le 5 voci della barra in basso della modalità compatta. */
-        val bottomBarSections: List<AppSection> = listOf(NOVITA, LIVE, FILM, SERIE, PREFERITI)
+        val bottomBarSections: List<AppSection> = listOf(NOVITA, PREFERITI, LIVE, FILM, SERIE)
 
         /** Vero quando la finestra vuole la barra laterale: più larga che alta e almeno 600dp. */
         fun useNavigationRail(isWiderThanTall: Boolean, widthIsAtLeast600: Boolean): Boolean =
