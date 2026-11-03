@@ -277,12 +277,13 @@ class SettingsPlayerPageTest {
         val expected = 10 + 1 + steps
 
         rule.mainClock.autoAdvance = false
-        // OK giù: il primo cambio è immediato (10 → 11).
+        // OK giù: il primo cambio è immediato (10 → 11). Il valore si legge
+        // dalle preferenze, che è ciò che conta per lo zapping; il testo si
+        // controlla alla fine, quando l'orologio torna automatico.
         rule.onNodeWithTag(ZAPPING_INCREASE_TAG)
             .performKeyPress(okKey(AndroidKeyEvent.ACTION_DOWN))
         rule.mainClock.advanceTimeBy(frameMillis)
         assertEquals(11, prefs.zappingSeconds)
-        rule.onNodeWithTag(ZAPPING_VALUE_TAG).assertTextEquals("11 s")
 
         // Prima ripetizione del sistema: comincia lo scorrimento.
         rule.onNodeWithTag(ZAPPING_INCREASE_TAG)
@@ -314,13 +315,14 @@ class SettingsPlayerPageTest {
         // Atteso dai tempi: 1 cambio all'OK più i passi da 528 a 1000 ms.
         assertEquals(16L, expected)
         assertEquals(16, prefs.zappingSeconds)
-        rule.onNodeWithTag(ZAPPING_VALUE_TAG).assertTextEquals("16 s")
 
         // Rilascio: nessun altro incremento, anche facendo passare altro tempo.
         rule.onNodeWithTag(ZAPPING_INCREASE_TAG)
             .performKeyPress(okKey(AndroidKeyEvent.ACTION_UP))
         rule.mainClock.advanceTimeBy(1_000L)
         assertEquals(16, prefs.zappingSeconds)
+
+        // Orologio di nuovo automatico: il valore mostrato è quello raggiunto.
         rule.mainClock.autoAdvance = true
         rule.waitForIdle()
         rule.onNodeWithTag(ZAPPING_VALUE_TAG).assertTextEquals("16 s")

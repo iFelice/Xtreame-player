@@ -122,6 +122,10 @@ class PlayerZappingTest {
                         .fillMaxSize()
                         .playerZappingKeys(zapping)
                         .onPreviewKeyEvent { event ->
+                            // Come in PlayerScreen: con il focus sul pulsante
+                            // "Zapping" l'OK resta al pulsante e non apre o
+                            // chiude la barra.
+                            if (zappingButtonFocused) return@onPreviewKeyEvent false
                             if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                             if (event.key != Key.DirectionCenter && event.key != Key.Enter) {
                                 return@onPreviewKeyEvent false
