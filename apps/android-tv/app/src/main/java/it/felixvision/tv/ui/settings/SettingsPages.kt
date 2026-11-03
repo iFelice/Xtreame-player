@@ -367,7 +367,10 @@ internal fun SettingsPlayerPage(
     zappingSeconds: Int = ZappingSeconds.DEFAULT,
     onZappingSecondsSelected: (Int) -> Unit = {},
 ) {
-    val active = ZappingSeconds.normalize(zappingSeconds)
+    // Stato locale: la scelta si vede subito (il "✓" si sposta) e resta
+    // salvata nelle preferenze del player.
+    var selected by remember { mutableStateOf(ZappingSeconds.normalize(zappingSeconds)) }
+    val active = selected
     val secondsFocusRequesters = remember { ZappingSeconds.ALLOWED.associateWith { FocusRequester() } }
     LaunchedEffect(Unit) {
         withFrameNanos { }
@@ -407,7 +410,10 @@ internal fun SettingsPlayerPage(
                 ZappingSeconds.ALLOWED.forEach { seconds ->
                     FvpCompactButton(
                         text = zappingSecondsButtonLabel(seconds = seconds, active = active),
-                        onClick = { onZappingSecondsSelected(seconds) },
+                        onClick = {
+                            selected = seconds
+                            onZappingSecondsSelected(seconds)
+                        },
                         scale = scale,
                         modifier = Modifier
                             .focusRequester(secondsFocusRequesters.getValue(seconds))
