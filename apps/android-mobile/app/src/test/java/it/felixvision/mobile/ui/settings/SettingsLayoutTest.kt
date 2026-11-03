@@ -434,9 +434,6 @@ class SettingsLayoutTest {
         rule.waitForIdle()
     }
 
-    /** Vero quando il ciclo, dopo il ritorno in primo piano, ha interrogato ancora. */
-    private fun FakePairingApi.pollsWhenResumed(expected: Int): Boolean = pollCalls >= expected + 1
-
     private fun exists(tag: String): Boolean =
         rule.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()
 
@@ -616,6 +613,7 @@ class SettingsLayoutTest {
     // --- Configura da remoto ---
 
     @Test
+    @Config(sdk = [34], qualifiers = "w800dp-h480dp-port-mdpi")
     fun `configura da remoto - polling solo con il riquadro visibile`() {
         // Solo la prima tessera del pannello viene creata: così il ciclo può
         // restare in attesa sul tempo virtuale senza esaurire i valori finti.
@@ -669,12 +667,24 @@ class SettingsLayoutTest {
     }
 
     @Test
+    @Config(sdk = [34], qualifiers = "w800dp-h480dp-port-mdpi")
     fun `configura da remoto - in secondo piano il polling si ferma`() {
         pairingApi.creates.addLast(
             ApiResult.Ok(
                 PairingSession(
                     code = "001001",
                     pollToken = "token-001001",
+                    expiresAtMillis = virtualClock.nowMillis() + 600_000L,
+                ),
+            ),
+        )
+        pairingApi.statuses.addLast(ApiResult.Ok(PairingStatus.Waiting))
+        // Dopo il ritorno in primo piano serve una nuova sessione: già pronta.
+        pairingApi.creates.addLast(
+            ApiResult.Ok(
+                PairingSession(
+                    code = "001002",
+                    pollToken = "token-001002",
                     expiresAtMillis = virtualClock.nowMillis() + 600_000L,
                 ),
             ),
@@ -703,10 +713,14 @@ class SettingsLayoutTest {
         assertEquals("nessuna richiesta in secondo piano", createsWhenPaused, pairingApi.createCalls)
         assertEquals("nessun interrogatorio in secondo piano", pollsWhenPaused, pairingApi.pollCalls)
 
-        // Al ritorno in primo piano il ciclo riparte (il riquadro è ancora lì).
+        // Al ritorno in primo piano il ciclo riparte (il riquadro è ancora a
+        // schermo): nuova sessione e nuova interrogazione.
         rule.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
         rule.waitUntil(timeoutMillis = 5_000) { viewModel.ui.value.pairingActive }
-        rule.waitUntil(timeoutMillis = 5_000) { pairingApi.pollsWhenResumed(1) }
+        rule.waitUntil(timeoutMillis = 5_000) { pairingApi.createCalls == 2 }
+        scheduler.advanceTimeBy(2_001L)
+        rule.waitForIdle()
+        rule.waitUntil(timeoutMillis = 5_000) { pairingApi.pollCalls == 2 }
     }
 
     @Test
