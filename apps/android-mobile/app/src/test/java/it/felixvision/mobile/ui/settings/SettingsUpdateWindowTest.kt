@@ -231,7 +231,12 @@ class SettingsUpdateWindowTest {
                 cacheGateway.lastUpdateMillis(server, username)
             },
             clearCatalogCache = { _, _ -> },
-            clearUserData = { _, _ -> },
+            userDataStore = object : SettingsUserDataStore {
+                override suspend fun clearFavorites(server: String, username: String) {}
+                override suspend fun clearMyChannels(server: String, username: String) {}
+                override suspend fun clearProgress(server: String, username: String) {}
+                override suspend fun clearContinueWatching(server: String, username: String) {}
+            },
             isPlaybackActive = { false },
             clock = fixedClock,
         )

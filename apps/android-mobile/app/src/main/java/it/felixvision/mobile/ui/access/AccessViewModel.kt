@@ -352,8 +352,29 @@ class AccessViewModel(
     }
 
     fun updateCredentialsFromRemote(server: String, username: String, password: String, account: XtreamAccount) {
+        updateCredentialsFromRemote(server, username, password, account, account.username)
+    }
+
+    /**
+     * Come sopra, con l'utente da conservare nelle credenziali: è quello
+     * digitato sul telefono, che il server può restituire normalizzato. Lo usa
+     * anche il riquadro "Configura da remoto" delle Impostazioni, così le
+     * credenziali dell'account in corso sono sempre quelle appena ricevute.
+     */
+    fun updateCredentialsFromRemote(
+        server: String,
+        username: String,
+        password: String,
+        account: XtreamAccount,
+        storedUsername: String,
+    ) {
         viewModelScope.launch {
-            currentCredentials = StoredCredentials(server = server, username = username, password = password, serverCode = null)
+            currentCredentials = StoredCredentials(
+                server = server,
+                username = storedUsername,
+                password = password,
+                serverCode = null,
+            )
             runCatching { credentialStore.save(currentCredentials!!) }
             sessionCounter += 1L
             val sessionId = sessionCounter
