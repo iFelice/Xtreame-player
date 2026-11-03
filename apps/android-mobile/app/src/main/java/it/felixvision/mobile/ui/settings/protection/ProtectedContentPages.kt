@@ -22,7 +22,9 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -311,7 +313,7 @@ private fun ProtectedAddCategoriesPage(
 ) {
     val scope = rememberCoroutineScope()
     val catalog = remember { mutableStateOf<Catalog?>(null) }
-    LaunchedEffect(Unit) { scope.launch { catalog.value = it.felixvision.tv.data.catalog.Catalog.empty() } }
+    LaunchedEffect(Unit) { catalog.value = Catalog() }
 
     val categories = catalog.value?.let { cat ->
         when (kind) {
@@ -330,7 +332,7 @@ private fun ProtectedAddCategoriesPage(
                     modifier = Modifier.fillMaxWidth().testTag("protected_category_${c.categoryId}"),
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(text = c.name, color = FvpColors.TextPrimary, fontSize = 14.sp)
+                        Text(text = c.categoryName.orEmpty(), color = FvpColors.TextPrimary, fontSize = 14.sp)
                         Text(text = "${countOf(kind, c, catalog.value)} contenuti", color = FvpColors.TextSecondary, fontSize = 12.sp)
                     }
                 }
@@ -372,7 +374,7 @@ private fun ProtectedAddItemsPage(
 
         TextButton(onClick = {
             scope.launch {
-                store.toggleCategory(server, username, kind, categoryId)
+                store.toggleCategory(server, username, kind, categoryId, categoryName)
                 onDone()
             }
         }) {
