@@ -175,19 +175,47 @@ class ZappingControllerTest {
     }
 
     @Test
-    fun `valori di durata non ammessi tornano a dieci`() {
+    fun `valori di durata fuori dall intervallo tornano a dieci`() {
+        // Fuori da 5..120 (compresi) vale il predefinito.
         assertEquals(10, ZappingSeconds.normalize(null))
+        assertEquals(10, ZappingSeconds.normalize(4))
         assertEquals(10, ZappingSeconds.normalize(0))
-        assertEquals(10, ZappingSeconds.normalize(7))
-        assertEquals(10, ZappingSeconds.normalize(20))
         assertEquals(10, ZappingSeconds.normalize(-5))
+        assertEquals(10, ZappingSeconds.normalize(121))
+        assertEquals(10, ZappingSeconds.normalize(1_000))
+
+        // I limiti e i valori interni restano quelli scelti.
+        assertEquals(5, ZappingSeconds.normalize(5))
+        assertEquals(6, ZappingSeconds.normalize(6))
+        assertEquals(12, ZappingSeconds.normalize(12))
+        assertEquals(119, ZappingSeconds.normalize(119))
+        assertEquals(120, ZappingSeconds.normalize(120))
+
+        // I vecchi valori salvati dalle scelte rapide restano validi.
         assertEquals(5, ZappingSeconds.normalize(5))
         assertEquals(10, ZappingSeconds.normalize(10))
         assertEquals(15, ZappingSeconds.normalize(15))
         assertEquals(30, ZappingSeconds.normalize(30))
+    }
 
-        assertEquals(10, controller.start(seconds = 7, index = 0, size = 3)?.seconds)
-        assertEquals(30, controller.start(seconds = 30, index = 0, size = 3)?.seconds)
+    @Test
+    fun `i limiti dell intervallo sono cinque e centoventi`() {
+        assertEquals(5, ZappingSeconds.MIN)
+        assertEquals(120, ZappingSeconds.MAX)
+        assertEquals(10, ZappingSeconds.DEFAULT)
+        assertEquals(listOf(5, 10, 15, 30), ZappingSeconds.QUICK_CHOICES)
+
+        // clamp porta nell'intervallo, per i pulsanti "−" e "+".
+        assertEquals(5, ZappingSeconds.clamp(4))
+        assertEquals(5, ZappingSeconds.clamp(5))
+        assertEquals(11, ZappingSeconds.clamp(11))
+        assertEquals(120, ZappingSeconds.clamp(120))
+        assertEquals(120, ZappingSeconds.clamp(121))
+
+        // Lo zapping usa il valore scelto: 12 s sono ammessi, 121 torna a 10.
+        assertEquals(12, controller.start(seconds = 12, index = 0, size = 3)?.seconds)
+        assertEquals(120, controller.start(seconds = 120, index = 0, size = 3)?.seconds)
+        assertEquals(10, controller.start(seconds = 121, index = 0, size = 3)?.seconds)
     }
 
     @Test
