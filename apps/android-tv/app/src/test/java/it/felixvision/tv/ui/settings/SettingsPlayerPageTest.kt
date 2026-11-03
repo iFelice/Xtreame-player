@@ -294,37 +294,34 @@ class SettingsPlayerPageTest {
         rule.onNodeWithTag(ZAPPING_INCREASE_TAG)
             .performKeyPress(okKey(AndroidKeyEvent.ACTION_DOWN, repeatCount = 1))
 
-        // I cambi cadono sui frame: il primo dopo l'attesa di 500 ms, poi uno
-        // ogni 100 ms, fino ai 1000 ms dall'OK.
-        val stepFrames = repeatStepFrames(repeatAt, ZAPPING_HOLD_MILLIS, frameMillis)
-        val firstStep = stepFrames.first()
-        val expected: Long = 10L + 1L + stepFrames.size.toLong()
-        // Un passo ogni 100 ms: ai frame di 16 ms i cambi cadono a 112 ms l'uno
-        // dall'altro.
-        assertEquals(listOf(0L, 112L, 224L, 336L, 448L).map { it + firstStep }, stepFrames)
-        assertEquals(5, stepFrames.size)
+        // I cambi: il primo sul primo frame dopo l'attesa di 500 ms, poi uno
+        // ogni 100 ms da lì (il conteggio riparte dalla scadenza, non dai frame).
+        val stepTimes = repeatStepTimes(repeatAt, ZAPPING_HOLD_MILLIS, frameMillis)
+        val firstStep = stepTimes.first()
+        val steps = stepTimes.size
+        val expected: Long = 10L + 1L + steps
+        assertEquals(listOf(0L, 100L, 200L, 300L, 400L).map { it + firstStep }, stepTimes)
+        assertEquals(5, steps)
         assertEquals(16L, expected)
 
-        // Fino a un frame prima del primo passo il valore non è ancora cambiato.
-        rule.mainClock.advanceTimeBy((firstStep - frameMillis - rule.mainClock.currentTime).coerceAtLeast(0L))
+        // Fino a un frame prima del primo cambiamento il valore è ancora 11.
+        rule.mainClock.advanceTimeBy(
+            (firstStep - frameMillis - rule.mainClock.currentTime).coerceAtLeast(0L),
+        )
         assertEquals(11, prefs.zappingSeconds)
 
         // Fino ai 1000 ms dall'OK, frame per frame, il valore è sempre quello
-        // dei punti di cambio già passati: nessun cambio in più né in meno.
-        // I cambi cadono sui frame (112 ms reali per passo) e sono in [stepFrames].
+        // dei cambi già scaduti: nessuno in più e nessuno in meno.
         val guard = 200
         var frames = 0
-        var passed = 0
         while (rule.mainClock.currentTime - repeatAt < ZAPPING_HOLD_MILLIS && frames < guard) {
             rule.mainClock.advanceTimeBy(frameMillis)
             frames++
-            if (passed < stepFrames.size && rule.mainClock.currentTime >= stepFrames[passed]) {
-                passed++
-            }
-            assertEquals(11 + passed, prefs.zappingSeconds)
+            val done = stepTimes.count { it <= rule.mainClock.currentTime }
+            assertEquals(11 + done, prefs.zappingSeconds)
         }
         assertTrue(rule.mainClock.currentTime - repeatAt >= ZAPPING_HOLD_MILLIS)
-        assertEquals(stepFrames.size, passed)
+        assertEquals(steps, stepTimes.count { it <= rule.mainClock.currentTime })
         assertEquals(expected.toInt(), prefs.zappingSeconds)
 
         // Rilascio: nessun altro incremento, anche facendo passare altro tempo.
@@ -353,24 +350,27 @@ class SettingsPlayerPageTest {
 
     /**
      * Istanze dei cambi con OK tenuto premuto da [repeatAtMillis] per
-     * [holdMillis]: il primo frame dopo la ripetizione dà il via, l'attesa di
-     * 500 ms scade sul primo frame successivo e ogni passo cade sul primo frame
-     * dopo 100 ms.
+     * [holdMillis]: il primo frame dopo la ripetizione dà il via e l'attesa di
+     * 500 ms scade sul primo frame successivo; da lì ogni passo scade 100 ms
+     * dopo il precedente.
      */
-    private fun repeatStepFrames(
+    private fun repeatStepTimes(
         repeatAtMillis: Long,
         holdMillis: Long,
         frameMillis: Long,
     ): List<Long> {
-        val startFrame = firstFrameAtOrAfter(repeatAtMillis + frameMillis, frameMillis) +
-            ZappingRepeat.START_DELAY_MILLIS
-        var at = firstFrameAtOrAfter(startFrame, frameMillis)
-        val frames = mutableListOf<Long>()
+        val first = firstFrameAtOrAfter(
+            firstFrameAtOrAfter(repeatAtMillis + frameMillis, frameMillis) +
+                ZappingRepeat.START_DELAY_MILLIS,
+            frameMillis,
+        )
+        val times = mutableListOf<Long>()
+        var at = first
         while (at <= repeatAtMillis + holdMillis) {
-            frames += at
-            at = firstFrameAtOrAfter(at + ZappingRepeat.STEP_MILLIS, frameMillis)
+            times += at
+            at += ZappingRepeat.STEP_MILLIS
         }
-        return frames
+        return times
     }
 
     /**
