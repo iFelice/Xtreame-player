@@ -245,18 +245,14 @@ fun SettingsScreen(
             )
         },
         vpnPage = { pageModifier, entryFocus ->
-            SettingsVpnPage(
-                vpnState = vpnState,
+            it.felixvision.tv.ui.settings.vpn.VpnServersPage(
+                controller = vpnController,
                 scale = scale,
                 modifier = pageModifier,
-                onVpnToggle = onVpnToggle,
-                onVpnConfigure = { showVpnSetup = true },
-                onVpnRemove = {
-                    vpnFocusAfterRemove = true
-                    vpnController.removeConfig()
-                },
+                onToggle = onVpnToggle,
+                onSetup = { showVpnSetup = true },
                 configureFocus = vpnConfigureFocus,
-                entryFocusRequester = entryFocus,
+                entryFocus = entryFocus,
             )
         },
         vpnSetupPage = { pageModifier ->
