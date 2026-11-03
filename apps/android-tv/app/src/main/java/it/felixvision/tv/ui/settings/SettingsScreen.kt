@@ -197,7 +197,7 @@ fun SettingsScreen(
             vpnState = vpnState,
             catalogLastUpdateMillis = catalogLastUpdateMillis ?: state.lastUpdateMillis,
             catalogRefreshing = catalogRefreshing,
-            zappingSeconds = container.playerPreferences.zappingSeconds,
+            zappingSeconds = viewModel.playerPreferences.zappingSeconds,
             versionName = state.versionName,
             updateStatus = state.updateStatus,
         ),
@@ -303,9 +303,9 @@ fun SettingsScreen(
             SettingsPlayerPage(
                 scale = scale,
                 modifier = pageModifier,
-                zappingSeconds = container.playerPreferences.zappingSeconds,
+                zappingSeconds = viewModel.playerPreferences.zappingSeconds,
                 onZappingSecondsSelected = { seconds ->
-                    container.playerPreferences.zappingSeconds = seconds
+                    viewModel.playerPreferences.zappingSeconds = seconds
                 },
             )
         },
