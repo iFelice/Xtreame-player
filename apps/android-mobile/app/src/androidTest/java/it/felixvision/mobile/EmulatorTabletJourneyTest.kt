@@ -15,6 +15,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.core.view.ViewCompat
@@ -264,7 +265,9 @@ class EmulatorTabletJourneyTest {
         waitForDistinctMinute(textOf("settings_last_update"))
 
         val before = textOf("settings_last_update")
-        composeRule.onNodeWithTag("settings_refresh").performClick()
+        // I riquadri stanno in una colonna scorrevole: in verticale il riquadro
+        // Catalogo può essere sotto il bordo dello schermo.
+        composeRule.onNodeWithTag("settings_refresh").performScrollTo().performClick()
         composeRule.waitUntil(timeoutMillis = 10_000) {
             nodeExists("update_dialog") &&
                 nodeExists("update_row_live_status") &&

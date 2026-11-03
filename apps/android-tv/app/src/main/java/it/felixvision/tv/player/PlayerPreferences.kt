@@ -7,7 +7,7 @@ import android.content.Context
  *
  * Sta in un pacchetto solo TV: `data/` e `core/` sono compilati anche da
  * `apps/android-mobile`, questo no. Per ora l'unica preferenza è l'intervallo
- * dello zapping automatico, senza interfaccia: la card Player arriverà dopo.
+ * dello zapping automatico, scelto nella pagina Player delle Impostazioni.
  *
  * La lettura è sincrona e piccolissima: nessun dato sensibile, nessuna
  * cifratura (come `InterfaceSizeStore` per `fvp_ui`).
@@ -21,8 +21,10 @@ class PlayerPreferences(
         .getSharedPreferences(preferencesName, Context.MODE_PRIVATE)
 
     /**
-     * Intervallo dello zapping automatico in secondi: 5, 10, 15 o 30.
-     * Con un valore salvato non ammesso (o assente) vale 10.
+     * Intervallo dello zapping automatico in secondi: da [ZappingSeconds.MIN] a
+     * [ZappingSeconds.MAX], predefinito [ZappingSeconds.DEFAULT]. Con un valore
+     * salvato fuori dall'intervallo (o assente) vale il predefinito; i vecchi
+     * 5, 10, 15 e 30 restano validi senza migrazione.
      */
     var zappingSeconds: Int
         get() {

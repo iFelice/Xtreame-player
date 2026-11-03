@@ -173,6 +173,21 @@ class SettingsViewModel(
      */
     val playerPreferences: PlayerPreferences get() = container.playerPreferences
 
+    /**
+     * Durata dello zapping salvata, osservata dalla schermata: la riga di stato
+     * della card Player si aggiorna appena il valore cambia nella pagina, senza
+     * rileggere l'archivio durante la composizione. La prima lettura è fatta
+     * qui sul thread del ViewModel, non in composizione.
+     */
+    private val _zappingSeconds = MutableStateFlow(playerPreferences.zappingSeconds)
+    val zappingSeconds: StateFlow<Int> = _zappingSeconds.asStateFlow()
+
+    /** Salva la durata dello zapping scelta e la pubblica subito. */
+    fun onZappingSecondsSelected(seconds: Int) {
+        playerPreferences.zappingSeconds = seconds
+        _zappingSeconds.value = playerPreferences.zappingSeconds
+    }
+
     /** Riepilogo per la riga del riquadro "Contenuti protetti". */
     private val _protectedSummary = MutableStateFlow(ProtectedSummary())
     val protectedSummary: StateFlow<ProtectedSummary> = _protectedSummary.asStateFlow()

@@ -63,6 +63,7 @@ import it.felixvision.mobile.ui.player.MobilePlayerSession
 import it.felixvision.mobile.ui.player.PlayerScreen
 import it.felixvision.mobile.ui.player.createMobilePlayerSession
 import it.felixvision.tv.data.epg.ChannelScheduleLoader
+import it.felixvision.tv.data.xtream.XtreamAccount
 
 /**
  * Schermata principale del tablet dopo l'accesso.
@@ -91,6 +92,8 @@ fun HomeScreen(
     banner: String?,
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Credenziali applicate dal riquadro "Configura da remoto" delle Impostazioni. */
+    onRemoteCredentials: (String, String, String, XtreamAccount) -> Unit = { _, _, _, _ -> },
     /** Caricatore della guida Live; `null` nei test e offline. */
     channelScheduleLoader: ChannelScheduleLoader?,
     imageLoader: ImageLoader,
@@ -107,6 +110,9 @@ fun HomeScreen(
             }
         },
     ),
+    // Le due chiavi dipendono dal riepilogo della sessione: dopo un abbinamento
+    // da remoto cambiano server e utente, quindi i ViewModel ripartono sul nuovo
+    // account, come sulla TV.
     settingsViewModel: SettingsViewModel = viewModel(
         key = "settings_${summary.server}_${summary.username}",
         factory = viewModelFactory {
@@ -121,6 +127,7 @@ fun HomeScreen(
                     maxConnections = summary.maxConnections,
                     activeConnections = summary.activeConnections,
                     onSignOut = onSignOut,
+                    onRemoteCredentialsApplied = onRemoteCredentials,
                 )
             }
         },

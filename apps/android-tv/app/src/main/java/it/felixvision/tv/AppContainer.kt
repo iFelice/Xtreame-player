@@ -61,6 +61,7 @@ class AppContainer(
     credentialStoreOverride: CredentialStore? = null,
     updateClientOverride: UpdateClient? = null,
     updateInstallerOverride: UpdateInstaller? = null,
+    playerPreferencesOverride: PlayerPreferences? = null,
 ) {
 
     val json = FvpJson
@@ -175,7 +176,7 @@ class AppContainer(
      * zapping automatico. Pacchetto solo TV, mai `data/` o `core/`.
      */
     val playerPreferences: PlayerPreferences by lazy {
-        PlayerPreferences(context = context)
+        playerPreferencesOverride ?: PlayerPreferences(context = context)
     }
 
     /** Archivio "Continua a guardare": una voce per film e una per serie. */

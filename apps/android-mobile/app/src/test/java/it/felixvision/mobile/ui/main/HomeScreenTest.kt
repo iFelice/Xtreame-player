@@ -33,6 +33,7 @@ import it.felixvision.mobile.ui.catalog.ContinueWatchingGateway
 import it.felixvision.mobile.ui.catalog.FavoritesGateway
 import it.felixvision.mobile.ui.catalog.MyChannelsGateway
 import it.felixvision.mobile.ui.catalog.ProgressGateway
+import it.felixvision.mobile.ui.settings.SettingsUserDataStore
 import it.felixvision.mobile.ui.settings.SettingsViewModel
 import it.felixvision.mobile.ui.theme.FvpTheme
 import it.felixvision.tv.core.Clock
@@ -267,7 +268,12 @@ class HomeScreenTest {
             credentialStore = FakeCredentialStore(),
             readLastCatalogUpdate = { _, _ -> null },
             clearCatalogCache = { _, _ -> },
-            clearUserData = { _, _ -> },
+            userDataStore = object : SettingsUserDataStore {
+                override suspend fun clearFavorites(server: String, username: String) {}
+                override suspend fun clearMyChannels(server: String, username: String) {}
+                override suspend fun clearProgress(server: String, username: String) {}
+                override suspend fun clearContinueWatching(server: String, username: String) {}
+            },
             isPlaybackActive = { false },
             clock = fixedClock,
         )

@@ -271,8 +271,16 @@ class SettingsCardsGridTest {
         assertTrue(!AppUpdateStatus.CheckFailed.hasActiveUpdate())
         assertEquals("Zapping ogni 10 s", playerStatusLine(10))
         assertEquals("Zapping ogni 30 s", playerStatusLine(30))
-        // Un valore non ammesso torna al predefinito.
-        assertEquals("Zapping ogni 10 s", playerStatusLine(7))
+        // La riga mostra sempre il valore salvato, anche fuori dalle scelte
+        // rapide e a qualunque punto dell'intervallo 5..120.
+        assertEquals("Zapping ogni 7 s", playerStatusLine(7))
+        assertEquals("Zapping ogni 12 s", playerStatusLine(12))
+        assertEquals("Zapping ogni 5 s", playerStatusLine(5))
+        assertEquals("Zapping ogni 120 s", playerStatusLine(120))
+        // Fuori dall'intervallo torna il predefinito.
+        assertEquals("Zapping ogni 10 s", playerStatusLine(4))
+        assertEquals("Zapping ogni 10 s", playerStatusLine(121))
+        assertEquals("Zapping ogni 10 s", playerStatusLine(0))
 
         assertEquals("demo · scade 15/03/2027", accountStatusLine("demo", expiryEpochSeconds))
         assertEquals("demo", accountStatusLine("demo", null))
