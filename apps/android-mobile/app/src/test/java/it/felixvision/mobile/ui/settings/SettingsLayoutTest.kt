@@ -675,17 +675,9 @@ class SettingsLayoutTest {
                 ),
             ),
         )
+        // Due stati "in attesa": uno per il primo interrogatorio e uno per
+        // quello dopo il ritorno in primo piano (la sessione è ancora valida).
         pairingApi.statuses.addLast(ApiResult.Ok(PairingStatus.Waiting))
-        // Dopo il ritorno in primo piano serve una nuova sessione: già pronta.
-        pairingApi.creates.addLast(
-            ApiResult.Ok(
-                PairingSession(
-                    code = "001002",
-                    pollToken = "token-001002",
-                    expiresAtMillis = virtualClock.nowMillis() + 600_000L,
-                ),
-            ),
-        )
         pairingApi.statuses.addLast(ApiResult.Ok(PairingStatus.Waiting))
         val viewModel = createSettingsViewModel()
         mount(viewModel)
@@ -711,14 +703,9 @@ class SettingsLayoutTest {
         assertEquals("nessun interrogatorio in secondo piano", pollsWhenPaused, pairingApi.pollCalls)
 
         // Al ritorno in primo piano il ciclo riparte (il riquadro è ancora a
-        // schermo): nuova sessione e nuova interrogazione.
+        // schermo) e il relay torna a essere interrogato.
         rule.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
         rule.waitUntil(timeoutMillis = 5_000) { viewModel.ui.value.pairingActive }
-        // La sessione consumata dal primo giro è scaduta: il ciclo la ricrea
-        // appena riparte, poi torna a interrogare il relay.
-        rule.waitUntil(timeoutMillis = 5_000) { pairingApi.createCalls == 2 }
-        scheduler.advanceTimeBy(2_001L)
-        rule.waitForIdle()
         rule.waitUntil(timeoutMillis = 5_000) { pairingApi.pollCalls == 2 }
     }
 

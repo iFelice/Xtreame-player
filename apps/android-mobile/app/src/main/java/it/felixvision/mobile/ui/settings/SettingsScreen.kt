@@ -24,6 +24,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -420,6 +421,12 @@ internal fun RemoteConfigCard(
     LifecycleStartEffect(Unit) {
         started = true
         onStopOrDispose { started = false }
+    }
+
+    // Uscire dalla composizione (cambio sezione, schermata sostituita) ferma
+    // comunque il ciclo: nessuna richiesta al relay senza riquadro.
+    DisposableEffect(Unit) {
+        onDispose { onHidden() }
     }
 
     LaunchedEffect(started, inViewport) {
