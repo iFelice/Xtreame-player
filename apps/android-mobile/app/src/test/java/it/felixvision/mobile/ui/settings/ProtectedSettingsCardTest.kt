@@ -474,13 +474,16 @@ class ProtectedSettingsCardTest {
         // schermo, che qui è largo 1280dp.
         val column = rule.onNodeWithTag(PROTECTED_PAGE_COLUMN_TAG).getUnclippedBoundsInRoot()
         val root = rule.onNodeWithTag(PROTECTED_PAGE_TAG).getUnclippedBoundsInRoot()
+        // DpRect espone i bordi: larghezza e centro si ricavano da quelli.
+        val columnWidth = (column.right - column.left).value
+        val rootWidth = (root.right - root.left).value
         assertTrue(
             "la colonna non deve superare ${PROTECTED_PAGE_MAX_WIDTH.value}dp",
-            column.width.value <= PROTECTED_PAGE_MAX_WIDTH.value + 1f,
+            columnWidth <= PROTECTED_PAGE_MAX_WIDTH.value + 1f,
         )
-        assertTrue("lo schermo è più largo della colonna", root.width.value > column.width.value)
-        val centerOfColumn = column.left.value + column.width.value / 2f
-        val centerOfRoot = root.left.value + root.width.value / 2f
+        assertTrue("lo schermo è più largo della colonna", rootWidth > columnWidth)
+        val centerOfColumn = column.left.value + columnWidth / 2f
+        val centerOfRoot = root.left.value + rootWidth / 2f
         assertEquals("colonna centrata", centerOfRoot, centerOfColumn, 2f)
         assertEquals(PROTECTED_TITLE, textOf("protected_title"))
     }
