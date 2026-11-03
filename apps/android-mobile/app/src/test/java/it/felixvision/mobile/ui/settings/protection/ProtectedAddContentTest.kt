@@ -12,7 +12,7 @@ import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -23,6 +23,7 @@ import it.felixvision.tv.data.catalog.Category
 import it.felixvision.tv.data.catalog.LiveStream
 import it.felixvision.tv.data.catalog.SeriesItem
 import it.felixvision.tv.data.catalog.VodStream
+import it.felixvision.tv.data.protection.ProtectedContentData
 import it.felixvision.tv.data.protection.ProtectedContentRules
 import it.felixvision.tv.data.protection.ProtectedContentStore
 import it.felixvision.tv.data.protection.ProtectedKind
@@ -40,7 +41,6 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -210,6 +210,17 @@ class ProtectedAddContentTest {
     private fun storedData() = runBlocking { store.get(server, username) }
 
     /**
+     * Attende che l'archivio soddisfi [predicate]: il salvataggio parte dal
+     * tocco e la scrittura gira su Dispatchers.IO, quindi l'esito si osserva
+     * con un'attesa e non con una lettura immediata.
+     */
+    private fun awaitStored(description: String, predicate: (ProtectedContentData) -> Boolean) {
+        rule.waitUntil(timeoutMillis = 5_000L) { predicate(storedData()) }
+        settle()
+        assertTrue(description, predicate(storedData()))
+    }
+
+    /**
      * Testo della voce con [tag] nell'albero unito: le righe fondono nome e
      * stato a destra in una sola voce (come le legge chi usa lo schermo).
      */
@@ -266,17 +277,19 @@ class ProtectedAddContentTest {
         // Nessun contenuto nascosto: la riga c'è e la spunta è spenta.
         rule.onNodeWithTag("protected_all_category").assertIsNotSelected()
         click("protected_all_category")
-        var data = storedData()
-        assertTrue(ProtectedContentRules.isCategoryHidden(data, ProtectedKind.VOD, "v1"))
+        awaitStored("la categoria v1 deve risultare nascosta") {
+            ProtectedContentRules.isCategoryHidden(it, ProtectedKind.VOD, "v1")
+        }
 
         // Un singolo contenuto: spunta e salvataggio immediato.
         awaitTag("protected_itemrow_vod_202")
         click("protected_itemrow_vod_202")
-        data = storedData()
-        assertEquals(ProtectedKind.VOD.storageKey, data.hiddenItems.last().kind)
-        assertEquals("202", data.hiddenItems.last().itemId)
-        rule.onNodeWithTag("protected_itemrow_vod_202")
-            .assertIsSelected()
+        awaitStored("il film 202 deve risultare nascosto") { data ->
+            data.hiddenItems.any {
+                it.kind == ProtectedKind.VOD.storageKey && it.itemId == "202"
+            }
+        }
+        rule.onNodeWithTag("protected_itemrow_vod_202").assertIsSelected()
     }
 
     @Test
@@ -292,10 +305,11 @@ class ProtectedAddContentTest {
         assertTrue(itemsForCategory(catalog, ProtectedKind.VOD, "v2").any { it.itemId == "201" })
 
         click("protected_itemrow_vod_201")
-        val data = storedData()
-        // Nascosto pur partendo da "v1": entrambe lo nascondono.
-        assertTrue(ProtectedContentRules.isItemHidden(data, ProtectedKind.VOD, "201", "v1"))
-        assertTrue(ProtectedContentRules.isItemHidden(data, ProtectedKind.VOD, "201", "v2"))
+        // Nascosto pur partendo da "v1": entrambe le categorie lo nascondono.
+        awaitStored("il film 201 deve risultare nascosto in entrambe le categorie") { data ->
+            ProtectedContentRules.isItemHidden(data, ProtectedKind.VOD, "201", "v1") &&
+                ProtectedContentRules.isItemHidden(data, ProtectedKind.VOD, "201", "v2")
+        }
 
         // Tornando alle categorie e aprendo l'altra, la riga è già spuntata.
         pressBack()
@@ -315,9 +329,11 @@ class ProtectedAddContentTest {
         rule.onNodeWithTag("protected_hidden_cat_series_s1").assertExists()
         click("protected_remove_cat_series_s1")
 
+        awaitStored("la categoria rimossa non deve restare nell'archivio") {
+            it.hiddenCategories.isEmpty()
+        }
         rule.waitUntil(timeoutMillis = 5_000L) { !exists("protected_hidden_cat_series_s1") }
         settle()
-        assertTrue(storedData().hiddenCategories.isEmpty())
         rule.onNodeWithTag("protected_hidden_empty").assertTextEquals(PROTECTED_EMPTY_HIDDEN)
     }
 
@@ -329,10 +345,14 @@ class ProtectedAddContentTest {
         click("protected_add")
         click("protected_kind_live")
 
-        // Si scorre fino a una categoria lontana e la si apre.
+        // Si scorre fino a una categoria lontana e la si apre: nella lista
+        // lazy la riga non è composta finché non si scorre la lista.
         val farCategory = "020"
-        rule.onNodeWithTag(categoryRow(ProtectedKind.LIVE, farCategory)).performScrollTo()
+        val farIndex = liveCategories.indexOfFirst { it.categoryId == farCategory }
+        assertEquals(19, farIndex)
+        rule.onNodeWithTag("protected_categories_list").performScrollToIndex(farIndex)
         settle()
+        awaitTag(categoryRow(ProtectedKind.LIVE, farCategory))
         click(categoryRow(ProtectedKind.LIVE, farCategory))
         awaitTag("protected_all_category")
 
@@ -360,8 +380,8 @@ class ProtectedAddContentTest {
             .assertTextEquals(PROTECTED_CATALOG_MISSING)
         click("protected_catalog_refresh")
         assertEquals(1, refreshes)
-        // Nessuna categoria e nessun elenco: l'archivio resta vuoto.
-        assertNull(storedData().hiddenCategories.firstOrNull())
+        // Nessuna categoria: l'archivio resta vuoto.
+        assertTrue(storedData().hiddenCategories.isEmpty())
     }
 
     /** Indietro dal livello corrente, come il tasto del sistema. */
