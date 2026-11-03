@@ -5,7 +5,6 @@ import it.felixvision.tv.core.FvpJson
 import it.felixvision.tv.core.HttpClientFactory
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.runBlocking
-import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -23,6 +22,11 @@ import org.junit.Test
  *   nullo e byte ricevuti crescenti;
  * - corpo da 5 MB → numero di emissioni limitato (nessuna emissione per ogni
  *   blocco da 8 KB).
+ *
+ * Le risposte sono scelte per `action`: con le tre sezioni in parallelo
+ * l'ordine di arrivo non è più quello sequenziale della coda di MockWebServer.
+ * Le tappe delle altre sezioni si interlacciano, quindi ogni asserzione filtra
+ * prima per [CatalogSection.LIVE].
  */
 class CatalogClientTest {
 
@@ -54,7 +58,7 @@ class CatalogClientTest {
         sb.append('[')
         for (i in 1..itemCount) {
             if (i > 1) sb.append(',')
-            sb.append("""{"stream_id":"""").append(i)
+            sb.append("""{"stream_id":""").append(i)
                 .append("""","name":"Canale """).append(i)
                 .append("""","category_id":"1"}""")
         }
@@ -73,9 +77,12 @@ class CatalogClientTest {
         val liveBody = buildLiveStreamsJson(itemCount = 25, minBytes = 256 * 1024)
         val expectedTotalBytes = liveBody.toByteArray(Charsets.UTF_8).size.toLong()
 
-        server.enqueue(MockResponse().setResponseCode(200).setBody(categoriesJson))
-        server.enqueue(MockResponse().setResponseCode(200).setBody(liveBody))
-        repeat(4) { server.enqueue(MockResponse().setResponseCode(200).setBody("[]")) }
+        server.dispatcher = ActionDispatcher(
+            bodies = mapOf(
+                "get_live_categories" to categoriesJson,
+                "get_live_streams" to liveBody,
+            ),
+        )
 
         val stages = mutableListOf<CatalogStage>()
         val result = client().loadCatalog(baseUrl(), "demo", "demo") { stage ->
@@ -130,9 +137,13 @@ class CatalogClientTest {
         val fakeNow = AtomicLong(1_000L)
         val steppingClock = Clock { fakeNow.addAndGet(50L) }
 
-        server.enqueue(MockResponse().setResponseCode(200).setBody(categoriesJson))
-        server.enqueue(MockResponse().setResponseCode(200).setChunkedBody(liveBody, 8 * 1024))
-        repeat(4) { server.enqueue(MockResponse().setResponseCode(200).setBody("[]")) }
+        server.dispatcher = ActionDispatcher(
+            bodies = mapOf(
+                "get_live_categories" to categoriesJson,
+                "get_live_streams" to liveBody,
+            ),
+            chunkedFor = mapOf("get_live_streams" to 8 * 1024),
+        )
 
         val stages = mutableListOf<CatalogStage>()
         val result = client(clock = steppingClock).loadCatalog(baseUrl(), "demo", "demo") { stage ->
@@ -179,9 +190,7 @@ class CatalogClientTest {
         // Orologio stabile durante lo scaricamento veloce: conta solo la soglia dell'1%
         val fixedClock = Clock { 10_000L }
 
-        server.enqueue(MockResponse().setResponseCode(200).setBody("[]"))
-        server.enqueue(MockResponse().setResponseCode(200).setBody(fiveMbJson))
-        repeat(4) { server.enqueue(MockResponse().setResponseCode(200).setBody("[]")) }
+        server.dispatcher = ActionDispatcher(bodies = mapOf("get_live_streams" to fiveMbJson))
 
         val stages = mutableListOf<CatalogStage>()
         val result = client(clock = fixedClock).loadCatalog(baseUrl(), "demo", "demo") { stage ->
