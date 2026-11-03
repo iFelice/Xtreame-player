@@ -314,9 +314,20 @@ class SettingsPlayerPageTest {
             firstDelay >= ZappingRepeat.START_DELAY_MILLIS &&
                 firstDelay <= ZappingRepeat.START_DELAY_MILLIS + 2 * frameMillis,
         )
+        // Un cambio ogni 100 ms: l'orologio dei test li vede solo ai frame
+        // (16 ms), quindi ogni intervallo misurato sta entro un frame dai 100 ms
+        // e la somma, dove l'errore si annulla, è esattamente 100 ms per passo.
+        val deltas = changeTimes.indices.drop(1).map { changeTimes[it] - changeTimes[it - 1] }
+        deltas.forEach { delta ->
+            assertTrue(
+                "intervallo di ${delta}ms, atteso 100ms ± un frame",
+                delta >= ZappingRepeat.STEP_MILLIS - frameMillis &&
+                    delta <= ZappingRepeat.STEP_MILLIS + frameMillis,
+            )
+        }
         assertEquals(
-            changeTimes.indices.drop(1).map { changeTimes[it] - changeTimes[it - 1] },
-            List(changeTimes.size - 1) { ZappingRepeat.STEP_MILLIS },
+            ZappingRepeat.STEP_MILLIS * deltas.size,
+            changeTimes.last() - changeTimes.first(),
         )
 
         // Atteso dai tempi 500/100 ms: i cambi che scadono entro 1000 ms sono
