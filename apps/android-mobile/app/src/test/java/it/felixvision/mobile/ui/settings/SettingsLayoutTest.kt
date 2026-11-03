@@ -440,9 +440,13 @@ class SettingsLayoutTest {
             ?.joinToString("") { it.text }
             .orEmpty()
 
-    private fun topOf(tag: String): Float = rule.onNodeWithTag(tag).getUnclippedBoundsInRoot().top
+    /** Coordinata superiore del nodo, in dp, senza troncamenti. */
+    private fun topOf(tag: String): Float =
+        rule.onNodeWithTag(tag).getUnclippedBoundsInRoot().top.value
 
-    private fun leftOf(tag: String): Float = rule.onNodeWithTag(tag).getUnclippedBoundsInRoot().left
+    /** Coordinata sinistra del nodo, in dp, senza troncamenti. */
+    private fun leftOf(tag: String): Float =
+        rule.onNodeWithTag(tag).getUnclippedBoundsInRoot().left.value
 
     // --- Riquadri: ordine ---
 
@@ -497,8 +501,8 @@ class SettingsLayoutTest {
         val column = rule.onNodeWithTag(SETTINGS_COLUMN_LEFT_TAG).getUnclippedBoundsInRoot()
         panels.forEach { tag ->
             val bounds = rule.onNodeWithTag(tag).getUnclippedBoundsInRoot()
-            assertTrue("$tag dentro l'unica colonna", bounds.left >= column.left)
-            assertTrue("$tag dentro l'unica colonna", bounds.right <= column.right)
+            assertTrue("$tag dentro l'unica colonna", bounds.left.value >= column.left.value)
+            assertTrue("$tag dentro l'unica colonna", bounds.right.value <= column.right.value)
         }
         // Basta un confronto per volta: una piccola tolleranza assorbe
         // l'arrotondamento in pixel dello scorrimento.
