@@ -520,9 +520,11 @@ private fun ProtectedRemoveConfirmDialog(
     onNo: () -> Unit,
 ) {
     // FocusRequester sempre dentro remember: focus iniziale sul "No" (sicuro).
+    // Nessun withFrameNanos qui: dentro un Dialog la sotto-composizione non
+    // riceve un frame in una schermata statica e la richiesta resterebbe
+    // sospesa. Come nelle altre finestre dell'app si chiede il focus subito.
     val noFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) {
-        withFrameNanos { }
         runCatching { noFocus.requestFocus() }
     }
 
@@ -563,13 +565,9 @@ private fun ProtectedRemoveConfirmDialog(
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.testTag(PROTECTED_REMOVE_TEXT_TAG),
                 )
+                // "No" è il primo pulsante: è la scelta sicura e riceve il
+                // focus iniziale anche quando la finestra lo assegna da sola.
                 Row(horizontalArrangement = Arrangement.spacedBy(scale.dp(12f))) {
-                    FvpCompactButton(
-                        text = "Sì",
-                        onClick = onYes,
-                        scale = scale,
-                        modifier = Modifier.testTag(PROTECTED_REMOVE_YES_TAG),
-                    )
                     FvpCompactButton(
                         text = "No",
                         onClick = onNo,
@@ -577,6 +575,12 @@ private fun ProtectedRemoveConfirmDialog(
                         modifier = Modifier
                             .focusRequester(noFocus)
                             .testTag(PROTECTED_REMOVE_NO_TAG),
+                    )
+                    FvpCompactButton(
+                        text = "Sì",
+                        onClick = onYes,
+                        scale = scale,
+                        modifier = Modifier.testTag(PROTECTED_REMOVE_YES_TAG),
                     )
                 }
             }
