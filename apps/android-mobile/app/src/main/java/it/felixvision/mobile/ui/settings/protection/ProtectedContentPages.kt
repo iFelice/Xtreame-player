@@ -385,7 +385,7 @@ private fun ProtectedAddItemsPage(
         if (itemIds.isEmpty()) {
             Text(text = "Nessun contenuto in questa categoria", color = FvpColors.TextSecondary, fontSize = 14.sp)
         } else {
-            itemsIndexed(items.toList(), key = { _, p -> "protected_item_${p.first}" }) { _, p ->
+            items.forEach { p ->
                 val id = p.first
                 val name = p.second
                 val hidden = ProtectedContentRules.isItemHidden(data.value, kind, id, categoryId)

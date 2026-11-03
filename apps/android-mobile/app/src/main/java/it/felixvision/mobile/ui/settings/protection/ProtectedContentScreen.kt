@@ -11,7 +11,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.input.ImeAction
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
@@ -52,7 +52,7 @@ import it.felixvision.tv.data.protection.ProtectedContentStore
 import it.felixvision.tv.data.protection.ProtectedKind
 import it.felixvision.tv.data.protection.ProtectedSession
 import it.felixvision.tv.data.store.CredentialStore
-import it.felixvision.tv.data.store.Credentials
+import it.felixvision.tv.data.store.StoredCredentials
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -107,7 +107,7 @@ internal enum class CreateOrigin { Initial, Change, ForgotBackToVerify, ForgotBa
 fun ProtectedContentScreen(
     store: ProtectedContentStore,
     session: ProtectedSession,
-    credentials: Credentials,
+    credentials: StoredCredentials,
     server: String,
     username: String,
     clock: Clock,
