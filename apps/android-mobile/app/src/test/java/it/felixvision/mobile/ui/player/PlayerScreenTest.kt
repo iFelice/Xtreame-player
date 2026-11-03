@@ -48,6 +48,28 @@ class PlayerScreenTest {
     val rule = createAndroidComposeRule<androidx.activity.ComponentActivity>()
 
     @Test
+    @Config(sdk = [34], qualifiers = "w1280dp-h800dp-land-mdpi")
+    fun liveControlsExposePlayPauseWithoutSeeking() {
+        var clicks = 0
+        rule.setContent {
+            FvpTheme {
+                PlayerControls(
+                    state = MobilePlayerState(playbackType = MobilePlaybackType.LIVE),
+                    currentProgram = null,
+                    nowMillis = 0L,
+                    isFit = true,
+                    onBack = {}, onTracks = {}, onFit = {}, onPip = {},
+                    onPlayPause = { clicks++ }, onSeek = {}, onSeekBy = {},
+                )
+            }
+        }
+        rule.onNodeWithTag("player_play_pause", useUnmergedTree = true).assertIsDisplayed().performClick()
+        rule.onNodeWithContentDescription("Indietro di dieci secondi").assertDoesNotExist()
+        rule.onNodeWithContentDescription("Avanti di dieci secondi").assertDoesNotExist()
+        assertEquals(1, clicks)
+    }
+
+    @Test
     @Config(sdk = [34], qualifiers = "w800dp-h1280dp-port-mdpi")
     fun portraitMovieShowsDetailsWithoutGuideOrChannelTabs() {
         val engine = engineFor(MobilePlaybackSource.Movie(movie()))

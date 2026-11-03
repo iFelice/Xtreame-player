@@ -64,23 +64,26 @@ fun PlayerControls(
             onFit = onFit,
             onPip = onPip,
         )
-        if (state.playbackType.supportsSeeking) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (state.playbackType.supportsSeeking) {
                 PlayerIconAction(
                     image = FvpIcons.Indietro10,
                     description = "Indietro di dieci secondi",
                     onClick = { onSeekBy(-10) },
                 )
-                PlayerIconAction(
-                    image = if (state.playing) FvpIcons.Pause else FvpIcons.Play,
-                    description = if (state.playing) "Metti in pausa" else "Riproduci",
-                    onClick = onPlayPause,
-                    emphasized = true,
-                )
+            }
+            PlayerIconAction(
+                image = if (state.playing) FvpIcons.Pause else FvpIcons.Play,
+                description = if (state.playing) "Metti in pausa" else "Riproduci",
+                onClick = onPlayPause,
+                emphasized = true,
+                modifier = Modifier.testTag("player_play_pause"),
+            )
+            if (state.playbackType.supportsSeeking) {
                 PlayerIconAction(
                     image = FvpIcons.Avanti10,
                     description = "Avanti di dieci secondi",

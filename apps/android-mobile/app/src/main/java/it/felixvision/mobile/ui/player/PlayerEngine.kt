@@ -1,9 +1,7 @@
 package it.felixvision.mobile.ui.player
 
 import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
-import android.media.AudioManager
+import android.os.SystemClock
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -41,6 +39,9 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.yield
 
 sealed interface MobilePlaybackSource {
     data class Live(
@@ -129,12 +130,13 @@ class PlayerEngine(
     val session: MobilePlayerSession,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     private var started = false
     private var hostStopped = false
     private var released = false
     private var trackSelector: DefaultTrackSelector? = null
     private val liveAutoRestart = LiveAutoRestart()
+    private var watchdog: Job? = null
+    private var sourceGeneration = 0
     private var currentSource: MobilePlaybackSource = session.source
     private val liveChannels = when (val source = session.source) {
         is MobilePlaybackSource.Live -> source.channels
@@ -174,7 +176,9 @@ class PlayerEngine(
                         else -> Unit
                     }
                     syncSourceState()
+                    sourceGeneration++
                     buildPlayer(positionMillis, autoplay)
+                    startLiveWatchdog()
                 }
 
                 override fun seekTo(positionMillis: Long) {
@@ -226,15 +230,6 @@ class PlayerEngine(
             serverTimezone = session.serverTimezone,
         )
     }
-    private val noisyReceiver = object : android.content.BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            pause()
-        }
-    }
-    private val audioFocusListener = AudioManager.OnAudioFocusChangeListener { change ->
-        if (change <= AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) pause()
-    }
-
     var player by mutableStateOf<ExoPlayer?>(null)
         private set
 
@@ -258,12 +253,12 @@ class PlayerEngine(
     private val listener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             state = state.copy(playing = isPlaying)
+            if (isPlaying) liveAutoRestart.reset()
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) {
             state = state.copy(buffering = playbackState == Player.STATE_BUFFERING)
             if (playbackState == Player.STATE_READY) {
-                liveAutoRestart.reset()
                 state = state.copy(duration = player?.duration?.coerceAtLeast(0L) ?: 0L)
             }
             if (playbackState == Player.STATE_ENDED) nextEpisode()
@@ -273,7 +268,11 @@ class PlayerEngine(
             when (liveAutoRestart.onPlayerError(currentSource.playbackKind(), error)) {
                 PlayerErrorAction.SILENT_RESTART -> {
                     state = state.copy(error = null, buffering = true)
-                    scope.launch { buildPlayer(0L, autoplay = true) }
+                    val generation = sourceGeneration
+                    scope.launch {
+                        yield()
+                        if (generation == sourceGeneration && !released) buildPlayer(0L, autoplay = true)
+                    }
                 }
                 PlayerErrorAction.SHOW_ERROR -> {
                     state = state.copy(error = "Impossibile riprodurre questo contenuto", buffering = false)
@@ -318,28 +317,31 @@ class PlayerEngine(
         }
 
         AppLog.info("Mobile player: apertura ${StreamUrls.redactStreamUrl(url)}")
-        player?.removeListener(listener)
-        player?.release()
-        val renderers = DefaultRenderersFactory(context)
-            .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
-        val selector = DefaultTrackSelector(context)
-        trackSelector = selector
-        val instance = ExoPlayer.Builder(context)
-            .setRenderersFactory(renderers)
-            .setTrackSelector(selector)
-            .setMediaSourceFactory(PlayerNetworkConfig.mediaSourceFactory(context, url))
-            .build()
-
-        instance.addListener(listener)
-        instance.addAnalyticsListener(analytics)
-        instance.setAudioAttributes(
-            AudioAttributes.Builder()
-                .setUsage(C.USAGE_MEDIA)
-                .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
-                .build(),
-            true,
-        )
-        instance.setHandleAudioBecomingNoisy(true)
+        val instance = player ?: run {
+            val renderers = DefaultRenderersFactory(context)
+                .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+            val selector = DefaultTrackSelector(context)
+            trackSelector = selector
+            ExoPlayer.Builder(context)
+                .setRenderersFactory(renderers)
+                .setTrackSelector(selector)
+                .setMediaSourceFactory(PlayerNetworkConfig.mediaSourceFactory(context))
+                .build().also { created ->
+                    player = created
+                    created.addListener(listener)
+                    created.addAnalyticsListener(analytics)
+                    created.setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(C.USAGE_MEDIA)
+                            .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+                            .build(),
+                        true,
+                    )
+                    created.setHandleAudioBecomingNoisy(true)
+                }
+        }
+        instance.stop()
+        instance.clearMediaItems()
         val item = MediaItem.Builder()
             .setUri(url)
             .setMediaMetadata(MediaMetadata.Builder().setTitle(title()).build())
@@ -347,8 +349,6 @@ class PlayerEngine(
         instance.setMediaItem(item, position.coerceAtLeast(0L))
         instance.prepare()
         instance.playWhenReady = autoplay
-        player = instance
-        requestAudioFocus()
         container.playbackActivity.setActive(true)
         state = state.copy(
             error = null,
@@ -402,7 +402,7 @@ class PlayerEngine(
         if (currentPlayer.isPlaying) {
             lifecycleController.pause()
         } else {
-            requestAudioFocus()
+            if (currentSource is MobilePlaybackSource.Live) currentPlayer.seekToDefaultPosition()
             currentPlayer.play()
         }
     }
@@ -472,8 +472,10 @@ class PlayerEngine(
 
     fun retry() {
         liveAutoRestart.reset()
+        sourceGeneration++
         state = state.copy(error = null)
         buildPlayer(0L, true)
+        startLiveWatchdog()
     }
 
     fun resumeFromSaved() {
@@ -609,12 +611,11 @@ class PlayerEngine(
     }
 
     private fun releasePlayerResources() {
+        watchdog?.cancel()
         player?.removeListener(listener)
         player?.release()
         player = null
         container.playbackActivity.setActive(false)
-        audioManager.abandonAudioFocus(audioFocusListener)
-        runCatching { context.unregisterReceiver(noisyReceiver) }
     }
 
     private suspend fun recordContinueWatching(
@@ -700,14 +701,42 @@ class PlayerEngine(
         is MobilePlaybackSource.Catchup -> source.title
     }
 
-    private fun requestAudioFocus() {
-        runCatching { context.registerReceiver(noisyReceiver, IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY)) }
-        @Suppress("DEPRECATION")
-        audioManager.requestAudioFocus(
-            audioFocusListener,
-            AudioManager.STREAM_MUSIC,
-            AudioManager.AUDIOFOCUS_GAIN,
-        )
+    private fun startLiveWatchdog() {
+        watchdog?.cancel()
+        if (currentSource !is MobilePlaybackSource.Live) return
+        watchdog = scope.launch {
+            var stalledSince: Long? = null
+            var stalledState = Player.STATE_IDLE
+            while (!released) {
+                val current = player ?: break
+                val status = current.playbackState
+                val stalled = current.playWhenReady && !current.isPlaying &&
+                    current.playbackSuppressionReason == Player.PLAYBACK_SUPPRESSION_REASON_NONE &&
+                    (status == Player.STATE_READY || status == Player.STATE_BUFFERING)
+                val now = SystemClock.elapsedRealtime()
+                if (!stalled || state.error != null) {
+                    stalledSince = null
+                } else {
+                    if (stalledSince == null || stalledState != status) {
+                        stalledSince = now
+                        stalledState = status
+                    }
+                    val timeout = if (status == Player.STATE_READY) 5_000L
+                        else PlayerNetworkConfig.READ_TIMEOUT_MILLIS.toLong()
+                    if (now - stalledSince > timeout) {
+                        stalledSince = null
+                        when (liveAutoRestart.onPlayerError(PlaybackKind.LIVE, networkError = true)) {
+                            PlayerErrorAction.SILENT_RESTART -> buildPlayer(0L, autoplay = true)
+                            PlayerErrorAction.SHOW_ERROR -> {
+                                current.stop()
+                                state = state.copy(error = "Impossibile riprodurre questo contenuto", buffering = false)
+                            }
+                        }
+                    }
+                }
+                delay(500L)
+            }
+        }
     }
 
     private fun refreshTracks(tracks: Tracks) {
