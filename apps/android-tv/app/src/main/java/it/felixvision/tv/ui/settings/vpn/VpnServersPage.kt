@@ -13,6 +13,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.tv.material3.Text
 import it.felixvision.tv.ui.components.*
 import it.felixvision.tv.ui.settings.vpnStatusLine
@@ -77,7 +78,7 @@ internal fun VpnServersPage(
                 onClick = {
                     if (!held) {
                         if (removing) selected = if (server.id in selected) selected - server.id else selected + server.id
-                        else controller.activateServer(server.id)
+                        else if (server.id != active) controller.activateServer(server.id)
                     }
                 },
                 scale = scale,
@@ -135,10 +136,10 @@ internal fun VpnServersPage(
 @Composable
 private fun VpnDialog(scale: UiScale, onClose: () -> Unit, content: @Composable ColumnScope.(FocusRequester) -> Unit) {
     val focus = remember { FocusRequester() }
-    Dialog(onDismissRequest = onClose) {
+    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         BackHandler { onClose() }
         LaunchedEffect(Unit) { withFrameNanos { }; focus.requestFocus() }
-        Column(Modifier.ignoreHeldOkUntilReleased().onPreviewKeyEvent {
+        Column(Modifier.fillMaxWidth(0.9f).ignoreHeldOkUntilReleased().onPreviewKeyEvent {
             if (it.key == Key.Back) {
                 if (it.type == KeyEventType.KeyUp) onClose()
                 true
@@ -149,7 +150,7 @@ private fun VpnDialog(scale: UiScale, onClose: () -> Unit, content: @Composable 
 }
 
 @Composable
-private fun VpnGuide(scale: UiScale, onContinue: () -> Unit, onClose: () -> Unit) {
+internal fun VpnGuide(scale: UiScale, onContinue: () -> Unit, onClose: () -> Unit) {
     VpnDialog(scale, onClose) { focus ->
         Text("Come aggiungere un server VPN", color = FvpColors.TextPrimary, fontSize = scale.sp(22f))
         Row(horizontalArrangement = Arrangement.spacedBy(scale.dp(20f))) {
