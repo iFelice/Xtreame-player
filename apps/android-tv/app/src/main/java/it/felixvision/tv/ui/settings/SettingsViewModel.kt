@@ -10,6 +10,7 @@ import it.felixvision.tv.data.pairing.PairingPanelState
 import it.felixvision.tv.data.pairing.PairingStep
 import it.felixvision.tv.data.pairing.RemoteCredentials
 import it.felixvision.tv.data.protection.ProtectedContentStore
+import it.felixvision.tv.data.protection.ProtectedPageAccess
 import it.felixvision.tv.data.protection.ProtectedSession
 import it.felixvision.tv.data.store.CredentialStore
 import it.felixvision.tv.core.Clock
@@ -156,6 +157,7 @@ class SettingsViewModel(
      */
     val protectedContentStore: ProtectedContentStore get() = container.protectedContentStore
     val protectedSession: ProtectedSession get() = container.protectedSession
+    val protectedPageAccess: ProtectedPageAccess get() = container.protectedPageAccess
     val clock: Clock get() = container.clock
 
     /**

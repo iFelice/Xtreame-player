@@ -232,6 +232,7 @@ fun SettingsScreen(
             ProtectedContentScreen(
                 store = viewModel.protectedContentStore,
                 session = viewModel.protectedSession,
+                access = viewModel.protectedPageAccess,
                 credentialStore = viewModel.credentialStore,
                 clock = viewModel.clock,
                 server = viewModel.server,

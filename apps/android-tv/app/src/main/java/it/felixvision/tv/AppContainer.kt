@@ -21,6 +21,7 @@ import it.felixvision.tv.data.images.FvpImageLoader
 import it.felixvision.tv.data.pairing.PairingClient
 import it.felixvision.tv.data.pairing.PairingCoordinator
 import it.felixvision.tv.data.protection.ProtectedContentStore
+import it.felixvision.tv.data.protection.ProtectedPageAccess
 import it.felixvision.tv.data.protection.ProtectedSession
 import it.felixvision.tv.data.playback.ChannelVideoFormatStore
 import it.felixvision.tv.data.playback.PlaybackActivityTracker
@@ -129,6 +130,17 @@ class AppContainer(
      */
     val protectedSession: ProtectedSession by lazy {
         ProtectedSession(clock = clock)
+    }
+
+    /**
+     * Autorizzazione alla pagina di gestione dei contenuti protetti: accanto a
+     * [protectedSession], solo in memoria e falsa a ogni avvio. Concessa dal
+     * PIN verificato per la visita corrente, revocata uscendo dalla pagina e
+     * dagli stessi eventi (ON_STOP, ACTION_SCREEN_OFF) che ribloccano la
+     * sessione. `lock()` dell'interruttore non la revoca.
+     */
+    val protectedPageAccess: ProtectedPageAccess by lazy {
+        ProtectedPageAccess()
     }
 
     /** Livello del volume del player (0-15), ripristinato a ogni avvio. */
