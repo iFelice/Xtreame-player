@@ -186,6 +186,15 @@ class ProtectedContentSelectionTest {
         rule.waitUntil(timeoutMillis = 10_000L) {
             store.revision.value == revisionBefore + 1L
         }
+        // La revisione notifica la scrittura, non il completamento della UI:
+        // LaunchedEffect deve ancora rileggere lo store sul dispatcher IO e
+        // ricomporre l'elenco. waitForIdle da solo non attende quella lettura.
+        rule.waitUntil(timeoutMillis = 10_000L) {
+            !hasTag(categoryTag) &&
+                !hasTag(itemTag) &&
+                !hasTag(PROTECTED_REMOVE_SELECTED_TAG) &&
+                !hasTag(PROTECTED_REMOVE_DIALOG_TAG)
+        }
         rule.waitForIdle()
         assertEquals(revisionBefore + 1L, store.revision.value)
         assertEquals(0, storedData().hiddenCount)
