@@ -512,13 +512,18 @@ class SettingsLayoutTest {
         }
     }
 
-    // --- Contenuti protetti: segnaposto ---
+    // --- Contenuti protetti: riepilogo ---
 
     @Test
-    fun `contenuti protetti - solo titolo e disponibile a breve`() {
+    fun `contenuti protetti - riepilogo del PIN e pulsante Gestisci`() {
         mount()
-        rule.onNodeWithTag("settings_protected_placeholder").performScrollTo()
-            .assertTextEquals(PROTECTED_COMING_SOON)
+        // Senza il container dell'app l'archivio non è leggibile: il riquadro
+        // mostra comunque la riga di riepilogo e "Gestisci" (spento, perché la
+        // pagina non è raggiungibile). La pagina completa ha i suoi test.
+        rule.onNodeWithTag("settings_protected_summary").performScrollTo()
+            .assertTextEquals(protectedSettingsLine(hasPin = false))
+        rule.onNodeWithTag("settings_protected_manage").performScrollTo()
+            .assertTextEquals(PROTECTED_MANAGE_LABEL)
     }
 
     // --- Riquadro App ---
