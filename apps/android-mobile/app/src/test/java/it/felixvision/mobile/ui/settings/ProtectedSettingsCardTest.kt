@@ -474,6 +474,24 @@ class ProtectedSettingsCardTest {
     }
 
     @Test
+    fun `indietro - pagina inserisci PIN torna alle Impostazioni`() {
+        mount(withPin = false)
+        click("settings_protected_manage")
+        awaitTag(MOBILE_PIN_ENTRY_TAG)
+        click("protected_back")
+        awaitTag(SETTINGS_LIST_TAG)
+    }
+
+    @Test
+    fun `indietro - pagina Contenuti protetti torna alle Impostazioni`() {
+        mount(withPin = true)
+        click("settings_protected_manage")
+        awaitTag("protected_title")
+        click("protected_back")
+        awaitTag(SETTINGS_LIST_TAG)
+    }
+
+    @Test
     fun `gestisci - in orizzontale la pagina non supera i 720dp ed e centrata`() {
         // Qualificatori orizzontali (1280x800) applicati prima del montaggio:
         // la configurazione dello schermo non si cambia a composizione avviata.

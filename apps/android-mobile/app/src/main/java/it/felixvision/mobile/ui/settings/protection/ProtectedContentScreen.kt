@@ -265,7 +265,7 @@ fun ProtectedContentScreen(
             when (val current = page) {
                 null -> Unit
 
-                ProtectedPage.CreatePin -> PinPage {
+                ProtectedPage.CreatePin -> PinPage(onBack = { goBack() }) {
                     PinKeypad(
                         title = "Crea il PIN",
                         errorMessage = pinError,
@@ -277,7 +277,7 @@ fun ProtectedContentScreen(
                     )
                 }
 
-                ProtectedPage.ConfirmPin -> PinPage {
+                ProtectedPage.ConfirmPin -> PinPage(onBack = { goBack() }) {
                     PinKeypad(
                         title = "Conferma il PIN",
                         errorMessage = pinError,
@@ -312,6 +312,7 @@ fun ProtectedContentScreen(
                     username = username,
                     scope = scope,
                     errorMessage = pinError,
+                    onBack = { goBack() },
                     onMessage = { pinError = it },
                     onVerified = {
                         pinError = null
@@ -345,6 +346,7 @@ fun ProtectedContentScreen(
 
                 ProtectedPage.Main -> ProtectedMainPage(
                     data = data,
+                    onBack = { goBack() },
                     unlocked = unlocked,
                     onToggleVisibility = {
                         // Solo lo stato di sessione: nessun filtro in questo passo.
@@ -440,15 +442,28 @@ fun ProtectedContentScreen(
  * in orizzontale il tastierino e il pulsante restano raggiungibili.
  */
 @Composable
-private fun PinPage(content: @Composable ColumnScope.() -> Unit) {
+private fun PinPage(onBack: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState()),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        // Su un tablet largo il tastierino resta raccolto al centro.
-        content = content,
-    )
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        ProtectedBackBar(onBack = onBack) {
+            Text(
+                text = "Contenuti protetti",
+                color = FvpColors.TextPrimary,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            // Su un tablet largo il tastierino resta raccolto al centro.
+            content = content,
+        )
+    }
 }
 
 // --- Pagina principale ---
@@ -460,6 +475,7 @@ private fun PinPage(content: @Composable ColumnScope.() -> Unit) {
 @Composable
 internal fun ProtectedMainPage(
     data: ProtectedContentData?,
+    onBack: () -> Unit = {},
     unlocked: Boolean,
     onToggleVisibility: () -> Unit,
     onAdd: () -> Unit,
@@ -473,13 +489,15 @@ internal fun ProtectedMainPage(
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(
-            text = PROTECTED_TITLE,
-            color = FvpColors.TextPrimary,
-            fontSize = 22.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.testTag("protected_title"),
-        )
+        ProtectedBackBar(onBack = onBack) {
+            Text(
+                text = PROTECTED_TITLE,
+                color = FvpColors.TextPrimary,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.testTag("protected_title"),
+            )
+        }
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
@@ -615,6 +633,7 @@ internal fun ProtectedVerifyPage(
     username: String,
     scope: CoroutineScope,
     errorMessage: String?,
+    onBack: () -> Unit = {},
     onMessage: (String?) -> Unit,
     onVerified: () -> Unit,
     onForgot: () -> Unit,
@@ -638,6 +657,14 @@ internal fun ProtectedVerifyPage(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        ProtectedBackBar(onBack = onBack) {
+            Text(
+                text = "Contenuti protetti",
+                color = FvpColors.TextPrimary,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+            )
+        }
         PinKeypad(
             title = "Inserisci il PIN",
             enabled = !locked,
