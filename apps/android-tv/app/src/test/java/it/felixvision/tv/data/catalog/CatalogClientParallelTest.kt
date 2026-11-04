@@ -238,6 +238,10 @@ class CatalogClientParallelTest {
             listOf(CatalogSection.FILM),
             stages.filter { it.status == CatalogSectionStatus.ERROR }.map { it.section },
         )
+        assertTrue(
+            "tutte le richieste bloccate devono osservare la cancellazione; osservate: ${cancelAware.cancelled}",
+            cancelAware.awaitCancelled(),
+        )
         assertEquals(tracked, cancelAware.cancelled)
         assertEquals(1, server.requestCount)
         assertTrue(server.takeRequest().path!!.contains("get_vod_categories"))
@@ -264,6 +268,10 @@ class CatalogClientParallelTest {
         job.cancelAndJoin()
 
         assertTrue(job.isCancelled)
+        assertTrue(
+            "tutte le richieste bloccate devono osservare la cancellazione; osservate: ${cancelAware.cancelled}",
+            cancelAware.awaitCancelled(),
+        )
         assertEquals(tracked, cancelAware.cancelled)
         // Nessuna richiesta è arrivata al server e nessun elenco è partito.
         assertEquals(0, server.requestCount)
