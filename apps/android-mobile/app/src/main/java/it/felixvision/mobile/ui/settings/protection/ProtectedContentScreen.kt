@@ -657,6 +657,13 @@ internal fun ProtectedVerifyPage(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        Text(
+            text = "Contenuti protetti",
+            color = FvpColors.TextPrimary,
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.testTag("protected_verify_heading"),
+        )
         PinKeypad(
             title = "Inserisci il PIN",
             enabled = !locked,
