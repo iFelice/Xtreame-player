@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -16,8 +17,8 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.tv.material3.Text
-import it.felixvision.tv.ui.components.FvpCompactButton
 import it.felixvision.tv.ui.components.UiScale
+import it.felixvision.tv.ui.settings.vpn.VpnActionCard
 import it.felixvision.tv.ui.theme.FvpColors
 import it.felixvision.tv.ui.theme.settingsRowSpacing
 import it.felixvision.tv.ui.theme.settingsRowText
@@ -58,11 +59,13 @@ fun vpnStatusLine(state: VpnState): String = when (state) {
 
 /**
  * Riquadro "VPN" delle Impostazioni, stesso stile di "Contenuti protetti":
- * riga di stato e pulsanti compatti. Senza configurazione c'è solo
- * "Configura"; con la configurazione anche "Accendi"/"Spegni" e "Rimuovi".
+ * riga di stato e azioni. Senza configurazione c'è solo "Configura"; con la
+ * configurazione anche "Accendi"/"Spegni" e "Rimuovi".
  *
- * Il riquadro ha più pulsanti: come per Aspetto è il focus dei pulsanti a
- * portarli in vista, senza rowInView sul riquadro.
+ * Le tre azioni hanno l'aspetto delle card della griglia Impostazioni (vedi
+ * [VpnActionCard]): è una modifica solo grafica, testi, tag, focus e callback
+ * restano identici. Il riquadro ha più azioni: come per Aspetto è il focus
+ * delle card a portarle in vista, senza rowInView sul riquadro.
  */
 @Composable
 internal fun VpnSettingsSection(
@@ -107,23 +110,30 @@ internal fun VpnSettingsSection(
             fontSize = scale.settingsRowText,
             modifier = Modifier.testTag(SETTINGS_VPN_STATUS_TAG),
         )
+        val cardHeight = scale.dp(SettingsCardDimens.HEIGHT_BASE)
         Row(
-            horizontalArrangement = Arrangement.spacedBy(scale.dp(8f)),
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(scale.dp(SettingsCardDimens.GRID_SPACING_BASE)),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (hasConfig) {
-                FvpCompactButton(
+                VpnActionCard(
                     text = if (switchedOn) VPN_TURN_OFF_LABEL else VPN_TURN_ON_LABEL,
                     onClick = onToggle,
                     scale = scale,
-                    modifier = Modifier.testTag(SETTINGS_VPN_TOGGLE_TAG),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(cardHeight)
+                        .testTag(SETTINGS_VPN_TOGGLE_TAG),
                 )
             }
-            FvpCompactButton(
+            VpnActionCard(
                 text = if (hasConfig) VPN_CHANGE_CONFIG_LABEL else VPN_CONFIGURE_LABEL,
                 onClick = onConfigure,
                 scale = scale,
                 modifier = Modifier
+                    .weight(1f)
+                    .height(cardHeight)
                     .then(
                         if (configureFocus != null) {
                             Modifier.focusRequester(configureFocus)
@@ -141,11 +151,14 @@ internal fun VpnSettingsSection(
                     .testTag(SETTINGS_VPN_CONFIGURE_TAG),
             )
             if (hasConfig) {
-                FvpCompactButton(
+                VpnActionCard(
                     text = VPN_REMOVE_LABEL,
                     onClick = onRemove,
                     scale = scale,
-                    modifier = Modifier.testTag(SETTINGS_VPN_REMOVE_TAG),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(cardHeight)
+                        .testTag(SETTINGS_VPN_REMOVE_TAG),
                 )
             }
         }

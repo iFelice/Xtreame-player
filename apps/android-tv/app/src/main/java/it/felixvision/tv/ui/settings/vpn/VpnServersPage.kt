@@ -16,6 +16,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.tv.material3.Text
 import it.felixvision.tv.ui.components.*
+import it.felixvision.tv.ui.settings.SettingsCardDimens
 import it.felixvision.tv.ui.settings.vpnStatusLine
 import it.felixvision.tv.ui.theme.FvpColors
 import it.felixvision.tv.vpn.*
@@ -71,14 +72,16 @@ internal fun VpnServersPage(
     ) {
         Text("VPN", color = FvpColors.TextPrimary, fontSize = scale.sp(22f))
         if (servers.isEmpty()) Text("Nessuna configurazione", color = FvpColors.TextSecondary)
-        else FvpCompactButton(
-            if (state == VpnState.Off) "Accendi" else "Spegni", onToggle, scale,
+        else VpnPageCard(
+            text = if (state == VpnState.Off) "Accendi" else "Spegni",
+            onClick = onToggle,
+            scale = scale,
         )
         servers.forEach { server ->
             var held by remember(server.id) { mutableStateOf(false) }
             val status = if (server.id == active) " · Attivo · ${vpnStatusLine(state)}" else ""
             val attempt = if (state == VpnState.Connecting && trying != null) " · $trying" else ""
-            FvpCompactButton(
+            VpnPageCard(
                 text = (if (server.id in selected) "✓ " else "") + server.name + status +
                     (if (server.id == active) attempt else ""),
                 onClick = {
@@ -99,21 +102,26 @@ internal fun VpnServersPage(
                 },
             )
         }
-        FvpCompactButton("Aggiungi server", { add() }, scale, modifier = Modifier
-            .focusRequester(addFocus)
-            .then(if (entryFocus != null) Modifier.focusRequester(entryFocus) else Modifier))
-        if (servers.isNotEmpty() && !removing) FvpCompactButton("Rimuovi server", { removing = true }, scale)
-        if (selected.isNotEmpty()) FvpCompactButton("Rimuovi selezionati (${selected.size})", { confirm = true }, scale)
-        FvpCompactButton("Guida", { guideOpened = true; controller.markGuideShown(); guide = true }, scale)
+        VpnPageCard(
+            text = "Aggiungi server",
+            onClick = { add() },
+            scale = scale,
+            modifier = Modifier
+                .focusRequester(addFocus)
+                .then(if (entryFocus != null) Modifier.focusRequester(entryFocus) else Modifier),
+        )
+        if (servers.isNotEmpty() && !removing) VpnPageCard("Rimuovi server", { removing = true }, scale)
+        if (selected.isNotEmpty()) VpnPageCard("Rimuovi selezionati (${selected.size})", { confirm = true }, scale)
+        VpnPageCard("Guida", { guideOpened = true; controller.markGuideShown(); guide = true }, scale)
     }
     if (limit) VpnDialog(scale, { limit = false }) { focus ->
         Text(VpnStore.LIMIT_MESSAGE, color = FvpColors.TextPrimary)
-        FvpCompactButton("Chiudi", { limit = false }, scale, Modifier.focusRequester(focus))
+        VpnPageCard("Chiudi", { limit = false }, scale, Modifier.focusRequester(focus))
     }
     if (confirm) VpnDialog(scale, { confirm = false }) { focus ->
         Text("Rimuovere ${selected.size} server?", color = FvpColors.TextPrimary)
-        FvpCompactButton("No", { confirm = false }, scale, Modifier.focusRequester(focus))
-        FvpCompactButton("Sì", {
+        VpnPageCard("No", { confirm = false }, scale, Modifier.focusRequester(focus))
+        VpnPageCard("Sì", {
             controller.removeServers(selected)
             selected = emptySet(); removing = false; confirm = false
         }, scale)
@@ -121,8 +129,8 @@ internal fun VpnServersPage(
     menu?.let { server ->
         VpnDialog(scale, { menu = null }) { focus ->
             Text(server.name, color = FvpColors.TextPrimary)
-            FvpCompactButton("Attiva", { controller.activateServer(server.id); menu = null }, scale, Modifier.focusRequester(focus))
-            FvpCompactButton("Rinomina", { renaming = server; menu = null }, scale)
+            VpnPageCard("Attiva", { controller.activateServer(server.id); menu = null }, scale, Modifier.focusRequester(focus))
+            VpnPageCard("Rinomina", { renaming = server; menu = null }, scale)
         }
     }
     renaming?.let { server ->
@@ -137,13 +145,43 @@ internal fun VpnServersPage(
     }, onClose = { guide = false })
 }
 
+/**
+ * Tutte le azioni della pagina VPN hanno l'aspetto delle card della griglia
+ * Impostazioni: l'interruttore, le righe dei server, Aggiungi/Rimuovi, Guida e
+ * i pulsanti dei dialoghi. Le righe dei server sono generate da una lista
+ * dinamica, ma usano questo stesso composable: anche i server aggiunti dopo
+ * nascono già con l'aspetto a card, senza casi speciali.
+ *
+ * Solo la grafica cambia: testi, callback, focus, selezione e stato [enabled]
+ * restano quelli del chiamante. L'altezza e la larghezza seguono le misure
+ * [SettingsCardDimens] usate dalla griglia, passando sempre da [UiScale].
+ */
+@Composable
+private fun VpnPageCard(
+    text: String,
+    onClick: () -> Unit,
+    scale: UiScale,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    VpnActionCard(
+        text = text,
+        onClick = onClick,
+        scale = scale,
+        enabled = enabled,
+        modifier = modifier
+            .fillMaxWidth()
+            .height(scale.dp(SettingsCardDimens.HEIGHT_BASE)),
+    )
+}
+
 @Composable
 internal fun VpnRenameDialog(initialName: String, scale: UiScale, onClose: () -> Unit, onSave: (String) -> Unit) {
     val name = rememberTextFieldState(initialName)
     VpnDialog(scale, onClose) { focus ->
         FvpTextField("Nome server", name, "Nome server", scale, focusRequester = focus, openKeyboardOnOk = true,
             fieldTag = "vpn_server_name")
-        FvpCompactButton("Salva", { onSave(name.text.toString().trim()) }, scale,
+        VpnPageCard("Salva", { onSave(name.text.toString().trim()) }, scale,
             enabled = name.text.toString().trim().length in 1..30)
     }
 }
@@ -180,7 +218,7 @@ internal fun VpnGuide(scale: UiScale, onContinue: () -> Unit, onClose: () -> Uni
             }
             VpnQrImage(VPN_GUIDE_URL, scale)
         }
-        FvpCompactButton("Continua", onContinue, scale, Modifier.focusRequester(focus))
-        FvpCompactButton("Chiudi", onClose, scale)
+        VpnPageCard("Continua", onContinue, scale, Modifier.focusRequester(focus))
+        VpnPageCard("Chiudi", onClose, scale)
     }
 }

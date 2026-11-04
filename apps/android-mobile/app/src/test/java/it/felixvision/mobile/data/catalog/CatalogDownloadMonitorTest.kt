@@ -1,6 +1,9 @@
 package it.felixvision.mobile.data.catalog
 
 import it.felixvision.tv.data.catalog.CatalogSection
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.mockwebserver.MockResponse
@@ -18,6 +21,10 @@ import org.junit.Test
  * get_live_streams, get_vod_streams e get_series (client del solo tablet):
  * percentuale reale rispetto al Content-Length, MB scaricati quando manca,
  * richieste non pertinenti o fallite non tracciate.
+ *
+ * Dopo il passaggio al catalogo parallelo le tre sezioni partono insieme: il
+ * monitor non presume più che sia Live la prima e le scritture devono restare
+ * atomiche anche con tre thread di I/O concorrenti.
  */
 class CatalogDownloadMonitorTest {
 
@@ -99,30 +106,87 @@ class CatalogDownloadMonitorTest {
     }
 
     @Test
-    fun `l'inizio di live azzera le righe dell'aggiornamento precedente`() {
+    fun `begin parallelo aggiorna solo la propria riga e reset azzera il refresh`() {
         monitor.begin(CatalogSection.FILM, 1_000L)
         monitor.advance(CatalogSection.FILM, 1_000L)
         monitor.begin(CatalogSection.SERIES, 500L)
-
-        val before = monitor.progress.value
-        assertEquals(1_000L, before[CatalogSection.FILM]?.bytesRead)
-        assertEquals(0L, before[CatalogSection.SERIES]?.bytesRead)
-
-        // Ogni caricamento ricomincia da get_live_streams: la mappa si azzera.
         monitor.begin(CatalogSection.LIVE, 100L)
-        val after = monitor.progress.value
-        assertFalse(after.containsKey(CatalogSection.FILM))
-        assertFalse(after.containsKey(CatalogSection.SERIES))
-        assertEquals(0L, after[CatalogSection.LIVE]?.bytesRead)
+
+        // Con il caricamento parallelo Live non è più "la prima": le righe già
+        // presenti delle altre sezioni restano.
+        val afterLive = monitor.progress.value
+        assertEquals(1_000L, afterLive[CatalogSection.FILM]?.bytesRead)
+        assertEquals(0L, afterLive[CatalogSection.SERIES]?.bytesRead)
+        assertEquals(0L, afterLive[CatalogSection.LIVE]?.bytesRead)
 
         // I valori non crescenti vengono ignorati.
         monitor.advance(CatalogSection.LIVE, 40L)
         assertEquals(40L, monitor.progress.value[CatalogSection.LIVE]?.bytesRead)
         monitor.advance(CatalogSection.LIVE, 30L)
         assertEquals(40L, monitor.progress.value[CatalogSection.LIVE]?.bytesRead)
-
-        // Frazione reale: byte letti / Content-Length.
         assertEquals(0.4f, monitor.progress.value[CatalogSection.LIVE]?.fraction)
+
+        // L'azzeramento avviene solo all'inizio di un nuovo aggiornamento.
+        monitor.reset()
+        assertTrue(monitor.progress.value.isEmpty())
+    }
+
+    @Test
+    fun `begin e advance concorrenti delle tre sezioni non perdono righe`() {
+        val pool = Executors.newFixedThreadPool(3)
+        val start = CountDownLatch(1)
+        val done = CountDownLatch(3)
+        try {
+            CatalogSection.entries.forEach { section ->
+                pool.execute {
+                    start.await()
+                    repeat(300) { step ->
+                        monitor.begin(section, 1_000L)
+                        monitor.advance(section, (step + 1).toLong())
+                    }
+                    done.countDown()
+                }
+            }
+            start.countDown()
+            assertTrue("i thread non sono terminati", done.await(10, TimeUnit.SECONDS))
+            assertEquals(CatalogSection.entries.toSet(), monitor.progress.value.keys)
+        } finally {
+            pool.shutdownNow()
+        }
+    }
+
+    @Test
+    fun `la prima richiesta categorie del refresh azzera le righe precedenti`() {
+        val categories = listOf(
+            "get_live_categories",
+            "get_vod_categories",
+            "get_series_categories",
+        )
+        // Primo aggiornamento: il gruppo delle tre categorie è completo.
+        categories.forEach { action ->
+            server.enqueue(MockResponse().setBody("[]"))
+            client.newCall(request(action)).execute().use { it.body.string() }
+        }
+
+        monitor.begin(CatalogSection.FILM, 1_000L)
+        monitor.advance(CatalogSection.FILM, 500L)
+        assertFalse(monitor.progress.value.isEmpty())
+
+        // Nuovo aggiornamento: può partire per primo qualsiasi sezione, non
+        // più necessariamente Live. La prima categoria azzera tutto.
+        server.enqueue(MockResponse().setBody("[]"))
+        client.newCall(request("get_series_categories")).execute().use { it.body.string() }
+        assertTrue(monitor.progress.value.isEmpty())
+
+        // Le altre due categorie dello stesso gruppo non azzerano le righe
+        // già ripartite in parallelo.
+        monitor.begin(CatalogSection.LIVE, 100L)
+        monitor.advance(CatalogSection.LIVE, 50L)
+        listOf("get_live_categories", "get_vod_categories").forEach { action ->
+            server.enqueue(MockResponse().setBody("[]"))
+            client.newCall(request(action)).execute().use { it.body.string() }
+        }
+        assertEquals(50L, monitor.progress.value[CatalogSection.LIVE]?.bytesRead)
     }
 
     private fun request(action: String): Request {

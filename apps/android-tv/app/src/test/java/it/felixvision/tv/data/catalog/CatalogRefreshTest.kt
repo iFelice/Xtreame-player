@@ -130,6 +130,116 @@ class CatalogRefreshTest {
     }
 
     @Test
+    fun `tappe interlacciate di sezioni diverse restano nelle righe Live Film Serie`() {
+        var rows = CatalogRefresh.idle()
+
+        // Ordine volutamente non sequenziale: Serie parte prima, poi Live,
+        // poi Film, con le fasi che si interlacciano.
+        rows = CatalogRefresh.apply(
+            rows,
+            CatalogStage(CatalogSection.SERIES, CatalogSectionStatus.DOWNLOADING, bytesReceived = 10L, bytesTotal = 100L),
+        )
+        rows = CatalogRefresh.apply(
+            rows,
+            CatalogStage(CatalogSection.LIVE, CatalogSectionStatus.COMPLETED, itemCount = 220, bytesReceived = 500L),
+        )
+        rows = CatalogRefresh.apply(
+            rows,
+            CatalogStage(CatalogSection.FILM, CatalogSectionStatus.DOWNLOADING, bytesReceived = 40L, bytesTotal = 80L),
+        )
+        rows = CatalogRefresh.apply(
+            rows,
+            CatalogStage(CatalogSection.SERIES, CatalogSectionStatus.PROCESSING, bytesReceived = 100L, bytesTotal = 100L),
+        )
+        rows = CatalogRefresh.apply(
+            rows,
+            CatalogStage(CatalogSection.FILM, CatalogSectionStatus.COMPLETED, itemCount = 1_440, bytesReceived = 80L),
+        )
+        rows = CatalogRefresh.apply(
+            rows,
+            CatalogStage(CatalogSection.SERIES, CatalogSectionStatus.COMPLETED, itemCount = 42, bytesReceived = 100L),
+        )
+
+        assertEquals(
+            listOf(CatalogSection.LIVE, CatalogSection.FILM, CatalogSection.SERIES),
+            rows.map { it.section },
+        )
+        assertEquals(
+            listOf(CatalogSectionStatus.COMPLETED, CatalogSectionStatus.COMPLETED, CatalogSectionStatus.COMPLETED),
+            rows.map { it.status },
+        )
+        assertEquals(listOf(220, 1_440, 42), rows.map { it.itemCount })
+        assertEquals(listOf(500L, 80L, 100L), rows.map { it.bytesReceived })
+        assertTrue(CatalogRefresh.isFinished(rows))
+        assertFalse(CatalogRefresh.hasError(rows))
+    }
+
+    @Test
+    fun `una lista parziale o in ordine diverso viene normalizzata`() {
+        val partial = listOf(
+            CatalogSectionProgress(
+                section = CatalogSection.SERIES,
+                status = CatalogSectionStatus.DOWNLOADING,
+                bytesReceived = 12L,
+                bytesTotal = 48L,
+            ),
+            CatalogSectionProgress(section = CatalogSection.LIVE, status = CatalogSectionStatus.PENDING),
+        )
+
+        val rows = CatalogRefresh.apply(
+            partial,
+            CatalogStage(CatalogSection.FILM, CatalogSectionStatus.COMPLETED, itemCount = 7),
+        )
+
+        assertEquals(
+            listOf(CatalogSection.LIVE, CatalogSection.FILM, CatalogSection.SERIES),
+            rows.map { it.section },
+        )
+        assertEquals(CatalogSectionStatus.PENDING, rows[0].status)
+        assertEquals(CatalogSectionStatus.COMPLETED, rows[1].status)
+        assertEquals(7, rows[1].itemCount)
+        assertEquals(CatalogSectionStatus.DOWNLOADING, rows[2].status)
+        assertEquals(12L, rows[2].bytesReceived)
+
+        // Lista vuota: la tappa crea comunque le tre righe canoniche.
+        val fromEmpty = CatalogRefresh.apply(
+            emptyList(),
+            CatalogStage(CatalogSection.SERIES, CatalogSectionStatus.DOWNLOADING),
+        )
+        assertEquals(
+            listOf(CatalogSection.LIVE, CatalogSection.FILM, CatalogSection.SERIES),
+            fromEmpty.map { it.section },
+        )
+        assertEquals(CatalogSectionStatus.DOWNLOADING, fromEmpty[2].status)
+    }
+
+    @Test
+    fun `una tappa di scaricamento in ritardo non riapre una riga conclusa`() {
+        var rows = CatalogRefresh.idle()
+        rows = CatalogRefresh.apply(
+            rows,
+            CatalogStage(CatalogSection.FILM, CatalogSectionStatus.COMPLETED, itemCount = 12, bytesReceived = 400L),
+        )
+        // Con le sezioni in parallelo una tappa già in volo può arrivare dopo
+        // la conclusione: la riga non deve tornare a "scaricamento".
+        rows = CatalogRefresh.apply(
+            rows,
+            CatalogStage(CatalogSection.FILM, CatalogSectionStatus.DOWNLOADING, bytesReceived = 40L),
+        )
+        assertEquals(CatalogSectionStatus.COMPLETED, rows[1].status)
+        assertEquals(12, rows[1].itemCount)
+        assertEquals(400L, rows[1].bytesReceived)
+
+        // Un errore invece può ancora sostituire una riga completata.
+        rows = CatalogRefresh.apply(
+            rows,
+            CatalogStage(CatalogSection.FILM, CatalogSectionStatus.ERROR),
+        )
+        assertEquals(CatalogSectionStatus.ERROR, rows[1].status)
+        assertTrue(CatalogRefresh.hasError(rows))
+    }
+
+    @Test
     fun `lista vuota non risulta conclusa`() {
         assertFalse(CatalogRefresh.isFinished(emptyList()))
     }
