@@ -329,6 +329,9 @@ class ProtectedPinTest {
         awaitTag(MOBILE_PIN_ENTRY_TAG)
         repeat(4) { typePinIfEnabled("9999") }
 
+        // La verifica legge l'archivio in IO: attendi l'aggiornamento Compose
+        // dell'errore invece di asserire subito dopo l'ultimo click.
+        awaitPinMessage(PROTECTED_PIN_WRONG)
         assertEquals(PROTECTED_PIN_WRONG, textOf(MOBILE_PIN_ERROR_TAG))
         assertFalse(session.isLocked())
     }
