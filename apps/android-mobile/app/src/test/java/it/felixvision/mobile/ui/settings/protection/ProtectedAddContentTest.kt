@@ -430,7 +430,7 @@ class ProtectedAddContentTest {
         mount()
         click("protected_add")
 
-        // Live: si entra nella categoria, si nasconde un canale e si torna.
+        // Live: si entra nella categoria, si torna alle categorie.
         click("protected_kind_live")
         awaitTag(categoryRow(ProtectedKind.LIVE, "001"))
         click(categoryRow(ProtectedKind.LIVE, "001"))
@@ -438,9 +438,11 @@ class ProtectedAddContentTest {
         click(PROTECTED_BACK_TAG)
         awaitTag(categoryRow(ProtectedKind.LIVE, "002"))
 
-        // Serie: stessa sequenza, con il tasto Indietro a schermo presente.
+        // Di nuovo indietro: si torna alla scelta del tipo.
         click(PROTECTED_BACK_TAG)
         awaitTag("protected_kind_series")
+
+        // Serie: stessa sequenza, con selezione e ritorno alle categorie.
         click("protected_kind_series")
         awaitTag(categoryRow(ProtectedKind.SERIES, "s1"))
         click(categoryRow(ProtectedKind.SERIES, "s1"))
