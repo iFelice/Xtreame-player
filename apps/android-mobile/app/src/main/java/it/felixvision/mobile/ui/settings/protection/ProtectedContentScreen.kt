@@ -657,14 +657,6 @@ internal fun ProtectedVerifyPage(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        ProtectedBackBar(onBack = onBack) {
-            Text(
-                text = "Contenuti protetti",
-                color = FvpColors.TextPrimary,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-            )
-        }
         PinKeypad(
             title = "Inserisci il PIN",
             enabled = !locked,
@@ -692,6 +684,12 @@ internal fun ProtectedVerifyPage(
             onClick = onForgot,
             modifier = Modifier.fillMaxWidth(),
             testTag = "protected_forgot_pin",
+        )
+        FvpSecondaryButton(
+            text = PROTECTED_BACK_LABEL,
+            onClick = onBack,
+            modifier = Modifier.width(180.dp),
+            testTag = PROTECTED_BACK_TAG,
         )
     }
 }
