@@ -10,6 +10,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performKeyInput
@@ -67,6 +68,78 @@ class VpnServersPageTest {
     private fun config(): String {
         fun key() = Base64.getEncoder().encodeToString(ByteArray(32).also { SecureRandom().nextBytes(it) })
         return "[Interface]\nPrivateKey = ${key()}\nAddress = 192.168.1.2/32\n[Peer]\nPublicKey = ${key()}\nAllowedIPs = 0.0.0.0/0\nEndpoint = 192.168.1.10:51820\n"
+    }
+
+    private fun waitForCell(id: String) {
+        rule.waitUntil(timeoutMillis = 10_000L) {
+            rule.onAllNodesWithTag("vpn_grid_$id").fetchSemanticsNodes().size == 1
+        }
+        rule.waitForIdle()
+    }
+
+    private fun cellBounds(id: String) =
+        rule.onNodeWithTag("vpn_grid_$id").fetchSemanticsNode().boundsInRoot
+
+    @Test fun `one server has four cards on first row and guide alone below with equal dimensions`() {
+        store.saveConfig(config(), "NL Free #246")
+        val serverId = store.servers.single().id
+        show()
+        waitForCell("server_$serverId")
+
+        // Misuriamo le celle, non l'ingrandimento animato della card col focus.
+        val ids = listOf("toggle", "server_$serverId", "add", "remove")
+        val firstRow = ids.map { cellBounds(it) }
+        val first = firstRow.first()
+        firstRow.forEachIndexed { index, bounds ->
+            assertEquals(first.top, bounds.top, 1f)
+            assertEquals(first.width, bounds.width, 1f)
+            assertEquals(SettingsCardDimens.HEIGHT_BASE, bounds.height, 1f)
+            if (index > 0) assertTrue(bounds.left > firstRow[index - 1].right)
+        }
+        val guide = cellBounds("guide")
+        assertEquals(first.left, guide.left, 1f)
+        assertEquals(first.width, guide.width, 1f)
+        assertEquals(first.height, guide.height, 1f)
+        assertEquals(SettingsCardDimens.GRID_SPACING_BASE, guide.top - first.bottom, 1f)
+        // Quattro colonne reali: la card Guida non occupa le tre celle vuote.
+        assertTrue(guide.right < firstRow[1].left)
+        rule.onNodeWithText("Aggiungi server").assertIsFocused()
+        rule.onNodeWithText("Accendi").assertExists()
+        rule.onNodeWithText("NL Free #246", substring = true).assertExists()
+    }
+
+    @Test fun `five servers wrap at four columns without stretching the last row`() {
+        repeat(5) { store.saveConfig(config(), "Server ${it + 1}") }
+        val serverIds = store.servers.map { "server_${it.id}" }
+        show()
+        serverIds.forEach { waitForCell(it) }
+        val ids = listOf("toggle") + serverIds + listOf("add", "remove", "guide")
+        val first = cellBounds(ids.first())
+        ids.forEachIndexed { index, id ->
+            val bounds = cellBounds(id)
+            assertEquals(first.width, bounds.width, 1f)
+            assertEquals(first.height, bounds.height, 1f)
+            assertEquals(
+                first.left + (index % 4) * (first.width + SettingsCardDimens.GRID_SPACING_BASE),
+                bounds.left, 1f,
+            )
+            assertEquals(
+                first.top + (index / 4) * (first.height + SettingsCardDimens.GRID_SPACING_BASE),
+                bounds.top, 1f,
+            )
+        }
+    }
+
+    @Test fun `empty archive keeps add and guide at single card width`() {
+        show()
+        waitForCell("add")
+        val add = cellBounds("add")
+        val guide = cellBounds("guide")
+        assertEquals(add.top, guide.top, 1f)
+        assertEquals(add.width, guide.width, 1f)
+        assertEquals(add.height, guide.height, 1f)
+        assertEquals(SettingsCardDimens.GRID_SPACING_BASE, guide.left - add.right, 1f)
+        rule.onNodeWithText("Nessuna configurazione").assertExists()
     }
 
     @Test fun `first add opens guide continue opens setup and second add skips guide`() {
