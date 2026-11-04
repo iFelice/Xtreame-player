@@ -118,6 +118,7 @@ internal class CancelAwareInterceptor(
 
     private val blocked = blockedActions.toSet()
     private val started = CountDownLatch(blockedActions.size)
+    private val cancellations = CountDownLatch(blockedActions.size)
     val cancelled: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
     override fun intercept(chain: Interceptor.Chain): Response {
@@ -132,7 +133,7 @@ internal class CancelAwareInterceptor(
         val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(waitMillis)
         while (System.nanoTime() < deadline) {
             if (chain.call().isCanceled()) {
-                cancelled.add(action)
+                if (cancelled.add(action)) cancellations.countDown()
                 throw IOException("chiamata annullata")
             }
             Thread.sleep(5L)
@@ -140,9 +141,16 @@ internal class CancelAwareInterceptor(
         return chain.proceed(request)
     }
 
-    suspend fun awaitStarted(): Boolean =
+    suspend fun awaitStarted(): Boolean = awaitLatch(started)
+
+    // La fine della coroutine non implica che il thread OkHttp abbia già
+    // osservato Call.cancel(). Attendiamo la registrazione nell'interceptor,
+    // senza bloccare l'event loop e senza assumere un ordine tra i thread.
+    suspend fun awaitCancelled(): Boolean = awaitLatch(cancellations)
+
+    private suspend fun awaitLatch(latch: CountDownLatch): Boolean =
         withTimeoutOrNull(waitMillis) {
-            while (started.count > 0L) delay(5L)
+            while (latch.count > 0L) delay(5L)
             true
         } ?: false
 }
