@@ -414,8 +414,10 @@ class ProtectedAddContentTest {
         assertEquals(1, data.hiddenItems.size)
         assertEquals("201", data.hiddenItems.single().itemId)
 
-        // 5) Ancora indietro: si torna alla scelta del tipo, che elenca Live,
-        // Film e Serie ancora toccabili.
+        // 5) Ancora indietro, una pagina alla volta: prima l'elenco delle
+        // categorie, poi la scelta del tipo con Live, Film e Serie toccabili.
+        click(PROTECTED_BACK_TAG)
+        awaitTag(categoryRow(ProtectedKind.VOD, "v1"))
         click(PROTECTED_BACK_TAG)
         awaitTag("protected_kind_live")
         assertTrue(exists("protected_kind_vod"))
