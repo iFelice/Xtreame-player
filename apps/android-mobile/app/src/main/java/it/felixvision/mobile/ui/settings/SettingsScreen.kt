@@ -3,6 +3,7 @@
 package it.felixvision.mobile.ui.settings
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -40,6 +41,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.testTag
+import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -217,10 +220,29 @@ fun SettingsScreen(
         showUpdateDialog = true
     }
 
+    val backDispatcher = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
             .background(FvpColors.Background)
+            // Un trascinamento orizzontale verso destra inoltra il back al
+            // gestore attivo: dialoghi, sottopagine protette e pagina settings.
+            .pointerInput(backDispatcher) {
+                var totalDrag = 0f
+                var handled = false
+                detectHorizontalDragGestures(
+                    onDragStart = { totalDrag = 0f; handled = false },
+                    onDragEnd = { totalDrag = 0f; handled = false },
+                    onHorizontalDrag = { change, dragAmount ->
+                        totalDrag += dragAmount
+                        if (!handled && totalDrag > 96.dp.toPx()) {
+                            handled = true
+                            backDispatcher?.onBackPressed()
+                            change.consume()
+                        }
+                    },
+                )
+            }
             // Intervallo a schermo delle Impostazioni: è il riferimento per
             // sapere se il riquadro "Configura da remoto" è visibile o se lo
             // scorrimento lo ha portato fuori.

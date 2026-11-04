@@ -370,6 +370,7 @@ fun ProtectedContentScreen(
                 )
 
                 ProtectedPage.AddKind -> ProtectedAddKindPage(
+                    onBack = { goBack() },
                     onSelectKind = { kind ->
                         stack.add(ProtectedPage.AddCategories(kind))
                     },
@@ -773,25 +774,39 @@ internal fun ProtectedForgotPage(
 @Composable
 internal fun ProtectedAddKindPage(
     onSelectKind: (ProtectedKind) -> Unit,
+    onBack: () -> Unit = {},
 ) {
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        ProtectedBackBar(onBack = onBack) {
+            Text(
+                text = "Contenuti protetti",
+                color = FvpColors.TextPrimary,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
         Text(
             text = "Aggiungi · cosa vuoi nascondere?",
             color = FvpColors.TextPrimary,
             fontSize = 20.sp,
             fontWeight = FontWeight.Bold,
         )
-        ProtectedKind.entries.forEach { kind ->
-            SelectionRow(
-                title = protectedKindLabel(kind),
-                testTag = "protected_kind_${kind.storageKey}",
-                onClick = { onSelectKind(kind) },
-            )
+            ProtectedKind.entries.forEach { kind ->
+                SelectionRow(
+                    title = protectedKindLabel(kind),
+                    testTag = "protected_kind_${kind.storageKey}",
+                    onClick = { onSelectKind(kind) },
+                )
+            }
         }
     }
 }

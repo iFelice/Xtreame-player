@@ -462,6 +462,18 @@ class ProtectedSettingsCardTest {
     }
 
     @Test
+    fun `aggiungi - Indietro dalla scelta del tipo torna a Contenuti protetti`() {
+        mount(withPin = true)
+        click("settings_protected_manage")
+        awaitTag("protected_title")
+        click("protected_add")
+        awaitTag("protected_kind_live")
+        click("protected_back")
+        awaitTag("protected_title")
+        assertTrue(exists("protected_add"))
+    }
+
+    @Test
     fun `gestisci - in orizzontale la pagina non supera i 720dp ed e centrata`() {
         // Qualificatori orizzontali (1280x800) applicati prima del montaggio:
         // la configurazione dello schermo non si cambia a composizione avviata.
