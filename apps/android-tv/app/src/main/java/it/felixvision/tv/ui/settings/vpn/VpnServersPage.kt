@@ -8,6 +8,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -22,6 +23,8 @@ import it.felixvision.tv.ui.theme.FvpColors
 import it.felixvision.tv.vpn.*
 
 const val VPN_GUIDE_URL = "https://account.protonvpn.com"
+
+private data class VpnGridEntry(val id: String, val content: @Composable () -> Unit)
 
 /** TV-only server management. Configuration/crypto/backend work stays in the controller. */
 @Composable
@@ -67,52 +70,83 @@ internal fun VpnServersPage(
                 if (it.type == KeyEventType.KeyUp) backSelection()
                 true
             } else false
-        }.verticalScroll(rememberScrollState()).padding(scale.dp(24f)),
-        verticalArrangement = Arrangement.spacedBy(scale.dp(10f)),
+        }.verticalScroll(rememberScrollState()).padding(
+            horizontal = scale.dp(SettingsCardDimens.GRID_HORIZONTAL_PADDING_BASE),
+            vertical = scale.dp(SettingsCardDimens.GRID_VERTICAL_PADDING_BASE),
+        ),
+        verticalArrangement = Arrangement.spacedBy(scale.dp(SettingsCardDimens.GRID_SPACING_BASE)),
     ) {
         Text("VPN", color = FvpColors.TextPrimary, fontSize = scale.sp(22f))
         if (servers.isEmpty()) Text("Nessuna configurazione", color = FvpColors.TextSecondary)
-        else VpnPageCard(
-            text = if (state == VpnState.Off) "Accendi" else "Spegni",
-            onClick = onToggle,
-            scale = scale,
-        )
-        servers.forEach { server ->
-            var held by remember(server.id) { mutableStateOf(false) }
-            val status = if (server.id == active) " · Attivo · ${vpnStatusLine(state)}" else ""
-            val attempt = if (state == VpnState.Connecting && trying != null) " · $trying" else ""
+        val cards = mutableListOf<VpnGridEntry>()
+        if (servers.isNotEmpty()) cards.add(VpnGridEntry("toggle") {
             VpnPageCard(
-                text = (if (server.id in selected) "✓ " else "") + server.name + status +
-                    (if (server.id == active) attempt else ""),
-                onClick = {
-                    if (!held) {
-                        if (removing) selected = if (server.id in selected) selected - server.id else selected + server.id
-                        else if (server.id != active) controller.activateServer(server.id)
-                    }
-                },
+                text = if (state == VpnState.Off) "Accendi" else "Spegni",
+                onClick = onToggle,
                 scale = scale,
-                modifier = Modifier.onPreviewKeyEvent { event ->
-                    val ok = event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter
-                    if (!ok || removing) false
-                    else if (event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount > 0) {
-                        if (!held) { held = true; menu = server }
-                        true
-                    } else if (event.type == KeyEventType.KeyUp && held) { held = false; true }
-                    else { if (event.type == KeyEventType.KeyDown) held = false; false }
-                },
             )
+        })
+        servers.forEach { server ->
+            cards.add(VpnGridEntry("server_${server.id}") {
+                var held by remember(server.id) { mutableStateOf(false) }
+                val status = if (server.id == active) " · Attivo · ${vpnStatusLine(state)}" else ""
+                val attempt = if (state == VpnState.Connecting && trying != null) " · $trying" else ""
+                VpnPageCard(
+                    text = (if (server.id in selected) "✓ " else "") + server.name + status +
+                        (if (server.id == active) attempt else ""),
+                    onClick = {
+                        if (!held) {
+                            if (removing) selected = if (server.id in selected) selected - server.id else selected + server.id
+                            else if (server.id != active) controller.activateServer(server.id)
+                        }
+                    },
+                    scale = scale,
+                    modifier = Modifier.onPreviewKeyEvent { event ->
+                        val ok = event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter
+                        if (!ok || removing) false
+                        else if (event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount > 0) {
+                            if (!held) { held = true; menu = server }
+                            true
+                        } else if (event.type == KeyEventType.KeyUp && held) { held = false; true }
+                        else { if (event.type == KeyEventType.KeyDown) held = false; false }
+                    },
+                )
+            })
         }
-        VpnPageCard(
-            text = "Aggiungi server",
-            onClick = { add() },
-            scale = scale,
-            modifier = Modifier
-                .focusRequester(addFocus)
-                .then(if (entryFocus != null) Modifier.focusRequester(entryFocus) else Modifier),
-        )
-        if (servers.isNotEmpty() && !removing) VpnPageCard("Rimuovi server", { removing = true }, scale)
-        if (selected.isNotEmpty()) VpnPageCard("Rimuovi selezionati (${selected.size})", { confirm = true }, scale)
-        VpnPageCard("Guida", { guideOpened = true; controller.markGuideShown(); guide = true }, scale)
+        cards.add(VpnGridEntry("add") {
+            VpnPageCard(
+                text = "Aggiungi server",
+                onClick = { add() },
+                scale = scale,
+                modifier = Modifier
+                    .focusRequester(addFocus)
+                    .then(if (entryFocus != null) Modifier.focusRequester(entryFocus) else Modifier),
+            )
+        })
+        if (servers.isNotEmpty() && !removing) cards.add(VpnGridEntry("remove") {
+            VpnPageCard("Rimuovi server", { removing = true }, scale)
+        })
+        if (selected.isNotEmpty()) cards.add(VpnGridEntry("remove_selected") {
+            VpnPageCard("Rimuovi selezionati (${selected.size})", { confirm = true }, scale)
+        })
+        cards.add(VpnGridEntry("guide") {
+            VpnPageCard("Guida", { guideOpened = true; controller.markGuideShown(); guide = true }, scale)
+        })
+        // Come nelle Impostazioni: quattro celle uguali, anche nell'ultima
+        // riga incompleta. Con un server, Guida apre da sola la seconda riga.
+        cards.chunked(SettingsCardDimens.CARDS_PER_ROW).forEach { row ->
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(scale.dp(SettingsCardDimens.GRID_SPACING_BASE)),
+            ) {
+                row.forEach { (id, content) ->
+                    key(id) { Box(Modifier.weight(1f).testTag("vpn_grid_$id")) { content() } }
+                }
+                repeat(SettingsCardDimens.CARDS_PER_ROW - row.size) {
+                    Spacer(Modifier.weight(1f))
+                }
+            }
+        }
     }
     if (limit) VpnDialog(scale, { limit = false }) { focus ->
         Text(VpnStore.LIMIT_MESSAGE, color = FvpColors.TextPrimary)
