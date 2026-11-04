@@ -689,7 +689,7 @@ internal fun ProtectedVerifyPage(
         FvpSecondaryButton(
             text = "PIN dimenticato",
             onClick = onForgot,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.width(180.dp),
             testTag = "protected_forgot_pin",
         )
         FvpSecondaryButton(
