@@ -17,6 +17,7 @@ import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -32,6 +33,7 @@ import it.felixvision.mobile.ui.catalog.CatalogViewModel
 import it.felixvision.mobile.ui.catalog.ContinueWatchingGateway
 import it.felixvision.mobile.ui.catalog.FavoritesGateway
 import it.felixvision.mobile.ui.catalog.MyChannelsGateway
+import it.felixvision.mobile.ui.catalog.PlayTarget
 import it.felixvision.mobile.ui.catalog.ProgressGateway
 import it.felixvision.mobile.ui.settings.SettingsUserDataStore
 import it.felixvision.mobile.ui.settings.SettingsViewModel
@@ -53,6 +55,8 @@ import it.felixvision.tv.data.channels.MyChannel
 import it.felixvision.tv.data.continuewatching.ContinueEntry
 import it.felixvision.tv.data.favorites.FavoriteItem
 import it.felixvision.tv.data.progress.WatchProgress
+import it.felixvision.tv.data.protection.ProtectedKind
+import kotlinx.coroutines.runBlocking
 import it.felixvision.tv.data.store.CredentialStore
 import it.felixvision.tv.data.store.StoredCredentials
 import it.felixvision.tv.data.xtream.AccountStatus
@@ -238,6 +242,7 @@ class HomeScreenTest {
 
     private fun createCatalogViewModel(
         myChannels: List<MyChannel> = emptyList(),
+        protection: AppContainer? = null,
     ): CatalogViewModel {
         return CatalogViewModel(
             server = "http://server.esempio:8080",
@@ -249,6 +254,8 @@ class HomeScreenTest {
             myChannelsGateway = FakeMyChannelsGateway(myChannels),
             continueGateway = FakeContinueWatchingGateway(),
             progressGateway = FakeProgressGateway(),
+            protectedStore = protection?.protectedContentStore,
+            protectedSession = protection?.protectedSession,
         )
     }
 
@@ -281,8 +288,8 @@ class HomeScreenTest {
 
     private fun mount(
         catalogViewModel: CatalogViewModel = createCatalogViewModel(),
+        container: AppContainer = AppContainer(ApplicationProvider.getApplicationContext()),
     ): CatalogViewModel {
-        val container = AppContainer(ApplicationProvider.getApplicationContext())
         val settingsViewModel = createSettingsViewModel()
         val summary = AccountSummary(
             username = "demo",
@@ -496,6 +503,43 @@ class HomeScreenTest {
         rule.onNodeWithTag("mychannel_drag_101", useUnmergedTree = true).assertDoesNotExist()
     }
 
+    @Test
+    @Config(sdk = [34], qualifiers = "w1280dp-h800dp-land-mdpi")
+    fun `live nasconde il canale bloccato e lo ripristina senza ricaricare`() {
+        val container = AppContainer(ApplicationProvider.getApplicationContext())
+        runBlocking {
+            container.protectedContentStore.toggleItem(
+                "http://server.esempio:8080", "demo", ProtectedKind.LIVE, "101", "c1", "Canale Uno",
+            )
+        }
+        val vm = createCatalogViewModel(protection = container)
+        mount(vm, container)
+        rule.waitUntil(10_000L) { vm.ui.value.catalog?.liveStreams?.map { it.streamId } == listOf("102", "103") }
+        rule.onNodeWithTag("rail_item_live").performClick()
+        rule.onNodeWithTag("live_row_101", useUnmergedTree = true).assertDoesNotExist()
+        rule.onNodeWithTag("live_row_102", useUnmergedTree = true).assertIsDisplayed()
+        rule.runOnIdle { container.protectedSession.unlock() }
+        rule.waitUntil(10_000L) { vm.ui.value.catalog?.liveStreams?.size == 3 }
+        rule.onNodeWithTag("live_row_101", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    @Config(sdk = [34], qualifiers = "w1280dp-h800dp-land-mdpi")
+    fun `richiesta diretta di canale nascosto non apre il player`() {
+        val container = AppContainer(ApplicationProvider.getApplicationContext())
+        runBlocking {
+            container.protectedContentStore.toggleItem(
+                "http://server.esempio:8080", "demo", ProtectedKind.LIVE, "101", "c1", "Canale Uno",
+            )
+        }
+        val vm = createCatalogViewModel(protection = container)
+        mount(vm, container)
+        rule.waitUntil(10_000L) { vm.ui.value.catalog?.liveStreams?.none { it.streamId == "101" } == true }
+        rule.runOnIdle { vm.onPlayRequest(PlayTarget.LiveChannel("101")) }
+        rule.waitUntil(10_000L) { vm.playRequest.value == null }
+        rule.onNodeWithText("IN DIRETTA").assertDoesNotExist()
+    }
+
     // --- Apertura del player dalla riga Live ---
 
     @Test
@@ -505,7 +549,10 @@ class HomeScreenTest {
         rule.onNodeWithTag("rail_item_live").performClick()
         rule.waitForIdle()
         rule.onNodeWithTag("live_row_101").performClick()
-        rule.waitForIdle()
+        // La creazione della sessione attende anche la lettura dell'archivio in IO.
+        rule.waitUntil(10_000L) {
+            rule.onAllNodesWithText("IN DIRETTA").fetchSemanticsNodes().isNotEmpty()
+        }
         rule.onNodeWithText("Canale Uno").assertIsDisplayed()
         rule.onNodeWithText("IN DIRETTA").assertIsDisplayed()
     }

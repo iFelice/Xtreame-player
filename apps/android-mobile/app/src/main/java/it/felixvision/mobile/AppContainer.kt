@@ -131,8 +131,7 @@ class AppContainer(
 
     /**
      * Visibilità dei contenuti protetti: solo in memoria, spenta a ogni avvio.
-     * In questo passo comanda soltanto la pagina "Contenuti protetti": il
-     * filtro delle sezioni arriva nel passo 3.
+     * Le schermate e il player osservano questa sessione condivisa.
      */
     val protectedSession: ProtectedSession by lazy {
         ProtectedSession(clock = clock)

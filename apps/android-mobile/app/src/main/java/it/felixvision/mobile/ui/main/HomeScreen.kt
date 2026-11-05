@@ -43,6 +43,7 @@ import coil3.ImageLoader
 import it.felixvision.mobile.AppContainer
 import it.felixvision.mobile.ui.access.AccountSummary
 import it.felixvision.mobile.ui.catalog.ActionSheetHost
+import it.felixvision.mobile.ui.catalog.ActionTarget
 import it.felixvision.mobile.ui.catalog.BackAction
 import it.felixvision.mobile.ui.catalog.CatalogViewModel
 import it.felixvision.mobile.ui.catalog.CercaSection
@@ -182,9 +183,9 @@ fun HomeScreen(
         val resolved = runCatching {
             createMobilePlayerSession(request, catalog, container, summary, password, catalogViewModel)
         }.getOrNull()
+        catalogViewModel.consumePlayRequest(request)
         if (resolved != null && catalogViewModel.ui.value.catalog == catalog) playerSession = resolved
         else snackbarHostState.showSnackbar("Contenuto non disponibile per la riproduzione")
-        catalogViewModel.consumePlayRequest(request)
     }
 
     // Un dettaglio rimasto aperto non deve mostrare un contenuto diventato nascosto.
@@ -198,6 +199,22 @@ fun HomeScreen(
         }
         if (!visible) catalogViewModel.closeDetail()
     }
+    LaunchedEffect(catalogState.catalog, actionTarget, positionDialog) {
+        val catalog = catalogState.catalog
+        val actionVisible = when (val target = actionTarget) {
+            is ActionTarget.Channel -> catalog?.liveStreams?.any { it.streamId == target.stream.streamId } == true
+            is ActionTarget.MyChannelEntry -> catalogViewModel.myChannels.value.any { it.streamId == target.channel.streamId }
+            is ActionTarget.Film -> catalog?.vodStreams?.any { it.streamId == target.stream.streamId } == true
+            is ActionTarget.Series -> catalog?.series?.any { it.seriesId == target.item.seriesId } == true
+            is ActionTarget.LiveCategory -> catalog?.liveCategories?.any { it.categoryId == target.categoryId } == true
+            is ActionTarget.Continue -> catalogViewModel.continueEntries.value.any { it.key == target.entry.key }
+            null -> true
+        }
+        if (!actionVisible) catalogViewModel.closeActions()
+        if (positionDialog != null && catalog?.liveStreams?.none { it.streamId == positionDialog?.channel?.streamId } != false) {
+            catalogViewModel.closePositionDialog()
+        }
+    }
 
     // Apertura delle Impostazioni: rilettura account + etichetta server.
     LaunchedEffect(section) {
@@ -207,7 +224,7 @@ fun HomeScreen(
     }
 
     if (playerSession != null) {
-        CompositionLocalProvider(LocalPlayerVisibleCatalog provides { catalogState.catalog }) {
+        CompositionLocalProvider(LocalPlayerVisibleCatalog provides catalogViewModel.ui) {
             playerContent(container, playerSession!!) {
                 playerSession = null
                 catalogViewModel.selectSection(AppSection.NOVITA)

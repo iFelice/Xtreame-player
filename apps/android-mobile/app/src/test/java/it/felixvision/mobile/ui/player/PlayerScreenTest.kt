@@ -198,6 +198,30 @@ class PlayerScreenTest {
 
     @Test
     @Config(sdk = [34], qualifiers = "w1280dp-h800dp-land-mdpi")
+    fun channelsPanelUpdatesWhenVisibilityChanges() {
+        val engine = engineFor(liveSource())
+        rule.setContent {
+            FvpTheme {
+                PlayerOverlayPanel(
+                    panel = PlayerPanel.CHANNELS,
+                    playbackSource = engine.playbackSource,
+                    state = engine.state,
+                    engine = engine,
+                    programs = emptyList(),
+                    guideLoading = false,
+                    onClose = {},
+                )
+            }
+        }
+        rule.runOnIdle { engine.setVisibleChannels(setOf("stream-002")) }
+        rule.onNodeWithTag("player_channel_stream-001", useUnmergedTree = true).assertDoesNotExist()
+        rule.onNodeWithTag("player_channel_stream-002", useUnmergedTree = true).assertIsDisplayed()
+        rule.runOnIdle { engine.setVisibleChannels(null) }
+        rule.onNodeWithTag("player_channel_stream-001", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    @Config(sdk = [34], qualifiers = "w1280dp-h800dp-land-mdpi")
     fun landscapeUsesTheOverlayPanelWithoutPortraitTabs() {
         val engine = engineFor(liveSource())
         rule.setContent {

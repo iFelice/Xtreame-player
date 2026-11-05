@@ -59,6 +59,7 @@ fun FilmSection(
 
     val sectionKey = "film"
     val selectedCategoryId = viewModel.sectionStates.selectedCategory(sectionKey)
+        ?.takeIf { selected -> displayCategories.any { it.categoryId == selected } }
         ?: displayCategories.firstOrNull()?.categoryId
     val headerOpen = viewModel.sectionStates.isHeaderOpen(sectionKey)
     val filtered = remember(streams, catalogState.recentFilms, selectedCategoryId) {

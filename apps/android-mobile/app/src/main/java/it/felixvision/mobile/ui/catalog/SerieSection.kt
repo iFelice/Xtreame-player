@@ -56,6 +56,7 @@ fun SerieSection(
 
     val sectionKey = "serie"
     val selectedCategoryId = viewModel.sectionStates.selectedCategory(sectionKey)
+        ?.takeIf { selected -> displayCategories.any { it.categoryId == selected } }
         ?: displayCategories.firstOrNull()?.categoryId
     val headerOpen = viewModel.sectionStates.isHeaderOpen(sectionKey)
     val filtered = remember(streams, catalogState.recentSeries, selectedCategoryId) {

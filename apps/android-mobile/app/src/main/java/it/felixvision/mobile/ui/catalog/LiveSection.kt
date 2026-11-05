@@ -88,6 +88,7 @@ fun LiveSection(
 
     val sectionKey = "live"
     val selectedCategoryId = viewModel.sectionStates.selectedCategory(sectionKey)
+        ?.takeIf { selected -> categories.any { it.categoryId == selected } }
         ?: categories.firstOrNull()?.categoryId
     val headerOpen = viewModel.sectionStates.isHeaderOpen(sectionKey)
 

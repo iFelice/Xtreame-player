@@ -155,8 +155,8 @@ internal enum class CreateOrigin { Initial, Change, Forgot }
  *   "N nascosti" a destra, e contenuti della categoria con "Tutta la
  *   categoria" in testa e la spunta per riga. Ogni tocco salva subito.
  *
- * L'interruttore cambia SOLO lo stato di [ProtectedSession]: entrare nella
- * pagina non sblocca nulla, e il filtro delle sezioni arriva nel passo 3.
+ * L'interruttore cambia lo stato di [ProtectedSession]: entrare nella
+ * pagina non sblocca nulla; la sessione determina il filtro delle sezioni.
  *
  * Il PIN non compare mai in chiaro, né nei log né nei messaggi: il tastierino
  * mostra pallini e il campo password usa la tastiera di sistema con
