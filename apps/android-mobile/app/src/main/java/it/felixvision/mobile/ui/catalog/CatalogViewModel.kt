@@ -7,6 +7,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import it.felixvision.mobile.AppContainer
 import it.felixvision.mobile.ui.main.AppSection
+import it.felixvision.mobile.ui.main.visibleContent
+import it.felixvision.tv.data.protection.ProtectedContentData
+import it.felixvision.tv.data.protection.ProtectedContentStore
+import it.felixvision.tv.data.protection.ProtectedSession
 import it.felixvision.tv.data.catalog.Catalog
 import it.felixvision.tv.data.catalog.CatalogOrdering
 import it.felixvision.tv.data.catalog.CatalogRefresh
@@ -27,6 +31,8 @@ import it.felixvision.tv.data.progress.WatchProgress
 import it.felixvision.tv.data.search.CatalogSearch
 import it.felixvision.tv.data.search.SearchResults
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -193,6 +199,8 @@ class CatalogViewModel(
     private val myChannelsGateway: MyChannelsGateway,
     private val continueGateway: ContinueWatchingGateway,
     private val progressGateway: ProgressGateway,
+    private val protectedStore: ProtectedContentStore? = null,
+    private val protectedSession: ProtectedSession? = null,
 ) : ViewModel() {
 
     constructor(
@@ -210,20 +218,32 @@ class CatalogViewModel(
         myChannelsGateway = StoreMyChannelsGateway(container.myChannelsStore, container.favoritesStore),
         continueGateway = StoreContinueWatchingGateway(container.continueWatchingStore),
         progressGateway = StoreProgressGateway(container.progressStore),
+        protectedStore = container.protectedContentStore,
+        protectedSession = container.protectedSession,
     )
 
     private val _ui = MutableStateFlow(CatalogUiState())
-    val ui: StateFlow<CatalogUiState> = _ui.asStateFlow()
+    /** Catalogo completo, usato soltanto dalla gestione delle impostazioni. */
+    val fullUi: StateFlow<CatalogUiState> = _ui.asStateFlow()
+    private val _visibleUi = MutableStateFlow(CatalogUiState())
+    val ui: StateFlow<CatalogUiState> = _visibleUi.asStateFlow()
 
     private val _favorites = MutableStateFlow<List<FavoriteItem>>(emptyList())
-    val favorites: StateFlow<List<FavoriteItem>> = _favorites.asStateFlow()
+    private val _visibleFavorites = MutableStateFlow<List<FavoriteItem>>(emptyList())
+    val favorites: StateFlow<List<FavoriteItem>> = _visibleFavorites.asStateFlow()
 
     private val _myChannels = MutableStateFlow<List<MyChannel>>(emptyList())
-    val myChannels: StateFlow<List<MyChannel>> = _myChannels.asStateFlow()
+    private val _visibleMyChannels = MutableStateFlow<List<MyChannel>>(emptyList())
+    val myChannels: StateFlow<List<MyChannel>> = _visibleMyChannels.asStateFlow()
 
-    /** Voci visibili di "Riprendi", dalla più recente. */
     private val _continueEntries = MutableStateFlow<List<ContinueEntry>>(emptyList())
-    val continueEntries: StateFlow<List<ContinueEntry>> = _continueEntries.asStateFlow()
+    private val _visibleContinueEntries = MutableStateFlow<List<ContinueEntry>>(emptyList())
+    val continueEntries: StateFlow<List<ContinueEntry>> = _visibleContinueEntries.asStateFlow()
+
+    private val protectedData = MutableStateFlow<ProtectedContentData?>(
+        if (protectedStore == null) ProtectedContentData() else null,
+    )
+    private val unlocked = protectedSession?.unlocked ?: MutableStateFlow(false)
 
     private val _watchProgress = MutableStateFlow<Map<String, WatchProgress>>(emptyMap())
     val watchProgress: StateFlow<Map<String, WatchProgress>> = _watchProgress.asStateFlow()
@@ -233,7 +253,8 @@ class CatalogViewModel(
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
     private val _searchResults = MutableStateFlow(SearchResults())
-    val searchResults: StateFlow<SearchResults> = _searchResults.asStateFlow()
+    private val _visibleSearchResults = MutableStateFlow(SearchResults())
+    val searchResults: StateFlow<SearchResults> = _visibleSearchResults.asStateFlow()
 
     /** Sezione attualmente scelta; dopo l'accesso è sempre Novità. */
     private val _selectedSection = MutableStateFlow(AppSection.NOVITA)
@@ -274,6 +295,49 @@ class CatalogViewModel(
     private val loadMutex = Mutex()
 
     init {
+        if (protectedStore != null) {
+            viewModelScope.launch {
+                protectedStore.revision.collectLatest {
+                    try {
+                        protectedData.value = protectedStore.get(server, username)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        // Non mostrare contenuti se la prima lettura fallisce.
+                    }
+                }
+            }
+        }
+        viewModelScope.launch {
+            val protection = combine(protectedData, unlocked) { data, isUnlocked -> data to isUnlocked }
+            combine(_ui, _favorites, _myChannels, _continueEntries, protection) { state, fav, channels, entries, rules ->
+                val visible = visibleContent(state.catalog, state.recentFilms, state.recentSeries, fav, entries, channels, rules.first, rules.second)
+                state to visible
+            }.collect { (state, visible) ->
+                _visibleFavorites.value = visible.favorites
+                _visibleMyChannels.value = visible.myChannels
+                _visibleContinueEntries.value = visible.continueEntries
+                _visibleUi.value = state.copy(
+                    isLoading = state.isLoading || visible.pending,
+                    catalog = visible.catalog,
+                    recentFilms = visible.recentFilms,
+                    recentSeries = visible.recentSeries,
+                )
+            }
+        }
+        viewModelScope.launch {
+            combine(_searchResults, _visibleUi) { results, state ->
+                val catalog = state.catalog
+                val live = catalog?.liveStreams.orEmpty().mapTo(hashSetOf()) { it.streamId }
+                val vod = catalog?.vodStreams.orEmpty().mapTo(hashSetOf()) { it.streamId }
+                val series = catalog?.series.orEmpty().mapTo(hashSetOf()) { it.seriesId }
+                SearchResults(
+                    live = results.live.filter { it.streamId in live },
+                    vod = results.vod.filter { it.streamId in vod },
+                    series = results.series.filter { it.seriesId in series },
+                )
+            }.collect { _visibleSearchResults.value = it }
+        }
         viewModelScope.launch {
             val cached = cacheGateway.load(server, username)
             if (cached != null) {

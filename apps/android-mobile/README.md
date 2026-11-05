@@ -243,10 +243,18 @@ TV, perché il tablet compila quei sorgenti. Nessun segreto nel workflow.
   recupero con la password del provider, interruttore "Mostra/Nascondi
   contenuti protetti", elenco "Nascosti" con rimozione per voce e flusso
   "Aggiungi" (Live/Film/Serie) sulle categorie del catalogo reale, con "Tutta
-  la categoria" e la spunta per contenuto. Archivio e regole sono le classi
-  condivise `it.felixvision.tv.data.protection`; il filtro delle sezioni
-  arriva nel passo successivo. Indietro torna al livello precedente e, dalla
-  radice, alle Impostazioni.
+  la categoria" e la spunta per contenuto. La lista è locale a questo tablet
+  e separata per server e utente: non viene sincronizzata con la TV o con
+  altri dispositivi. Quando la sessione è bloccata, categorie e contenuti
+  nascosti non compaiono nelle sezioni, nei preferiti, nella ricerca o nel
+  player; sbloccarla li rende nuovamente visibili senza aggiornare il catalogo.
+  La sessione si blocca all'avvio, allo spegnimento dello schermo, quando
+  l'app va in secondo piano (eccetto in Picture-in-Picture) e alla chiusura
+  del PiP. Se si sta riproducendo un contenuto nascosto, il player si chiude.
+  Se si dimentica il PIN, "PIN dimenticato" richiede la password del provider
+  e permette di scegliere un nuovo PIN senza cancellare l'elenco. Archivio e
+  regole sono condivisi con `it.felixvision.tv.data.protection`. Indietro
+  torna al livello precedente e, dalla radice, alle Impostazioni.
 - **Abbinamento remoto**: QR e PIN dal servizio di relay
   (`BuildConfig.PAIRING_RELAY_URL`, stesso della TV), rinnovo del codice,
   accesso automatico alla ricezione delle credenziali; il polling è attivo

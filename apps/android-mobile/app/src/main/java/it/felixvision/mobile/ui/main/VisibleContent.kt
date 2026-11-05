@@ -68,12 +68,35 @@ fun visibleContent(
         )
     }
     val visibleCatalog = catalog?.let { ProtectedFilter.filterCatalog(it, data) }
+    // Gli archivi dei preferiti e di Riprendi conservano solo la categoria
+    // principale. Il catalogo completo permette di riconoscere anche le
+    // categorie secondarie, senza scartare le voci non più nel catalogo.
+    val hiddenLive = catalog?.liveStreams.orEmpty().map { it.streamId }.toSet() -
+        visibleCatalog?.liveStreams.orEmpty().map { it.streamId }.toSet()
+    val hiddenVod = catalog?.vodStreams.orEmpty().map { it.streamId }.toSet() -
+        visibleCatalog?.vodStreams.orEmpty().map { it.streamId }.toSet()
+    val hiddenSeries = catalog?.series.orEmpty().map { it.seriesId }.toSet() -
+        visibleCatalog?.series.orEmpty().map { it.seriesId }.toSet()
+    val filteredFavorites = ProtectedFilter.filterFavorites(favorites, data)
+    val matchedFavorites = filteredFavorites.filterNot {
+        when (it.type) {
+            FavoriteItem.LIVE -> it.id.removePrefix("live_") in hiddenLive
+            FavoriteItem.VOD -> it.id.removePrefix("vod_") in hiddenVod
+            FavoriteItem.SERIES -> it.id.removePrefix("series_") in hiddenSeries
+            else -> false
+        }
+    }
+    val filteredContinue = ProtectedFilter.filterContinueEntries(continueEntries, data)
+    val matchedContinue = filteredContinue.filterNot {
+        (it.isMovie && it.streamId?.let { id -> id in hiddenVod } == true) ||
+            (it.isSeries && it.seriesId?.let { id -> id in hiddenSeries } == true)
+    }
     return VisibleContent(
         catalog = visibleCatalog,
         recentFilms = ProtectedFilter.filterVodStreams(recentFilms, data),
         recentSeries = ProtectedFilter.filterSeries(recentSeries, data),
-        favorites = ProtectedFilter.filterFavorites(favorites, data),
-        continueEntries = ProtectedFilter.filterContinueEntries(continueEntries, data),
+        favorites = if (matchedFavorites.size == filteredFavorites.size) filteredFavorites else matchedFavorites,
+        continueEntries = if (matchedContinue.size == filteredContinue.size) filteredContinue else matchedContinue,
         // La categoria dei canali si ricava dal catalogo COMPLETO: se la
         // categoria è nascosta i suoi canali non sono più nel catalogo visibile
         // e la mappa perderebbe proprio quelli da togliere (categoria ignota =

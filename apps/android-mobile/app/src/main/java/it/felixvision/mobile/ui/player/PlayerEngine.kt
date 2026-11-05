@@ -247,8 +247,14 @@ class PlayerEngine(
 
     fun nowMillis(): Long = container.clock.nowMillis()
 
+    private var allowedChannelIds by mutableStateOf<Set<String>?>(null)
+
     val zappingChannels: List<LiveStream>
-        get() = liveChannels
+        get() = allowedChannelIds?.let { allowed -> liveChannels.filter { it.streamId in allowed } } ?: liveChannels
+
+    fun setVisibleChannels(ids: Set<String>?) {
+        allowedChannelIds = ids
+    }
 
     private val listener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -550,15 +556,24 @@ class PlayerEngine(
     }
 
     fun selectChannel(index: Int) {
-        lifecycleController.selectChannel(index)
+        val id = zappingChannels.getOrNull(index)?.streamId ?: return
+        lifecycleController.selectChannel(liveChannels.indexOfFirst { it.streamId == id })
     }
 
     fun nextChannel() {
-        lifecycleController.nextChannel()
+        moveVisibleChannel(1)
     }
 
     fun previousChannel() {
-        lifecycleController.previousChannel()
+        moveVisibleChannel(-1)
+    }
+
+    private fun moveVisibleChannel(direction: Int) {
+        val visible = zappingChannels
+        if (visible.isEmpty()) return
+        val current = visible.indexOfFirst { it.streamId == state.currentStreamId }
+        val next = if (current < 0) 0 else (current + direction + visible.size) % visible.size
+        selectChannel(next)
     }
 
     fun returnToLive() {

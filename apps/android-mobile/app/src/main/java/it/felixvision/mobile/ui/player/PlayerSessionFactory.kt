@@ -12,6 +12,7 @@ import it.felixvision.tv.data.epg.CatchupRules
 import it.felixvision.tv.data.playback.LiveZapping
 import it.felixvision.tv.data.playback.buildEpisodeQueue
 import it.felixvision.tv.data.playback.indexOfEpisode
+import it.felixvision.tv.data.protection.ProtectedFilter
 
 internal fun zappingChannelsFor(chosen: LiveStream, allLive: List<LiveStream>): List<LiveStream> {
     val category = chosen.categoryId
@@ -22,7 +23,10 @@ suspend fun createMobilePlayerSession(
     target: PlayTarget, catalog: Catalog, container: AppContainer, account: AccountSummary,
     password: String, viewModel: CatalogViewModel,
 ): MobilePlayerSession? {
-    val allLive = catalog.liveStreams
+    val unlocked = container.protectedSession.unlocked.value
+    val protection = if (unlocked) null else container.protectedContentStore.get(account.server, account.username)
+    val permittedCatalog = if (protection == null) catalog else ProtectedFilter.filterCatalog(catalog, protection)
+    val allLive = permittedCatalog.liveStreams
     suspend fun liveSession(streamId: String, personal: Boolean = false): MobilePlaybackSource.Live? {
         val chosen = allLive.firstOrNull { it.streamId == streamId } ?: return null
         if (personal) {
@@ -37,7 +41,7 @@ suspend fun createMobilePlayerSession(
         // Zapping nella categoria di partenza usa l'appartenenza multipla.
         val channels = zappingChannelsFor(chosen, allLive)
         val start = channels.indexOfFirst { it.streamId == streamId }.let { if (it < 0) 0 else it }
-        val categoryName = catalog.liveCategories.firstOrNull { it.categoryId == category }?.categoryName
+        val categoryName = permittedCatalog.liveCategories.firstOrNull { it.categoryId == category }?.categoryName
         return MobilePlaybackSource.Live(channels, LiveZapping.clamp(start, channels.size), categoryName)
     }
     val source: MobilePlaybackSource = when (target) {
@@ -58,11 +62,11 @@ suspend fun createMobilePlayerSession(
             MobilePlaybackSource.Catchup(channel, program.title, program.start, program.end - program.start, account.serverTimezone, live.channels, live.startIndex)
         }
         is PlayTarget.Movie -> {
-            val stream = catalog.vodStreams.firstOrNull { it.streamId == target.streamId } ?: return null
+            val stream = permittedCatalog.vodStreams.firstOrNull { it.streamId == target.streamId } ?: return null
             MobilePlaybackSource.Movie(stream)
         }
         is PlayTarget.SeriesEpisode -> {
-            val item = catalog.series.firstOrNull { it.seriesId == target.seriesId } ?: return null
+            val item = permittedCatalog.series.firstOrNull { it.seriesId == target.seriesId } ?: return null
             val info = viewModel.loadSeriesInfo(target.seriesId) ?: return null
             val seasonOrder = info.seasons.map { it.seasonNumber.toString() }
             val queue = buildEpisodeQueue(seasonOrder, info.episodes)
@@ -73,8 +77,9 @@ suspend fun createMobilePlayerSession(
         }
         is PlayTarget.ContinueItem -> {
             val entry = container.continueWatchingStore.getAll(account.server, account.username).firstOrNull { it.key == target.key } ?: return null
+            if (protection != null && ProtectedFilter.filterContinueEntries(listOf(entry), protection).isEmpty()) return null
             if (entry.isMovie) {
-                val stream = catalog.vodStreams.firstOrNull { it.streamId == entry.streamId } ?: return null
+                val stream = permittedCatalog.vodStreams.firstOrNull { it.streamId == entry.streamId } ?: return null
                 MobilePlaybackSource.Movie(stream, entry.title)
             } else {
                 val seriesId = entry.seriesId ?: return null
@@ -82,7 +87,7 @@ suspend fun createMobilePlayerSession(
                 val queue = buildEpisodeQueue(info.seasons.map { it.seasonNumber.toString() }, info.episodes)
                 val episodeId = entry.episodeId ?: return null
                 val index = indexOfEpisode(queue, episodeId).takeIf { it >= 0 } ?: return null
-                val item = catalog.series.firstOrNull { it.seriesId == seriesId } ?: return null
+                val item = permittedCatalog.series.firstOrNull { it.seriesId == seriesId } ?: return null
                 val episode = queue[index]
                 MobilePlaybackSource.Episode(episodeId, episode.displayTitle, item.name, episode.episode.containerExtension, item.seriesId, item.categoryId, item.cover,
                     queue.map { MobileEpisodeRef(it.episode.id, it.displayTitle, it.episode.containerExtension, it.seasonNumber, it.episode.episodeNum) })

@@ -27,6 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -44,9 +45,13 @@ import androidx.media3.ui.PlayerView
 import it.felixvision.mobile.AppContainer
 import it.felixvision.mobile.ui.components.FvpIcons
 import it.felixvision.mobile.ui.theme.FvpColors
+import it.felixvision.tv.data.catalog.Catalog
 import it.felixvision.tv.data.catalog.VodInfoResponse
 import it.felixvision.tv.data.epg.EpgProgram
 import kotlinx.coroutines.delay
+
+/** Null fuori dalla Home (ad esempio nelle anteprime isolate del player). */
+internal val LocalPlayerVisibleCatalog = staticCompositionLocalOf<(() -> Catalog?)?> { null }
 
 @androidx.media3.common.util.UnstableApi
 @Composable
@@ -62,6 +67,8 @@ fun PlayerScreen(
         PlayerEngine(context.applicationContext, container, session)
     }
     val state = engine.state
+    val visibility = LocalPlayerVisibleCatalog.current
+    val visibleCatalog = visibility?.invoke()
     val feedback = rememberPlayerGestureFeedback()
     var videoView by remember { mutableStateOf<PlayerView?>(null) }
     var fit by remember { mutableStateOf(true) }
@@ -77,6 +84,21 @@ fun PlayerScreen(
     val volumeControl = rememberVolumeControl(context)
     val brightnessControl = rememberBrightnessControl(context, activity?.window)
 
+    LaunchedEffect(engine, visibleCatalog, state.currentStreamId, visibility != null) {
+        if (visibility != null) {
+            engine.setVisibleChannels(visibleCatalog?.liveStreams.orEmpty().mapTo(hashSetOf()) { it.streamId })
+            val visible = when (val source = engine.playbackSource) {
+                is MobilePlaybackSource.Live -> visibleCatalog?.liveStreams?.any { it.streamId == state.currentStreamId } == true
+                is MobilePlaybackSource.Catchup -> visibleCatalog?.liveStreams?.any { it.streamId == source.stream.streamId } == true
+                is MobilePlaybackSource.Movie -> visibleCatalog?.vodStreams?.any { it.streamId == source.stream.streamId } == true
+                is MobilePlaybackSource.Episode -> visibleCatalog?.series?.any { it.seriesId == source.seriesId } == true
+            }
+            if (!visible) {
+                engine.close()
+                onExit()
+            }
+        }
+    }
     LaunchedEffect(engine) {
         engine.start()
     }

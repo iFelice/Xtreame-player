@@ -139,7 +139,7 @@ fun PreferitiSection(
 
     // Copia di lavoro per il riordino touch: solo in modalità modifica.
     val workingList = remember { mutableStateListOf<MyChannel>() }
-    LaunchedEffect(editMode) {
+    LaunchedEffect(editMode, myChannels) {
         if (editMode) {
             workingList.clear()
             workingList.addAll(myChannels)

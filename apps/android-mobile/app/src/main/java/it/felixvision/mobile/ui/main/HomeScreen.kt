@@ -23,6 +23,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -59,6 +61,7 @@ import it.felixvision.mobile.ui.detail.SeriesDetailScreen
 import it.felixvision.mobile.ui.settings.SettingsScreen
 import it.felixvision.mobile.ui.settings.SettingsViewModel
 import it.felixvision.mobile.ui.theme.FvpColors
+import it.felixvision.mobile.ui.player.LocalPlayerVisibleCatalog
 import it.felixvision.mobile.ui.player.MobilePlayerSession
 import it.felixvision.mobile.ui.player.PlayerScreen
 import it.felixvision.mobile.ui.player.createMobilePlayerSession
@@ -137,14 +140,15 @@ fun HomeScreen(
             PlayerScreen(container = playerContainer, session = session, onExit = onExit)
         },
 ) {
-    val catalogState by catalogViewModel.ui.collectAsStateWithLifecycle()
+    // Anche in PiP o con activity ferma il blocco deve aggiornare il player.
+    val catalogState by catalogViewModel.ui.collectAsState()
     val section by catalogViewModel.selectedSection.collectAsStateWithLifecycle()
     val detailTarget by catalogViewModel.detailTarget.collectAsStateWithLifecycle()
     val actionTarget by catalogViewModel.actionTarget.collectAsStateWithLifecycle()
     val positionDialog by catalogViewModel.positionDialog.collectAsStateWithLifecycle()
     val notice by catalogViewModel.notice.collectAsStateWithLifecycle()
     val playRequest by catalogViewModel.playRequest.collectAsStateWithLifecycle()
-    var playerSession by remember { mutableStateOf<MobilePlayerSession?>(null) }
+    var playerSession by remember(summary.server, summary.username) { mutableStateOf<MobilePlayerSession?>(null) }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
@@ -178,9 +182,21 @@ fun HomeScreen(
         val resolved = runCatching {
             createMobilePlayerSession(request, catalog, container, summary, password, catalogViewModel)
         }.getOrNull()
-        if (resolved != null) playerSession = resolved
+        if (resolved != null && catalogViewModel.ui.value.catalog == catalog) playerSession = resolved
         else snackbarHostState.showSnackbar("Contenuto non disponibile per la riproduzione")
         catalogViewModel.consumePlayRequest(request)
+    }
+
+    // Un dettaglio rimasto aperto non deve mostrare un contenuto diventato nascosto.
+    LaunchedEffect(catalogState.catalog, detailTarget) {
+        val catalog = catalogState.catalog
+        val visible = when (val target = detailTarget) {
+            is DetailTarget.Film -> catalog?.vodStreams?.any { it.streamId == target.stream.streamId } == true
+            is DetailTarget.Series -> catalog?.series?.any { it.seriesId == target.item.seriesId } == true
+            is DetailTarget.LiveGuide -> catalog?.liveStreams?.any { it.streamId == target.stream.streamId } == true
+            null -> true
+        }
+        if (!visible) catalogViewModel.closeDetail()
     }
 
     // Apertura delle Impostazioni: rilettura account + etichetta server.
@@ -191,7 +207,12 @@ fun HomeScreen(
     }
 
     if (playerSession != null) {
-        playerContent(container, playerSession!!) { playerSession = null }
+        CompositionLocalProvider(LocalPlayerVisibleCatalog provides { catalogState.catalog }) {
+            playerContent(container, playerSession!!) {
+                playerSession = null
+                catalogViewModel.selectSection(AppSection.NOVITA)
+            }
+        }
         return
     }
 

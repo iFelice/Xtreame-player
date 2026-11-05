@@ -3,6 +3,8 @@ package it.felixvision.mobile.ui.main
 import it.felixvision.tv.data.catalog.Catalog
 import it.felixvision.tv.data.catalog.Category
 import it.felixvision.tv.data.catalog.VodStream
+import it.felixvision.tv.data.continuewatching.ContinueEntry
+import it.felixvision.tv.data.favorites.FavoriteItem
 import it.felixvision.tv.data.protection.HiddenCategory
 import it.felixvision.tv.data.protection.ProtectedContentData
 import it.felixvision.tv.data.protection.ProtectedKind
@@ -69,6 +71,19 @@ class VisibleContentMultiCategoryTest {
             emptyList<VodStream>(),
             filmsForCategory("002", visibleCatalog.vodStreams, emptyList()),
         )
+    }
+
+    @Test
+    fun `categoria secondaria nasconde anche preferiti e riprendi`() {
+        val favorite = FavoriteItem(id = "vod_201", type = FavoriteItem.VOD, title = filmInDueCategorie.name, categoryId = "001")
+        val entry = ContinueEntry.movie("201", filmInDueCategorie.name, null, "001", "mp4")
+        fun select(unlocked: Boolean) = visibleContent(
+            catalog, vodStreams, emptyList(), listOf(favorite), listOf(entry), emptyList(), data, unlocked,
+        )
+        assertEquals(emptyList<FavoriteItem>(), select(false).favorites)
+        assertEquals(emptyList<ContinueEntry>(), select(false).continueEntries)
+        assertEquals(listOf(favorite), select(true).favorites)
+        assertEquals(listOf(entry), select(true).continueEntries)
     }
 
     @Test

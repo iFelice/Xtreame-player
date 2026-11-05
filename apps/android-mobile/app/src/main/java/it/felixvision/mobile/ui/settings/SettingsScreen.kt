@@ -177,7 +177,7 @@ fun SettingsScreen(
     container: AppContainer? = null,
 ) {
     val state by settingsViewModel.ui.collectAsStateWithLifecycle()
-    val catalogState by catalogViewModel.ui.collectAsStateWithLifecycle()
+    val catalogState by catalogViewModel.fullUi.collectAsStateWithLifecycle()
     val downloadProgress by downloadMonitor.progress.collectAsStateWithLifecycle()
     var showUpdateDialog by remember { mutableStateOf(false) }
     val scrollHolder = remember { ScrollStateHolder() }

@@ -52,10 +52,14 @@ fun FvpApp(container: AppContainer) {
             // La password resta solo nel modello di sessione in memoria.
             password = viewModel.getCurrentCredentials()?.password.orEmpty(),
             banner = screen.banner,
-            onSignOut = viewModel::signOut,
+            onSignOut = {
+                container.protectedSession.lock()
+                viewModel.signOut()
+            },
             // Riquadro "Configura da remoto" delle Impostazioni: le credenziali
             // ricevute aggiornano la sessione dell'app come nella TV.
             onRemoteCredentials = { newServer, newUsername, newPassword, account ->
+                container.protectedSession.lock()
                 viewModel.updateCredentialsFromRemote(
                     server = newServer,
                     username = newUsername,

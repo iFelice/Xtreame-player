@@ -1,5 +1,9 @@
 package it.felixvision.mobile
 
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -17,11 +21,25 @@ import it.felixvision.mobile.ui.theme.FvpTheme
 @androidx.media3.common.util.UnstableApi
 class MainActivity : ComponentActivity() {
 
+    private val protectedSession get() = (application as FvpApplication).container.protectedSession
+
+    private val screenOffReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action == Intent.ACTION_SCREEN_OFF) protectedSession.lock()
+        }
+    }
+
     private val localNetworkPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* l'esito non blocca l'app */ }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        ContextCompat.registerReceiver(
+            this,
+            screenOffReceiver,
+            IntentFilter(Intent.ACTION_SCREEN_OFF),
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
         // Da targetSdk 37 la visualizzazione edge-to-edge è obbligatoria:
         // il sistema ignora window.setDecorFitsSystemWindows(true). Qui si
         // dichiara l'edge-to-edge e si scelgono icone chiare su fondo scuro,
@@ -40,6 +58,16 @@ class MainActivity : ComponentActivity() {
                 FvpApp(container = container)
             }
         }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        if (!isInPictureInPictureMode && !PlayerPipRegistry.inPip) protectedSession.lock()
+    }
+
+    override fun onDestroy() {
+        unregisterReceiver(screenOffReceiver)
+        super.onDestroy()
     }
 
     override fun onUserLeaveHint() {
@@ -62,7 +90,10 @@ class MainActivity : ComponentActivity() {
             window.decorView.post {
                 val resumed = lifecycle.currentState
                     .isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)
-                if (!resumed) PlayerPipRegistry.notifyClosed()
+                if (!resumed) {
+                    protectedSession.lock()
+                    PlayerPipRegistry.notifyClosed()
+                }
             }
         }
     }
