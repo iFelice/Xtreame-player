@@ -231,6 +231,18 @@ export class PairingHub {
       )
     `);
     this.sql.exec(`
+      CREATE TABLE IF NOT EXISTS backup_sessions (
+        code TEXT PRIMARY KEY,
+        ip TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        poll_token_hash TEXT NOT NULL,
+        direction TEXT NOT NULL,
+        iv TEXT,
+        ciphertext TEXT,
+        failed_attempts INTEGER NOT NULL DEFAULT 0
+      )
+    `);
+    this.sql.exec(`
       CREATE TABLE IF NOT EXISTS ip_submit_limits (
         ip TEXT PRIMARY KEY,
         failed_count INTEGER NOT NULL DEFAULT 0,
