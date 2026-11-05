@@ -153,6 +153,27 @@ export function evaluateCors(request: Request, allowedOriginsRaw: string | undef
   return { allowed: false, headers: {} };
 }
 
+/**
+ * Busta di trasporto del backup valida: IV di 12 byte e testo cifrato entro i
+ * limiti, entrambi in base64url. Il relay non può verificare altro: la chiave
+ * resta nel frammento del QR e non lo raggiunge mai.
+ */
+function isValidBackupEnvelope(iv: string, ciphertext: string): boolean {
+  try {
+    const decodedIv = decodeBase64Url(iv);
+    const decodedCiphertext = decodeBase64Url(ciphertext);
+    const valid =
+      decodedIv.byteLength === BACKUP_IV_BYTES &&
+      decodedCiphertext.byteLength >= BACKUP_MIN_CIPHERTEXT_BYTES &&
+      decodedCiphertext.byteLength <= BACKUP_MAX_CIPHERTEXT_BYTES;
+    decodedIv.fill(0);
+    decodedCiphertext.fill(0);
+    return valid;
+  } catch {
+    return false;
+  }
+}
+
 function withCorsHeaders(response: Response, corsHeaders: Record<string, string>): Response {
   if (Object.keys(corsHeaders).length === 0) return response;
   const headers = new Headers(response.headers);
