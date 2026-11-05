@@ -72,7 +72,7 @@ class MyChannelPositionFocusTest {
         rule.waitForIdle()
 
         rule.onNodeWithTag("my_channel_017").assertIsDisplayed().assertIsFocused()
-        rule.onNodeWithTag("my_channel_number_017").assertTextEquals("18")
+        rule.onNodeWithTag("my_channel_number_017", useUnmergedTree = true).assertTextEquals("18")
     }
 
     @Test
