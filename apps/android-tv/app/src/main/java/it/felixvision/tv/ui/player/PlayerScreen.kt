@@ -393,17 +393,31 @@ fun PlayerScreen(
                 // di ogni altro gestore, così il tasto non fa altro.
                 .playerZappingKeys(zapping)
                 .onPreviewKeyEvent { event ->
-                    // Focus sul pulsante "Zapping" della barra info: le frecce
-                    // tornano al player senza cambiare canale, OK resta al
-                    // pulsante che lo attiva.
+                    // Con il focus su "Zapping", Su/Giù cambiano canale senza
+                    // spostarlo; OK resta al pulsante che avvia lo zapping.
+                    // Gli altri tasti non OK tornano al player come prima.
                     if (zappingButtonFocused) {
-                        if (event.type == KeyEventType.KeyDown &&
-                            event.key != Key.DirectionCenter &&
-                            event.key != Key.Enter
-                        ) {
-                            zappingButtonFocused = false
-                            rootFocus.requestFocus()
-                            return@onPreviewKeyEvent true
+                        if (event.type == KeyEventType.KeyDown) {
+                            when (event.key) {
+                                Key.DirectionUp -> {
+                                    if (session.source is PlaybackSource.Live && !state.isReplay) {
+                                        engine.onUp()
+                                    }
+                                    return@onPreviewKeyEvent true
+                                }
+                                Key.DirectionDown -> {
+                                    if (session.source is PlaybackSource.Live && !state.isReplay) {
+                                        engine.onDown()
+                                    }
+                                    return@onPreviewKeyEvent true
+                                }
+                                Key.DirectionCenter, Key.Enter -> return@onPreviewKeyEvent false
+                                else -> {
+                                    zappingButtonFocused = false
+                                    rootFocus.requestFocus()
+                                    return@onPreviewKeyEvent true
+                                }
+                            }
                         }
                         return@onPreviewKeyEvent false
                     }
