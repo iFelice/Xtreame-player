@@ -186,9 +186,15 @@ class SettingsViewModel(
      * Credenziali dell'account attualmente mostrato. Cambiano dopo un
      * abbinamento riuscito, come sulla TV: le operazioni successive (rilettura
      * account, uscita, ricarica catalogo) valgono per il nuovo account.
+     *
+     * Server e utente sono leggibili dall'esterno (sola lettura) perché
+     * l'archivio dei contenuti protetti è legato a server+utente e deve seguire
+     * l'account mostrato; la password resta privata.
      */
-    private var currentServer: String = server
-    private var currentUsername: String = username
+    var currentServer: String = server
+        private set
+    var currentUsername: String = username
+        private set
     private var currentPassword: String = password
 
     private val coordinator: PairingCoordinator? = pairingApi?.let { api ->

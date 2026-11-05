@@ -236,6 +236,17 @@ TV, perché il tablet compila quei sorgenti. Nessun segreto nel workflow.
 - **Impostazioni**: account (utente, stato, scadenza, connessioni in uso con
   ConnectionsAdvisory), server, Aggiorna catalogo con avanzamento, versione
   dell'app, Esci verso l'accesso con pulizia opzionale dei dati utente.
+- **Contenuti protetti**: il riquadro mostra la riga di riepilogo del PIN (lo
+  stesso testo della TV) e "Gestisci" apre la pagina con i livelli della TV in
+  versione touch: creazione del PIN a 4 cifre con conferma, verifica con blocco
+  di 30 secondi dopo 5 errori (conto alla rovescia aggiornato ogni secondo),
+  recupero con la password del provider, interruttore "Mostra/Nascondi
+  contenuti protetti", elenco "Nascosti" con rimozione per voce e flusso
+  "Aggiungi" (Live/Film/Serie) sulle categorie del catalogo reale, con "Tutta
+  la categoria" e la spunta per contenuto. Archivio e regole sono le classi
+  condivise `it.felixvision.tv.data.protection`; il filtro delle sezioni
+  arriva nel passo successivo. Indietro torna al livello precedente e, dalla
+  radice, alle Impostazioni.
 - **Abbinamento remoto**: QR e PIN dal servizio di relay
   (`BuildConfig.PAIRING_RELAY_URL`, stesso della TV), rinnovo del codice,
   accesso automatico alla ricezione delle credenziali; il polling è attivo

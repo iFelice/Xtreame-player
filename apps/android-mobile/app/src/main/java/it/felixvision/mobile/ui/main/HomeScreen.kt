@@ -410,6 +410,9 @@ private fun SectionContent(
             catalogViewModel = catalogViewModel,
             modifier = modifier,
             downloadMonitor = container.catalogDownloadMonitor,
+            // Archivio e sessione dei contenuti protetti: la pagina del
+            // riquadro "Contenuti protetti" usa queste istanze condivise.
+            container = container,
         )
     }
 }
