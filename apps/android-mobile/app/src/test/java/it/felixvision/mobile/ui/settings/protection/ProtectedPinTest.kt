@@ -281,6 +281,9 @@ class ProtectedPinTest {
         runBlocking { store.setPin(server, username, pin) }
         mount()
         repeat(4) { typePinIfEnabled("4321") }
+        // La verifica legge l'archivio in IO: attendi il risultato prima di
+        // controllare il messaggio, senza dipendere dalla velocità del runner.
+        awaitPinMessage(PROTECTED_PIN_WRONG)
         // Quattro errori: nessun blocco, solo il messaggio del PIN errato.
         assertEquals(PROTECTED_PIN_WRONG, textOf(MOBILE_PIN_ERROR_TAG))
         typePinIfEnabled("4321")
