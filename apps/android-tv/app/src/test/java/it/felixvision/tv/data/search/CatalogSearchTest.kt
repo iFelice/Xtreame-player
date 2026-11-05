@@ -49,6 +49,31 @@ class CatalogSearchTest {
     }
 
     @Test
+    fun `frammento senza separatori trova X Factor`() {
+        val films = listOf(
+            film("1", "X Factor"),
+            film("2", "X-Factor"),
+            film("3", "The X Factor"),
+            film("4", "Altro programma"),
+        )
+
+        assertEquals(
+            listOf("1", "2", "3"),
+            CatalogSearch.filterRanked(films, "xfa") { it.name }.map { it.streamId },
+        )
+    }
+
+    @Test
+    fun `le corrispondenze dirette precedono quelle compatte`() {
+        val titles = listOf("The X Factor", "An XFA special", "X Factor", "XFA direct")
+
+        assertEquals(
+            listOf("XFA direct", "An XFA special", "X Factor", "The X Factor"),
+            CatalogSearch.filterRanked(titles, "xfa") { it },
+        )
+    }
+
+    @Test
     fun `limite di cinquanta risultati per riga`() {
         val films = (1..60).map { film(it.toString(), "Film numero $it") }
         val result = CatalogSearch.filterRanked(films, "film") { it.name }
