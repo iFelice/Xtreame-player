@@ -1,4 +1,8 @@
 import {
+  BACKUP_AAD_PREFIX,
+  BACKUP_IV_BYTES,
+  BACKUP_KEY_BYTES,
+  BACKUP_MAX_PLAINTEXT_BYTES,
   VPN_AAD_PREFIX,
   VPN_IV_BYTES,
   VPN_KEY_BYTES,
@@ -705,6 +709,469 @@ export function renderVpnPage(): string {
           if (!sent && keyBytes) submitBtn.disabled = false;
         }
       });
+    })();
+  </script>
+</body>
+</html>`;
+}
+
+/**
+ * Pagina del backup (`/backup?mode=export|import&code=<6 cifre>#k=<chiave>`):
+ * la chiave AES-256 di trasporto resta nel frammento, che il browser non
+ * invia al relay, e viene cancellata dall'indirizzo appena letta.
+ *
+ * - `mode=export`: la TV ha depositato il file cifrato; la pagina lo scarica,
+ *   lo decifra nel browser e propone il salvataggio come `.fvpbackup`
+ *   (su iPhone il link di download salva in File).
+ * - `mode=import`: la pagina legge il file `.fvpbackup` scelto con il
+ *   selettore (stesso schema del `.conf` della VPN, compatibile con iPhone),
+ *   lo cifra e lo invia al relay; la TV lo ritira una sola volta.
+ *
+ * La password del backup non passa mai da questa pagina: il file resta
+ * cifrato con la password anche dopo la decifratura del trasporto.
+ */
+export function renderBackupPage(): string {
+  return `<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Backup per FelixVP</title>
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      background-color: #1C1C1E;
+      color: #FFFFFF;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .card {
+      width: 100%;
+      max-width: 520px;
+      min-width: 288px;
+      background-color: #2C2C2E;
+      border: 1px solid #38383A;
+      border-radius: 24px;
+      padding: 24px 20px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.45);
+    }
+    @media (min-width: 540px) {
+      .card {
+        padding: 28px 26px;
+      }
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 22px;
+    }
+    .brand {
+      font-size: 1.35rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin: 0;
+      color: #FFFFFF;
+    }
+    .brand span {
+      color: #10B981;
+    }
+    .subtitle {
+      margin: 8px 0 0;
+      font-size: 0.875rem;
+      color: #AEAEB2;
+      line-height: 1.5;
+    }
+    .field {
+      margin-bottom: 16px;
+    }
+    label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #FFFFFF;
+      margin-bottom: 6px;
+    }
+    input[type="file"] {
+      width: 100%;
+      padding: 12px 14px;
+      font-size: 0.95rem;
+      font-family: inherit;
+      color: #FFFFFF;
+      background-color: #1C1C1E;
+      border: 1px solid #48484A;
+      border-radius: 14px;
+      outline: none;
+    }
+    input[type="file"]:focus {
+      border-color: #10B981;
+    }
+    input[type="file"]::file-selector-button {
+      margin-right: 10px;
+      padding: 7px 10px;
+      color: #FFFFFF;
+      background-color: #38383A;
+      border: 1px solid #48484A;
+      border-radius: 9px;
+      font: inherit;
+      cursor: pointer;
+    }
+    .submit-btn, .download-btn {
+      display: block;
+      width: 100%;
+      margin-top: 6px;
+      padding: 14px 16px;
+      font-size: 1rem;
+      font-weight: 800;
+      font-family: inherit;
+      background-color: #10B981;
+      color: #1C1C1E;
+      border: none;
+      border-radius: 16px;
+      cursor: pointer;
+      text-align: center;
+      text-decoration: none;
+      transition: opacity 0.15s ease, transform 0.1s ease;
+    }
+    .submit-btn:active, .download-btn:active {
+      transform: scale(0.99);
+    }
+    .submit-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .download-btn {
+      display: none;
+    }
+    .download-btn.visible {
+      display: block;
+    }
+    .hint {
+      margin: 10px 0 0;
+      font-size: 0.8rem;
+      color: #AEAEB2;
+      text-align: center;
+      line-height: 1.4;
+    }
+    .status {
+      display: none;
+      margin-top: 16px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      line-height: 1.4;
+      text-align: center;
+    }
+    .status.visible {
+      display: block;
+    }
+    .status.ok {
+      background-color: rgba(16, 185, 129, 0.18);
+      border: 1px solid #10B981;
+      color: #FFFFFF;
+    }
+    .status.err {
+      background-color: rgba(255, 69, 58, 0.18);
+      border: 1px solid #FF453A;
+      color: #FFFFFF;
+    }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <div class="header">
+      <h1 class="brand">Backup per <span>FelixVP</span></h1>
+      <p class="subtitle" id="page-subtitle">Ricezione del backup dalla TV</p>
+    </div>
+
+    <form id="backup-import-form" autocomplete="off" novalidate style="display: none;">
+      <div class="field">
+        <label for="backup-file">File di backup (.fvpbackup)</label>
+        <input id="backup-file" name="file" type="file" accept=".fvpbackup,application/octet-stream" />
+      </div>
+
+      <button type="submit" id="submit-btn" class="submit-btn" disabled>Invia alla TV</button>
+      <p class="hint">Su iPhone il file si trova nell'app File, di solito in Download</p>
+    </form>
+
+    <div id="backup-export-block" style="display: none;">
+      <p class="hint" id="export-hint">Attendi: il file arriva dalla TV entro pochi secondi.</p>
+      <a id="download-link" class="download-btn" href="#" download="felixvp-backup.fvpbackup">Scarica il backup</a>
+      <p class="hint">Su iPhone il download si salva in File, di solito in Download</p>
+    </div>
+
+    <div id="status-box" class="status" role="status" aria-live="polite"></div>
+  </main>
+
+  <script>
+    (function () {
+      var subtitle = document.getElementById('page-subtitle');
+      var importForm = document.getElementById('backup-import-form');
+      var exportBlock = document.getElementById('backup-export-block');
+      var exportHint = document.getElementById('export-hint');
+      var downloadLink = document.getElementById('download-link');
+      var fileInput = document.getElementById('backup-file');
+      var submitBtn = document.getElementById('submit-btn');
+      var statusBox = document.getElementById('status-box');
+      var params = new URLSearchParams(window.location.search);
+      var mode = params.get('mode') || '';
+      var queryCode = params.get('code') || '';
+      var keyMatch = /^#k=([A-Za-z0-9_-]+)$/.exec(window.location.hash);
+      var encodedKey = keyMatch ? keyMatch[1] : '';
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+
+      var code = queryCode;
+      var keyBytes = null;
+
+      function showStatus(text, isOk) {
+        statusBox.textContent = text;
+        statusBox.className = 'status visible ' + (isOk ? 'ok' : 'err');
+      }
+
+      function decodeBase64Url(value) {
+        if (!/^[A-Za-z0-9_-]+$/.test(value) || value.length % 4 === 1) {
+          throw new Error('Invalid base64url');
+        }
+        var base64 = value.replace(/-/g, '+').replace(/_/g, '/');
+        base64 += '='.repeat((4 - (base64.length % 4)) % 4);
+        var binary = window.atob(base64);
+        var bytes = new Uint8Array(binary.length);
+        for (var i = 0; i < binary.length; i += 1) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        return bytes;
+      }
+
+      function encodeBase64Url(bytes) {
+        var binary = '';
+        for (var i = 0; i < bytes.length; i += 1) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+        return window.btoa(binary).replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');
+      }
+
+      function clearSecrets() {
+        encodedKey = '';
+        keyMatch = null;
+        if (keyBytes) keyBytes.fill(0);
+        keyBytes = null;
+        code = '';
+      }
+
+      try {
+        if (mode !== 'export' && mode !== 'import') throw new Error('Invalid mode');
+        if (!/^\\d{6}$/.test(code)) throw new Error('Invalid code');
+        keyBytes = decodeBase64Url(encodedKey);
+        encodedKey = '';
+        keyMatch = null;
+        if (keyBytes.byteLength !== ${BACKUP_KEY_BYTES}) throw new Error('Invalid key length');
+        if (!window.crypto || !window.crypto.subtle) throw new Error('Web Crypto unavailable');
+      } catch (_) {
+        clearSecrets();
+        showStatus('Apri questa pagina dal QR mostrato sulla TV', false);
+        return;
+      }
+
+      function additionalData() {
+        return new TextEncoder().encode(${JSON.stringify(BACKUP_AAD_PREFIX)} + code);
+      }
+
+      async function importCryptoKey() {
+        return window.crypto.subtle.importKey('raw', keyBytes, 'AES-GCM', false, ['encrypt', 'decrypt']);
+      }
+
+      if (mode === 'import') {
+        subtitle.textContent = 'Scegli il file di backup da inviare alla TV';
+        importForm.style.display = 'block';
+        submitBtn.disabled = false;
+
+        importForm.addEventListener('submit', function (event) {
+          event.preventDefault();
+          if (!keyBytes || !code) return;
+          var file = fileInput.files && fileInput.files[0];
+          if (!file) {
+            showStatus('Scegli prima il file di backup (.fvpbackup).', false);
+            return;
+          }
+          if (file.size > ${BACKUP_MAX_PLAINTEXT_BYTES}) {
+            showStatus('Il file è troppo grande per essere inviato.', false);
+            return;
+          }
+          submitBtn.disabled = true;
+
+          var reader = new FileReader();
+          reader.onload = async function () {
+            var plaintextBytes = null;
+            var ciphertextBytes = null;
+            var ivBytes = null;
+            var sent = false;
+            try {
+              if (typeof reader.result === 'string') {
+                plaintextBytes = new TextEncoder().encode(reader.result);
+              } else if (reader.result instanceof ArrayBuffer) {
+                plaintextBytes = new Uint8Array(reader.result);
+              } else {
+                throw new Error('Unreadable file');
+              }
+              if (plaintextBytes.byteLength === 0 || plaintextBytes.byteLength > ${BACKUP_MAX_PLAINTEXT_BYTES}) {
+                showStatus('Il file non sembra un backup valido.', false);
+                return;
+              }
+              var cryptoKey = await importCryptoKey();
+              ivBytes = window.crypto.getRandomValues(new Uint8Array(${BACKUP_IV_BYTES}));
+              ciphertextBytes = new Uint8Array(await window.crypto.subtle.encrypt(
+                { name: 'AES-GCM', iv: ivBytes, additionalData: additionalData() },
+                cryptoKey,
+                plaintextBytes
+              ));
+              var response = await fetch('/api/backup/submit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  code: code,
+                  iv: encodeBase64Url(ivBytes),
+                  ciphertext: encodeBase64Url(ciphertextBytes)
+                })
+              });
+              if (response.ok) {
+                fileInput.value = '';
+                sent = true;
+                showStatus('Backup inviato: la TV lo riceve entro pochi secondi', true);
+                clearSecrets();
+                return;
+              }
+              if (response.status === 404) {
+                showStatus('Sessione scaduta. Rigenera il QR dalla TV.', false);
+              } else if (response.status === 409) {
+                showStatus('Backup già inviato.', false);
+              } else if (response.status === 429) {
+                showStatus('Troppi tentativi. Attendi qualche minuto prima di riprovare.', false);
+              } else {
+                showStatus('Invio non riuscito. Riprova.', false);
+              }
+            } catch (_) {
+              showStatus('Errore di lettura, connessione o cifratura. Riprova.', false);
+            } finally {
+              if (plaintextBytes) plaintextBytes.fill(0);
+              if (ciphertextBytes) ciphertextBytes.fill(0);
+              if (ivBytes) ivBytes.fill(0);
+              if (!sent && keyBytes) submitBtn.disabled = false;
+            }
+          };
+          reader.onerror = function () {
+            showStatus('Impossibile leggere il file di backup.', false);
+            if (keyBytes) submitBtn.disabled = false;
+          };
+          try {
+            reader.readAsArrayBuffer(file);
+          } catch (_) {
+            showStatus('Impossibile leggere il file di backup.', false);
+            if (keyBytes) submitBtn.disabled = false;
+          }
+        });
+        return;
+      }
+
+      subtitle.textContent = 'Ricezione del backup dalla TV';
+      exportBlock.style.display = 'block';
+
+      var attempts = 0;
+      var maxAttempts = 150;
+      var timer = null;
+
+      async function pollDownload() {
+        attempts += 1;
+        if (!keyBytes || !code || attempts > maxAttempts) {
+          if (timer) window.clearInterval(timer);
+          timer = null;
+          if (attempts > maxAttempts) {
+            clearSecrets();
+            showStatus('Sessione scaduta. Rigenera il QR dalla TV.', false);
+          }
+          return;
+        }
+        var response = null;
+        try {
+          response = await fetch('/api/backup/download/' + encodeURIComponent(code), {
+            headers: { 'Accept': 'application/json' }
+          });
+        } catch (_) {
+          return;
+        }
+        if (response.status === 404) {
+          if (timer) window.clearInterval(timer);
+          timer = null;
+          clearSecrets();
+          showStatus('Sessione scaduta. Rigenera il QR dalla TV.', false);
+          return;
+        }
+        if (response.status === 429) {
+          if (timer) window.clearInterval(timer);
+          timer = null;
+          showStatus('Troppi tentativi. Attendi qualche minuto prima di riprovare.', false);
+          return;
+        }
+        if (!response.ok) return;
+        var payload = null;
+        try {
+          payload = await response.json();
+        } catch (_) {
+          return;
+        }
+        if (!payload || payload.status !== 'ready') return;
+
+        if (timer) window.clearInterval(timer);
+        timer = null;
+        var ciphertextBytes = null;
+        var ivBytes = null;
+        var plaintextBytes = null;
+        try {
+          ivBytes = decodeBase64Url(String(payload.iv || ''));
+          ciphertextBytes = decodeBase64Url(String(payload.ciphertext || ''));
+          var cryptoKey = await importCryptoKey();
+          plaintextBytes = new Uint8Array(await window.crypto.subtle.decrypt(
+            { name: 'AES-GCM', iv: ivBytes, additionalData: additionalData() },
+            cryptoKey,
+            ciphertextBytes
+          ));
+          var now = new Date();
+          var stamp = now.getFullYear() + '-' +
+            ('0' + (now.getMonth() + 1)).slice(-2) + '-' +
+            ('0' + now.getDate()).slice(-2);
+          var blob = new Blob([plaintextBytes], { type: 'application/octet-stream' });
+          var objectUrl = window.URL.createObjectURL(blob);
+          downloadLink.href = objectUrl;
+          downloadLink.download = 'felixvp-backup-' + stamp + '.fvpbackup';
+          downloadLink.classList.add('visible');
+          exportHint.textContent = 'Backup pronto: salvalo in un posto sicuro. Serve la password scelta sulla TV per aprirlo.';
+          showStatus('Backup ricevuto: tocca "Scarica il backup" per salvarlo', true);
+          try {
+            downloadLink.click();
+          } catch (_) {
+            // Alcuni browser bloccano il clic automatico: resta il link visibile.
+          }
+        } catch (_) {
+          showStatus('Backup non leggibile. Rigenera il QR dalla TV.', false);
+        } finally {
+          if (ciphertextBytes) ciphertextBytes.fill(0);
+          if (ivBytes) ivBytes.fill(0);
+          if (plaintextBytes) plaintextBytes.fill(0);
+          clearSecrets();
+        }
+      }
+
+      timer = window.setInterval(pollDownload, 2000);
+      pollDownload();
     })();
   </script>
 </body>

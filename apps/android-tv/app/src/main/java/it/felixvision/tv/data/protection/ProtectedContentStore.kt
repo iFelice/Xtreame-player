@@ -139,6 +139,36 @@ class ProtectedContentStore(
         ProtectedContentRules.removeAll(it, keys)
     }
 
+    /**
+     * Unione degli elenchi nascosti del backup con UNA sola scrittura:
+     * aggiunge solo le voci mancanti (per tipo e id), senza toccare il PIN, e
+     * restituisce quante ne ha aggiunte.
+     */
+    suspend fun unionHidden(
+        server: String,
+        username: String,
+        categories: List<HiddenCategory>,
+        items: List<HiddenItem>,
+    ): Int = mutex.withLock {
+        withContext(io) {
+            val current = read(server, username)
+            val knownCategories = current.hiddenCategories.map { it.kind to it.categoryId }.toMutableSet()
+            val knownItems = current.hiddenItems.map { it.kind to it.itemId }.toMutableSet()
+            val addedCategories = categories.filter { knownCategories.add(it.kind to it.categoryId) }
+            val addedItems = items.filter { knownItems.add(it.kind to it.itemId) }
+            if (addedCategories.isEmpty() && addedItems.isEmpty()) return@withContext 0
+            persist(
+                keyFor(server, username),
+                current.copy(
+                    hiddenCategories = current.hiddenCategories + addedCategories,
+                    hiddenItems = current.hiddenItems + addedItems,
+                ),
+            )
+            _revision.value = _revision.value + 1L
+            addedCategories.size + addedItems.size
+        }
+    }
+
     private suspend fun mutate(
         server: String,
         username: String,

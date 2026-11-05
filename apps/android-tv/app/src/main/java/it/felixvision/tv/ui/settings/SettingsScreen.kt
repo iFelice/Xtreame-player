@@ -57,20 +57,27 @@ import it.felixvision.tv.BuildConfig
 import it.felixvision.tv.data.catalog.Catalog
 import it.felixvision.tv.data.catalog.CatalogRefresh
 import it.felixvision.tv.data.catalog.CatalogSectionProgress
+import it.felixvision.tv.data.backup.BackupVpn
 import it.felixvision.tv.data.catalog.CatalogSectionStatus
 import it.felixvision.tv.ui.components.FvpCheckboxButton
 import it.felixvision.tv.ui.components.FvpPrimaryButton
 import it.felixvision.tv.ui.components.FvpSecondaryButton
 import it.felixvision.tv.ui.components.UiScale
+import it.felixvision.tv.ui.settings.backup.BackupExportScreen
+import it.felixvision.tv.ui.settings.backup.BackupFlow
+import it.felixvision.tv.ui.settings.backup.BackupImportScreen
+import it.felixvision.tv.ui.settings.backup.BackupPage
 import it.felixvision.tv.ui.settings.protection.ProtectedContentScreen
 import it.felixvision.tv.ui.settings.vpn.VpnSetupScreen
 import it.felixvision.tv.ui.theme.FvpColors
+import it.felixvision.tv.vpn.VpnConfigParseResult
+import it.felixvision.tv.vpn.VpnConfigParser
 import it.felixvision.tv.vpn.VpnState
 
 /**
- * Schermata Impostazioni: una griglia di sette card (Account, Aspetto, Contenuti
- * protetti, VPN, Catalogo, Player, App) e, per ogni card, la pagina della sua
- * funzione a tutto schermo nell'area dei contenuti.
+ * Schermata Impostazioni: una griglia di otto card (Account, Aspetto, Contenuti
+ * protetti, VPN, Catalogo, Player, App, Backup) e, per ogni card, la pagina
+ * della sua funzione a tutto schermo nell'area dei contenuti.
  *
  * Il contenuto dei vecchi riquadri sta nelle pagine ([SettingsAccountPage],
  * [SettingsAppearancePage], [SettingsVpnPage], [SettingsCatalogPage],
@@ -118,6 +125,8 @@ fun SettingsScreen(
     // da questo stato osservato, così tornando dalla pagina è già aggiornata.
     val zappingSeconds by viewModel.zappingSeconds.collectAsState()
     var showVpnSetup by remember { mutableStateOf(false) }
+    // Backup: la pagina apre la schermata di esportazione o di importazione.
+    var backupFlow by remember { mutableStateOf<BackupFlow?>(null) }
     val vpnConfigureFocus = remember { FocusRequester() }
     var wasVpnSetupOpen by remember { mutableStateOf(false) }
     LaunchedEffect(showVpnSetup) {
@@ -320,6 +329,60 @@ fun SettingsScreen(
                 entryFocusRequester = entryFocus,
             )
         },
+        backupFlowOpen = backupFlow != null,
+        onCloseBackupFlow = { backupFlow = null },
+        backupPage = { pageModifier, entryFocus ->
+            BackupPage(
+                scale = scale,
+                modifier = pageModifier,
+                entryFocusRequester = entryFocus,
+                onExport = { backupFlow = BackupFlow.Export },
+                onImport = { backupFlow = BackupFlow.Import },
+            )
+        },
+        backupFlowPage = { pageModifier ->
+            when (backupFlow) {
+                BackupFlow.Export -> BackupExportScreen(
+                    relay = viewModel.backupRelayClient,
+                    repository = viewModel.backupRepository,
+                    clock = viewModel.clock,
+                    relayBaseUrl = BuildConfig.PAIRING_RELAY_URL,
+                    server = viewModel.server,
+                    username = viewModel.username,
+                    scale = scale,
+                    vpnExport = {
+                        val exported = vpnController.exportActiveConfig() ?: return@BackupExportScreen null
+                        BackupVpn(text = exported.first, serverName = exported.second)
+                    },
+                    modifier = pageModifier,
+                    onExit = { backupFlow = null },
+                )
+
+                BackupFlow.Import -> BackupImportScreen(
+                    relay = viewModel.backupRelayClient,
+                    repository = viewModel.backupRepository,
+                    protectedStore = viewModel.protectedContentStore,
+                    clock = viewModel.clock,
+                    relayBaseUrl = BuildConfig.PAIRING_RELAY_URL,
+                    server = viewModel.server,
+                    username = viewModel.username,
+                    tvHasVpnConfig = vpnState != VpnState.NoConfig,
+                    scale = scale,
+                    saveVpn = { text, serverName ->
+                        val parsed = VpnConfigParser.parse(text, packageName)
+                        if (parsed !is VpnConfigParseResult.Valid) {
+                            false
+                        } else {
+                            vpnController.saveConfig(text, parsed.serverName.ifBlank { serverName })
+                        }
+                    },
+                    modifier = pageModifier,
+                    onExit = { backupFlow = null },
+                )
+
+                null -> Unit
+            }
+        },
     )
 
     if (showCatalogDialog) {
@@ -365,6 +428,9 @@ fun SettingsScreen(
  * in ognuna. La pagina della VPN può aprirne un'altra (la configurazione con il
  * QR): [vpnSetupOpen] dice se è aperta e [onCloseVpnSetup] la chiude, così
  * Indietro dalla configurazione torna alla pagina VPN e solo da lì alla griglia.
+ * Lo stesso vale per la pagina del Backup ([backupFlowOpen],
+ * [onCloseBackupFlow]): Indietro dalle schermate di esportazione e importazione
+ * torna alla pagina Backup.
  *
  * @param entryFocusRequester focus d'ingresso dal menu laterale: va sulla prima
  *   card della griglia.
@@ -381,6 +447,8 @@ internal fun SettingsNavigation(
     downloadInProgress: Boolean = false,
     vpnSetupOpen: Boolean = false,
     onCloseVpnSetup: () -> Unit = {},
+    backupFlowOpen: Boolean = false,
+    onCloseBackupFlow: () -> Unit = {},
     accountPage: @Composable (Modifier, FocusRequester?) -> Unit = { _, _ -> },
     appearancePage: @Composable (Modifier, FocusRequester?) -> Unit = { _, _ -> },
     protectedPage: @Composable (Modifier, () -> Unit) -> Unit = { _, _ -> },
@@ -389,6 +457,8 @@ internal fun SettingsNavigation(
     catalogPage: @Composable (Modifier, FocusRequester?) -> Unit = { _, _ -> },
     playerPage: @Composable (Modifier, FocusRequester?) -> Unit = { _, _ -> },
     appPage: @Composable (Modifier, FocusRequester?) -> Unit = { _, _ -> },
+    backupPage: @Composable (Modifier, FocusRequester?) -> Unit = { _, _ -> },
+    backupFlowPage: @Composable (Modifier) -> Unit = {},
 ) {
     // La card aperta decide cosa occupa l'area dei contenuti; [lastOpenedCard]
     // resta anche dopo la chiusura, così il focus torna sulla card di ingresso.
@@ -409,9 +479,11 @@ internal fun SettingsNavigation(
         }
     }
 
-    // Tornare alla griglia chiude anche l'eventuale configurazione della VPN.
+    // Tornare alla griglia chiude anche l'eventuale configurazione della VPN e
+    // l'eventuale schermata di esportazione o importazione del backup.
     val closePage: () -> Unit = {
         onCloseVpnSetup()
+        onCloseBackupFlow()
         openCard = null
     }
 
@@ -429,6 +501,7 @@ internal fun SettingsNavigation(
     // La riserva per il dispositivo vero è il BackHandler qui sotto.
     val pageHandlesBack = openCard != SettingsCard.Protected &&
         !(openCard == SettingsCard.Vpn && vpnSetupOpen) &&
+        !(openCard == SettingsCard.Backup && backupFlowOpen) &&
         !downloadInProgress
 
     // Riserva per il dispositivo vero: quando la pagina non ha elementi
@@ -497,6 +570,11 @@ internal fun SettingsNavigation(
                     pageEntryFocusRequesters.getValue(SettingsCard.Player),
                 )
                 SettingsCard.App -> appPage(modifier, pageEntryFocusRequesters.getValue(SettingsCard.App))
+                SettingsCard.Backup -> if (backupFlowOpen) {
+                    backupFlowPage(modifier)
+                } else {
+                    backupPage(modifier, pageEntryFocusRequesters.getValue(SettingsCard.Backup))
+                }
                 null -> Unit
             }
         }
