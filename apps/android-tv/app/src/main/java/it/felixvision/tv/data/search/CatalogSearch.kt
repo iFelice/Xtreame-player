@@ -23,8 +23,8 @@ data class SearchResults(
  * - si cerca da [CatalogSearch.MIN_QUERY_LENGTH] caratteri in su;
  * - confronto senza maiuscole e senza accenti (Normalizer NFD + rimozione dei
  *   segni diacritici), su nome di canali, film e serie;
- * - prima i nomi che iniziano con il testo cercato, poi quelli che lo
- *   contengono, poi ordine alfabetico;
+ * - prima le corrispondenze dirette (prefisso, poi contenuto), quindi quelle
+ *   che ignorano spazi e punteggiatura, poi ordine alfabetico;
  * - al massimo [CatalogSearch.MAX_RESULTS_PER_ROW] risultati per riga.
  */
 object CatalogSearch {
@@ -39,6 +39,8 @@ object CatalogSearch {
 
     private const val RANK_PREFIX = 0
     private const val RANK_CONTAINS = 1
+    private const val RANK_COMPACT_PREFIX = 2
+    private const val RANK_COMPACT_CONTAINS = 3
 
     /** Minuscole, senza accenti, senza spazi ai bordi. */
     fun normalize(text: String): String {
@@ -57,6 +59,19 @@ object CatalogSearch {
         return if (index == 0) RANK_PREFIX else RANK_CONTAINS
     }
 
+    /** Normalizza già normalizzati rimuovendo spazi e punteggiatura. */
+    private fun compactSearchKey(normalizedText: String): String =
+        normalizedText.filter { it.isLetterOrDigit() }
+
+    /** Compatto: permette di trovare ad esempio `X Factor` cercando `xfa`. */
+    private fun compactMatchRank(compactQuery: String, normalizedName: String): Int? {
+        if (compactQuery.length < MIN_QUERY_LENGTH) return null
+        val compactName = compactSearchKey(normalizedName)
+        val index = compactName.indexOf(compactQuery)
+        if (index < 0) return null
+        return if (index == 0) RANK_COMPACT_PREFIX else RANK_COMPACT_CONTAINS
+    }
+
     /**
      * Filtra e ordina un elenco di elementi per nome. Il testo cercato non
      * raggiunge la lunghezza minima → lista vuota.
@@ -69,11 +84,14 @@ object CatalogSearch {
     ): List<T> {
         val normalizedQuery = normalize(query)
         if (normalizedQuery.length < MIN_QUERY_LENGTH) return emptyList()
+        val compactQuery = compactSearchKey(normalizedQuery)
         val matches = ArrayList<Candidate<T>>()
         for (item in items) {
             val displayName = name(item)
             val normalizedName = normalize(displayName)
-            val rank = matchRank(normalizedQuery, normalizedName) ?: continue
+            val rank = matchRank(normalizedQuery, normalizedName)
+                ?: compactMatchRank(compactQuery, normalizedName)
+                ?: continue
             matches.add(Candidate(item = item, rank = rank, normalizedName = normalizedName, displayName = displayName))
         }
         matches.sortWith(
