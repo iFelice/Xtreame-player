@@ -22,7 +22,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.window.Dialog
@@ -49,6 +53,34 @@ object MyChannelDialogTexts {
     const val CANCEL = "Annulla"
     const val CONFIRM = "OK"
 }
+
+/**
+ * Dopo la rimozione punta al canale che prende il posto rimosso; se era l'ultimo,
+ * al precedente. `null` indica che non resta nessun canale visibile.
+ */
+internal fun myChannelFocusTargetAfterRemoval(
+    channels: List<MyChannel>,
+    removedStreamId: String,
+): MyChannel? {
+    val removedIndex = MyChannels.indexOf(channels, removedStreamId)
+    if (removedIndex < 0) return null
+    val remaining = MyChannels.remove(channels, removedStreamId)
+    return remaining.getOrNull(removedIndex) ?: remaining.lastOrNull()
+}
+
+/** Consuma Indietro sulla radice del Dialog e chiude solo al rilascio. */
+private fun Modifier.closeDialogOnBack(onDismiss: () -> Unit): Modifier =
+    onPreviewKeyEvent { event ->
+        if (event.key != Key.Back) return@onPreviewKeyEvent false
+        when (event.type) {
+            KeyEventType.KeyDown -> true
+            KeyEventType.KeyUp -> {
+                onDismiss()
+                true
+            }
+            else -> false
+        }
+    }
 
 /**
  * Finestra di pressione lunga su un canale.
@@ -93,9 +125,17 @@ fun MyChannelDialog(
     }
 
     val firstButton = remember { FocusRequester() }
-    LaunchedEffect(Unit) {
-        withFrameNanos { }
-        runCatching { firstButton.requestFocus() }
+    val removeMenuButton = remember { FocusRequester() }
+    val removeCancelButton = remember { FocusRequester() }
+    var hasEnteredRemoveConfirmation by remember(channel.streamId) { mutableStateOf(false) }
+    LaunchedEffect(confirmingRemove) {
+        val target = when {
+            confirmingRemove -> removeCancelButton
+            hasEnteredRemoveConfirmation -> removeMenuButton
+            else -> firstButton
+        }
+        runCatching { target.requestFocus() }
+        if (confirmingRemove) hasEnteredRemoveConfirmation = true
     }
 
     Dialog(
@@ -105,6 +145,7 @@ fun MyChannelDialog(
         BackHandler { onDismiss() }
         Box(
             modifier = Modifier
+                .closeDialogOnBack(onDismiss)
                 // Aperta dalla pressione lunga di OK: ripetizioni e rilascio del
                 // tasto ancora premuto non devono attivare il primo pulsante.
                 .ignoreHeldOkUntilReleased()
@@ -145,7 +186,7 @@ fun MyChannelDialog(
                             onClick = { confirmingRemove = false },
                             scale = scale,
                             modifier = Modifier
-                                .focusRequester(firstButton)
+                                .focusRequester(removeCancelButton)
                                 .testTag("my_channel_remove_cancel"),
                         )
                         FvpPrimaryButton(
@@ -180,9 +221,14 @@ fun MyChannelDialog(
                     )
                     FvpSecondaryButton(
                         text = MyChannelDialogTexts.REMOVE,
-                        onClick = { confirmingRemove = true },
+                        onClick = {
+                            hasEnteredRemoveConfirmation = true
+                            confirmingRemove = true
+                        },
                         scale = scale,
-                        modifier = Modifier.testTag("my_channel_remove"),
+                        modifier = Modifier
+                            .focusRequester(removeMenuButton)
+                            .testTag("my_channel_remove"),
                     )
                 }
             }
@@ -217,6 +263,7 @@ fun ChannelNumberDialog(
         BackHandler { onDismiss() }
         Box(
             modifier = Modifier
+                .closeDialogOnBack(onDismiss)
                 // Aperta dalla pressione lunga di OK (aggiunta): ripetizioni e
                 // rilascio del tasto ancora premuto non confermano il numero.
                 .ignoreHeldOkUntilReleased()

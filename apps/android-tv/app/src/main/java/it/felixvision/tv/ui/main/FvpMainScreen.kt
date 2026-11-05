@@ -72,6 +72,7 @@ import it.felixvision.tv.ui.catalog.FavoritesSection
 import it.felixvision.tv.ui.catalog.FilmSection
 import it.felixvision.tv.ui.catalog.LiveSection
 import it.felixvision.tv.ui.catalog.MyChannelDialog
+import it.felixvision.tv.ui.catalog.myChannelFocusTargetAfterRemoval
 import it.felixvision.tv.ui.catalog.NovitaSection
 import it.felixvision.tv.ui.catalog.SearchSection
 import it.felixvision.tv.ui.catalog.SerieSection
@@ -543,9 +544,13 @@ fun FvpMainScreen(
     }
 
     fun removeMyChannel(channel: MyChannel) {
+        // Dopo la rimozione il focus va alla riga che prende il posto rimosso;
+        // se era l'ultima, al canale precedente. Se la lista resta vuota il
+        // ripristino usa l'id rimosso e la sezione porta il focus sulla scheda.
+        val focusTarget = myChannelFocusTargetAfterRemoval(visibleMyChannels, channel.streamId)
         scope.launch {
             container.myChannelsStore.remove(currentServer, currentUsername, channel.streamId)
-            closeMyChannelDialog(channel)
+            closeMyChannelDialog(focusTarget ?: channel)
         }
     }
 
