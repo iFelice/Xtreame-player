@@ -3,6 +3,7 @@
 package it.felixvision.mobile.ui.settings
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -39,11 +41,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.testTag
+import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import it.felixvision.mobile.AppContainer
 import it.felixvision.mobile.data.catalog.CatalogDownloadMonitor
 import it.felixvision.mobile.ui.access.AccessViewModel
 import it.felixvision.mobile.ui.access.PairingPanel
@@ -51,10 +56,13 @@ import it.felixvision.mobile.ui.catalog.CatalogUiState
 import it.felixvision.mobile.ui.catalog.CatalogViewModel
 import it.felixvision.mobile.ui.components.FvpPrimaryButton
 import it.felixvision.mobile.ui.components.FvpSecondaryButton
+import it.felixvision.mobile.ui.settings.protection.ProtectedContentScreen
 import it.felixvision.mobile.ui.theme.FvpColors
+import it.felixvision.tv.data.protection.ProtectedContentData
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
  * I cinque riquadri delle Impostazioni del tablet, nell'ordine della schermata:
@@ -90,8 +98,17 @@ const val SETTINGS_LIST_TAG = "settings_list"
 const val SETTINGS_COLUMN_LEFT_TAG = "settings_column_left"
 const val SETTINGS_COLUMN_RIGHT_TAG = "settings_column_right"
 
-/** Testo del riquadro "Contenuti protetti" in questo passo (2 e 3 in seguito). */
-const val PROTECTED_COMING_SOON = "Disponibile a breve"
+/** Titolo del pulsante che apre la pagina "Contenuti protetti" dal riquadro. */
+const val PROTECTED_MANAGE_LABEL = "Gestisci"
+
+/**
+ * Riga di riepilogo del riquadro "Contenuti protetti": stesso testo e stessa
+ * logica di `protectedSettingsLine` delle Impostazioni della TV, con la sola
+ * differenza che qui il dato arriva dall'archivio del tablet
+ * ([it.felixvision.tv.data.protection.ProtectedContentData.hasPin]).
+ */
+fun protectedSettingsLine(hasPin: Boolean): String =
+    if (hasPin) "PIN impostato" else "PIN non impostato"
 
 /** Domanda e avviso della conferma di uscita. */
 const val EXIT_CONFIRM_TITLE = "Vuoi uscire dall'account?"
@@ -130,8 +147,10 @@ class ScrollStateHolder {
  *
  * - Account: utente, stato, scadenza, connessioni in uso con l'avviso della TV,
  *   server ed Esci (con conferma e pulizia opzionale dei dati utente).
- * - Contenuti protetti: per ora solo il titolo e "Disponibile a breve": la
- *   gestione arriva nei passi 2 e 3.
+ * - Contenuti protetti: la riga di riepilogo del PIN ([protectedSettingsLine],
+ *   lo stesso testo della TV) e "Gestisci", che apre la pagina
+ *   [it.felixvision.mobile.ui.settings.protection.ProtectedContentScreen] al
+ *   posto del contenuto delle Impostazioni; Indietro torna ai riquadri.
  * - Catalogo: ultimo aggiornamento e "Aggiorna catalogo" con la finestra
  *   esistente ([CatalogUpdateDialog], aperta anche se un aggiornamento è già in
  *   corso).
@@ -147,12 +166,39 @@ fun SettingsScreen(
     catalogViewModel: CatalogViewModel,
     modifier: Modifier = Modifier,
     downloadMonitor: CatalogDownloadMonitor,
+    /**
+     * Contenitore dell'app: da qui arrivano l'archivio dei contenuti protetti
+     * ([AppContainer.protectedContentStore]), lo stato di sessione
+     * ([AppContainer.protectedSession]) e l'orologio iniettato. Con `null` la
+     * pagina "Contenuti protetti" non è raggiungibile e il pulsante
+     * "Gestisci" resta spento (serve solo a chi monta le Impostazioni senza il
+     * container dell'app, come i test delle sole Impostazioni).
+     */
+    container: AppContainer? = null,
 ) {
     val state by settingsViewModel.ui.collectAsStateWithLifecycle()
     val catalogState by catalogViewModel.ui.collectAsStateWithLifecycle()
     val downloadProgress by downloadMonitor.progress.collectAsStateWithLifecycle()
     var showUpdateDialog by remember { mutableStateOf(false) }
     val scrollHolder = remember { ScrollStateHolder() }
+
+    // --- Contenuti protetti ---
+    // La pagina sostituisce il contenuto delle Impostazioni finché è aperta:
+    // "Gestisci" la apre, Indietro (gestito dentro la pagina) torna qui.
+    var showProtectedPage by remember { mutableStateOf(false) }
+    var protectedData by remember { mutableStateOf<ProtectedContentData?>(null) }
+    val protectedStore = container?.protectedContentStore
+    // Archivio legato a server+utente: cambia con l'account mostrato
+    // (abbinamento da remoto) e si ricarica a ogni scrittura dell'archivio.
+    val protectedAccount = with(settingsViewModel) { currentServer to currentUsername }
+    // Flusso di riserva (sempre a 0) quando manca il container: nessuna
+    // remember condizionale, la revisione arriva dallo store quando c'è.
+    val noRevision = remember { MutableStateFlow(0L) }
+    val protectedRevision by (protectedStore?.revision ?: noRevision).collectAsStateWithLifecycle()
+    LaunchedEffect(protectedStore, protectedRevision, protectedAccount) {
+        val store = protectedStore ?: return@LaunchedEffect
+        protectedData = store.get(protectedAccount.first, protectedAccount.second)
+    }
 
     // Quando il catalogo viene ricaricato (aggiornamento riuscito), la riga
     // "Ultimo aggiornamento" rilegge l'ora salvata in cache dalla finestra.
@@ -174,10 +220,29 @@ fun SettingsScreen(
         showUpdateDialog = true
     }
 
+    val backDispatcher = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
             .background(FvpColors.Background)
+            // Un trascinamento orizzontale verso destra inoltra il back al
+            // gestore attivo: dialoghi, sottopagine protette e pagina settings.
+            .pointerInput(backDispatcher) {
+                var totalDrag = 0f
+                var handled = false
+                detectHorizontalDragGestures(
+                    onDragStart = { totalDrag = 0f; handled = false },
+                    onDragEnd = { totalDrag = 0f; handled = false },
+                    onHorizontalDrag = { change, dragAmount ->
+                        totalDrag += dragAmount
+                        if (!handled && totalDrag > 96.dp.toPx()) {
+                            handled = true
+                            backDispatcher?.onBackPressed()
+                            change.consume()
+                        }
+                    },
+                )
+            }
             // Intervallo a schermo delle Impostazioni: è il riferimento per
             // sapere se il riquadro "Configura da remoto" è visibile o se lo
             // scorrimento lo ha portato fuori.
@@ -212,6 +277,9 @@ fun SettingsScreen(
                             catalogState = catalogState,
                             settingsViewModel = settingsViewModel,
                             onRefreshClick = onRefreshClick,
+                            onOpenProtected = { showProtectedPage = true },
+                            protectedHasPin = protectedData?.hasPin == true,
+                            container = container,
                             modifier = Modifier.weight(1f),
                         )
                         SettingsColumn(
@@ -221,6 +289,9 @@ fun SettingsScreen(
                             catalogState = catalogState,
                             settingsViewModel = settingsViewModel,
                             onRefreshClick = onRefreshClick,
+                            onOpenProtected = { showProtectedPage = true },
+                            protectedHasPin = protectedData?.hasPin == true,
+                            container = container,
                             modifier = Modifier.weight(1f),
                         )
                     }
@@ -232,6 +303,9 @@ fun SettingsScreen(
                         catalogState = catalogState,
                         settingsViewModel = settingsViewModel,
                         onRefreshClick = onRefreshClick,
+                        onOpenProtected = { showProtectedPage = true },
+                        protectedHasPin = protectedData?.hasPin == true,
+                        container = container,
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
@@ -258,6 +332,28 @@ fun SettingsScreen(
             onConfirm = settingsViewModel::onExitConfirm,
         )
     }
+
+    // La pagina "Contenuti protetti" si disegna SOPRA i riquadri e prende il
+    // loro posto finché è aperta: "Gestisci" la apre, Indietro (gestito dentro
+    // la pagina) la chiude e si torna alle Impostazioni così com'erano.
+    if (showProtectedPage && container != null) {
+        ProtectedContentScreen(
+            store = container.protectedContentStore,
+            session = container.protectedSession,
+            credentialStore = container.credentialStore,
+            clock = container.clock,
+            server = settingsViewModel.currentServer,
+            username = settingsViewModel.currentUsername,
+            catalog = catalogState.catalog,
+            onRefreshCatalog = {
+                if (!catalogState.isRefreshing && !catalogState.isLoading) {
+                    catalogViewModel.refreshManual()
+                }
+            },
+            onExit = { showProtectedPage = false },
+            modifier = modifier,
+        )
+    }
 }
 
 /** Colonna di riquadri: una per riga, con lo spazio fra i riquadri del progetto. */
@@ -269,6 +365,9 @@ private fun SettingsColumn(
     catalogState: CatalogUiState,
     settingsViewModel: SettingsViewModel,
     onRefreshClick: () -> Unit,
+    onOpenProtected: () -> Unit,
+    protectedHasPin: Boolean,
+    container: AppContainer?,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -286,10 +385,20 @@ private fun SettingsColumn(
 
                 SettingsPanel.PROTECTED -> SettingsCard(panel.title, panel.titleTag, panel.testTag) {
                     Text(
-                        text = PROTECTED_COMING_SOON,
+                        text = protectedSettingsLine(protectedHasPin),
                         color = FvpColors.TextSecondary,
                         fontSize = 14.sp,
-                        modifier = Modifier.testTag("settings_protected_placeholder"),
+                        modifier = Modifier.testTag("settings_protected_summary"),
+                    )
+                    FvpSecondaryButton(
+                        text = PROTECTED_MANAGE_LABEL,
+                        onClick = onOpenProtected,
+                        enabled = container != null,
+                        // Riga comoda per il tocco, come gli altri comandi.
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp),
+                        testTag = "settings_protected_manage",
                     )
                 }
 

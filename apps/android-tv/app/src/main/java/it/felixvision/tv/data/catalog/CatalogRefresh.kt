@@ -10,9 +10,23 @@ const val CATALOG_BYTES_PER_MB = 1_048_576.0
 /**
  * Stato dell'aggiornamento del catalogo, una riga per categoria.
  *
- * Le tappe restano quelle di [CatalogClient.loadCatalog] (Live, Film, Serie,
- * nello stesso ordine e sempre una richiesta alla volta): qui c'è solo la
- * rappresentazione per la finestra di Impostazioni.
+ * Nuova regola di caricamento (non più "sempre una richiesta alla volta"):
+ * [CatalogClient.loadCatalog] avvia Live, Film e Serie insieme con
+ * coroutineScope/async, al massimo 3 richieste contemporanee (una per
+ * sezione); dentro ogni sezione resta l'ordine categorie → elenco. Le righe
+ * della finestra restano nell'ordine Live, Film, Serie, ma le tappe arrivano
+ * interlacciate: [CatalogRefresh.apply] non presume più alcun ordine fra
+ * sezioni diverse.
+ *
+ * Misure reali sul provider in uso (curl dal Mac, risposta gzip):
+ * - get_live_streams ≈ 0,6 s;
+ * - get_vod_streams ≈ 21 s (6,9 MB non compressi, 1,1 MB compressi: lo
+ *   stesso tempo indica elaborazione lato server, non banda);
+ * - get_series ≈ 15 s.
+ * In sequenza ≈ 37 s; Film e Serie richiesti insieme ≈ 22 s in tutto: il
+ * pannello regge le richieste contemporanee senza rallentare. Il pannello non
+ * invia ETag, Last-Modified né Cache-Control: le richieste condizionali non
+ * sono possibili, quindi la velocizzazione passa solo dal parallelo.
  */
 enum class CatalogSection(val label: String) {
     LIVE("Live"),
@@ -120,23 +134,35 @@ object CatalogRefresh {
     fun idle(): List<CatalogSectionProgress> =
         CatalogSection.entries.map { CatalogSectionProgress(section = it) }
 
-    /** Applica una tappa mantenendo l'ordine Live, Film, Serie. */
+    /**
+     * Applica una tappa mantenendo sempre l'ordine Live, Film, Serie.
+     *
+     * Con le tre sezioni in parallelo le tappe di sezioni diverse si
+     * interlacciano: la riga da aggiornare si cerca per [CatalogStage.section]
+     * (non per posizione) e l'elenco viene ricostruito dall'ordine canonico,
+     * così anche una lista parziale o in ordine diverso viene normalizzata.
+     * Una riga già conclusa (COMPLETED o ERROR) non torna indietro su una
+     * tappa di scaricamento/elaborazione arrivata in ritardo.
+     */
     fun apply(
         current: List<CatalogSectionProgress>,
         stage: CatalogStage,
     ): List<CatalogSectionProgress> {
-        val base = if (current.isEmpty()) idle() else current
-        return base.map { row ->
-            if (row.section == stage.section) {
-                row.copy(
-                    status = stage.status,
-                    itemCount = stage.itemCount,
-                    bytesReceived = stage.bytesReceived,
-                    bytesTotal = stage.bytesTotal,
-                )
-            } else {
-                row
-            }
+        val bySection = current.associateBy { it.section }
+        return CatalogSection.entries.map { section ->
+            val row = bySection[section] ?: CatalogSectionProgress(section = section)
+            if (section != stage.section) return@map row
+            val isTerminal = row.status == CatalogSectionStatus.COMPLETED ||
+                row.status == CatalogSectionStatus.ERROR
+            val isLateProgress = stage.status == CatalogSectionStatus.DOWNLOADING ||
+                stage.status == CatalogSectionStatus.PROCESSING
+            if (isTerminal && isLateProgress) return@map row
+            row.copy(
+                status = stage.status,
+                itemCount = stage.itemCount,
+                bytesReceived = stage.bytesReceived,
+                bytesTotal = stage.bytesTotal,
+            )
         }
     }
 

@@ -5,7 +5,8 @@ import it.felixvision.tv.core.FvpJson
 import it.felixvision.tv.core.HttpClientFactory
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.runBlocking
-import okhttp3.mockwebserver.MockResponse
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.json.decodeFromStream
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -23,6 +24,11 @@ import org.junit.Test
  *   nullo e byte ricevuti crescenti;
  * - corpo da 5 MB → numero di emissioni limitato (nessuna emissione per ogni
  *   blocco da 8 KB).
+ *
+ * Le risposte sono scelte per `action`: con le tre sezioni in parallelo
+ * l'ordine di arrivo non è più quello sequenziale della coda di MockWebServer.
+ * Le tappe delle altre sezioni si interlacciano, quindi ogni asserzione filtra
+ * prima per [CatalogSection.LIVE].
  */
 class CatalogClientTest {
 
@@ -48,7 +54,12 @@ class CatalogClientTest {
             clock = clock,
         )
 
-    /** Costruisce un JSON valido di `LiveStream` della dimensione minima indicata. */
+    /**
+     * Costruisce un JSON valido di `LiveStream` della dimensione minima
+     * indicata. Il riempimento sta DENTRO il valore `name` del primo
+     * elemento: nessuno spazio dopo la parentesi di chiusura, così il
+     * parsing in streaming non incontra byte di coda.
+     */
     private fun buildLiveStreamsJson(itemCount: Int, minBytes: Int): String {
         val sb = StringBuilder(minBytes + 1024)
         sb.append('[')
@@ -58,13 +69,25 @@ class CatalogClientTest {
                 .append("""","name":"Canale """).append(i)
                 .append("""","category_id":"1"}""")
         }
-        val currentLen = sb.length + 1
-        if (currentLen < minBytes) {
-            // Spazi validi nel JSON prima della parentesi di chiusura
-            repeat(minBytes - currentLen) { sb.append(' ') }
-        }
         sb.append(']')
+        val padding = minBytes - sb.length
+        if (padding > 0) {
+            val marker = "\"Canale 1\""
+            val insertAt = sb.indexOf(marker) + marker.length - 1
+            sb.insert(insertAt, " ".repeat(padding))
+        }
         return sb.toString()
+    }
+
+    /** Il corpo di prova deve essere decodificabile anche da stream puro. */
+    @OptIn(ExperimentalSerializationApi::class)
+    private fun assertDecodable(body: String, expectedItems: Int) {
+        val decoded = FvpJson.decodeFromStream<List<LiveStream>>(body.byteInputStream())
+        assertEquals(
+            "il JSON di prova deve decodificarsi in streaming",
+            expectedItems,
+            decoded.size,
+        )
     }
 
     @Test
@@ -72,10 +95,14 @@ class CatalogClientTest {
         val categoriesJson = """[{"category_id":"1","category_name":"Generale"}]"""
         val liveBody = buildLiveStreamsJson(itemCount = 25, minBytes = 256 * 1024)
         val expectedTotalBytes = liveBody.toByteArray(Charsets.UTF_8).size.toLong()
+        assertDecodable(liveBody, 25)
 
-        server.enqueue(MockResponse().setResponseCode(200).setBody(categoriesJson))
-        server.enqueue(MockResponse().setResponseCode(200).setBody(liveBody))
-        repeat(4) { server.enqueue(MockResponse().setResponseCode(200).setBody("[]")) }
+        server.dispatcher = ActionDispatcher(
+            bodies = mapOf(
+                "get_live_categories" to categoriesJson,
+                "get_live_streams" to liveBody,
+            ),
+        )
 
         val stages = mutableListOf<CatalogStage>()
         val result = client().loadCatalog(baseUrl(), "demo", "demo") { stage ->
@@ -115,7 +142,7 @@ class CatalogClientTest {
         assertEquals(expectedTotalBytes, tail[0].bytesTotal)
 
         assertEquals(CatalogSectionStatus.COMPLETED, tail[1].status)
-        assertEquals(25, tail[1].itemCount)
+        assertEquals("tappe LIVE: $liveStages", 25, tail[1].itemCount)
         assertEquals(expectedTotalBytes, tail[1].bytesReceived)
         assertEquals(expectedTotalBytes, tail[1].bytesTotal)
     }
@@ -125,14 +152,19 @@ class CatalogClientTest {
         val categoriesJson = """[{"category_id":"1","category_name":"Generale"}]"""
         val liveBody = buildLiveStreamsJson(itemCount = 15, minBytes = 128 * 1024)
         val expectedTotalBytes = liveBody.toByteArray(Charsets.UTF_8).size.toLong()
+        assertDecodable(liveBody, 15)
 
         // Orologio che avanza di 50 ms ad ogni lettura per verificare anche le emissioni intermedie ogni 200 ms
         val fakeNow = AtomicLong(1_000L)
         val steppingClock = Clock { fakeNow.addAndGet(50L) }
 
-        server.enqueue(MockResponse().setResponseCode(200).setBody(categoriesJson))
-        server.enqueue(MockResponse().setResponseCode(200).setChunkedBody(liveBody, 8 * 1024))
-        repeat(4) { server.enqueue(MockResponse().setResponseCode(200).setBody("[]")) }
+        server.dispatcher = ActionDispatcher(
+            bodies = mapOf(
+                "get_live_categories" to categoriesJson,
+                "get_live_streams" to liveBody,
+            ),
+            chunkedFor = mapOf("get_live_streams" to 8 * 1024),
+        )
 
         val stages = mutableListOf<CatalogStage>()
         val result = client(clock = steppingClock).loadCatalog(baseUrl(), "demo", "demo") { stage ->
@@ -165,7 +197,7 @@ class CatalogClientTest {
         assertEquals(CatalogSectionStatus.COMPLETED, completedStage.status)
         assertNull(completedStage.bytesTotal)
         assertEquals(expectedTotalBytes, completedStage.bytesReceived)
-        assertEquals(15, completedStage.itemCount)
+        assertEquals("tappe LIVE: $liveStages", 15, completedStage.itemCount)
     }
 
     @Test
@@ -175,13 +207,12 @@ class CatalogClientTest {
         val fiveMbJson = buildLiveStreamsJson(itemCount = 40, minBytes = fiveMbBytes)
         val actualBytes = fiveMbJson.toByteArray(Charsets.UTF_8).size.toLong()
         assertTrue("il corpo deve essere di almeno 5 MB", actualBytes >= fiveMbBytes.toLong())
+        assertDecodable(fiveMbJson, 40)
 
         // Orologio stabile durante lo scaricamento veloce: conta solo la soglia dell'1%
         val fixedClock = Clock { 10_000L }
 
-        server.enqueue(MockResponse().setResponseCode(200).setBody("[]"))
-        server.enqueue(MockResponse().setResponseCode(200).setBody(fiveMbJson))
-        repeat(4) { server.enqueue(MockResponse().setResponseCode(200).setBody("[]")) }
+        server.dispatcher = ActionDispatcher(bodies = mapOf("get_live_streams" to fiveMbJson))
 
         val stages = mutableListOf<CatalogStage>()
         val result = client(clock = fixedClock).loadCatalog(baseUrl(), "demo", "demo") { stage ->

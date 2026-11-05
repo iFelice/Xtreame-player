@@ -302,7 +302,9 @@ data class EpisodeInfo(
 )
 
 /**
- * Catalogo completo come restituito dalle sei chiamate sequenziali.
+ * Catalogo completo come restituito dalle sei chiamate del catalogo: tre
+ * sezioni in parallelo, ognuna con categorie prima dell'elenco. Contenuto e
+ * ordine degli elenchi restano identici al vecchio caricamento sequenziale.
  */
 @Serializable
 data class Catalog(

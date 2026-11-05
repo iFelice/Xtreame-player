@@ -22,6 +22,8 @@ import it.felixvision.tv.data.pairing.PairingClient
 import it.felixvision.tv.data.pairing.PairingCoordinator
 import it.felixvision.tv.data.playback.PlaybackActivityTracker
 import it.felixvision.tv.data.progress.ProgressStore
+import it.felixvision.tv.data.protection.ProtectedContentStore
+import it.felixvision.tv.data.protection.ProtectedSession
 import it.felixvision.tv.data.store.CredentialStore
 import it.felixvision.tv.data.store.DataStoreSecurePreferences
 import it.felixvision.tv.data.store.EncryptedCredentialStore
@@ -116,6 +118,24 @@ class AppContainer(
     /** Archivio "Continua a guardare": una voce per film e una per serie. */
     val continueWatchingStore: ContinueWatchingStore by lazy {
         ContinueWatchingStore(context = context, json = json, clock = clock)
+    }
+
+    /**
+     * Contenuti protetti: PIN (solo hash PBKDF2, mai in chiaro) ed elenchi di
+     * categorie e contenuti nascosti, per server+utente. Stessa classe
+     * condivisa della TV ([ProtectedContentStore]), nessuna copia.
+     */
+    val protectedContentStore: ProtectedContentStore by lazy {
+        ProtectedContentStore(context = context)
+    }
+
+    /**
+     * Visibilità dei contenuti protetti: solo in memoria, spenta a ogni avvio.
+     * In questo passo comanda soltanto la pagina "Contenuti protetti": il
+     * filtro delle sezioni arriva nel passo 3.
+     */
+    val protectedSession: ProtectedSession by lazy {
+        ProtectedSession(clock = clock)
     }
 
     val pairingClient: PairingClient by lazy {

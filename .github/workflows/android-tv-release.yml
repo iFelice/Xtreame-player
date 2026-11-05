@@ -92,6 +92,44 @@ jobs:
           fi
           "$APKSIGNER" verify "$RUNNER_TEMP/FelixVP.apk"
 
+      # Anche nella release rendiamo il test fallito leggibile senza scaricare
+      # i log del runner. Non ignoriamo il fallimento: la pubblicazione resta
+      # subordinata al successo di test, build e verifica della firma.
+      - name: Annota i test falliti
+        if: failure()
+        shell: bash
+        run: |
+          python3 - <<'PYTEST'
+          import glob
+          import xml.etree.ElementTree as ET
+
+          def escape(value):
+              return value.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+
+          for path in sorted(glob.glob('apps/android-tv/app/build/test-results/**/*.xml', recursive=True)):
+              root = ET.parse(path).getroot()
+              for case in root.iter('testcase'):
+                  for failure in case:
+                      if failure.tag not in ('failure', 'error'):
+                          continue
+                      name = f"{case.get('classname', '?')}.{case.get('name', '?')}"
+                      detail = failure.text or failure.get('message') or 'Nessun dettaglio'
+                      print(f"::error::{escape(name + ': ' + detail[:6000])}")
+          PYTEST
+
+      - name: Carica i report in caso di errore
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-tv-release-reports
+          path: |
+            apps/android-tv/app/build/reports/tests
+            apps/android-tv/app/build/test-results
+            apps/android-tv/app/build/reports/lint-results*
+            apps/android-tv/build/reports/problems
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Pubblica la release nel repository pubblico
         env:
           GH_TOKEN: ${{ secrets.RELEASES_REPO_TOKEN }}

@@ -4,6 +4,7 @@ import it.felixvision.tv.data.catalog.CatalogSection
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import okhttp3.HttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType
@@ -26,6 +27,18 @@ private val TRACKED_ACTIONS = mapOf(
 )
 
 /**
+ * Le tre richieste delle categorie partono insieme all'inizio di ogni
+ * aggiornamento: una per sezione, prima di qualunque body degli elenchi.
+ * Servono all'interceptor per riconoscere un nuovo aggiornamento senza
+ * dipendere da quale sezione arriva per prima.
+ */
+private val CATEGORY_ACTIONS = setOf(
+    "get_live_categories",
+    "get_vod_categories",
+    "get_series_categories",
+)
+
+/**
  * Sezione della finestra di aggiornamento a cui appartiene una richiesta, oppure `null`
  * se la richiesta non riguarda il download del catalogo.
  */
@@ -43,10 +56,13 @@ internal fun catalogSectionFor(url: HttpUrl): CatalogSection? {
  * non invia il Content-Length il valore è `null` e la riga mostra i MB
  * scaricati con una barra indeterminata.
  *
- * Ogni caricamento del catalogo inizia da get_live_streams (Live): la prima
- * chiamata a [begin] su Live azzera le righe dell'aggiornamento precedente.
- * Le letture avvengono sul thread di I/O di OkHttp: [MutableStateFlow] è
- * thread-safe e i collettori ricevono sempre l'ultimo valore.
+ * Con Live, Film e Serie scaricati in parallelo non esiste più una sezione
+ * che parte per prima: [begin] aggiorna solo la riga della propria sezione e
+ * l'azzeramento dell'aggiornamento precedente è fatto da [reset], chiamato
+ * dall'interceptor sulla prima richiesta categorie del nuovo aggiornamento.
+ * Le letture avvengono su tre thread di I/O diversi: tutte le modifiche della
+ * mappa passano da [MutableStateFlow.update], che ripete la trasformazione in
+ * caso di aggiornamento concorrente (nessuna riga persa).
  */
 class CatalogDownloadMonitor {
 
@@ -69,20 +85,31 @@ class CatalogDownloadMonitor {
     private val _progress = MutableStateFlow<Map<CatalogSection, Progress>>(emptyMap())
     val progress: StateFlow<Map<CatalogSection, Progress>> = _progress.asStateFlow()
 
-    /** Registra l'inizio del body di una sezione (azzera tutto se è Live). */
+    /**
+     * Azzera tutte le righe all'inizio di un nuovo aggiornamento. Metodo
+     * interno al modulo: non cambia la firma pubblica del monitor.
+     */
+    internal fun reset() {
+        _progress.value = emptyMap()
+    }
+
+    /**
+     * Registra l'inizio del body di una sezione azzerando solo la sua riga:
+     * le altre sezioni possono essere già partite (caricamento parallelo).
+     */
     fun begin(section: CatalogSection, contentLength: Long?) {
-        _progress.value = if (section == CatalogSection.LIVE) {
-            mapOf(section to Progress(bytesRead = 0L, contentLength = contentLength))
-        } else {
-            _progress.value + (section to Progress(bytesRead = 0L, contentLength = contentLength))
+        _progress.update { current ->
+            current + (section to Progress(bytesRead = 0L, contentLength = contentLength))
         }
     }
 
     /** Aggiorna i byte letti di una sezione, ignorando i valori non crescenti. */
     fun advance(section: CatalogSection, bytesRead: Long) {
-        val current = _progress.value[section] ?: return
-        if (bytesRead <= current.bytesRead) return
-        _progress.value = _progress.value + (section to current.copy(bytesRead = bytesRead))
+        _progress.update { current ->
+            val previous = current[section] ?: return@update current
+            if (bytesRead <= previous.bytesRead) return@update current
+            current + (section to previous.copy(bytesRead = bytesRead))
+        }
     }
 }
 
@@ -93,14 +120,26 @@ class CatalogDownloadMonitor {
  * [CatalogDownloadMonitor]. Le altre richieste passano invariate.
  *
  * È aggiunto SOLO al client dell'app tablet: il codice condiviso della TV
- * ([it.felixvision.tv.core.HttpClientFactory]) non viene toccato.
+ * ([it.felixvision.tv.core.HttpClientFactory]) non viene toccato. Con le tre
+ * sezioni in parallelo azzera le righe del refresh precedente sulla prima
+ * richiesta categorie del gruppo, non più sull'inizio di Live.
  */
 class CatalogDownloadInterceptor(
     private val monitor: CatalogDownloadMonitor,
 ) : Interceptor {
 
+    private val lock = Any()
+    private val categoriesSeen = mutableSetOf<String>()
+
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
+        val action = request.url.queryParameter("action") ?: ""
+        if (action in CATEGORY_ACTIONS &&
+            request.url.pathSegments.contains("player_api.php") &&
+            isFirstCategoryOfRefresh(action)
+        ) {
+            monitor.reset()
+        }
         val section = catalogSectionFor(request.url) ?: return chain.proceed(request)
         val response = chain.proceed(request)
         if (!response.isSuccessful) return response
@@ -110,6 +149,20 @@ class CatalogDownloadInterceptor(
         return response.newBuilder()
             .body(CountingResponseBody(body, monitor, section))
             .build()
+    }
+
+    /**
+     * Vero solo per la prima delle tre richieste categorie di un
+     * aggiornamento: un gruppo completo (o un'azione ripetuta) significa che
+     * è partito un nuovo refresh. Qualsiasi delle tre sezioni può arrivare
+     * per prima, quindi il reset non dipende più dall'ordine Live → Film →
+     * Serie.
+     */
+    private fun isFirstCategoryOfRefresh(action: String): Boolean = synchronized(lock) {
+        val first = categoriesSeen.size == CATEGORY_ACTIONS.size || action in categoriesSeen
+        if (first) categoriesSeen.clear()
+        categoriesSeen.add(action)
+        first
     }
 }
 
