@@ -68,6 +68,20 @@ internal fun myChannelFocusTargetAfterRemoval(
     return remaining.getOrNull(removedIndex) ?: remaining.lastOrNull()
 }
 
+/**
+ * Dopo un riordino, mantiene il focus sul numero di riga occupato prima del
+ * cambio: il canale che entra in quello slot riceve il focus.
+ */
+internal fun myChannelFocusTargetAtOriginalPosition(
+    before: List<MyChannel>,
+    after: List<MyChannel>,
+    movedStreamId: String,
+): MyChannel? {
+    val originalIndex = MyChannels.indexOf(before, movedStreamId)
+    if (originalIndex < 0) return null
+    return after.getOrNull(originalIndex)
+}
+
 /** Consuma Indietro sulla radice del Dialog e chiude solo al rilascio. */
 private fun Modifier.closeDialogOnBack(onDismiss: () -> Unit): Modifier =
     onPreviewKeyEvent { event ->
@@ -237,8 +251,9 @@ fun MyChannelDialog(
 }
 
 /**
- * Campo numerico a 4 cifre del telecomando: OK conferma la posizione, Indietro
- * annulla. Il valore iniziale è già selezionato: la prima cifra lo sostituisce.
+ * Selettore numerico a 4 cifre: ▲/Su incrementa di uno, ▼/Giù decrementa di
+ * uno, le cifre permettono l'immissione diretta, OK conferma e Indietro annulla.
+ * Il valore iniziale è già selezionato: la prima cifra lo sostituisce.
  */
 @Composable
 fun ChannelNumberDialog(
@@ -287,34 +302,55 @@ fun ChannelNumberDialog(
                     fontWeight = FontWeight.Bold,
                 )
                 Text(text = channelName, color = FvpColors.TextSecondary, fontSize = scale.sp(15f))
-                Box(
+                Column(
                     modifier = Modifier
                         .focusRequester(fieldFocus)
                         .focusable()
                         .onPreviewKeyEvent { event ->
                             val native = event.nativeKeyEvent
+                            val isStepKey = native.keyCode == AndroidKeyEvent.KEYCODE_DPAD_UP ||
+                                native.keyCode == AndroidKeyEvent.KEYCODE_DPAD_DOWN
                             if (native.action == AndroidKeyEvent.ACTION_UP) {
-                                // Il rilascio del tasto non deve arrivare ai comandi sotto.
-                                val upHandled = ChannelNumberInput.digitFromKeyCode(native.keyCode) != null ||
-                                    ChannelNumberInput.isConfirmKeyCode(native.keyCode)
-                                upHandled
+                                // Consuma anche i rilasci per non spostare il focus fuori dal selettore.
+                                ChannelNumberInput.digitFromKeyCode(native.keyCode) != null ||
+                                    ChannelNumberInput.isConfirmKeyCode(native.keyCode) ||
+                                    isStepKey
                             } else if (native.action == AndroidKeyEvent.ACTION_DOWN) {
                                 val digit = ChannelNumberInput.digitFromKeyCode(native.keyCode)
-                                if (digit != null) {
-                                    field = field.digit(digit)
-                                    true
-                                } else if (ChannelNumberInput.isConfirmKeyCode(native.keyCode)) {
-                                    field.value?.let { position -> onConfirm(position) }
-                                    true
-                                } else {
-                                    false
+                                when {
+                                    digit != null -> {
+                                        field = field.digit(digit)
+                                        true
+                                    }
+                                    ChannelNumberInput.isConfirmKeyCode(native.keyCode) -> {
+                                        field.value?.let { position -> onConfirm(position) }
+                                        true
+                                    }
+                                    native.keyCode == AndroidKeyEvent.KEYCODE_DPAD_UP -> {
+                                        field = field.step(delta = 1)
+                                        true
+                                    }
+                                    native.keyCode == AndroidKeyEvent.KEYCODE_DPAD_DOWN -> {
+                                        field = field.step(delta = -1)
+                                        true
+                                    }
+                                    else -> false
                                 }
                             } else {
                                 false
                             }
                         }
                         .testTag("channel_number_field"),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(scale.dp(2f)),
                 ) {
+                    Text(
+                        text = "▲",
+                        color = FvpColors.TextSecondary,
+                        fontSize = scale.sp(15f),
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.testTag("channel_number_step_up"),
+                    )
                     Text(
                         text = field.digits.ifEmpty { "—" },
                         color = FvpColors.TextPrimary,
@@ -325,9 +361,16 @@ fun ChannelNumberDialog(
                             .padding(horizontal = scale.dp(22f), vertical = scale.dp(8f))
                             .testTag("channel_number_value"),
                     )
+                    Text(
+                        text = "▼",
+                        color = FvpColors.TextSecondary,
+                        fontSize = scale.sp(15f),
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.testTag("channel_number_step_down"),
+                    )
                 }
                 Text(
-                    text = "OK conferma · Indietro annulla",
+                    text = "▲ +1 · ▼ −1 · OK conferma · Indietro annulla",
                     color = FvpColors.TextSecondary,
                     fontSize = scale.sp(13f),
                 )
