@@ -210,6 +210,7 @@ fun FavoritesSection(
     val firstFocus = remember { FocusRequester() }
     val tabFocusRequesters = remember { FavoritesTab.entries.map { FocusRequester() } }
     val tabsScope = rememberCoroutineScope()
+    val myChannelsListState = rememberLazyListState()
 
     val vodListState = rememberLazyListState()
     val seriesListState = rememberLazyListState()
@@ -219,6 +220,20 @@ fun FavoritesSection(
     val seriesRestore = rememberListDetailFocusRestore(seriesListState, { seriesFocusMap }, firstFocus)
     val filmSeriesScroll = rememberScrollState()
     val rowsBringIntoView = rememberRowsBringIntoViewer()
+
+    fun requestTabContentFocus(tab: FavoritesTab) {
+        tabsScope.launch {
+            // Attende la composizione del contenuto scelto; la riga 1 può non
+            // essere composta se la LazyColumn era rimasta scorsa. Prima la si
+            // riporta in vista, poi si richiede il focus.
+            withFrameNanos { }
+            if (tab == FavoritesTab.MY_CHANNELS && myChannels.isNotEmpty()) {
+                myChannelsListState.scrollToItem(0)
+                withFrameNanos { }
+            }
+            runCatching { firstFocus.requestFocus() }
+        }
+    }
 
     // Ritorno da Live dopo aver aperto una categoria preferita: le categorie
     // stanno nella scheda "Categorie Live".
@@ -234,26 +249,15 @@ fun FavoritesSection(
             contentFocusRequester = contentFocusRequester,
             onSelect = { tab ->
                 selectedTab = tab
-                // La scheda scelta può essere appena composta: il focus sul suo
-                // primo elemento si chiede dopo il frame di composizione.
-                tabsScope.launch {
-                    withFrameNanos { }
-                    runCatching { firstFocus.requestFocus() }
-                }
+                requestTabContentFocus(tab)
             },
-            onDown = {
-                // La scheda scelta può essere appena composta: il focus sul suo
-                // primo elemento si chiede dopo il frame di composizione.
-                tabsScope.launch {
-                    withFrameNanos { }
-                    runCatching { firstFocus.requestFocus() }
-                }
-            },
+            onDown = { requestTabContentFocus(selectedTab) },
         )
         Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
             when (selectedTab) {
                 FavoritesTab.MY_CHANNELS -> MyChannelsTab(
                     channels = myChannels,
+                    listState = myChannelsListState,
                     epgClient = epgClient,
                     epgServer = epgServer,
                     epgUsername = epgUsername,
@@ -465,6 +469,7 @@ private fun FavoritesTabsRow(
 @Composable
 private fun MyChannelsTab(
     channels: List<MyChannel>,
+    listState: LazyListState,
     epgClient: ChannelScheduleLoader?,
     epgServer: String,
     epgUsername: String,
@@ -480,7 +485,6 @@ private fun MyChannelsTab(
     onTabFocusRequester: FocusRequester,
 ) {
     val scope = rememberCoroutineScope()
-    val listState = rememberLazyListState()
     // Solo i canali visibili a schermo: la guida si chiede per quelli.
     val visibleIds by remember(channels) {
         androidx.compose.runtime.derivedStateOf {
@@ -552,7 +556,7 @@ private fun MyChannelsTab(
         cancelNumberInput()
     }
 
-    // Ritorno dal player: focus sul canale.
+    // Ritorno dal player o da una modifica: focus sul canale richiesto.
     LaunchedEffect(focusChannelId, focusChannelTick, channels) {
         val id = focusChannelId ?: return@LaunchedEffect
         val index = channels.indexOfFirst { it.streamId == id }
