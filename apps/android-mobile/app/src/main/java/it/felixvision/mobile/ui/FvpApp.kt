@@ -2,6 +2,7 @@ package it.felixvision.mobile.ui
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -46,30 +47,33 @@ fun FvpApp(container: AppContainer) {
             onRenewCode = viewModel::onRenewPairingCode,
         )
 
-        is Screen.Account -> HomeScreen(
-            container = container,
-            summary = screen.summary,
-            // La password resta solo nel modello di sessione in memoria.
-            password = viewModel.getCurrentCredentials()?.password.orEmpty(),
-            banner = screen.banner,
-            onSignOut = {
-                container.protectedSession.lock()
-                viewModel.signOut()
-            },
-            // Riquadro "Configura da remoto" delle Impostazioni: le credenziali
-            // ricevute aggiornano la sessione dell'app come nella TV.
-            onRemoteCredentials = { newServer, newUsername, newPassword, account ->
-                container.protectedSession.lock()
-                viewModel.updateCredentialsFromRemote(
-                    server = newServer,
-                    username = newUsername,
-                    password = newPassword,
-                    account = account,
-                    storedUsername = newUsername,
-                )
-            },
-            channelScheduleLoader = container.channelScheduleLoader,
-            imageLoader = container.imageLoader,
-        )
+        is Screen.Account -> key(screen.sessionId) {
+            HomeScreen(
+                container = container,
+                summary = screen.summary,
+                sessionId = screen.sessionId,
+                // La password resta solo nel modello di sessione in memoria.
+                password = viewModel.getCurrentCredentials()?.password.orEmpty(),
+                banner = screen.banner,
+                onSignOut = {
+                    container.protectedSession.lock()
+                    viewModel.signOut()
+                },
+                // Riquadro "Configura da remoto" delle Impostazioni: le credenziali
+                // ricevute aggiornano la sessione dell'app come nella TV.
+                onRemoteCredentials = { newServer, newUsername, newPassword, account ->
+                    container.protectedSession.lock()
+                    viewModel.updateCredentialsFromRemote(
+                        server = newServer,
+                        username = newUsername,
+                        password = newPassword,
+                        account = account,
+                        storedUsername = newUsername,
+                    )
+                },
+                channelScheduleLoader = container.channelScheduleLoader,
+                imageLoader = container.imageLoader,
+            )
+        }
     }
 }

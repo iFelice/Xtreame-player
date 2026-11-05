@@ -99,13 +99,15 @@ fun HomeScreen(
     banner: String?,
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Identifica una nuova autenticazione, anche sullo stesso account. */
+    sessionId: Long = 0L,
     /** Credenziali applicate dal riquadro "Configura da remoto" delle Impostazioni. */
     onRemoteCredentials: (String, String, String, XtreamAccount) -> Unit = { _, _, _, _ -> },
     /** Caricatore della guida Live; `null` nei test e offline. */
     channelScheduleLoader: ChannelScheduleLoader?,
     imageLoader: ImageLoader,
     catalogViewModel: CatalogViewModel = viewModel(
-        key = "catalog_${summary.server}_${summary.username}",
+        key = "catalog_${summary.server}_${summary.username}_$sessionId",
         factory = viewModelFactory {
             initializer {
                 CatalogViewModel(
@@ -121,7 +123,7 @@ fun HomeScreen(
     // da remoto cambiano server e utente, quindi i ViewModel ripartono sul nuovo
     // account, come sulla TV.
     settingsViewModel: SettingsViewModel = viewModel(
-        key = "settings_${summary.server}_${summary.username}",
+        key = "settings_${summary.server}_${summary.username}_$sessionId",
         factory = viewModelFactory {
             initializer {
                 SettingsViewModel(

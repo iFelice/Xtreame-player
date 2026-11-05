@@ -17,12 +17,17 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /**
  * Scelta delle liste della schermata principale: con la sessione sbloccata
  * passano le liste originali (stesse istanze), con la sessione bloccata
  * passano quelle filtrate. Nessun Android, nessuna composizione.
  */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class VisibleContentTest {
 
     private val catalog = Catalog(

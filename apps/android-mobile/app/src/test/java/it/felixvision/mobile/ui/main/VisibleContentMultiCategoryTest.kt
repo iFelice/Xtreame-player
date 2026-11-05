@@ -2,7 +2,10 @@ package it.felixvision.mobile.ui.main
 
 import it.felixvision.tv.data.catalog.Catalog
 import it.felixvision.tv.data.catalog.Category
+import it.felixvision.tv.data.catalog.LiveStream
+import it.felixvision.tv.data.catalog.SeriesItem
 import it.felixvision.tv.data.catalog.VodStream
+import it.felixvision.tv.data.channels.MyChannel
 import it.felixvision.tv.data.continuewatching.ContinueEntry
 import it.felixvision.tv.data.favorites.FavoriteItem
 import it.felixvision.tv.data.protection.HiddenCategory
@@ -12,6 +15,9 @@ import it.felixvision.mobile.ui.catalog.filmsForCategory
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /**
  * Percorso completo della schermata principale per un film in due categorie:
@@ -19,6 +25,8 @@ import org.junit.Test
  * in nessuna lista; sessione sbloccata → torna visibile in entrambe le
  * categorie. Dati inventati.
  */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class VisibleContentMultiCategoryTest {
 
     private val filmInDueCategorie = VodStream(
@@ -84,6 +92,33 @@ class VisibleContentMultiCategoryTest {
         assertEquals(emptyList<ContinueEntry>(), select(false).continueEntries)
         assertEquals(listOf(favorite), select(true).favorites)
         assertEquals(listOf(entry), select(true).continueEntries)
+    }
+
+    @Test
+    fun `categorie secondarie nascondono anche canali serie e relativi archivi`() {
+        val live = LiveStream(streamId = "101", name = "Canale demo", categoryId = "001", categoryIds = listOf("002"))
+        val series = SeriesItem(seriesId = "301", name = "Serie demo", categoryId = "001", categoryIds = listOf("002"))
+        val fullCatalog = Catalog(liveStreams = listOf(live), series = listOf(series))
+        val favorites = listOf(
+            FavoriteItem("live_101", FavoriteItem.LIVE, "Canale demo", categoryId = "001"),
+            FavoriteItem("series_301", FavoriteItem.SERIES, "Serie demo", categoryId = "001"),
+        )
+        val entries = listOf(ContinueEntry.series("301", "Serie demo", null, "001", null))
+        val channels = listOf(MyChannel("101", "Canale demo"))
+        val rules = ProtectedContentData(hiddenCategories = listOf(
+            HiddenCategory(ProtectedKind.LIVE.storageKey, "002", "Categoria demo"),
+            HiddenCategory(ProtectedKind.SERIES.storageKey, "002", "Categoria demo"),
+        ))
+        val locked = visibleContent(fullCatalog, emptyList(), listOf(series), favorites, entries, channels, rules, false)
+        assertEquals(emptyList<LiveStream>(), locked.catalog?.liveStreams)
+        assertEquals(emptyList<SeriesItem>(), locked.recentSeries)
+        assertEquals(emptyList<FavoriteItem>(), locked.favorites)
+        assertEquals(emptyList<ContinueEntry>(), locked.continueEntries)
+        assertEquals(emptyList<MyChannel>(), locked.myChannels)
+        val unlocked = visibleContent(fullCatalog, emptyList(), listOf(series), favorites, entries, channels, rules, true)
+        assertSame(favorites, unlocked.favorites)
+        assertSame(entries, unlocked.continueEntries)
+        assertSame(channels, unlocked.myChannels)
     }
 
     @Test

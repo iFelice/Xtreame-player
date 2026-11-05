@@ -36,6 +36,7 @@ import it.felixvision.mobile.ui.catalog.FavoritesGateway
 import it.felixvision.mobile.ui.catalog.MyChannelsGateway
 import it.felixvision.mobile.ui.catalog.PlayTarget
 import it.felixvision.mobile.ui.catalog.ProgressGateway
+import it.felixvision.mobile.ui.catalog.ProtectedContentGateway
 import it.felixvision.mobile.ui.catalog.StoreProtectedContentGateway
 import it.felixvision.mobile.ui.player.MobilePlaybackSource
 import it.felixvision.mobile.ui.player.createMobilePlayerSession
@@ -60,6 +61,8 @@ import it.felixvision.tv.data.continuewatching.ContinueEntry
 import it.felixvision.tv.data.favorites.FavoriteItem
 import it.felixvision.tv.data.progress.WatchProgress
 import it.felixvision.tv.data.protection.ProtectedKind
+import it.felixvision.tv.data.protection.ProtectedContentData
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.runBlocking
 import it.felixvision.tv.data.store.CredentialStore
 import it.felixvision.tv.data.store.StoredCredentials
@@ -251,6 +254,7 @@ class HomeScreenTest {
         protection: AppContainer? = null,
         favorites: List<FavoriteItem> = emptyList(),
         entries: List<ContinueEntry> = emptyList(),
+        protectionGateway: ProtectedContentGateway? = protection?.let { StoreProtectedContentGateway(it.protectedContentStore) },
     ): CatalogViewModel {
         return CatalogViewModel(
             server = "http://server.esempio:8080",
@@ -262,7 +266,7 @@ class HomeScreenTest {
             myChannelsGateway = FakeMyChannelsGateway(myChannels),
             continueGateway = FakeContinueWatchingGateway(entries),
             progressGateway = FakeProgressGateway(),
-            protectionGateway = protection?.let { StoreProtectedContentGateway(it.protectedContentStore) },
+            protectionGateway = protectionGateway,
             protectedSession = protection?.protectedSession,
         )
     }
@@ -513,6 +517,23 @@ class HomeScreenTest {
 
     @Test
     @Config(sdk = [34], qualifiers = "w1280dp-h800dp-land-mdpi")
+    fun `archivio pending mostra caricamento e nessun contenuto`() {
+        val result = CompletableDeferred<ProtectedContentData>()
+        val gateway = object : ProtectedContentGateway {
+            override val revision = MutableStateFlow(0L)
+            override suspend fun get(server: String, username: String): ProtectedContentData = result.await()
+        }
+        val vm = createCatalogViewModel(protectionGateway = gateway)
+        mount(vm)
+        rule.onNodeWithTag("home_loading").assertIsDisplayed()
+        rule.onNodeWithTag("novita_film_201", useUnmergedTree = true).assertDoesNotExist()
+        rule.runOnIdle { result.complete(ProtectedContentData()) }
+        rule.waitUntil(10_000L) { vm.ui.value.catalog != null }
+        rule.onNodeWithTag("novita_film_201", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    @Config(sdk = [34], qualifiers = "w1280dp-h800dp-land-mdpi")
     fun `live nasconde il canale bloccato e lo ripristina senza ricaricare`() {
         val container = AppContainer(ApplicationProvider.getApplicationContext())
         runBlocking {
@@ -559,6 +580,8 @@ class HomeScreenTest {
             vm.ui.value.catalog?.vodStreams?.size == 1 && vm.myChannels.value.size == 1 &&
                 vm.favorites.value.size == 1 && vm.continueEntries.value.size == 1
         }
+        rule.onNodeWithTag("novita_film_201", useUnmergedTree = true).assertDoesNotExist()
+        rule.onNodeWithTag("novita_film_202", useUnmergedTree = true).assertIsDisplayed()
         rule.onNodeWithTag("rail_item_film").performClick()
         rule.onNodeWithTag("film_201", useUnmergedTree = true).assertDoesNotExist()
         rule.onNodeWithTag("film_202", useUnmergedTree = true).assertIsDisplayed()
@@ -586,7 +609,16 @@ class HomeScreenTest {
         rule.runOnIdle { container.protectedSession.unlock() }
         rule.waitUntil(10_000L) { vm.searchResults.value.vod.size == 2 && vm.myChannels.value.size == 2 }
         rule.onNodeWithTag("cerca_film_201", useUnmergedTree = true).assertIsDisplayed()
+        rule.onNodeWithTag("rail_item_novita").performClick()
+        rule.onNodeWithTag("novita_film_201", useUnmergedTree = true).assertIsDisplayed()
+        rule.onNodeWithTag("rail_item_film").performClick()
+        rule.onNodeWithTag("film_201", useUnmergedTree = true).assertIsDisplayed()
+        rule.onNodeWithTag("rail_item_riprendi").performClick()
+        rule.onNodeWithTag("continua_card_vod_201", useUnmergedTree = true).assertIsDisplayed()
         rule.onNodeWithTag("rail_item_preferiti").performClick()
+        rule.onNodeWithTag("favorite_livecat_c2", useUnmergedTree = true).assertIsDisplayed()
+        rule.onNodeWithTag("favorites_tab_film_series", useUnmergedTree = true).performClick()
+        rule.onNodeWithTag("favorite_vod_201", useUnmergedTree = true).assertIsDisplayed()
         rule.onNodeWithTag("favorites_tab_my_channels", useUnmergedTree = true).performClick()
         rule.onNodeWithTag("mychannel_101", useUnmergedTree = true).assertIsDisplayed()
         rule.onNode(hasText("2") and hasAnyAncestor(hasTestTag("mychannel_102")), useUnmergedTree = true).assertExists()
