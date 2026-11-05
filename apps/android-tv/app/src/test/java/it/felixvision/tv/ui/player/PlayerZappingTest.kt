@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -81,6 +82,8 @@ class PlayerZappingTest {
         zapping: PlayerZapping,
         startIndex: () -> Int = { 0 },
         listSize: () -> Int = { 3 },
+        manualChannelNumber: () -> Int = { 1 },
+        onManualChannelChange: (Int) -> Unit = {},
     ) {
         rule.setContent {
             FvpTheme {
@@ -122,10 +125,30 @@ class PlayerZappingTest {
                         .fillMaxSize()
                         .playerZappingKeys(zapping)
                         .onPreviewKeyEvent { event ->
-                            // Come in PlayerScreen: con il focus sul pulsante
-                            // "Zapping" l'OK resta al pulsante e non apre o
-                            // chiude la barra.
-                            if (zappingButtonFocused) return@onPreviewKeyEvent false
+                            // Come in PlayerScreen: Su/Giù cambiano canale
+                            // senza togliere il focus da "Zapping"; OK resta
+                            // al pulsante e gli altri tasti tornano alla radice.
+                            if (zappingButtonFocused) {
+                                if (event.type == KeyEventType.KeyDown) {
+                                    when (event.key) {
+                                        Key.DirectionUp -> {
+                                            onManualChannelChange(-1)
+                                            return@onPreviewKeyEvent true
+                                        }
+                                        Key.DirectionDown -> {
+                                            onManualChannelChange(1)
+                                            return@onPreviewKeyEvent true
+                                        }
+                                        Key.DirectionCenter, Key.Enter -> return@onPreviewKeyEvent false
+                                        else -> {
+                                            zappingButtonFocused = false
+                                            navFocus.requestFocus()
+                                            return@onPreviewKeyEvent true
+                                        }
+                                    }
+                                }
+                                return@onPreviewKeyEvent false
+                            }
                             if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                             if (event.key != Key.DirectionCenter && event.key != Key.Enter) {
                                 return@onPreviewKeyEvent false
@@ -151,10 +174,11 @@ class PlayerZappingTest {
                         contentAlignment = Alignment.TopStart,
                     ) {
                         if (live() && bannerVisible) {
+                            val channelNumber = manualChannelNumber()
                             PlayerChannelBanner(
                                 banner = ChannelBanner(
-                                    number = 1,
-                                    name = "Canale 1",
+                                    number = channelNumber,
+                                    name = "Canale $channelNumber",
                                     categoryName = "Notizie",
                                     logoUrl = null,
                                 ),
@@ -296,6 +320,49 @@ class PlayerZappingTest {
         rule.onNodeWithTag("player_zapping_indicator").assertExists()
         rule.onNodeWithTag("player_zapping_indicator").assertTextEquals("Zapping · 10")
         assertTrue(switched.isEmpty())
+    }
+
+    @Test
+    fun `su e giu cambiano canale mantenendo il focus su Zapping`() {
+        val clock = FakeClock()
+        val changes = mutableListOf<Int>()
+        val currentChannel = mutableIntStateOf(1)
+        val zapping = PlayerZapping(
+            controller = ZappingController(clock = clock),
+            onSwitchChannel = {},
+        )
+        showPlayer(
+            live = { true },
+            zapping = zapping,
+            manualChannelNumber = { currentChannel.intValue },
+            onManualChannelChange = { direction ->
+                currentChannel.intValue = ((currentChannel.intValue - 1 + direction + 3) % 3) + 1
+                changes += direction
+            },
+        )
+        val root = rule.onNodeWithTag("harness_player_root")
+
+        // OK apre la barra info e lascia il focus sul pulsante "Zapping".
+        root.performKeyInput { pressKey(Key.DirectionCenter) }
+        rule.waitForIdle()
+        rule.waitUntil(timeoutMillis = 2_000) { isFocused("player_zapping_button") }
+        rule.onNodeWithTag("player_zapping_button").assertIsFocused()
+
+        // Una sola pressione per ogni direzione cambia canale; dopo la
+        // ricomposizione del banner il focus resta sul pulsante.
+        root.performKeyInput { pressKey(Key.DirectionDown) }
+        rule.waitForIdle()
+        assertEquals(2, currentChannel.intValue)
+        assertEquals(listOf(1), changes)
+        rule.onNodeWithTag("player_zapping_button").assertIsFocused()
+
+        root.performKeyInput { pressKey(Key.DirectionUp) }
+        rule.waitForIdle()
+        assertEquals(1, currentChannel.intValue)
+        assertEquals(listOf(1, -1), changes)
+        rule.onNodeWithTag("player_zapping_button").assertIsFocused()
+        rule.onNodeWithTag("player_channel_banner").assertExists()
+        rule.onNodeWithTag("player_zapping_indicator").assertDoesNotExist()
     }
 
     @Test
