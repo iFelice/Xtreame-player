@@ -8,6 +8,9 @@ package it.felixvision.mobile.ui.main
 
 import android.os.Looper
 import androidx.activity.ComponentActivity
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
@@ -38,6 +41,11 @@ import it.felixvision.mobile.ui.catalog.PlayTarget
 import it.felixvision.mobile.ui.catalog.ProgressGateway
 import it.felixvision.mobile.ui.catalog.ProtectedContentGateway
 import it.felixvision.mobile.ui.catalog.StoreProtectedContentGateway
+import it.felixvision.mobile.ui.player.LocalPlayerOnHidden
+import it.felixvision.mobile.ui.player.LocalPlayerVisibleCatalog
+import it.felixvision.mobile.ui.player.MobilePlayerSession
+import it.felixvision.mobile.ui.player.PlayerEngine
+import it.felixvision.mobile.ui.player.PlayerVisibilityObserver
 import it.felixvision.mobile.ui.player.MobilePlaybackSource
 import it.felixvision.mobile.ui.player.createMobilePlayerSession
 import it.felixvision.mobile.ui.settings.SettingsUserDataStore
@@ -301,6 +309,13 @@ class HomeScreenTest {
     private fun mount(
         catalogViewModel: CatalogViewModel = createCatalogViewModel(),
         container: AppContainer = AppContainer(ApplicationProvider.getApplicationContext()),
+        player: @Composable (AppContainer, MobilePlayerSession, () -> Unit) -> Unit = { _, session, _ ->
+            val live = session.source as? MobilePlaybackSource.Live
+            androidx.compose.foundation.layout.Column {
+                androidx.compose.material3.Text(live?.channels?.getOrNull(live.startIndex)?.name.orEmpty())
+                androidx.compose.material3.Text("IN DIRETTA")
+            }
+        },
     ): CatalogViewModel {
         val settingsViewModel = createSettingsViewModel()
         val summary = AccountSummary(
@@ -324,20 +339,26 @@ class HomeScreenTest {
                     settingsViewModel = settingsViewModel,
                     channelScheduleLoader = null,
                     imageLoader = container.imageLoader,
-                    playerContent = { _, session, _ ->
-                        val live = session.source as? it.felixvision.mobile.ui.player.MobilePlaybackSource.Live
-                        androidx.compose.foundation.layout.Column {
-                            androidx.compose.material3.Text(
-                                live?.channels?.getOrNull(live.startIndex)?.name.orEmpty(),
-                            )
-                            androidx.compose.material3.Text("IN DIRETTA")
-                        }
-                    },
+                    playerContent = player,
                 )
             }
         }
         rule.waitForIdle()
         return catalogViewModel
+    }
+
+    @Composable
+    private fun VisibilityTestPlayer(container: AppContainer, session: MobilePlayerSession, onExit: () -> Unit) {
+        val context = LocalContext.current
+        val engine = remember(session) { PlayerEngine(context.applicationContext, container, session) }
+        val onHidden = LocalPlayerOnHidden.current ?: onExit
+        PlayerVisibilityObserver(engine, LocalPlayerVisibleCatalog.current, onHidden)
+        androidx.compose.foundation.layout.Column {
+            androidx.compose.material3.Text("IN DIRETTA")
+            androidx.compose.material3.TextButton(onClick = onExit) {
+                androidx.compose.material3.Text("Chiudi player")
+            }
+        }
     }
 
     // --- Navigazione adattiva (8 sezioni / 5 voci + icone) ---
@@ -666,6 +687,54 @@ class HomeScreenTest {
             val unlocked = createMobilePlayerSession(PlayTarget.LiveChannel("102"), sampleCatalog(), container, account, "demo", vm)
             assertEquals(listOf("101", "102"), (unlocked?.source as MobilePlaybackSource.Live).channels.map { it.streamId })
         }
+    }
+
+    @Test
+    @Config(sdk = [34], qualifiers = "w1280dp-h800dp-land-mdpi")
+    fun `blocco del contenuto corrente chiude il player e torna a novita`() {
+        val container = AppContainer(ApplicationProvider.getApplicationContext())
+        runBlocking {
+            container.protectedContentStore.toggleItem(
+                "http://server.esempio:8080", "demo", ProtectedKind.LIVE, "101", "c1", "Canale Uno",
+            )
+        }
+        val vm = createCatalogViewModel(protection = container)
+        mount(vm, container) { c, session, exit -> VisibilityTestPlayer(c, session, exit) }
+        rule.waitUntil(10_000L) { vm.ui.value.catalog?.liveStreams?.size == 2 }
+        rule.runOnIdle { container.protectedSession.unlock() }
+        rule.waitUntil(10_000L) { vm.ui.value.catalog?.liveStreams?.size == 3 }
+        rule.onNodeWithTag("rail_item_live").performClick()
+        rule.onNodeWithTag("live_row_101", useUnmergedTree = true).performClick()
+        rule.waitUntil(10_000L) { rule.onAllNodesWithText("IN DIRETTA").fetchSemanticsNodes().isNotEmpty() }
+        rule.runOnIdle { container.protectedSession.lock() }
+        rule.waitUntil(10_000L) { vm.selectedSection.value == AppSection.NOVITA }
+        rule.onNodeWithText("IN DIRETTA").assertDoesNotExist()
+        rule.onNodeWithTag("home_screen").assertIsDisplayed()
+    }
+
+    @Test
+    @Config(sdk = [34], qualifiers = "w1280dp-h800dp-land-mdpi")
+    fun `blocco di un altro contenuto lascia aperto il player e uscita conserva la sezione`() {
+        val container = AppContainer(ApplicationProvider.getApplicationContext())
+        runBlocking {
+            container.protectedContentStore.toggleItem(
+                "http://server.esempio:8080", "demo", ProtectedKind.LIVE, "101", "c1", "Canale Uno",
+            )
+        }
+        val vm = createCatalogViewModel(protection = container)
+        mount(vm, container) { c, session, exit -> VisibilityTestPlayer(c, session, exit) }
+        rule.waitUntil(10_000L) { vm.ui.value.catalog?.liveStreams?.size == 2 }
+        rule.runOnIdle { container.protectedSession.unlock() }
+        rule.waitUntil(10_000L) { vm.ui.value.catalog?.liveStreams?.size == 3 }
+        rule.onNodeWithTag("rail_item_live").performClick()
+        rule.onNodeWithTag("live_row_102", useUnmergedTree = true).performClick()
+        rule.waitUntil(10_000L) { rule.onAllNodesWithText("IN DIRETTA").fetchSemanticsNodes().isNotEmpty() }
+        rule.runOnIdle { container.protectedSession.lock() }
+        rule.waitUntil(10_000L) { vm.ui.value.catalog?.liveStreams?.size == 2 }
+        rule.onNodeWithText("IN DIRETTA").assertIsDisplayed()
+        rule.onNodeWithText("Chiudi player").performClick()
+        rule.onNodeWithTag("live_row_102", useUnmergedTree = true).assertIsDisplayed()
+        assertEquals(AppSection.LIVE, vm.selectedSection.value)
     }
 
     // --- Apertura del player dalla riga Live ---

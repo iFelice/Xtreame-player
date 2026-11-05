@@ -54,6 +54,7 @@ import kotlinx.coroutines.flow.StateFlow
 
 /** Null fuori dalla Home (ad esempio nelle anteprime isolate del player). */
 internal val LocalPlayerVisibleCatalog = staticCompositionLocalOf<StateFlow<CatalogUiState>?> { null }
+internal val LocalPlayerOnHidden = staticCompositionLocalOf<(() -> Unit)?> { null }
 
 @androidx.media3.common.util.UnstableApi
 @Composable
@@ -96,6 +97,7 @@ fun PlayerScreen(
     }
     val state = engine.state
     val visibility = LocalPlayerVisibleCatalog.current
+    val onHidden = LocalPlayerOnHidden.current ?: onExit
     val feedback = rememberPlayerGestureFeedback()
     var videoView by remember { mutableStateOf<PlayerView?>(null) }
     var fit by remember { mutableStateOf(true) }
@@ -111,7 +113,7 @@ fun PlayerScreen(
     val volumeControl = rememberVolumeControl(context)
     val brightnessControl = rememberBrightnessControl(context, activity?.window)
 
-    PlayerVisibilityObserver(engine, visibility, onExit)
+    PlayerVisibilityObserver(engine, visibility, onHidden)
     LaunchedEffect(engine) {
         engine.start()
     }

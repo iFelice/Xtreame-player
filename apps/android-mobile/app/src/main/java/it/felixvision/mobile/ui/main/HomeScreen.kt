@@ -63,6 +63,7 @@ import it.felixvision.mobile.ui.detail.SeriesDetailScreen
 import it.felixvision.mobile.ui.settings.SettingsScreen
 import it.felixvision.mobile.ui.settings.SettingsViewModel
 import it.felixvision.mobile.ui.theme.FvpColors
+import it.felixvision.mobile.ui.player.LocalPlayerOnHidden
 import it.felixvision.mobile.ui.player.LocalPlayerVisibleCatalog
 import it.felixvision.mobile.ui.player.MobilePlayerSession
 import it.felixvision.mobile.ui.player.PlayerScreen
@@ -242,11 +243,14 @@ fun HomeScreen(
     }
 
     if (playerSession != null) {
-        CompositionLocalProvider(LocalPlayerVisibleCatalog provides catalogViewModel.ui) {
-            playerContent(container, playerSession!!) {
+        CompositionLocalProvider(
+            LocalPlayerVisibleCatalog provides catalogViewModel.ui,
+            LocalPlayerOnHidden provides {
                 playerSession = null
                 catalogViewModel.selectSection(AppSection.NOVITA)
-            }
+            },
+        ) {
+            playerContent(container, playerSession!!) { playerSession = null }
         }
         return
     }
