@@ -123,4 +123,15 @@ class PersonalChannelNumberingTest {
         // Zero non è una posizione valida.
         assertEquals(null, ChannelPositionField.forAppend(0).digit(0).value)
     }
+
+    @Test
+    fun `frecce incrementano e decrementano di un passo`() {
+        val proposed = ChannelPositionField.forPosition(50)
+
+        assertEquals("51", proposed.step(delta = 1).digits)
+        assertEquals("49", proposed.step(delta = -1).digits)
+        assertEquals("1", ChannelPositionField.forPosition(1).step(delta = -1).digits)
+        assertEquals("9999", ChannelPositionField.forPosition(9_999).step(delta = 1).digits)
+        assertEquals("50", proposed.step(delta = 2).digits)
+    }
 }

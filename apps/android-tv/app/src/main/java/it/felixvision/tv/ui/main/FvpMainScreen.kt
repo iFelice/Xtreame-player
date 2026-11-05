@@ -73,6 +73,7 @@ import it.felixvision.tv.ui.catalog.FilmSection
 import it.felixvision.tv.ui.catalog.LiveSection
 import it.felixvision.tv.ui.catalog.MyChannelDialog
 import it.felixvision.tv.ui.catalog.myChannelFocusTargetAfterRemoval
+import it.felixvision.tv.ui.catalog.myChannelFocusTargetAtOriginalPosition
 import it.felixvision.tv.ui.catalog.NovitaSection
 import it.felixvision.tv.ui.catalog.SearchSection
 import it.felixvision.tv.ui.catalog.SerieSection
@@ -176,6 +177,7 @@ fun FvpMainScreen(
     var favoritesTick by remember(sessionId) { mutableStateOf(0L) }
     // Canale della finestra "Aggiungi a I miei canali" / menu di modifica.
     var myChannelEdit by remember(sessionId, currentServer, currentUsername) { mutableStateOf<MyChannel?>(null) }
+    var myChannelEditFromMyChannels by remember(sessionId, currentServer, currentUsername) { mutableStateOf(false) }
     var myChannelFocusId by remember(sessionId, currentServer, currentUsername) { mutableStateOf<String?>(null) }
     var myChannelFocusTick by remember(sessionId) { mutableIntStateOf(0) }
     var favoritesMessage by remember(sessionId) { mutableStateOf<String?>(null) }
@@ -502,6 +504,7 @@ fun FvpMainScreen(
 
     /** Pressione lunga su un canale: aggiunta o menu di modifica. */
     fun openMyChannelDialog(stream: LiveStream) {
+        myChannelEditFromMyChannels = false
         myChannelEdit = MyChannel(
             streamId = stream.streamId,
             name = stream.name,
@@ -509,23 +512,31 @@ fun FvpMainScreen(
         )
     }
 
-    fun closeMyChannelDialog(channel: MyChannel?) {
+    fun closeMyChannelDialog(channel: MyChannel?, focusTarget: MyChannel? = channel) {
         myChannelEdit = null
-        if (channel != null) {
-            myChannelFocusId = channel.streamId
+        myChannelEditFromMyChannels = false
+        if (focusTarget != null) {
+            myChannelFocusId = focusTarget.streamId
             myChannelFocusTick += 1
         }
     }
 
     fun confirmMyChannelPosition(channel: MyChannel, position: Int) {
+        val restoreOriginalSlot = myChannelEditFromMyChannels
         scope.launch {
             val current = container.myChannelsStore.getChannels(currentServer, currentUsername)
-            if (MyChannels.contains(current, channel.streamId)) {
+            val wasInMyChannels = MyChannels.contains(current, channel.streamId)
+            val updated = if (wasInMyChannels) {
                 container.myChannelsStore.moveTo(currentServer, currentUsername, channel.streamId, position)
             } else {
                 container.myChannelsStore.insertAt(currentServer, currentUsername, channel, position)
             }
-            closeMyChannelDialog(channel)
+            val focusTarget = if (restoreOriginalSlot && wasInMyChannels) {
+                myChannelFocusTargetAtOriginalPosition(current, updated, channel.streamId)
+            } else {
+                null
+            }
+            closeMyChannelDialog(channel, focusTarget ?: channel)
         }
     }
 
@@ -899,6 +910,7 @@ fun FvpMainScreen(
                                         clock = container.clock,
                                         onPlayMyChannel = { channel -> playMyChannel(channel) },
                                         onLongPressMyChannel = { channel ->
+                                            myChannelEditFromMyChannels = true
                                             myChannelEdit = channel
                                         },
                                         focusMyChannelId = myChannelFocusId,
