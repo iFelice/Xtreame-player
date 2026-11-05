@@ -6,6 +6,7 @@ import android.content.Context
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertTextEquals
@@ -209,6 +210,14 @@ class ProtectedAddContentTest {
         settle()
     }
 
+    private fun awaitSelected(tag: String) {
+        rule.waitUntil(timeoutMillis = 5_000L) {
+            scheduler.runCurrent()
+            rule.onAllNodesWithTag(tag, useUnmergedTree = true).fetchSemanticsNodes()
+                .firstOrNull()?.config?.getOrNull(SemanticsProperties.Selected) == true
+        }
+    }
+
     private fun storedData() = runBlocking { store.get(server, username) }
 
     /**
@@ -291,6 +300,7 @@ class ProtectedAddContentTest {
                 it.kind == ProtectedKind.VOD.storageKey && it.itemId == "202"
             }
         }
+        awaitSelected("protected_itemrow_vod_202")
         rule.onNodeWithTag("protected_itemrow_vod_202").assertIsSelected()
     }
 
@@ -317,6 +327,7 @@ class ProtectedAddContentTest {
         pressBack()
         click(categoryRow(ProtectedKind.VOD, "v2"))
         awaitTag("protected_itemrow_vod_201")
+        awaitSelected("protected_itemrow_vod_201")
         rule.onNodeWithTag("protected_itemrow_vod_201").assertIsSelected()
     }
 

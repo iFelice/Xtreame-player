@@ -61,6 +61,17 @@ class ProtectedSessionLifecycleTest {
     }
 
     @Test
+    fun destructionInPipLocksEvenWithoutModeChangedCallback() {
+        start()
+        app.container.protectedSession.unlock()
+        PlayerPipRegistry.markEntered()
+        controller?.pause()?.stop()?.destroy()
+        controller = null
+        assertFalse(app.container.protectedSession.unlocked.value)
+        assertFalse(PlayerPipRegistry.inPip)
+    }
+
+    @Test
     fun stoppingInPipDoesNotLockButClosingPipDoes() {
         val activity = start()
         app.container.protectedSession.unlock()

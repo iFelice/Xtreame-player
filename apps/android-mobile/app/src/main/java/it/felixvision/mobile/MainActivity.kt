@@ -66,6 +66,12 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        // Il sistema può distruggere l'activity chiudendo il PiP senza
+        // consegnare prima un cambio di modalità.
+        if (PlayerPipRegistry.inPip) {
+            protectedSession.lock()
+            PlayerPipRegistry.notifyClosed()
+        }
         unregisterReceiver(screenOffReceiver)
         super.onDestroy()
     }

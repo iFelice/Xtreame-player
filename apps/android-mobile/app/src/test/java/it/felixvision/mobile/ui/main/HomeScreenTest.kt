@@ -6,6 +6,7 @@
 
 package it.felixvision.mobile.ui.main
 
+import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
@@ -67,7 +68,9 @@ import it.felixvision.tv.data.xtream.LoginResult
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.util.concurrent.TimeUnit
 import kotlin.math.abs
+import org.robolectric.Shadows.shadowOf
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -575,6 +578,7 @@ class HomeScreenTest {
         rule.onNodeWithTag("continua_card_vod_202", useUnmergedTree = true).assertIsDisplayed()
         rule.onNodeWithTag("rail_item_cerca").performClick()
         rule.runOnIdle { vm.onSearchQueryChange("Esempio") }
+        shadowOf(Looper.getMainLooper()).idleFor(350, TimeUnit.MILLISECONDS)
         rule.waitUntil(10_000L) { vm.searchResults.value.vod.map { it.streamId } == listOf("202") }
         rule.onNodeWithTag("cerca_film_201", useUnmergedTree = true).assertDoesNotExist()
         rule.onNodeWithTag("cerca_film_202", useUnmergedTree = true).assertIsDisplayed()

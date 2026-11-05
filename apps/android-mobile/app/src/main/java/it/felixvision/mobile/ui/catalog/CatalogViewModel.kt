@@ -326,15 +326,19 @@ class CatalogViewModel(
         }
         viewModelScope.launch {
             combine(_searchResults, _visibleUi) { results, state ->
-                val catalog = state.catalog
-                val live = catalog?.liveStreams.orEmpty().mapTo(hashSetOf()) { it.streamId }
-                val vod = catalog?.vodStreams.orEmpty().mapTo(hashSetOf()) { it.streamId }
-                val series = catalog?.series.orEmpty().mapTo(hashSetOf()) { it.seriesId }
-                SearchResults(
-                    live = results.live.filter { it.streamId in live },
-                    vod = results.vod.filter { it.streamId in vod },
-                    series = results.series.filter { it.seriesId in series },
-                )
+                if (results.isEmpty) {
+                    results
+                } else {
+                    val catalog = state.catalog
+                    val live = catalog?.liveStreams.orEmpty().mapTo(hashSetOf()) { it.streamId }
+                    val vod = catalog?.vodStreams.orEmpty().mapTo(hashSetOf()) { it.streamId }
+                    val series = catalog?.series.orEmpty().mapTo(hashSetOf()) { it.seriesId }
+                    SearchResults(
+                        live = results.live.filter { it.streamId in live },
+                        vod = results.vod.filter { it.streamId in vod },
+                        series = results.series.filter { it.seriesId in series },
+                    )
+                }
             }.collect { _visibleSearchResults.value = it }
         }
         viewModelScope.launch {
