@@ -295,7 +295,10 @@ export class PairingHub {
     const vpnRows = this.sql
       .exec<{ oldest: number | null }>('SELECT MIN(created_at) AS oldest FROM vpn_sessions')
       .toArray();
-    const oldestCandidates = [pairRows[0]?.oldest, vpnRows[0]?.oldest].filter(
+    const backupRows = this.sql
+      .exec<{ oldest: number | null }>('SELECT MIN(created_at) AS oldest FROM backup_sessions')
+      .toArray();
+    const oldestCandidates = [pairRows[0]?.oldest, vpnRows[0]?.oldest, backupRows[0]?.oldest].filter(
       (value): value is number => typeof value === 'number' && Number.isFinite(value),
     );
     if (oldestCandidates.length > 0) {
