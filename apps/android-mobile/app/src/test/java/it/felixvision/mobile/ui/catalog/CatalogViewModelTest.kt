@@ -18,6 +18,12 @@ import it.felixvision.tv.data.channels.MyChannel
 import it.felixvision.tv.data.continuewatching.ContinueEntry
 import it.felixvision.tv.data.favorites.FavoriteItem
 import it.felixvision.tv.data.progress.WatchProgress
+import it.felixvision.tv.core.Clock
+import it.felixvision.tv.data.protection.HiddenItem
+import it.felixvision.tv.data.protection.ProtectedContentData
+import it.felixvision.tv.data.protection.ProtectedKind
+import it.felixvision.tv.data.protection.ProtectedSession
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -253,8 +259,11 @@ class CatalogViewModelTest {
         myChannelsGateway: FakeMyChannelsGateway = FakeMyChannelsGateway(),
         continueGateway: FakeContinueWatchingGateway = FakeContinueWatchingGateway(),
         progressGateway: FakeProgressGateway = FakeProgressGateway(),
+        server: String = SERVER,
+        protectionGateway: ProtectedContentGateway? = null,
+        protectedSession: ProtectedSession? = null,
     ): CatalogViewModel = CatalogViewModel(
-        server = SERVER,
+        server = server,
         username = USERNAME,
         password = PASSWORD,
         catalogGateway = catalogGateway,
@@ -263,7 +272,49 @@ class CatalogViewModelTest {
         myChannelsGateway = myChannelsGateway,
         continueGateway = continueGateway,
         progressGateway = progressGateway,
+        protectionGateway = protectionGateway,
+        protectedSession = protectedSession,
     )
+
+    private class DeferredProtection : ProtectedContentGateway {
+        override val revision = MutableStateFlow(0L)
+        val reads = mutableListOf<Pair<String, String>>()
+        val results = mutableMapOf<String, CompletableDeferred<ProtectedContentData>>()
+        override suspend fun get(server: String, username: String): ProtectedContentData {
+            reads += server to username
+            return results.getOrPut(server) { CompletableDeferred() }.await()
+        }
+    }
+
+    @Test
+    fun `archivio pending e rilettura per account diverso`() = runTest(scheduler) {
+        val gateway = DeferredProtection()
+        val session = ProtectedSession(clock = Clock { scheduler.currentTime })
+        val first = newViewModel(protectionGateway = gateway, protectedSession = session)
+        runCurrent()
+        assertTrue(first.ui.value.isLoading)
+        assertNull(first.ui.value.catalog)
+        assertTrue(first.favorites.value.isEmpty())
+        assertTrue(first.myChannels.value.isEmpty())
+        assertTrue(first.continueEntries.value.isEmpty())
+        gateway.results.getValue(SERVER).complete(
+            ProtectedContentData(hiddenItems = listOf(HiddenItem(ProtectedKind.LIVE.storageKey, "101", "c1", "Canale Uno"))),
+        )
+        runCurrent()
+        assertEquals(listOf("102", "103"), first.ui.value.catalog?.liveStreams?.map { it.streamId })
+
+        // Anche un nuovo account deve attendere la propria lettura, senza
+        // riutilizzare il risultato del precedente.
+        val secondServer = "$SERVER/"
+        val second = newViewModel(server = secondServer, protectionGateway = gateway, protectedSession = session)
+        runCurrent()
+        assertTrue(second.ui.value.isLoading)
+        assertNull(second.ui.value.catalog)
+        assertEquals(listOf(SERVER to USERNAME, secondServer to USERNAME), gateway.reads)
+        gateway.results.getValue(secondServer).complete(ProtectedContentData())
+        runCurrent()
+        assertEquals(listOf("101", "102", "103"), second.ui.value.catalog?.liveStreams?.map { it.streamId })
+    }
 
     // --- Casi ---
 

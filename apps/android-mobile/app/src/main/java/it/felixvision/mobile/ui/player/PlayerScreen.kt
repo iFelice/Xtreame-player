@@ -26,6 +26,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
@@ -53,6 +54,32 @@ import kotlinx.coroutines.flow.StateFlow
 
 /** Null fuori dalla Home (ad esempio nelle anteprime isolate del player). */
 internal val LocalPlayerVisibleCatalog = staticCompositionLocalOf<StateFlow<CatalogUiState>?> { null }
+
+@androidx.media3.common.util.UnstableApi
+@Composable
+internal fun PlayerVisibilityObserver(
+    engine: PlayerEngine,
+    visibility: StateFlow<CatalogUiState>?,
+    onExit: () -> Unit,
+) {
+    val currentOnExit by rememberUpdatedState(onExit)
+    LaunchedEffect(engine, visibility) {
+        visibility?.collect { current ->
+            val catalog = current.catalog
+            engine.setVisibleChannels(catalog?.liveStreams.orEmpty().mapTo(hashSetOf()) { it.streamId })
+            val visible = when (val source = engine.playbackSource) {
+                is MobilePlaybackSource.Live -> catalog?.liveStreams?.any { it.streamId == engine.state.currentStreamId } == true
+                is MobilePlaybackSource.Catchup -> catalog?.liveStreams?.any { it.streamId == source.stream.streamId } == true
+                is MobilePlaybackSource.Movie -> catalog?.vodStreams?.any { it.streamId == source.stream.streamId } == true
+                is MobilePlaybackSource.Episode -> catalog?.series?.any { it.seriesId == source.seriesId } == true
+            }
+            if (!visible) {
+                engine.close()
+                currentOnExit()
+            }
+        }
+    }
+}
 
 @androidx.media3.common.util.UnstableApi
 @Composable
@@ -84,22 +111,7 @@ fun PlayerScreen(
     val volumeControl = rememberVolumeControl(context)
     val brightnessControl = rememberBrightnessControl(context, activity?.window)
 
-    LaunchedEffect(engine, visibility) {
-        visibility?.collect { current ->
-            val visibleCatalog = current.catalog
-            engine.setVisibleChannels(visibleCatalog?.liveStreams.orEmpty().mapTo(hashSetOf()) { it.streamId })
-            val visible = when (val source = engine.playbackSource) {
-                is MobilePlaybackSource.Live -> visibleCatalog?.liveStreams?.any { it.streamId == engine.state.currentStreamId } == true
-                is MobilePlaybackSource.Catchup -> visibleCatalog?.liveStreams?.any { it.streamId == source.stream.streamId } == true
-                is MobilePlaybackSource.Movie -> visibleCatalog?.vodStreams?.any { it.streamId == source.stream.streamId } == true
-                is MobilePlaybackSource.Episode -> visibleCatalog?.series?.any { it.seriesId == source.seriesId } == true
-            }
-            if (!visible) {
-                engine.close()
-                onExit()
-            }
-        }
-    }
+    PlayerVisibilityObserver(engine, visibility, onExit)
     LaunchedEffect(engine) {
         engine.start()
     }

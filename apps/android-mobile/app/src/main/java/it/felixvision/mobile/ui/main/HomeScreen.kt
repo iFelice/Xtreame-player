@@ -30,6 +30,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -68,6 +69,8 @@ import it.felixvision.mobile.ui.player.PlayerScreen
 import it.felixvision.mobile.ui.player.createMobilePlayerSession
 import it.felixvision.tv.data.epg.ChannelScheduleLoader
 import it.felixvision.tv.data.xtream.XtreamAccount
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 
 /**
  * Schermata principale del tablet dopo l'accesso.
@@ -152,6 +155,7 @@ fun HomeScreen(
     var playerSession by remember(summary.server, summary.username) { mutableStateOf<MobilePlayerSession?>(null) }
 
     val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
     // Migrazione dei vecchi preferiti Live, esattamente dove la TV la fa
@@ -180,12 +184,24 @@ fun HomeScreen(
     LaunchedEffect(playRequest, catalogState.catalog) {
         val request = playRequest ?: return@LaunchedEffect
         val catalog = catalogState.catalog ?: return@LaunchedEffect
-        val resolved = runCatching {
+        val wasUnlocked = container.protectedSession.unlocked.value
+        val protectionRevision = container.protectedContentStore.revision.value
+        val resolved = try {
             createMobilePlayerSession(request, catalog, container, summary, password, catalogViewModel)
-        }.getOrNull()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        }
         catalogViewModel.consumePlayRequest(request)
-        if (resolved != null && catalogViewModel.ui.value.catalog == catalog) playerSession = resolved
-        else snackbarHostState.showSnackbar("Contenuto non disponibile per la riproduzione")
+        if (resolved != null && catalogViewModel.ui.value.catalog == catalog &&
+            container.protectedSession.unlocked.value == wasUnlocked &&
+            container.protectedContentStore.revision.value == protectionRevision
+        ) {
+            playerSession = resolved
+        } else {
+            scope.launch { snackbarHostState.showSnackbar("Contenuto non disponibile per la riproduzione") }
+        }
     }
 
     // Un dettaglio rimasto aperto non deve mostrare un contenuto diventato nascosto.

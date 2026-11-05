@@ -18,6 +18,8 @@ import it.felixvision.tv.data.favorites.FavoriteItem
 import it.felixvision.tv.data.favorites.FavoritesStore
 import it.felixvision.tv.data.progress.ProgressStore
 import it.felixvision.tv.data.progress.WatchProgress
+import it.felixvision.tv.data.protection.ProtectedContentData
+import it.felixvision.tv.data.protection.ProtectedContentStore
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -27,6 +29,16 @@ import kotlinx.coroutines.flow.StateFlow
  * finti senza Android né rete. In app le implementazioni predefinite
  * delegano alle classi condivise costruite dall'AppContainer.
  */
+interface ProtectedContentGateway {
+    val revision: StateFlow<Long>
+    suspend fun get(server: String, username: String): ProtectedContentData
+}
+
+class StoreProtectedContentGateway(private val store: ProtectedContentStore) : ProtectedContentGateway {
+    override val revision: StateFlow<Long> = store.revision
+    override suspend fun get(server: String, username: String): ProtectedContentData = store.get(server, username)
+}
+
 interface CatalogGateway {
 
     suspend fun loadCatalog(

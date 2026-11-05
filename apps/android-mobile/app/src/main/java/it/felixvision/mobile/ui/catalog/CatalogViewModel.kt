@@ -9,7 +9,6 @@ import it.felixvision.mobile.AppContainer
 import it.felixvision.mobile.ui.main.AppSection
 import it.felixvision.mobile.ui.main.visibleContent
 import it.felixvision.tv.data.protection.ProtectedContentData
-import it.felixvision.tv.data.protection.ProtectedContentStore
 import it.felixvision.tv.data.protection.ProtectedSession
 import it.felixvision.tv.data.catalog.Catalog
 import it.felixvision.tv.data.catalog.CatalogOrdering
@@ -199,7 +198,7 @@ class CatalogViewModel(
     private val myChannelsGateway: MyChannelsGateway,
     private val continueGateway: ContinueWatchingGateway,
     private val progressGateway: ProgressGateway,
-    private val protectedStore: ProtectedContentStore? = null,
+    private val protectionGateway: ProtectedContentGateway? = null,
     private val protectedSession: ProtectedSession? = null,
 ) : ViewModel() {
 
@@ -218,7 +217,7 @@ class CatalogViewModel(
         myChannelsGateway = StoreMyChannelsGateway(container.myChannelsStore, container.favoritesStore),
         continueGateway = StoreContinueWatchingGateway(container.continueWatchingStore),
         progressGateway = StoreProgressGateway(container.progressStore),
-        protectedStore = container.protectedContentStore,
+        protectionGateway = StoreProtectedContentGateway(container.protectedContentStore),
         protectedSession = container.protectedSession,
     )
 
@@ -241,7 +240,7 @@ class CatalogViewModel(
     val continueEntries: StateFlow<List<ContinueEntry>> = _visibleContinueEntries.asStateFlow()
 
     private val protectedData = MutableStateFlow<ProtectedContentData?>(
-        if (protectedStore == null) ProtectedContentData() else null,
+        if (protectionGateway == null) ProtectedContentData() else null,
     )
     private val unlocked = protectedSession?.unlocked ?: MutableStateFlow(false)
 
@@ -295,11 +294,11 @@ class CatalogViewModel(
     private val loadMutex = Mutex()
 
     init {
-        if (protectedStore != null) {
+        if (protectionGateway != null) {
             viewModelScope.launch {
-                protectedStore.revision.collectLatest {
+                protectionGateway.revision.collectLatest {
                     try {
-                        protectedData.value = protectedStore.get(server, username)
+                        protectedData.value = protectionGateway.get(server, username)
                     } catch (e: CancellationException) {
                         throw e
                     } catch (_: Exception) {

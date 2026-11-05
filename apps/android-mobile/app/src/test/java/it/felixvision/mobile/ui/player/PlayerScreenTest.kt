@@ -31,6 +31,9 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import it.felixvision.mobile.AppContainer
+import it.felixvision.mobile.ui.catalog.CatalogUiState
+import it.felixvision.tv.data.catalog.Catalog
+import kotlinx.coroutines.flow.MutableStateFlow
 import it.felixvision.mobile.ui.theme.FvpTheme
 import it.felixvision.tv.data.catalog.LiveStream
 import it.felixvision.tv.data.catalog.VodStream
@@ -194,6 +197,28 @@ class PlayerScreenTest {
 
         rule.onNodeWithText("Torna alla diretta").assertIsDisplayed()
         rule.onNodeWithTag("player_tab_channels").assertIsDisplayed()
+    }
+
+    @Test
+    @Config(sdk = [34], qualifiers = "w1280dp-h800dp-land-mdpi")
+    fun playerClosesOnlyWhenTheCurrentChannelBecomesHidden() {
+        val source = liveSource()
+        val engine = engineFor(source)
+        val visibility = MutableStateFlow(CatalogUiState(isLoading = false, catalog = Catalog(liveStreams = source.channels)))
+        var exits = 0
+        rule.setContent { PlayerVisibilityObserver(engine, visibility) { exits++ } }
+        rule.waitForIdle()
+        rule.runOnIdle {
+            visibility.value = visibility.value.copy(catalog = Catalog(liveStreams = listOf(source.channels.first())))
+        }
+        rule.waitForIdle()
+        assertEquals(0, exits)
+        assertEquals(listOf("stream-001"), engine.zappingChannels.map { it.streamId })
+        rule.runOnIdle {
+            visibility.value = visibility.value.copy(catalog = Catalog(liveStreams = listOf(source.channels.last())))
+        }
+        rule.waitForIdle()
+        assertEquals(1, exits)
     }
 
     @Test

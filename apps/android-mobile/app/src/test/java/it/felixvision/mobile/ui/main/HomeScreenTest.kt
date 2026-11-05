@@ -35,6 +35,9 @@ import it.felixvision.mobile.ui.catalog.FavoritesGateway
 import it.felixvision.mobile.ui.catalog.MyChannelsGateway
 import it.felixvision.mobile.ui.catalog.PlayTarget
 import it.felixvision.mobile.ui.catalog.ProgressGateway
+import it.felixvision.mobile.ui.catalog.StoreProtectedContentGateway
+import it.felixvision.mobile.ui.player.MobilePlaybackSource
+import it.felixvision.mobile.ui.player.createMobilePlayerSession
 import it.felixvision.mobile.ui.settings.SettingsUserDataStore
 import it.felixvision.mobile.ui.settings.SettingsViewModel
 import it.felixvision.mobile.ui.theme.FvpTheme
@@ -159,9 +162,9 @@ class HomeScreenTest {
         override fun shouldAutoRefresh(lastUpdateMillis: Long?): Boolean = false
     }
 
-    private class FakeFavoritesGateway : FavoritesGateway {
+    private class FakeFavoritesGateway(private val items: List<FavoriteItem> = emptyList()) : FavoritesGateway {
         override suspend fun getFavorites(server: String, username: String): List<FavoriteItem> =
-            emptyList()
+            items
 
         override suspend fun toggleFavorite(
             server: String,
@@ -208,12 +211,12 @@ class HomeScreenTest {
         override suspend fun migrateLegacyLiveFavorites(server: String, username: String): Int = 0
     }
 
-    private class FakeContinueWatchingGateway : ContinueWatchingGateway {
+    private class FakeContinueWatchingGateway(private val entries: List<ContinueEntry> = emptyList()) : ContinueWatchingGateway {
         private val _revision = MutableStateFlow(0L)
         override val revision: StateFlow<Long> = _revision.asStateFlow()
 
         override suspend fun getAll(server: String, username: String): List<ContinueEntry> =
-            emptyList()
+            entries
 
         override suspend fun hide(server: String, username: String, key: String) {}
     }
@@ -243,6 +246,8 @@ class HomeScreenTest {
     private fun createCatalogViewModel(
         myChannels: List<MyChannel> = emptyList(),
         protection: AppContainer? = null,
+        favorites: List<FavoriteItem> = emptyList(),
+        entries: List<ContinueEntry> = emptyList(),
     ): CatalogViewModel {
         return CatalogViewModel(
             server = "http://server.esempio:8080",
@@ -250,11 +255,11 @@ class HomeScreenTest {
             password = "demo",
             catalogGateway = FakeCatalogGateway(sampleCatalog()),
             cacheGateway = FakeCacheGateway(),
-            favoritesGateway = FakeFavoritesGateway(),
+            favoritesGateway = FakeFavoritesGateway(favorites),
             myChannelsGateway = FakeMyChannelsGateway(myChannels),
-            continueGateway = FakeContinueWatchingGateway(),
+            continueGateway = FakeContinueWatchingGateway(entries),
             progressGateway = FakeProgressGateway(),
-            protectedStore = protection?.protectedContentStore,
+            protectionGateway = protection?.let { StoreProtectedContentGateway(it.protectedContentStore) },
             protectedSession = protection?.protectedSession,
         )
     }
@@ -525,6 +530,66 @@ class HomeScreenTest {
 
     @Test
     @Config(sdk = [34], qualifiers = "w1280dp-h800dp-land-mdpi")
+    fun `filtro in film ricerca preferiti riprendi e numerazione si aggiorna allo sblocco`() {
+        val container = AppContainer(ApplicationProvider.getApplicationContext())
+        runBlocking {
+            val store = container.protectedContentStore
+            store.toggleItem("http://server.esempio:8080", "demo", ProtectedKind.LIVE, "101", "c1", "Canale Uno")
+            store.toggleItem("http://server.esempio:8080", "demo", ProtectedKind.VOD, "201", "v1", "Film Esempio")
+            store.toggleCategory("http://server.esempio:8080", "demo", ProtectedKind.LIVE, "c2", "Sport")
+        }
+        val vm = createCatalogViewModel(
+            protection = container,
+            myChannels = listOf(MyChannel("101", "Canale Uno"), MyChannel("102", "Canale Due")),
+            favorites = listOf(
+                FavoriteItem("vod_201", FavoriteItem.VOD, "Film Esempio", categoryId = "v1"),
+                FavoriteItem("vod_202", FavoriteItem.VOD, "Cartone Esempio", categoryId = "v2"),
+                FavoriteItem.liveCategory("c2", "Sport"),
+            ),
+            entries = listOf(
+                ContinueEntry.movie("201", "Film Esempio", null, "v1", "mp4"),
+                ContinueEntry.movie("202", "Cartone Esempio", null, "v2", "mp4"),
+            ),
+        )
+        mount(vm, container)
+        rule.waitUntil(10_000L) {
+            vm.ui.value.catalog?.vodStreams?.size == 1 && vm.myChannels.value.size == 1 &&
+                vm.favorites.value.size == 1 && vm.continueEntries.value.size == 1
+        }
+        rule.onNodeWithTag("rail_item_film").performClick()
+        rule.onNodeWithTag("film_201", useUnmergedTree = true).assertDoesNotExist()
+        rule.onNodeWithTag("film_202", useUnmergedTree = true).assertIsDisplayed()
+
+        rule.onNodeWithTag("rail_item_preferiti").performClick()
+        rule.onNodeWithTag("mychannel_101", useUnmergedTree = true).assertDoesNotExist()
+        rule.onNodeWithTag("mychannel_102", useUnmergedTree = true).assertIsDisplayed()
+        rule.onNode(hasText("1") and hasAnyAncestor(hasTestTag("mychannel_102")), useUnmergedTree = true).assertExists()
+        rule.onNodeWithTag("favorites_tab_film_series", useUnmergedTree = true).performClick()
+        rule.onNodeWithTag("favorite_vod_201", useUnmergedTree = true).assertDoesNotExist()
+        rule.onNodeWithTag("favorite_vod_202", useUnmergedTree = true).assertIsDisplayed()
+        rule.onNodeWithTag("favorites_tab_live_categories", useUnmergedTree = true).performClick()
+        rule.onNodeWithTag("favorite_livecat_c2", useUnmergedTree = true).assertDoesNotExist()
+
+        rule.onNodeWithTag("rail_item_riprendi").performClick()
+        rule.onNodeWithTag("continua_card_vod_201", useUnmergedTree = true).assertDoesNotExist()
+        rule.onNodeWithTag("continua_card_vod_202", useUnmergedTree = true).assertIsDisplayed()
+        rule.onNodeWithTag("rail_item_cerca").performClick()
+        rule.runOnIdle { vm.onSearchQueryChange("Esempio") }
+        rule.waitUntil(10_000L) { vm.searchResults.value.vod.map { it.streamId } == listOf("202") }
+        rule.onNodeWithTag("cerca_film_201", useUnmergedTree = true).assertDoesNotExist()
+        rule.onNodeWithTag("cerca_film_202", useUnmergedTree = true).assertIsDisplayed()
+
+        rule.runOnIdle { container.protectedSession.unlock() }
+        rule.waitUntil(10_000L) { vm.searchResults.value.vod.size == 2 && vm.myChannels.value.size == 2 }
+        rule.onNodeWithTag("cerca_film_201", useUnmergedTree = true).assertIsDisplayed()
+        rule.onNodeWithTag("rail_item_preferiti").performClick()
+        rule.onNodeWithTag("favorites_tab_my_channels", useUnmergedTree = true).performClick()
+        rule.onNodeWithTag("mychannel_101", useUnmergedTree = true).assertIsDisplayed()
+        rule.onNode(hasText("2") and hasAnyAncestor(hasTestTag("mychannel_102")), useUnmergedTree = true).assertExists()
+    }
+
+    @Test
+    @Config(sdk = [34], qualifiers = "w1280dp-h800dp-land-mdpi")
     fun `richiesta diretta di canale nascosto non apre il player`() {
         val container = AppContainer(ApplicationProvider.getApplicationContext())
         runBlocking {
@@ -538,6 +603,33 @@ class HomeScreenTest {
         rule.runOnIdle { vm.onPlayRequest(PlayTarget.LiveChannel("101")) }
         rule.waitUntil(10_000L) { vm.playRequest.value == null }
         rule.onNodeWithText("IN DIRETTA").assertDoesNotExist()
+    }
+
+    @Test
+    @Config(sdk = [34], qualifiers = "w1280dp-h800dp-land-mdpi")
+    fun `factory blocca avvio e zapping nascosti e li ripristina dopo sblocco`() {
+        val container = AppContainer(ApplicationProvider.getApplicationContext())
+        runBlocking {
+            container.protectedContentStore.toggleItem(
+                "http://server.esempio:8080", "demo", ProtectedKind.LIVE, "101", "c1", "Canale Uno",
+            )
+        }
+        val vm = createCatalogViewModel(protection = container)
+        val account = AccountSummary(
+            username = "demo", server = "http://server.esempio:8080", status = AccountStatus.ACTIVE,
+            expiresAtEpochSeconds = null, isTrial = false, maxConnections = 2, activeConnections = 1,
+        )
+        runBlocking {
+            val hidden = createMobilePlayerSession(PlayTarget.LiveChannel("101"), sampleCatalog(), container, account, "demo", vm)
+            assertEquals(null, hidden)
+            val locked = createMobilePlayerSession(PlayTarget.LiveChannel("102"), sampleCatalog(), container, account, "demo", vm)
+            assertEquals(listOf("102"), (locked?.source as MobilePlaybackSource.Live).channels.map { it.streamId })
+        }
+        rule.runOnIdle { container.protectedSession.unlock() }
+        runBlocking {
+            val unlocked = createMobilePlayerSession(PlayTarget.LiveChannel("102"), sampleCatalog(), container, account, "demo", vm)
+            assertEquals(listOf("101", "102"), (unlocked?.source as MobilePlaybackSource.Live).channels.map { it.streamId })
+        }
     }
 
     // --- Apertura del player dalla riga Live ---

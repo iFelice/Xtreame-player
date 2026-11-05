@@ -71,12 +71,12 @@ fun visibleContent(
     // Gli archivi dei preferiti e di Riprendi conservano solo la categoria
     // principale. Il catalogo completo permette di riconoscere anche le
     // categorie secondarie, senza scartare le voci non più nel catalogo.
-    val hiddenLive = catalog?.liveStreams.orEmpty().map { it.streamId }.toSet() -
-        visibleCatalog?.liveStreams.orEmpty().map { it.streamId }.toSet()
-    val hiddenVod = catalog?.vodStreams.orEmpty().map { it.streamId }.toSet() -
-        visibleCatalog?.vodStreams.orEmpty().map { it.streamId }.toSet()
-    val hiddenSeries = catalog?.series.orEmpty().map { it.seriesId }.toSet() -
-        visibleCatalog?.series.orEmpty().map { it.seriesId }.toSet()
+    val hiddenLive = if (catalog == null || visibleCatalog === catalog) emptySet() else
+        catalog.liveStreams.map { it.streamId }.toSet() - visibleCatalog?.liveStreams.orEmpty().map { it.streamId }.toSet()
+    val hiddenVod = if (catalog == null || visibleCatalog === catalog) emptySet() else
+        catalog.vodStreams.map { it.streamId }.toSet() - visibleCatalog?.vodStreams.orEmpty().map { it.streamId }.toSet()
+    val hiddenSeries = if (catalog == null || visibleCatalog === catalog) emptySet() else
+        catalog.series.map { it.seriesId }.toSet() - visibleCatalog?.series.orEmpty().map { it.seriesId }.toSet()
     val filteredFavorites = ProtectedFilter.filterFavorites(favorites, data)
     val matchedFavorites = filteredFavorites.filterNot {
         when (it.type) {
