@@ -38,7 +38,7 @@ class MyChannelPositionFocusTest {
             MyChannel(streamId = id, name = "Canale $id")
         }
         val channels = mutableStateOf(initialChannels)
-        val focusChannelId = mutableStateOf("018")
+        val focusChannelId = mutableStateOf<String?>("018")
         val focusChannelTick = mutableIntStateOf(1)
 
         rule.setContent {
@@ -62,11 +62,12 @@ class MyChannelPositionFocusTest {
 
         val reordered = MyChannels.moveTo(initialChannels, "018", 12)
         val focusTarget = myChannelFocusTargetAtOriginalPosition(initialChannels, reordered, "018")
-        assertEquals("017", focusTarget?.streamId)
+        val focusTargetId = checkNotNull(focusTarget).streamId
+        assertEquals("017", focusTargetId)
         assertEquals(18, MyChannels.numberOf(reordered, "017"))
 
         channels.value = reordered
-        focusChannelId.value = focusTarget?.streamId
+        focusChannelId.value = focusTargetId
         focusChannelTick.intValue += 1
         rule.waitForIdle()
 
