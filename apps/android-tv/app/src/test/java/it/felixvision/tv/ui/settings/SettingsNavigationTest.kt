@@ -47,6 +47,8 @@ private const val FAKE_VPN_SETUP_TAG = "fake_vpn_setup_page"
 private const val FAKE_CATALOG_TAG = "fake_catalog_page"
 private const val FAKE_PLAYER_TAG = "fake_player_page"
 private const val FAKE_APP_TAG = "fake_app_page"
+private const val FAKE_BACKUP_TAG = "fake_backup_page"
+private const val FAKE_BACKUP_FLOW_TAG = "fake_backup_flow_page"
 
 /** Suffisso del pulsante che riceve il focus dentro una pagina segnaposto. */
 private const val FAKE_CLOSE_SUFFIX = "_close"
@@ -90,6 +92,7 @@ class SettingsNavigationTest {
         SettingsCard.Catalog -> FAKE_CATALOG_TAG
         SettingsCard.Player -> FAKE_PLAYER_TAG
         SettingsCard.App -> FAKE_APP_TAG
+        SettingsCard.Backup -> FAKE_BACKUP_TAG
     }
 
     @Test
@@ -147,7 +150,36 @@ class SettingsNavigationTest {
     }
 
     @Test
-    fun `all'ingresso c'è solo la griglia, con il titolo e le sette card`() {
+    fun `dalla pagina Backup il flusso si apre e Indietro torna alla pagina Backup`() {
+        showNavigation()
+
+        rule.onNodeWithTag(SETTINGS_CARD_BACKUP_TAG).performSemanticsAction(SemanticsActions.OnClick)
+        settle()
+        rule.onNodeWithTag(FAKE_BACKUP_TAG).assertExists()
+
+        // Il pulsante apre la schermata del flusso, che sostituisce la pagina.
+        rule.onNodeWithTag(FAKE_BACKUP_TAG + FAKE_CLOSE_SUFFIX)
+            .performSemanticsAction(SemanticsActions.OnClick)
+        settle()
+        rule.onNodeWithTag(FAKE_BACKUP_FLOW_TAG).assertExists()
+        rule.onNodeWithTag(FAKE_BACKUP_TAG).assertDoesNotExist()
+        rule.onNodeWithTag(SETTINGS_GRID_TAG).assertDoesNotExist()
+
+        // Indietro dalla schermata: si torna alla pagina Backup, non alla griglia.
+        rule.onNodeWithTag(FAKE_BACKUP_FLOW_TAG + FAKE_CLOSE_SUFFIX).performKeyInput { pressKey(Key.Back) }
+        settle()
+        rule.onNodeWithTag(FAKE_BACKUP_TAG).assertExists()
+        rule.onNodeWithTag(FAKE_BACKUP_FLOW_TAG).assertDoesNotExist()
+
+        // Indietro dalla pagina Backup: griglia con il focus sulla card Backup.
+        rule.onNodeWithTag(FAKE_BACKUP_TAG + FAKE_CLOSE_SUFFIX).performKeyInput { pressKey(Key.Back) }
+        settle()
+        rule.onNodeWithTag(SETTINGS_GRID_TAG).assertExists()
+        rule.onNodeWithTag(SETTINGS_CARD_BACKUP_TAG).assertIsFocused()
+    }
+
+    @Test
+    fun `all'ingresso c'è solo la griglia, con il titolo e le otto card`() {
         showNavigation()
 
         rule.onNodeWithTag(SETTINGS_TITLE_TAG).assertTextEquals(SETTINGS_TITLE)
@@ -224,11 +256,14 @@ class SettingsNavigationTest {
         rule.setContent {
             FvpTheme {
                 var vpnSetupOpen by remember { mutableStateOf(false) }
+                var backupFlowOpen by remember { mutableStateOf(false) }
                 SettingsNavigation(
                     cardsState = cardsState(),
                     scale = scale,
                     vpnSetupOpen = vpnSetupOpen,
                     onCloseVpnSetup = { vpnSetupOpen = false },
+                    backupFlowOpen = backupFlowOpen,
+                    onCloseBackupFlow = { backupFlowOpen = false },
                     accountPage = { pageModifier, entryFocus ->
                         FakeSettingsPage(pageModifier, scale, FAKE_ACCOUNT_TAG, entryFocus = entryFocus)
                     },
@@ -263,6 +298,23 @@ class SettingsNavigationTest {
                     },
                     appPage = { pageModifier, entryFocus ->
                         FakeSettingsPage(pageModifier, scale, FAKE_APP_TAG, entryFocus = entryFocus)
+                    },
+                    backupPage = { pageModifier, entryFocus ->
+                        FakeSettingsPage(
+                            modifier = pageModifier,
+                            scale = scale,
+                            tag = FAKE_BACKUP_TAG,
+                            onClick = { backupFlowOpen = true },
+                            entryFocus = entryFocus,
+                        )
+                    },
+                    backupFlowPage = { pageModifier ->
+                        FakeSettingsPage(
+                            modifier = pageModifier,
+                            scale = scale,
+                            tag = FAKE_BACKUP_FLOW_TAG,
+                            backAction = { backupFlowOpen = false },
+                        )
                     },
                 )
             }

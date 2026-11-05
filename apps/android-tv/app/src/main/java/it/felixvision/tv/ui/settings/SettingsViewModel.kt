@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import it.felixvision.tv.AppContainer
 import it.felixvision.tv.BuildConfig
+import it.felixvision.tv.data.backup.BackupRelayApi
+import it.felixvision.tv.data.backup.BackupRepository
 import it.felixvision.tv.data.pairing.ApiResult
 import it.felixvision.tv.data.pairing.PairingCoordinator
 import it.felixvision.tv.data.pairing.PairingPanelState
@@ -166,6 +168,14 @@ class SettingsViewModel(
      */
     val vpnController: VpnController get() = container.vpnController
     val vpnRelayClient: VpnRelayApi get() = container.vpnRelayClient
+
+    /**
+     * Backup e ripristino: relay del trasferimento, raccolta/cifratura/
+     * applicazione e archivi coinvolti. Getter: costruire il ViewModel non li
+     * crea.
+     */
+    val backupRelayClient: BackupRelayApi get() = container.backupRelayClient
+    val backupRepository: BackupRepository get() = container.backupRepository
 
     /**
      * Preferenze del player (durata dello zapping): la pagina "Player" le legge

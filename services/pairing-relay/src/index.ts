@@ -1,4 +1,7 @@
 import {
+  BACKUP_IV_BYTES,
+  BACKUP_MAX_CIPHERTEXT_BYTES,
+  BACKUP_MIN_CIPHERTEXT_BYTES,
   buildRubricaIndex,
   constantTimeEqual,
   createVersionedPayload,
@@ -27,7 +30,7 @@ import {
   type RubricaEntry,
 } from '../../../shared/pairing/index.ts';
 import rubricaData from '../rubrica.json';
-import { renderSubmissionPage, renderVpnPage } from './page.ts';
+import { renderBackupPage, renderSubmissionPage, renderVpnPage } from './page.ts';
 
 export const DEFAULT_RUBRICA_ENTRIES: ReadonlyArray<RubricaEntry> = rubricaData as RubricaEntry[];
 export const DEFAULT_RUBRICA_INDEX: ReadonlyMap<string, string> = buildRubricaIndex(
@@ -78,6 +81,11 @@ export interface PairingHubOptions {
 }
 
 const MAX_VPN_REQUEST_BYTES = 32 * 1024;
+/**
+ * Corpo massimo delle richieste di backup (768 KiB): il file cifrato da 256 KiB
+ * in base64url occupa circa 350 KiB, più l'IV e l'involucro JSON.
+ */
+const MAX_BACKUP_REQUEST_BYTES = 768 * 1024;
 
 function jsonResponse(body: unknown, status = 200, extraHeaders?: HeadersInit): Response {
   const headers = new Headers(extraHeaders);
@@ -230,6 +238,11 @@ export class PairingHub {
       REMOTE_SESSION_TTL_MS,
     );
     this.sql.exec(
+      'DELETE FROM backup_sessions WHERE ? - created_at >= ?',
+      timestamp,
+      REMOTE_SESSION_TTL_MS,
+    );
+    this.sql.exec(
       'DELETE FROM ip_submit_limits WHERE blocked_until <= ? AND ? - window_started_at >= ?',
       timestamp,
       timestamp,
@@ -277,6 +290,17 @@ export class PairingHub {
       if (existing.length === 0) return code;
     }
     throw new Error('Unable to generate a unique VPN code');
+  }
+
+  private uniqueBackupCode(): string {
+    for (let attempt = 0; attempt < 1_000_000; attempt += 1) {
+      const code = this.createPinFn();
+      const existing = this.sql
+        .exec<{ code: string }>('SELECT code FROM backup_sessions WHERE code = ?', code)
+        .toArray();
+      if (existing.length === 0) return code;
+    }
+    throw new Error('Unable to generate a unique backup code');
   }
 
   private recordFailedPinAttempt(
@@ -683,6 +707,350 @@ export class PairingHub {
     });
   }
 
+  private async handleBackupCreate(
+    request: Request,
+    ip: string,
+    timestamp: number,
+  ): Promise<Response> {
+    let direction: string | null = null;
+    try {
+      const parsed: unknown = await request.json();
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const value = (parsed as Record<string, unknown>).direction;
+        if (value === 'export' || value === 'import') direction = value;
+      }
+    } catch {
+      direction = null;
+    }
+    if (direction === null) {
+      return jsonResponse({ error: 'INVALID_DIRECTION' }, 400);
+    }
+
+    const pollToken = this.createPollTokenFn();
+    const pollTokenHash = await hashToken(pollToken);
+
+    const totalRows = this.sql
+      .exec<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM backup_sessions')
+      .toArray();
+    const totalActive = Number(totalRows[0]?.cnt ?? 0);
+    if (totalActive >= MAX_SESSIONS) {
+      return jsonResponse({ error: 'TOO_MANY_SESSIONS' }, 429);
+    }
+
+    const ipRows = this.sql
+      .exec<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM backup_sessions WHERE ip = ?', ip)
+      .toArray();
+    const ipActive = Number(ipRows[0]?.cnt ?? 0);
+    if (ipActive >= MAX_SESSIONS_PER_IP) {
+      return jsonResponse({ error: 'TOO_MANY_SESSIONS' }, 429);
+    }
+
+    const code = this.uniqueBackupCode();
+    this.sql.exec(
+      'INSERT INTO backup_sessions (code, ip, created_at, poll_token_hash, direction, iv, ciphertext, failed_attempts) VALUES (?, ?, ?, ?, ?, NULL, NULL, 0)',
+      code,
+      ip,
+      timestamp,
+      pollTokenHash,
+      direction,
+    );
+    await this.scheduleNextAlarm();
+
+    return jsonResponse({
+      code,
+      pollToken,
+      expiresInSeconds: REMOTE_SESSION_TTL_SECONDS,
+    });
+  }
+
+  /**
+   * Deposito del file cifrato per l'esportazione (TV → relay): solo la TV che
+   * ha creato la sessione, autenticata con il `pollToken`, e una sola volta.
+   * Il relay vede soltanto `iv` e testo cifrato con la chiave del QR.
+   */
+  private async handleBackupUpload(request: Request): Promise<Response> {
+    let body: Record<string, unknown>;
+    try {
+      const parsed: unknown = await request.json();
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return jsonResponse({ error: 'INVALID_CREDENTIALS' }, 400);
+      }
+      body = parsed as Record<string, unknown>;
+    } catch {
+      return jsonResponse({ error: 'INVALID_CREDENTIALS' }, 400);
+    }
+
+    const code = typeof body.code === 'string' ? body.code.trim() : '';
+    const sessionRows = isValidPin(code)
+      ? this.sql
+          .exec<{
+            code: string;
+            poll_token_hash: string;
+            direction: string;
+            iv: string | null;
+            ciphertext: string | null;
+          }>(
+            'SELECT code, poll_token_hash, direction, iv, ciphertext FROM backup_sessions WHERE code = ?',
+            code,
+          )
+          .toArray()
+      : [];
+    const session = sessionRows[0];
+
+    const suppliedToken = extractBearerToken(request.headers.get('Authorization'));
+    const suppliedHash = await hashToken(suppliedToken || '');
+    const targetHash = session ? String(session.poll_token_hash) : suppliedHash;
+    const hashMatches = constantTimeEqual(targetHash, suppliedHash);
+
+    if (!session || !suppliedToken || !hashMatches || session.direction !== 'export') {
+      return jsonResponse({ error: 'SESSION_NOT_FOUND' }, 404);
+    }
+    if (session.ciphertext !== null) {
+      return jsonResponse({ error: 'SESSION_ALREADY_COMPLETED' }, 409);
+    }
+
+    if (typeof body.iv !== 'string' || typeof body.ciphertext !== 'string') {
+      return jsonResponse({ error: 'INVALID_CREDENTIALS' }, 400);
+    }
+    if (!isValidBackupEnvelope(body.iv, body.ciphertext)) {
+      return jsonResponse({ error: 'INVALID_CREDENTIALS' }, 400);
+    }
+
+    this.sql.exec(
+      'UPDATE backup_sessions SET iv = ?, ciphertext = ? WHERE code = ?',
+      body.iv,
+      body.ciphertext,
+      code,
+    );
+    return jsonResponse({ ok: true });
+  }
+
+  /**
+   * Scaricamento del file cifrato per l'esportazione (relay → telefono): la
+   * pagina `/backup` conosce solo il codice (la chiave resta nel frammento del
+   * QR), quindi questa è l'unica rotta del relay leggibile senza token. Il
+   * contenuto resta illeggibile senza la chiave di trasporto, i codici
+   * inesistenti contano come tentativi falliti (stesso blocco anti
+   * forza-bruta degli invii) e la consegna cancella la sessione: un solo
+   * ritiro.
+   */
+  private async handleBackupDownload(
+    code: string,
+    ip: string,
+    timestamp: number,
+  ): Promise<Response> {
+    const limitRows = this.sql
+      .exec<{
+        failed_count: number;
+        window_started_at: number;
+        blocked_until: number;
+      }>(
+        'SELECT failed_count, window_started_at, blocked_until FROM ip_submit_limits WHERE ip = ?',
+        ip,
+      )
+      .toArray();
+    const limitRow = limitRows[0];
+    if (limitRow && Number(limitRow.blocked_until) > timestamp) {
+      return jsonResponse({ error: 'TOO_MANY_ATTEMPTS' }, 429);
+    }
+
+    const sessionRows = isValidPin(code)
+      ? this.sql
+          .exec<{
+            code: string;
+            direction: string;
+            iv: string | null;
+            ciphertext: string | null;
+          }>(
+            'SELECT code, direction, iv, ciphertext FROM backup_sessions WHERE code = ?',
+            code,
+          )
+          .toArray()
+      : [];
+    const session = sessionRows[0];
+
+    if (!session || session.direction !== 'export') {
+      this.recordFailedPinAttempt(ip, timestamp, limitRow);
+      return jsonResponse({ error: 'SESSION_NOT_FOUND' }, 404);
+    }
+    if (session.iv === null || session.ciphertext === null) {
+      return jsonResponse({ status: 'waiting' });
+    }
+
+    this.sql.exec('DELETE FROM backup_sessions WHERE code = ?', code);
+    return jsonResponse({
+      status: 'ready',
+      iv: session.iv,
+      ciphertext: session.ciphertext,
+    });
+  }
+
+  /**
+   * Invio del file cifrato per l'importazione (telefono → relay): stesso
+   * schema anti-abuso dell'invio VPN (blocco per IP, cancellazione dopo
+   * [MAX_PIN_VALIDATION_FAILURES] buste non valide), con i limiti del backup.
+   */
+  private async handleBackupSubmit(
+    request: Request,
+    ip: string,
+    timestamp: number,
+  ): Promise<Response> {
+    const limitRows = this.sql
+      .exec<{
+        failed_count: number;
+        window_started_at: number;
+        blocked_until: number;
+      }>(
+        'SELECT failed_count, window_started_at, blocked_until FROM ip_submit_limits WHERE ip = ?',
+        ip,
+      )
+      .toArray();
+    const limitRow = limitRows[0];
+    if (limitRow && Number(limitRow.blocked_until) > timestamp) {
+      return jsonResponse({ error: 'TOO_MANY_ATTEMPTS' }, 429);
+    }
+
+    const contentLength = request.headers.get('Content-Length');
+    if (contentLength && Number(contentLength) > MAX_BACKUP_REQUEST_BYTES) {
+      return jsonResponse({ error: 'REQUEST_TOO_LARGE' }, 413);
+    }
+
+    let rawBody: ArrayBuffer;
+    try {
+      rawBody = await request.arrayBuffer();
+    } catch {
+      return jsonResponse({ error: 'INVALID_CREDENTIALS' }, 400);
+    }
+    if (rawBody.byteLength > MAX_BACKUP_REQUEST_BYTES) {
+      return jsonResponse({ error: 'REQUEST_TOO_LARGE' }, 413);
+    }
+
+    let body: Record<string, unknown>;
+    try {
+      const parsed: unknown = JSON.parse(new TextDecoder().decode(rawBody));
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return jsonResponse({ error: 'INVALID_CREDENTIALS' }, 400);
+      }
+      body = parsed as Record<string, unknown>;
+    } catch {
+      return jsonResponse({ error: 'INVALID_CREDENTIALS' }, 400);
+    }
+
+    const currentLimitRows = this.sql
+      .exec<{
+        failed_count: number;
+        window_started_at: number;
+        blocked_until: number;
+      }>(
+        'SELECT failed_count, window_started_at, blocked_until FROM ip_submit_limits WHERE ip = ?',
+        ip,
+      )
+      .toArray();
+    const currentLimitRow = currentLimitRows[0];
+    if (currentLimitRow && Number(currentLimitRow.blocked_until) > timestamp) {
+      return jsonResponse({ error: 'TOO_MANY_ATTEMPTS' }, 429);
+    }
+
+    const code = typeof body.code === 'string' ? body.code.trim() : '';
+    const sessionRows = isValidPin(code)
+      ? this.sql
+          .exec<{
+            code: string;
+            direction: string;
+            iv: string | null;
+            ciphertext: string | null;
+            failed_attempts: number;
+          }>(
+            'SELECT code, direction, iv, ciphertext, failed_attempts FROM backup_sessions WHERE code = ?',
+            code,
+          )
+          .toArray()
+      : [];
+    const session = sessionRows[0];
+
+    if (!session || session.direction !== 'import') {
+      this.recordFailedPinAttempt(ip, timestamp, currentLimitRow);
+      return jsonResponse({ error: 'SESSION_NOT_FOUND' }, 404);
+    }
+    if (session.ciphertext !== null) {
+      return jsonResponse({ error: 'SESSION_ALREADY_COMPLETED' }, 409);
+    }
+
+    if (typeof body.iv !== 'string' || typeof body.ciphertext !== 'string') {
+      this.recordInvalidBackupAttempt(code, Number(session.failed_attempts));
+      return jsonResponse({ error: 'INVALID_CREDENTIALS' }, 400);
+    }
+
+    if (!isValidBackupEnvelope(body.iv, body.ciphertext)) {
+      this.recordInvalidBackupAttempt(code, Number(session.failed_attempts));
+      return jsonResponse({ error: 'INVALID_CREDENTIALS' }, 400);
+    }
+
+    this.sql.exec(
+      'UPDATE backup_sessions SET iv = ?, ciphertext = ? WHERE code = ?',
+      body.iv,
+      body.ciphertext,
+      code,
+    );
+    this.sql.exec('DELETE FROM ip_submit_limits WHERE ip = ?', ip);
+    return jsonResponse({ ok: true });
+  }
+
+  private recordInvalidBackupAttempt(code: string, failedAttempts: number): void {
+    const nextFailed = failedAttempts + 1;
+    if (nextFailed >= MAX_PIN_VALIDATION_FAILURES) {
+      this.sql.exec('DELETE FROM backup_sessions WHERE code = ?', code);
+      return;
+    }
+    this.sql.exec(
+      'UPDATE backup_sessions SET failed_attempts = ? WHERE code = ?',
+      nextFailed,
+      code,
+    );
+  }
+
+  /**
+   * Lettura del file cifrato per l'importazione (relay → TV): solo la TV che
+   * ha creato la sessione, autenticata con il `pollToken`. Alla consegna la
+   * sessione viene cancellata: un solo ritiro.
+   */
+  private async handleBackupStatus(request: Request, code: string): Promise<Response> {
+    const sessionRows = isValidPin(code)
+      ? this.sql
+          .exec<{
+            code: string;
+            poll_token_hash: string;
+            direction: string;
+            iv: string | null;
+            ciphertext: string | null;
+          }>(
+            'SELECT code, poll_token_hash, direction, iv, ciphertext FROM backup_sessions WHERE code = ?',
+            code,
+          )
+          .toArray()
+      : [];
+    const session = sessionRows[0];
+
+    const suppliedToken = extractBearerToken(request.headers.get('Authorization'));
+    const suppliedHash = await hashToken(suppliedToken || '');
+    const targetHash = session ? String(session.poll_token_hash) : suppliedHash;
+    const hashMatches = constantTimeEqual(targetHash, suppliedHash);
+
+    if (!session || !suppliedToken || !hashMatches || session.direction !== 'import') {
+      return jsonResponse({ error: 'SESSION_NOT_FOUND' }, 404);
+    }
+    if (session.iv === null || session.ciphertext === null) {
+      return jsonResponse({ status: 'waiting' });
+    }
+
+    this.sql.exec('DELETE FROM backup_sessions WHERE code = ?', code);
+    return jsonResponse({
+      status: 'ready',
+      iv: session.iv,
+      ciphertext: session.ciphertext,
+    });
+  }
+
   private handleRubrica(code: string, ip: string, timestamp: number): Response {
     const limitRows = this.sql
       .exec<{
@@ -752,6 +1120,28 @@ export class PairingHub {
     if (request.method === 'GET' && url.pathname.startsWith('/api/vpn/status/')) {
       const code = decodeURIComponent(url.pathname.slice('/api/vpn/status/'.length));
       return this.handleVpnStatus(request, code);
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/backup/create') {
+      return this.handleBackupCreate(request, ip, timestamp);
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/backup/upload') {
+      return this.handleBackupUpload(request);
+    }
+
+    if (request.method === 'GET' && url.pathname.startsWith('/api/backup/download/')) {
+      const code = decodeURIComponent(url.pathname.slice('/api/backup/download/'.length));
+      return this.handleBackupDownload(code, ip, timestamp);
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/backup/submit') {
+      return this.handleBackupSubmit(request, ip, timestamp);
+    }
+
+    if (request.method === 'GET' && url.pathname.startsWith('/api/backup/status/')) {
+      const code = decodeURIComponent(url.pathname.slice('/api/backup/status/'.length));
+      return this.handleBackupStatus(request, code);
     }
 
     if (request.method === 'GET' && url.pathname.startsWith('/api/pair/status/')) {
@@ -837,6 +1227,22 @@ export async function handleWorkerRequest(request: Request, env: Env): Promise<R
     );
   }
 
+  if (request.method === 'GET' && url.pathname === '/backup') {
+    const html = renderBackupPage();
+    return withCorsHeaders(
+      new Response(html, {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Cache-Control': 'no-store',
+          'Referrer-Policy': 'no-referrer',
+          'Content-Security-Policy': "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'",
+        },
+      }),
+      cors.headers,
+    );
+  }
+
   if (
     (request.method === 'POST' && url.pathname === '/api/pair/create') ||
     (request.method === 'POST' && url.pathname === '/api/pair/submit') ||
@@ -844,6 +1250,11 @@ export async function handleWorkerRequest(request: Request, env: Env): Promise<R
     (request.method === 'POST' && url.pathname === '/api/vpn/create') ||
     (request.method === 'POST' && url.pathname === '/api/vpn/submit') ||
     (request.method === 'GET' && url.pathname.startsWith('/api/vpn/status/')) ||
+    (request.method === 'POST' && url.pathname === '/api/backup/create') ||
+    (request.method === 'POST' && url.pathname === '/api/backup/upload') ||
+    (request.method === 'GET' && url.pathname.startsWith('/api/backup/download/')) ||
+    (request.method === 'POST' && url.pathname === '/api/backup/submit') ||
+    (request.method === 'GET' && url.pathname.startsWith('/api/backup/status/')) ||
     (request.method === 'GET' && url.pathname.startsWith('/api/rubrica/'))
   ) {
     const id = env.PAIRING_HUB.idFromName('global');

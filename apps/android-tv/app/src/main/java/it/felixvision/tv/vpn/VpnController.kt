@@ -292,6 +292,20 @@ class VpnController(
     }
 
     /**
+     * Configurazione attiva per il backup: testo `.conf` e nome del server,
+     * `null` quando non c'è nessuna configurazione salvata. Lettura da disco:
+     * da chiamare fuori dal thread principale. Mai nei log: contiene la
+     * chiave privata.
+     */
+    suspend fun exportActiveConfig(): Pair<String, String>? = withContext(serial) {
+        operations.withLock {
+            val text = store.loadConfigText() ?: return@withLock null
+            val name = store.serverName ?: return@withLock null
+            text to name
+        }
+    }
+
+    /**
      * Avviso da mostrare in basso nella schermata principale. Se nessuno è
      * ancora in ascolto (per esempio all'avvio, prima del catalogo) aspetta il
      * primo osservatore.

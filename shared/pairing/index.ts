@@ -17,6 +17,17 @@ export const VPN_MAX_PLAINTEXT_BYTES = 8192;
 export const VPN_MAX_CIPHERTEXT_BYTES = VPN_MAX_PLAINTEXT_BYTES + 16;
 export const VPN_MIN_CIPHERTEXT_BYTES = 17;
 export const VPN_AAD_PREFIX = 'felixvp-vpn-v1:';
+export const BACKUP_KEY_BYTES = 32;
+export const BACKUP_IV_BYTES = 12;
+/**
+ * Testo in chiaro massimo del file di backup trasportato (256 KiB): copre
+ * preferiti, canali, nascosti, avanzamenti e configurazione VPN anche per gli
+ * account più pieni, restando nei limiti del piano gratuito di Cloudflare.
+ */
+export const BACKUP_MAX_PLAINTEXT_BYTES = 262_144;
+export const BACKUP_MAX_CIPHERTEXT_BYTES = BACKUP_MAX_PLAINTEXT_BYTES + 16;
+export const BACKUP_MIN_CIPHERTEXT_BYTES = 17;
+export const BACKUP_AAD_PREFIX = 'felixvp-backup-v1:';
 export const MAX_SERVER_LENGTH = 2048;
 export const MAX_USERNAME_LENGTH = 512;
 export const MAX_PASSWORD_LENGTH = 512;

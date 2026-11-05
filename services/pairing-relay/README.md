@@ -16,6 +16,20 @@ Le sessioni scadono dopo 10 minuti. Il relay non riceve né memorizza la chiave 
 
 ---
 
+## Trasferimento del file di backup
+
+La TV crea una sessione di esportazione o di importazione e mostra un QR con `https://<relay>/backup?mode=export|import&code=<6 cifre>#k=<chiave base64url>`. La chiave AES-256 di trasporto è casuale e resta nel frammento del QR, che il browser non invia al relay; il file resta cifrato anche con la password del backup, che non passa mai dal telefono né dal relay. La cifratura di trasporto è AES-GCM con AAD `felixvp-backup-v1:<codice>`, sullo stesso schema della VPN.
+
+- `POST /api/backup/create` con `{ direction: "export" | "import" }` crea una sessione e restituisce codice, `pollToken` e scadenza (10 minuti).
+- `POST /api/backup/upload` con `Authorization: Bearer <pollToken>` e `{ code, iv, ciphertext }` deposita il file cifrato (solo la TV che ha creato una sessione di esportazione, una sola volta).
+- `GET /api/backup/download/{code}` consegna il file cifrato alla pagina del telefono (in attesa con `waiting`); alla consegna cancella la sessione: un solo ritiro. È l'unica rotta leggibile senza token (la pagina conosce solo il codice) e i codici inesistenti contano come tentativi falliti, con lo stesso blocco anti forza-bruta degli invii.
+- `POST /api/backup/submit` riceve `{ code, iv, ciphertext }` in base64url dalla pagina del telefono (sessioni di importazione, con gli stessi limiti anti-abuso dell'invio VPN).
+- `GET /api/backup/status/{code}` con `Authorization: Bearer <pollToken>` restituisce `waiting` o `ready`; alla consegna cancella la sessione: un solo ritiro.
+
+Limiti: file in chiaro fino a 256 KiB (`BACKUP_MAX_PLAINTEXT_BYTES`), corpo delle richieste fino a 768 KiB, sessioni con scadenza di 10 minuti e un solo ritiro, massimo 100 sessioni totali e 5 per IP, blocco IP dopo 10 tentativi falliti. Il relay non riceve né memorizza la chiave di trasporto, la password o il contenuto del backup.
+
+---
+
 ## 1. Come modificare la rubrica (`rubrica.json`)
 
 La rubrica dei codici brevi si trova nel file [`rubrica.json`](./rubrica.json) ed è inclusa nel pacchetto al momento della pubblicazione (build).

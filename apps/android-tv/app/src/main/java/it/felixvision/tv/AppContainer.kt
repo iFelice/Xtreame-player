@@ -9,6 +9,8 @@ import it.felixvision.tv.core.Clock
 import it.felixvision.tv.core.FvpJson
 import it.felixvision.tv.core.HttpClientFactory
 import it.felixvision.tv.core.SystemClock
+import it.felixvision.tv.data.backup.BackupRelayClient
+import it.felixvision.tv.data.backup.BackupRepository
 import it.felixvision.tv.data.catalog.CatalogCache
 import it.felixvision.tv.data.channels.MyChannelsStore
 import it.felixvision.tv.data.catalog.CatalogClient
@@ -190,6 +192,25 @@ class AppContainer(
             baseUrl = BuildConfig.PAIRING_RELAY_URL,
             json = json,
             clock = clock,
+        )
+    }
+
+    /** Trasferimento del file di backup con il telefono, sul canale cifrato del relay. */
+    val backupRelayClient: BackupRelayClient by lazy {
+        BackupRelayClient(
+            http = httpClient,
+            baseUrl = BuildConfig.PAIRING_RELAY_URL,
+            json = json,
+        )
+    }
+
+    /** Raccolta, cifratura e applicazione del backup (vedi BackupRepository). */
+    val backupRepository: BackupRepository by lazy {
+        BackupRepository(
+            favorites = favoritesStore,
+            myChannels = myChannelsStore,
+            progress = progressStore,
+            protectedContent = protectedContentStore,
         )
     }
 

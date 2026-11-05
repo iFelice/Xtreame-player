@@ -29,9 +29,10 @@ import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 
 /**
- * Griglia delle Impostazioni: sette card, quattro per riga, nell'ordine Account,
- * Aspetto, Contenuti protetti, VPN, Catalogo, Player, App, ognuna con la sua
- * riga di stato calcolata da dati finti (nessun dato reale di server o account).
+ * Griglia delle Impostazioni: otto card, quattro per riga, nell'ordine Account,
+ * Aspetto, Contenuti protetti, VPN, Catalogo, Player, App, Backup, ognuna con
+ * la sua riga di stato calcolata da dati finti (nessun dato reale di server o
+ * account).
  *
  * La griglia si compone senza ViewModel ([SettingsGrid]): le card sono [Card]
  * di tv-material, quindi OK si prova con l'azione semantica
@@ -91,7 +92,7 @@ class SettingsCardsGridTest {
     }
 
     @Test
-    fun `la griglia ha il titolo e le sette card nell'ordine indicato`() {
+    fun `la griglia ha il titolo e le otto card nell'ordine indicato`() {
         showGrid()
 
         rule.onNodeWithTag(SETTINGS_TITLE_TAG).assertTextEquals(SETTINGS_TITLE)
@@ -105,6 +106,7 @@ class SettingsCardsGridTest {
             SETTINGS_CARD_CATALOG_TAG,
             SETTINGS_CARD_PLAYER_TAG,
             SETTINGS_CARD_APP_TAG,
+            SETTINGS_CARD_BACKUP_TAG,
         )
         assertEquals(
             SettingsCard.entries.map { it.testTag },
@@ -128,14 +130,16 @@ class SettingsCardsGridTest {
             )
         }
 
-        // Seconda riga: Catalogo, Player e App, sotto la prima e larghe come le altre.
+        // Seconda riga: Catalogo, Player, App e Backup, sotto la prima e larghe come le altre.
         val catalog = rule.onNodeWithTag(SETTINGS_CARD_CATALOG_TAG).fetchSemanticsNode().boundsInRoot
         val player = rule.onNodeWithTag(SETTINGS_CARD_PLAYER_TAG).fetchSemanticsNode().boundsInRoot
         val app = rule.onNodeWithTag(SETTINGS_CARD_APP_TAG).fetchSemanticsNode().boundsInRoot
+        val backup = rule.onNodeWithTag(SETTINGS_CARD_BACKUP_TAG).fetchSemanticsNode().boundsInRoot
         assertTrue("Catalogo non sta sotto la prima riga", catalog.top >= account.bottom - 1f)
         assertTrue("Player non sta a destra di Catalogo", player.left > catalog.left)
         assertTrue("App non sta a destra di Player", app.left > player.left)
-        listOf(catalog, player, app).forEach { bounds ->
+        assertTrue("Backup non sta a destra di App", backup.left > app.left)
+        listOf(catalog, player, app, backup).forEach { bounds ->
             assertTrue("la card non è larga come Account", abs(bounds.width - account.width) <= 0.5f)
             assertTrue("la card non è alta come Account", abs(bounds.height - account.height) <= 0.5f)
         }
@@ -165,6 +169,9 @@ class SettingsCardsGridTest {
 
         rule.onNodeWithTag(SettingsCard.App.titleTag, useUnmergedTree = true).assertTextEquals("App")
         rule.onNodeWithTag(SettingsCard.App.statusTag, useUnmergedTree = true).assertTextEquals("Versione 1.0.2")
+
+        rule.onNodeWithTag(SettingsCard.Backup.titleTag, useUnmergedTree = true).assertTextEquals("Backup")
+        rule.onNodeWithTag(SettingsCard.Backup.statusTag, useUnmergedTree = true).assertTextEquals("Esporta e importa")
     }
 
     @Test
@@ -256,7 +263,7 @@ class SettingsCardsGridTest {
     }
 
     @Test
-    fun `righe di stato delle sette card e regola dell'icona arancione`() {
+    fun `righe di stato delle otto card e regola dell'icona arancione`() {
         val release = ReleaseInfo(
             version = "1.0.3",
             downloadUrl = "http://server.esempio:8080/FelixVP.apk",

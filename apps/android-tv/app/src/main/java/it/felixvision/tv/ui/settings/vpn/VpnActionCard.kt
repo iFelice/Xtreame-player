@@ -32,7 +32,7 @@ import it.felixvision.tv.ui.settings.SettingsCardDimens
 import it.felixvision.tv.ui.theme.FvpColors
 
 /**
- * Aspetto delle azioni VPN: la stessa [Card] tv-material delle sette card della
+ * Aspetto delle azioni VPN: la stessa [Card] tv-material delle otto card della
  * griglia Impostazioni (fondo [FvpColors.Surface] in ogni stato, angoli
  * [SettingsCardDimens.CORNER_BASE], bordo [FvpColors.SurfaceElevated] a riposo
  * e [FvpColors.GreenFocus] con il focus, ingrandimento con il focus), con icona

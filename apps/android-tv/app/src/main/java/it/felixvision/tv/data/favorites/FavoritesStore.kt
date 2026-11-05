@@ -117,6 +117,25 @@ class FavoritesStore(
         return updated
     }
 
+    /**
+     * Unione dei preferiti del backup con UNA sola scrittura: aggiunge solo le
+     * voci con id mancante, in fondo, e restituisce quante ne ha aggiunte.
+     */
+    suspend fun addFavorites(
+        server: String,
+        username: String,
+        items: List<FavoriteItem>,
+    ): Int {
+        if (items.isEmpty()) return 0
+        val key = keyFor(server, username)
+        val current = getFavorites(server, username)
+        val known = current.map { it.id }.toMutableSet()
+        val added = items.filter { known.add(it.id) }
+        if (added.isEmpty()) return 0
+        persist(key, current + added)
+        return added.size
+    }
+
     suspend fun toggleFavorite(server: String, username: String, item: FavoriteItem): Boolean {
         val exists = isFavorite(server, username, item.id)
         if (exists) removeFavorite(server, username, item.id) else addFavorite(server, username, item)

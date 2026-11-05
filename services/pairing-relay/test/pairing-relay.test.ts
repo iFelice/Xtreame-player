@@ -1,6 +1,11 @@
 import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
 import {
+  BACKUP_AAD_PREFIX,
+  BACKUP_IV_BYTES,
+  BACKUP_KEY_BYTES,
+  BACKUP_MAX_CIPHERTEXT_BYTES,
+  BACKUP_MIN_CIPHERTEXT_BYTES,
   buildRubricaIndex,
   decodeBase64Url,
   encodeBase64Url,
@@ -991,5 +996,379 @@ describe('services/pairing-relay', () => {
     const prefilledHtml = await prefilledPage.text();
     expect(prefilledHtml).toContain('value="482910"');
     expect(prefilledHtml).toContain('readonly');
+  });
+
+  it('rejects backup creation without a valid direction', async () => {
+    const { fetch } = createTestHarness();
+    for (const body of ['{}', '{"direction":"sideways"}', 'not-json']) {
+      const res = await fetch(
+        new Request('https://relay.example.workers.dev/api/backup/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body,
+        }),
+      );
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ error: 'INVALID_DIRECTION' });
+    }
+  });
+
+  it('uploads a backup from the TV and delivers the download once to the phone', async () => {
+    const { fetch } = createTestHarness({ createPin: () => '246802' });
+    const createRes = await fetch(
+      new Request('https://relay.example.workers.dev/api/backup/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'CF-Connecting-IP': '192.168.1.10',
+        },
+        body: JSON.stringify({ direction: 'export' }),
+      }),
+    );
+    expect(createRes.status).toBe(200);
+    const created = (await createRes.json()) as {
+      code: string;
+      pollToken: string;
+      expiresInSeconds: number;
+    };
+    expect(created).toMatchObject({ code: '246802', expiresInSeconds: 600 });
+
+    const downloadUrl = 'https://relay.example.workers.dev/api/backup/download/246802';
+    const waitingRes = await fetch(
+      new Request(downloadUrl, { headers: { 'CF-Connecting-IP': '192.168.1.20' } }),
+    );
+    expect(waitingRes.status).toBe(200);
+    expect(await waitingRes.json()).toEqual({ status: 'waiting' });
+
+    const iv = encodeBase64Url(new Uint8Array(BACKUP_IV_BYTES).fill(11));
+    const ciphertext = encodeBase64Url(
+      Uint8Array.from({ length: BACKUP_MIN_CIPHERTEXT_BYTES }, (_, index) => index),
+    );
+    const uploadBody = JSON.stringify({ code: created.code, iv, ciphertext });
+
+    const wrongTokenRes = await fetch(
+      new Request('https://relay.example.workers.dev/api/backup/upload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer token-sbagliato',
+        },
+        body: uploadBody,
+      }),
+    );
+    expect(wrongTokenRes.status).toBe(404);
+
+    const uploadRes = await fetch(
+      new Request('https://relay.example.workers.dev/api/backup/upload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${created.pollToken}`,
+        },
+        body: uploadBody,
+      }),
+    );
+    expect(uploadRes.status).toBe(200);
+    expect(await uploadRes.json()).toEqual({ ok: true });
+
+    const secondUploadRes = await fetch(
+      new Request('https://relay.example.workers.dev/api/backup/upload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${created.pollToken}`,
+        },
+        body: uploadBody,
+      }),
+    );
+    expect(secondUploadRes.status).toBe(409);
+
+    const readyRes = await fetch(
+      new Request(downloadUrl, { headers: { 'CF-Connecting-IP': '192.168.1.20' } }),
+    );
+    expect(readyRes.status).toBe(200);
+    expect(await readyRes.json()).toEqual({ status: 'ready', iv, ciphertext });
+
+    const secondDownloadRes = await fetch(
+      new Request(downloadUrl, { headers: { 'CF-Connecting-IP': '192.168.1.20' } }),
+    );
+    expect(secondDownloadRes.status).toBe(404);
+    expect(await secondDownloadRes.json()).toEqual({ error: 'SESSION_NOT_FOUND' });
+  });
+
+  it('receives a backup from the phone and delivers it once to the TV', async () => {
+    const { fetch } = createTestHarness({ createPin: () => '135791' });
+    const createRes = await fetch(
+      new Request('https://relay.example.workers.dev/api/backup/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ direction: 'import' }),
+      }),
+    );
+    expect(createRes.status).toBe(200);
+    const created = (await createRes.json()) as { code: string; pollToken: string };
+
+    const statusUrl = 'https://relay.example.workers.dev/api/backup/status/135791';
+    const waitingRes = await fetch(
+      new Request(statusUrl, {
+        headers: { Authorization: `Bearer ${created.pollToken}` },
+      }),
+    );
+    expect(waitingRes.status).toBe(200);
+    expect(await waitingRes.json()).toEqual({ status: 'waiting' });
+
+    const iv = encodeBase64Url(new Uint8Array(BACKUP_IV_BYTES).fill(9));
+    const ciphertext = encodeBase64Url(
+      Uint8Array.from({ length: BACKUP_MIN_CIPHERTEXT_BYTES }, (_, index) => 255 - index),
+    );
+    const submitRequest = () =>
+      new Request('https://relay.example.workers.dev/api/backup/submit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'CF-Connecting-IP': '192.168.1.30',
+        },
+        body: JSON.stringify({ code: created.code, iv, ciphertext }),
+      });
+
+    const submitRes = await fetch(submitRequest());
+    expect(submitRes.status).toBe(200);
+    expect(await submitRes.json()).toEqual({ ok: true });
+
+    const duplicateRes = await fetch(submitRequest());
+    expect(duplicateRes.status).toBe(409);
+
+    const readyRes = await fetch(
+      new Request(statusUrl, {
+        headers: { Authorization: `Bearer ${created.pollToken}` },
+      }),
+    );
+    expect(readyRes.status).toBe(200);
+    expect(await readyRes.json()).toEqual({ status: 'ready', iv, ciphertext });
+
+    const secondStatusRes = await fetch(
+      new Request(statusUrl, {
+        headers: { Authorization: `Bearer ${created.pollToken}` },
+      }),
+    );
+    expect(secondStatusRes.status).toBe(404);
+    expect(await secondStatusRes.json()).toEqual({ error: 'SESSION_NOT_FOUND' });
+  });
+
+  it('keeps export and import backup sessions on their own routes', async () => {
+    const codes = ['111111', '222222'];
+    let next = 0;
+    const { fetch } = createTestHarness({ createPin: () => codes[next++] });
+    const iv = encodeBase64Url(new Uint8Array(BACKUP_IV_BYTES).fill(3));
+    const ciphertext = encodeBase64Url(
+      Uint8Array.from({ length: BACKUP_MIN_CIPHERTEXT_BYTES }, () => 1),
+    );
+
+    const exportRes = await fetch(
+      new Request('https://relay.example.workers.dev/api/backup/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ direction: 'export' }),
+      }),
+    );
+    const exported = (await exportRes.json()) as { code: string; pollToken: string };
+    const importRes = await fetch(
+      new Request('https://relay.example.workers.dev/api/backup/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ direction: 'import' }),
+      }),
+    );
+    const imported = (await importRes.json()) as { code: string; pollToken: string };
+
+    // Submit (phone upload) against an export session.
+    const wrongSubmit = await fetch(
+      new Request('https://relay.example.workers.dev/api/backup/submit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'CF-Connecting-IP': '192.168.1.40',
+        },
+        body: JSON.stringify({ code: exported.code, iv, ciphertext }),
+      }),
+    );
+    expect(wrongSubmit.status).toBe(404);
+
+    // Upload (TV deposit) against an import session.
+    const wrongUpload = await fetch(
+      new Request('https://relay.example.workers.dev/api/backup/upload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${imported.pollToken}`,
+        },
+        body: JSON.stringify({ code: imported.code, iv, ciphertext }),
+      }),
+    );
+    expect(wrongUpload.status).toBe(404);
+
+    // Download against an import session.
+    const wrongDownload = await fetch(
+      new Request(`https://relay.example.workers.dev/api/backup/download/${imported.code}`),
+    );
+    expect(wrongDownload.status).toBe(404);
+
+    // Authenticated status against an export session.
+    const wrongStatus = await fetch(
+      new Request(`https://relay.example.workers.dev/api/backup/status/${exported.code}`, {
+        headers: { Authorization: `Bearer ${exported.pollToken}` },
+      }),
+    );
+    expect(wrongStatus.status).toBe(404);
+  });
+
+  it('rejects malformed backup envelopes and caps submit bodies at 768 KiB', async () => {
+    const { fetch } = createTestHarness({ createPin: () => '975310' });
+    const createRes = await fetch(
+      new Request('https://relay.example.workers.dev/api/backup/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ direction: 'import' }),
+      }),
+    );
+    const created = (await createRes.json()) as { code: string };
+    const validIv = encodeBase64Url(new Uint8Array(BACKUP_IV_BYTES).fill(4));
+    const validCiphertext = encodeBase64Url(
+      Uint8Array.from({ length: BACKUP_MIN_CIPHERTEXT_BYTES }, () => 8),
+    );
+    const submit = (iv: string, ciphertext: string, extraHeaders: Record<string, string> = {}) =>
+      fetch(
+        new Request('https://relay.example.workers.dev/api/backup/submit', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'CF-Connecting-IP': '192.168.1.50',
+            ...extraHeaders,
+          },
+          body: JSON.stringify({ code: created.code, iv, ciphertext }),
+        }),
+      );
+
+    const shortIv = await submit(
+      encodeBase64Url(new Uint8Array(BACKUP_IV_BYTES - 1).fill(4)),
+      validCiphertext,
+    );
+    expect(shortIv.status).toBe(400);
+
+    const oversizedCiphertext = encodeBase64Url(
+      new Uint8Array(BACKUP_MAX_CIPHERTEXT_BYTES + 1).fill(8),
+    );
+    const tooLarge = await submit(validIv, oversizedCiphertext);
+    expect(tooLarge.status).toBe(400);
+
+    const hugeBody = 'x'.repeat(768 * 1024 + 1);
+    const capped = await fetch(
+      new Request('https://relay.example.workers.dev/api/backup/submit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'CF-Connecting-IP': '192.168.1.51',
+        },
+        body: hugeBody,
+      }),
+    );
+    expect(capped.status).toBe(413);
+  });
+
+  it('encrypts and relays a backup file with AES-GCM and authenticates the six-digit code as AAD', async () => {
+    const { fetch } = createTestHarness({ createPin: () => '864208' });
+    const createdResponse = await fetch(
+      new Request('https://relay.example.workers.dev/api/backup/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ direction: 'import' }),
+      }),
+    );
+    const created = (await createdResponse.json()) as { code: string; pollToken: string };
+
+    const keyBytes = new Uint8Array(BACKUP_KEY_BYTES).fill(5);
+    const cryptoKey = await crypto.subtle.importKey(
+      'raw',
+      keyBytes,
+      'AES-GCM',
+      false,
+      ['encrypt', 'decrypt'],
+    );
+    const ivBytes = new Uint8Array(BACKUP_IV_BYTES).fill(7);
+    const plaintext = '{"formatVersion":1,"favorites":[]}';
+    const aad = new TextEncoder().encode(`${BACKUP_AAD_PREFIX}${created.code}`);
+    const encryptedBytes = new Uint8Array(
+      await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv: ivBytes, additionalData: aad },
+        cryptoKey,
+        new TextEncoder().encode(plaintext),
+      ),
+    );
+    const iv = encodeBase64Url(ivBytes);
+    const ciphertext = encodeBase64Url(encryptedBytes);
+
+    const submitResponse = await fetch(
+      new Request('https://relay.example.workers.dev/api/backup/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: created.code, iv, ciphertext }),
+      }),
+    );
+    expect(submitResponse.status).toBe(200);
+
+    const statusResponse = await fetch(
+      new Request(`https://relay.example.workers.dev/api/backup/status/${created.code}`, {
+        headers: { Authorization: `Bearer ${created.pollToken}` },
+      }),
+    );
+    const received = (await statusResponse.json()) as {
+      status: string;
+      iv?: string;
+      ciphertext?: string;
+    };
+    expect(received).toEqual({ status: 'ready', iv, ciphertext });
+
+    const receivedIv = new Uint8Array(decodeBase64Url(received.iv as string));
+    const receivedCiphertext = new Uint8Array(decodeBase64Url(received.ciphertext as string));
+    const decrypted = await crypto.subtle.decrypt(
+      {
+        name: 'AES-GCM',
+        iv: receivedIv,
+        additionalData: new TextEncoder().encode(`${BACKUP_AAD_PREFIX}${created.code}`),
+      },
+      cryptoKey,
+      receivedCiphertext,
+    );
+    expect(new TextDecoder().decode(decrypted)).toBe(plaintext);
+
+    await expect(
+      crypto.subtle.decrypt(
+        {
+          name: 'AES-GCM',
+          iv: receivedIv,
+          additionalData: new TextEncoder().encode(`${BACKUP_AAD_PREFIX}999999`),
+        },
+        cryptoKey,
+        receivedCiphertext,
+      ),
+    ).rejects.toThrow();
+  });
+
+  it('serves /backup with restrictive security headers, a file picker, and a download link', async () => {
+    const { fetch } = createTestHarness();
+    const page = await fetch(new Request('https://relay.example.workers.dev/backup'));
+    expect(page.status).toBe(200);
+    expect(page.headers.get('Content-Type')).toContain('text/html');
+    expect(page.headers.get('Cache-Control')).toBe('no-store');
+    expect(page.headers.get('Referrer-Policy')).toBe('no-referrer');
+    expect(page.headers.get('Content-Security-Policy')).toContain("connect-src 'self'");
+    const html = await page.text();
+    expect(html).toContain('Backup per');
+    expect(html).toContain('type="file"');
+    expect(html).toContain('.fvpbackup');
+    expect(html).toContain('Scarica il backup');
+    expect(html).toContain('/api/backup/submit');
+    expect(html).toContain('/api/backup/download/');
+    expect(html).toContain('history.replaceState');
   });
 });

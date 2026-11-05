@@ -53,7 +53,7 @@ const val SETTINGS_TITLE = "Impostazioni"
 const val SETTINGS_TITLE_TAG = "settings_title"
 const val SETTINGS_GRID_TAG = "settings_grid"
 
-/** Tag di test delle sette card, nell'ordine in cui compaiono nella griglia. */
+/** Tag di test delle otto card, nell'ordine in cui compaiono nella griglia. */
 const val SETTINGS_CARD_ACCOUNT_TAG = "settings_card_account"
 const val SETTINGS_CARD_APPEARANCE_TAG = "settings_card_appearance"
 const val SETTINGS_CARD_PROTECTED_TAG = "settings_card_protected"
@@ -61,6 +61,7 @@ const val SETTINGS_CARD_VPN_TAG = "settings_card_vpn"
 const val SETTINGS_CARD_CATALOG_TAG = "settings_card_catalog"
 const val SETTINGS_CARD_PLAYER_TAG = "settings_card_player"
 const val SETTINGS_CARD_APP_TAG = "settings_card_app"
+const val SETTINGS_CARD_BACKUP_TAG = "settings_card_backup"
 
 /** Suffisso del tag della riga di stato, del titolo e dell'icona di una card. */
 const val SETTINGS_CARD_STATUS_SUFFIX = "_status"
@@ -79,6 +80,12 @@ const val SETTINGS_CATALOG_TITLE = "Catalogo"
 
 /** Titolo della card e della pagina del player. */
 const val SETTINGS_PLAYER_TITLE = "Player"
+
+/** Titolo della card e della pagina del backup. */
+const val SETTINGS_BACKUP_TITLE = "Backup"
+
+/** Riga di stato della card Backup: le due funzioni disponibili. */
+const val SETTINGS_BACKUP_STATUS = "Esporta e importa"
 
 /**
  * Vero quando lo stato dell'aggiornamento è Available, Downloading o
@@ -140,7 +147,7 @@ object SettingsCardDimens {
     /** Spazio tra le card e tra le righe della griglia. */
     const val GRID_SPACING_BASE = 16f
 
-    /** Card per riga: la griglia è 4 + 3. */
+    /** Card per riga: la griglia è 4 + 4. */
     const val CARDS_PER_ROW = 4
 
     /** Margine orizzontale della griglia, come il resto delle Impostazioni. */
@@ -151,8 +158,8 @@ object SettingsCardDimens {
 }
 
 /**
- * Le sette card della griglia Impostazioni, nell'ordine in cui compaiono:
- * Account, Aspetto, Contenuti protetti, VPN, Catalogo, Player, App.
+ * Le otto card della griglia Impostazioni, nell'ordine in cui compaiono:
+ * Account, Aspetto, Contenuti protetti, VPN, Catalogo, Player, App, Backup.
  *
  * Ogni card apre la pagina della sua funzione. Le icone riusano i drawable già
  * presenti dove esistono (`ic_replay` per il Catalogo) e ne aggiungono di nuovi
@@ -170,6 +177,7 @@ enum class SettingsCard(
     Catalog(SETTINGS_CATALOG_TITLE, SETTINGS_CARD_CATALOG_TAG, R.drawable.ic_replay),
     Player(SETTINGS_PLAYER_TITLE, SETTINGS_CARD_PLAYER_TAG, R.drawable.ic_settings_player),
     App("App", SETTINGS_CARD_APP_TAG, R.drawable.ic_settings_app),
+    Backup(SETTINGS_BACKUP_TITLE, SETTINGS_CARD_BACKUP_TAG, R.drawable.ic_settings_backup),
     ;
 
     /** Tag di test del titolo della card. */
@@ -189,7 +197,7 @@ data class SettingsCardStatus(
 )
 
 /**
- * Dati delle righe di stato delle sette card. È solo lettura: la griglia non
+ * Dati delle righe di stato delle otto card. È solo lettura: la griglia non
  * chiama il ViewModel, così si compone e si prova con dati finti.
  */
 data class SettingsCardsState(
@@ -271,6 +279,7 @@ fun settingsCardStatuses(state: SettingsCardsState): Map<SettingsCard, SettingsC
         text = playerStatusLine(state.zappingSeconds),
     ),
     SettingsCard.App to appCardStatus(state.versionName, state.updateStatus),
+    SettingsCard.Backup to SettingsCardStatus(text = SETTINGS_BACKUP_STATUS),
 )
 
 /** Riga di stato della card Player: l'intervallo attuale dello zapping. */
@@ -284,12 +293,12 @@ internal fun settingsClockText(millis: Long): String = runCatching {
 }.getOrDefault("")
 
 /**
- * Griglia delle Impostazioni: titolo e sette card, quattro per riga.
+ * Griglia delle Impostazioni: titolo e otto card, quattro per riga.
  *
- * Le righe sono [Row] con pesi uguali (non una lista Lazy): con sette card la
+ * Le righe sono [Row] con pesi uguali (non una lista Lazy): con otto card la
  * griglia sta in una schermata e le card restano tutte visibili insieme. Gli
- * spazi vuoti della seconda riga sono [Spacer] dello stesso peso, così le card
- * hanno la stessa larghezza in entrambe le righe.
+ * spazi vuoti di una riga incompleta sono [Spacer] dello stesso peso, così le
+ * card hanno la stessa larghezza in entrambe le righe.
  *
  * Nessun pallino di aggiornamento sulle card: il pallino resta solo sull'icona
  * Impostazioni del menu laterale. Quando c'è un aggiornamento disponibile (stato
@@ -372,7 +381,7 @@ internal fun SettingsGrid(
     }
 }
 
-/** I [FocusRequester] delle sette card, uno per card, creati una volta sola. */
+/** I [FocusRequester] delle otto card, uno per card, creati una volta sola. */
 @Composable
 internal fun rememberSettingsCardFocusRequesters(): Map<SettingsCard, FocusRequester> =
     remember { SettingsCard.entries.associateWith { FocusRequester() } }

@@ -70,6 +70,7 @@ const val SETTINGS_PAGE_VPN_TAG = "settings_page_vpn"
 const val SETTINGS_PAGE_CATALOG_TAG = "settings_page_catalog"
 const val SETTINGS_PAGE_PLAYER_TAG = "settings_page_player"
 const val SETTINGS_PAGE_APP_TAG = "settings_page_app"
+const val SETTINGS_PAGE_BACKUP_TAG = "settings_page_backup"
 
 /** Riquadro "Durata zapping" dentro la pagina Player. */
 const val SETTINGS_PLAYER_SECTION_TAG = "settings_player_section"
