@@ -3,9 +3,11 @@ package it.felixvision.tv.ui.settings.backup
 import android.content.Context
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performSemanticsAction
@@ -153,7 +155,8 @@ class BackupExportScreenTest {
         rule.onNodeWithTag(BACKUP_CONTINUE_TAG).performSemanticsAction(SemanticsActions.OnClick)
 
         awaitTag(BACKUP_RETRY_TAG)
-        rule.onNodeWithText(BACKUP_UNREACHABLE).assertIsDisplayed()
+        // Il messaggio compare nel segnaposto e nel riquadro d'errore.
+        rule.onAllNodesWithText(BACKUP_UNREACHABLE).assertCountEquals(2)
         rule.onNodeWithTag(BACKUP_CLOSE_TAG).assertIsDisplayed()
         assertEquals(1, relay.createdDirections.size)
     }

@@ -3,9 +3,11 @@ package it.felixvision.tv.ui.settings.backup
 import android.content.Context
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performSemanticsAction
@@ -164,6 +166,23 @@ class BackupImportScreenTest {
         throw AssertionError("testo non comparso: $text", lastError)
     }
 
+    /** Attende che il nodo con tag [tag] compaia (i tag sono univoci). */
+    private fun awaitTag(tag: String, timeoutMs: Long = 15_000L) {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        var lastError: Throwable? = null
+        while (System.currentTimeMillis() < deadline) {
+            try {
+                rule.onNodeWithTag(tag).assertExists()
+                rule.waitForIdle()
+                return
+            } catch (error: Throwable) {
+                lastError = error
+                Thread.sleep(100L)
+            }
+        }
+        throw AssertionError("tag non comparso: $tag", lastError)
+    }
+
     private fun favoriteIds(): List<String> =
         runBlocking { favorites.getFavorites(server, username) }.map { it.id }
 
@@ -195,8 +214,9 @@ class BackupImportScreenTest {
         stores()
         showScreen(FakeBackupRelay(statusResults = listOf(ApiResult.Ok(BackupRelayStatus.Expired))))
 
-        awaitText(BACKUP_EXPIRED)
-        rule.onNodeWithTag(BACKUP_IMPORT_RETRY_TAG).assertIsDisplayed()
+        // Il messaggio compare nel segnaposto e nel riquadro d'errore.
+        awaitTag(BACKUP_IMPORT_RETRY_TAG)
+        rule.onAllNodesWithText(BACKUP_EXPIRED).assertCountEquals(2)
         assertTrue(favoriteIds().isEmpty())
     }
 
@@ -208,8 +228,8 @@ class BackupImportScreenTest {
         )
         showScreen(relay)
 
-        awaitText(BACKUP_GENERIC_ERROR)
-        rule.onNodeWithTag(BACKUP_IMPORT_RETRY_TAG).assertIsDisplayed()
+        awaitTag(BACKUP_IMPORT_RETRY_TAG)
+        rule.onAllNodesWithText(BACKUP_GENERIC_ERROR).assertCountEquals(2)
         assertTrue(favoriteIds().isEmpty())
     }
 
@@ -217,7 +237,7 @@ class BackupImportScreenTest {
     fun `password errata mostra errore generico e non modifica nulla`() {
         stores()
         showScreen(relayWithFile(backupData()))
-        awaitText(BACKUP_IMPORT_PASSWORD_HINT)
+        awaitTag(BACKUP_CONTINUE_TAG)
 
         inputPassword("password-sbagliata")
         rule.onNodeWithTag(BACKUP_CONTINUE_TAG).performSemanticsAction(SemanticsActions.OnClick)
@@ -231,7 +251,7 @@ class BackupImportScreenTest {
     fun `flusso completo con password giusta mostra riepilogo e unisce`() {
         stores()
         showScreen(relayWithFile(backupData()))
-        awaitText(BACKUP_IMPORT_PASSWORD_HINT)
+        awaitTag(BACKUP_CONTINUE_TAG)
 
         inputPassword(password)
         rule.onNodeWithTag(BACKUP_CONTINUE_TAG).performSemanticsAction(SemanticsActions.OnClick)
@@ -246,7 +266,7 @@ class BackupImportScreenTest {
         stores()
         val other = backupData(accountServer = "http://altro-server.esempio:8080")
         showScreen(relayWithFile(other))
-        awaitText(BACKUP_IMPORT_PASSWORD_HINT)
+        awaitTag(BACKUP_CONTINUE_TAG)
 
         inputPassword(password)
         rule.onNodeWithTag(BACKUP_CONTINUE_TAG).performSemanticsAction(SemanticsActions.OnClick)
@@ -264,7 +284,7 @@ class BackupImportScreenTest {
         stores()
         val other = backupData(accountUsername = "altro")
         showScreen(relayWithFile(other))
-        awaitText(BACKUP_IMPORT_PASSWORD_HINT)
+        awaitTag(BACKUP_CONTINUE_TAG)
 
         inputPassword(password)
         rule.onNodeWithTag(BACKUP_CONTINUE_TAG).performSemanticsAction(SemanticsActions.OnClick)
@@ -283,7 +303,7 @@ class BackupImportScreenTest {
             hidden = listOf(HiddenCategory(kind = "live", categoryId = "001", name = "Sport")),
         )
         showScreen(relayWithFile(withHidden))
-        awaitText(BACKUP_IMPORT_PASSWORD_HINT)
+        awaitTag(BACKUP_CONTINUE_TAG)
 
         inputPassword(password)
         rule.onNodeWithTag(BACKUP_CONTINUE_TAG).performSemanticsAction(SemanticsActions.OnClick)
@@ -304,7 +324,7 @@ class BackupImportScreenTest {
         stores()
         val withVpn = backupData(vpn = BackupVpn(text = "configurazione", serverName = "Server"))
         showScreen(relayWithFile(withVpn), tvHasVpnConfig = true)
-        awaitText(BACKUP_IMPORT_PASSWORD_HINT)
+        awaitTag(BACKUP_CONTINUE_TAG)
 
         inputPassword(password)
         rule.onNodeWithTag(BACKUP_CONTINUE_TAG).performSemanticsAction(SemanticsActions.OnClick)
@@ -323,7 +343,7 @@ class BackupImportScreenTest {
         stores()
         val withVpn = backupData(vpn = BackupVpn(text = "configurazione", serverName = "Server"))
         showScreen(relayWithFile(withVpn), tvHasVpnConfig = true)
-        awaitText(BACKUP_IMPORT_PASSWORD_HINT)
+        awaitTag(BACKUP_CONTINUE_TAG)
 
         inputPassword(password)
         rule.onNodeWithTag(BACKUP_CONTINUE_TAG).performSemanticsAction(SemanticsActions.OnClick)

@@ -46,8 +46,10 @@ import it.felixvision.tv.ui.components.FvpPasswordField
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.settings.protection.PinEntry
 import it.felixvision.tv.ui.theme.FvpColors
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** Schermata "Importa backup": testi e tag di test. */
 const val BACKUP_IMPORT_TITLE = "Importa backup"
@@ -158,19 +160,23 @@ fun BackupImportScreen(
     BackHandler { onExit() }
 
     // Ricezione del file: sessione, attesa del telefono e decifratura del
-    // trasporto. La chiave si azzera appena usata e in ogni caso all'uscita.
+    // trasporto. Il polling gira fuori dal thread principale (rete e attese a
+    // tempo reale, mai lavoro bloccante in UI); la chiave si azzera appena
+    // usata e in ogni caso all'uscita.
     LaunchedEffect(attempt) {
         phase = BackupImportPhase.Preparing
         passwordError = null
         val key = testTransportKey?.copyOf() ?: BackupTransferCrypto.newKey()
         try {
-            phase = receiveBackupFile(
-                relay = relay,
-                clock = clock,
-                relayBaseUrl = relayBaseUrl,
-                key = key,
-                onWaiting = { waiting -> phase = waiting },
-            )
+            phase = withContext(Dispatchers.Default) {
+                receiveBackupFile(
+                    relay = relay,
+                    clock = clock,
+                    relayBaseUrl = relayBaseUrl,
+                    key = key,
+                    onWaiting = { waiting -> phase = waiting },
+                )
+            }
         } finally {
             key.fill(0)
         }
