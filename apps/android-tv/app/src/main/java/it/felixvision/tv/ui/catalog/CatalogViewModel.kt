@@ -55,7 +55,11 @@ class CatalogViewModel(
                 applyCatalog(cached.catalog, cached.updatedAtMillis)
                 _ui.update { it.copy(isLoading = false) }
                 if (cache.shouldAutoRefresh(cached.updatedAtMillis)) {
+                    // Il catalogo aggiornato o il fallback cache verrà passato
+                    // alla Guida al termine di questo refresh, una sola volta.
                     refreshInternal(showLoading = false)
+                } else {
+                    scheduleGuideRefresh(cached.catalog)
                 }
             } else {
                 refreshInternal(showLoading = true)
@@ -70,6 +74,7 @@ class CatalogViewModel(
     private suspend fun refreshInternal(showLoading: Boolean) {
         // Un solo caricamento alla volta: tryLock, se in corso ignora nuova richiesta
         if (!loadMutex.tryLock()) return
+        container.guideEpgRepository.resetFallbackSession(server, username)
         try {
             _ui.update { it.copy(refreshSections = CatalogRefresh.idle()) }
             if (showLoading && _ui.value.catalog == null) {
@@ -92,9 +97,12 @@ class CatalogViewModel(
                     cache.save(server, username, result.catalog)
                     applyCatalog(result.catalog, result.catalog.updatedAtMillis)
                     _ui.update { it.copy(isLoading = false, isRefreshing = false, errorMessage = null) }
+                    scheduleGuideRefresh(result.catalog)
                 }
                 is CatalogResult.Error -> {
                     _ui.update { it.copy(isLoading = false, isRefreshing = false, errorMessage = result.message) }
+                    _ui.value.catalog?.let(::scheduleGuideRefresh)
+                        ?: container.guideEpgRepository.markCatalogUnavailable(server, username)
                 }
             }
         } finally {
@@ -104,6 +112,15 @@ class CatalogViewModel(
 
     fun retry() {
         viewModelScope.launch { refreshInternal(showLoading = true) }
+    }
+
+    private fun scheduleGuideRefresh(catalog: Catalog) {
+        container.guideEpgRepository.scheduleCatalogRefresh(
+            server = server,
+            username = username,
+            password = password,
+            liveStreams = catalog.liveStreams,
+        )
     }
 
     private fun applyCatalog(catalog: Catalog, updatedAt: Long) {

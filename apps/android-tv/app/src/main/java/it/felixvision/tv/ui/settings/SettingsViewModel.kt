@@ -417,8 +417,8 @@ class SettingsViewModel(
     }
 
     /**
-     * APK di un aggiornamento scaricato o in installazione: "Svuota cache
-     * immagini" non deve cancellarlo, altrimenti l'installazione fallisce.
+     * APK di un aggiornamento scaricato o in installazione: "Svuota cache"
+     * non deve cancellarlo, altrimenti l'installazione fallisce.
      */
     fun activeUpdateApk(): File? {
         val version = when (val status = _ui.value.updateStatus) {
@@ -434,7 +434,8 @@ class SettingsViewModel(
      * (`cacheDir/fvp_images`), cache in memoria dell'`ImageLoader` e file di
      * `cacheDir/updates` tranne l'APK di un aggiornamento in corso.
      *
-     * Il catalogo salvato in `filesDir` non è contato e non si tocca.
+     * Il catalogo salvato in `filesDir` non è contato e non si tocca; la cache
+     * separata della Guida EPG è inclusa e viene rimossa.
      */
     suspend fun cacheOccupiedBytes(): Long = withContext(Dispatchers.IO) {
         CacheCleanup.occupiedBytes(
@@ -442,7 +443,7 @@ class SettingsViewModel(
             updatesDir = updateInstaller.updatesDir,
             memoryCacheBytes = memoryCacheBytes(),
             protectedApk = activeUpdateApk(),
-        )
+        ) + container.catalogCache.guideCacheBytes()
     }
 
     /**
@@ -454,12 +455,15 @@ class SettingsViewModel(
         val memoryBytes = memoryCacheBytes()
         runCatching { container.imageLoader.diskCache?.clear() }
         runCatching { container.imageLoader.memoryCache?.clear() }
-        CacheCleanup.clear(
+        val imageAndUpdateBytes = CacheCleanup.clear(
             imagesDir = container.imageCacheDir,
             updatesDir = updateInstaller.updatesDir,
             memoryCacheBytes = memoryBytes,
             protectedApk = activeUpdateApk(),
         )
+        val guideBytes = container.guideEpgRepository.clearCache()
+        container.channelEpgClient.clearCache()
+        imageAndUpdateBytes + guideBytes
     }
 
     /** Byte nella cache in memoria di Coil; 0 se non c'è o non è leggibile. */

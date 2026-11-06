@@ -172,6 +172,8 @@ fun FvpMainScreen(
     var playerSession by remember(sessionId, currentServer, currentUsername) { mutableStateOf<PlayerSession?>(null) }
     var playerReturnTick by remember(sessionId) { mutableIntStateOf(0) }
     var returnLiveChannelId by remember(sessionId) { mutableStateOf<String?>(null) }
+    var guideReturnChannelId by remember(sessionId) { mutableStateOf<String?>(null) }
+    var guideReturnTick by remember(sessionId) { mutableIntStateOf(0) }
     var returnEpisodeId by remember(sessionId) { mutableStateOf<String?>(null) }
     var favoritesTick by remember(sessionId) { mutableStateOf(0L) }
     // Canale della finestra "Aggiungi a I miei canali" / menu di modifica.
@@ -479,6 +481,31 @@ fun FvpMainScreen(
         )
     }
 
+    /** Avvia il fullscreen con Su/Giù limitati alla categoria attiva della Guida. */
+    fun playLiveFromGuide(
+        channel: LiveStream,
+        category: GuideCategory,
+        categoryStreams: List<LiveStream>,
+    ) {
+        val catalog = visibleCatalog ?: return
+        val visibleStreams = catalog.liveStreams
+        val visibleStreamIds = visibleStreams.mapTo(HashSet()) { it.streamId }
+        val channels = categoryStreams.filter { it.streamId in visibleStreamIds }
+        val startIndex = channels.indexOfFirst { it.streamId == channel.streamId }
+        if (startIndex < 0) return
+        playerSession = newPlayerSession(
+            PlaybackSource.Live(
+                channels = channels,
+                startIndex = startIndex,
+                categoryId = category.id.takeUnless { it == GUIDE_UNCATEGORIZED_CATEGORY_ID },
+                categoryName = category.name,
+                allChannels = visibleStreams,
+                categories = catalog?.liveCategories.orEmpty(),
+                returnToGuide = true,
+            ),
+        )
+    }
+
     /**
      * OK su un canale di "I miei canali": player con zapping Su/Giù nell'ordine
      * della lista (circolare) e numerazione personale dei tasti numerici.
@@ -735,10 +762,27 @@ fun FvpMainScreen(
         AppBackground(modifier = Modifier.fillMaxSize()) {
             Box(modifier = Modifier.fillMaxSize().padding(scale.dp(8f))) {
                 when {
-                    // La pagina Guida TV è un segnaposto autonomo e non dipende dal catalogo.
+                    // La Guida riceve esclusivamente il catalogo già filtrato
+                    // dai contenuti protetti: mai le liste grezze del provider.
                     selectedTab == DrawerSection.GuidaTv -> GuideTvSection(
                         contentFocusRequester = contentFocusRequester,
                         modifier = Modifier.fillMaxSize(),
+                        categories = visibleCatalog?.liveCategories.orEmpty(),
+                        streams = visibleCatalog?.liveStreams.orEmpty(),
+                        guideDataSource = container.guideEpgRepository,
+                        server = currentServer,
+                        username = currentUsername,
+                        password = currentPassword,
+                        allowedOutputFormats = allowedOutputFormats,
+                        videoFormatStore = container.channelVideoFormatStore,
+                        scale = scale,
+                        clock = container.clock,
+                        focusChannelId = guideReturnChannelId,
+                        focusChannelTick = guideReturnTick,
+                        onChannelFocusRestored = { guideReturnChannelId = null },
+                        onPlayFullscreen = { channel, category, categoryStreams ->
+                            playLiveFromGuide(channel, category, categoryStreams)
+                        },
                     )
                     // L'attesa del primo catalogo è a schermo intero: il BrandBackdrop
                     // è composto in fondo a questa schermata, sopra il menu laterale.
@@ -1024,6 +1068,11 @@ fun FvpMainScreen(
                 playerSession = null
                 playerReturnTick += 1
                 when (playerReturnTarget(session.source)) {
+                    PlayerReturnTarget.GUIDE -> {
+                        guideReturnChannelId = info.lastLiveChannelId
+                        guideReturnTick += 1
+                        selectedTab = DrawerSection.GuidaTv
+                    }
                     PlayerReturnTarget.LIVE -> {
                         returnLiveChannelId = info.lastLiveChannelId
                         liveCategoryEntry = null

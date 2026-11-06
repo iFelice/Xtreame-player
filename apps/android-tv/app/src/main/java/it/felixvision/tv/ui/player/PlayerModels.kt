@@ -26,6 +26,8 @@ sealed interface PlaybackSource {
         val categories: List<Category> = emptyList(),
         /** Numerazione dei tasti numerici: personale quando si arriva da "I miei canali". */
         val numbering: ChannelNumbering = ChannelNumbering.PROVIDER,
+        /** Ritorno alla Guida e ripristino del punto selezionato dopo il fullscreen. */
+        val returnToGuide: Boolean = false,
     ) : PlaybackSource
 
     data class Movie(

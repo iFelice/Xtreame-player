@@ -32,13 +32,13 @@ import org.robolectric.shadows.ShadowLooper
 import org.robolectric.annotation.Config
 
 /**
- * "Svuota cache immagini" nella pagina "Impostazioni › Catalogo".
+ * "Svuota cache" nella pagina "Impostazioni › Catalogo".
  *
  * Il test lavora su cartelle vere del contesto Robolectric: mette file finti in
  * `cacheDir/fvp_images` (la cache su disco di Coil) e in `cacheDir/updates`,
  * compone [SettingsCatalogPage] con lo spazio occupato calcolato da
- * [CacheCleanup] e attiva il pulsante con l'azione semantica, come fanno gli
- * altri test dei pulsanti tv-material.
+ * [CacheCleanup] e [CatalogCache], poi attiva il pulsante con l'azione
+ * semantica, come fanno gli altri test dei pulsanti tv-material.
  *
  * Tre cose devono restare vere dopo la pulizia: le due cartelle si svuotano,
  * l'APK di un aggiornamento in corso sopravvive (cancellarlo romperebbe
@@ -69,6 +69,7 @@ class SettingsCacheCleanupTest {
     private lateinit var apkInUso: File
     private lateinit var catalogCache: CatalogCache
     private lateinit var fileCatalogo: File
+    private lateinit var fileGuida: File
 
     @Before
     fun preparaCache() {
@@ -93,7 +94,10 @@ class SettingsCacheCleanupTest {
                 catalog = Catalog(liveCategories = emptyList()),
             )
         }
+        fileGuida = catalogCache.guideFileFor(server = SERVER, username = UTENTE)
+        scrivi(fileGuida, megabytes = 1L)
         assertTrue("il catalogo salvato deve esistere prima della pulizia", fileCatalogo.exists())
+        assertTrue("la cache EPG deve esistere prima della pulizia", fileGuida.exists())
     }
 
     @Test
@@ -102,9 +106,9 @@ class SettingsCacheCleanupTest {
 
         rule.onNodeWithTag(SETTINGS_PAGE_CATALOG_TAG).assertExists()
         rule.onNodeWithTag(SETTINGS_CACHE_SECTION_TAG).assertExists()
-        // 3 MB + 1 MB di immagini, 1 MB del vecchio APK, 1 MB di memoria: 6 MB.
-        // I 5 MB dell'APK in uso non contano.
-        rule.onNodeWithTag(SETTINGS_CACHE_SIZE_TAG).assertTextEquals("6 MB")
+        // 3 MB + 1 MB di immagini, 1 MB del vecchio APK, 1 MB di memoria
+        // e 1 MB di cache EPG: 7 MB. L'APK in uso non conta.
+        rule.onNodeWithTag(SETTINGS_CACHE_SIZE_TAG).assertTextEquals("7 MB")
         rule.onNodeWithTag(SETTINGS_CACHE_CLEAR_TAG).assertTextEquals(SETTINGS_CACHE_CLEAR_LABEL)
         rule.onNodeWithText(SETTINGS_CACHE_NOTE).assertExists()
     }
@@ -118,7 +122,7 @@ class SettingsCacheCleanupTest {
         attendiRisultato()
 
         rule.onNodeWithTag(SETTINGS_CACHE_RESULT_TAG)
-            .assertTextEquals("Cache svuotata · liberati 6 MB")
+            .assertTextEquals("Cache svuotata · liberati 7 MB")
         assertTrue(
             "la cartella delle immagini deve essere vuota: ${imagesDir.listFiles()?.toList()}",
             imagesDir.listFiles().isNullOrEmpty(),
@@ -131,6 +135,7 @@ class SettingsCacheCleanupTest {
         assertTrue("l'APK in uso è stato cancellato", apkInUso.exists())
         assertTrue("il catalogo salvato è stato cancellato", fileCatalogo.exists())
         assertEquals("il catalogo salvato è cambiato", testoCatalogo, fileCatalogo.readText())
+        assertTrue("la cache EPG non è stata cancellata", !fileGuida.exists())
         // Dopo la pulizia lo spazio occupato è quello dell'APK rimasto, che non conta.
         assertEquals(
             0L,
@@ -164,7 +169,7 @@ class SettingsCacheCleanupTest {
             updatesDir = updatesDir,
             memoryCacheBytes = memoryCacheBytes,
             protectedApk = apkInUso,
-        )
+        ) + runBlocking { catalogCache.guideCacheBytes() }
         rule.setContent {
             FvpTheme {
                 SettingsCatalogPage(
@@ -179,7 +184,7 @@ class SettingsCacheCleanupTest {
                             updatesDir = updatesDir,
                             memoryCacheBytes = memoryCacheBytes,
                             protectedApk = apkInUso,
-                        )
+                        ) + catalogCache.clearGuideCaches()
                     },
                 )
             }

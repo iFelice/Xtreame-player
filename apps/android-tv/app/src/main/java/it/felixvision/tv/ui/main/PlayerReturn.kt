@@ -4,14 +4,14 @@ import it.felixvision.tv.data.playback.ChannelNumbering
 import it.felixvision.tv.ui.player.PlaybackSource
 
 /** Sezione da ripristinare quando si chiude il player. */
-enum class PlayerReturnTarget { LIVE, MY_CHANNELS, NONE }
+enum class PlayerReturnTarget { GUIDE, LIVE, MY_CHANNELS, NONE }
 
 /** Determina la destinazione di ritorno in base alla sorgente della sessione. */
 fun playerReturnTarget(source: PlaybackSource): PlayerReturnTarget = when (source) {
-    is PlaybackSource.Live -> if (source.numbering == ChannelNumbering.PERSONAL) {
-        PlayerReturnTarget.MY_CHANNELS
-    } else {
-        PlayerReturnTarget.LIVE
+    is PlaybackSource.Live -> when {
+        source.numbering == ChannelNumbering.PERSONAL -> PlayerReturnTarget.MY_CHANNELS
+        source.returnToGuide -> PlayerReturnTarget.GUIDE
+        else -> PlayerReturnTarget.LIVE
     }
     is PlaybackSource.Movie, is PlaybackSource.Series -> PlayerReturnTarget.NONE
 }

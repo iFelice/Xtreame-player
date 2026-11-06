@@ -141,16 +141,16 @@ const val SETTINGS_CATALOG_REFRESH_ROW_TAG = "settings_catalog_refresh_row"
 /** Tag di test del pulsante di aggiornamento del catalogo. */
 const val SETTINGS_CATALOG_REFRESH_TAG = "settings_refresh"
 
-/** Cache immagini della pagina Catalogo: testi e tag di test. */
-const val SETTINGS_CACHE_TITLE = "Cache immagini"
+/** Cache svuotabile della pagina Catalogo: testi e tag di test. */
+const val SETTINGS_CACHE_TITLE = "Cache"
 const val SETTINGS_CACHE_SIZE_LABEL = "Spazio occupato"
 const val SETTINGS_CACHE_SECTION_TAG = "settings_cache_section"
 const val SETTINGS_CACHE_SIZE_ROW_TAG = "settings_cache_size_row"
 const val SETTINGS_CACHE_SIZE_TAG = "settings_cache_size"
-const val SETTINGS_CACHE_CLEAR_LABEL = "Svuota cache immagini"
+const val SETTINGS_CACHE_CLEAR_LABEL = "Svuota cache"
 const val SETTINGS_CACHE_CLEAR_TAG = "settings_cache_clear"
 const val SETTINGS_CACHE_RESULT_TAG = "settings_cache_result"
-const val SETTINGS_CACHE_NOTE = "Il catalogo salvato non viene cancellato."
+const val SETTINGS_CACHE_NOTE = "Il catalogo salvato non viene cancellato; la cache EPG viene rimossa."
 
 /** "<n> MB" occupati dalle cache, arrotondati al megabyte. */
 fun cacheSizeLabel(bytes: Long): String = "${CacheCleanup.megabytes(bytes)} MB"
@@ -689,9 +689,9 @@ internal fun SettingsVpnPage(
  * nella schermata (finestra di avanzamento compresa, aperta da [SettingsScreen])
  * e la cache delle immagini, con lo spazio occupato e il pulsante che la svuota.
  *
- * La cache svuotabile è quella su disco di Coil (`cacheDir/fvp_images`), quella
- * in memoria dell'`ImageLoader` e i file di `cacheDir/updates` tranne l'APK di un
- * aggiornamento in corso ([CacheCleanup]). Il catalogo salvato in `filesDir` non
+ * Le cache svuotabili sono quella su disco di Coil (`cacheDir/fvp_images`),
+ * quella in memoria dell'`ImageLoader`, i file di `cacheDir/updates` tranne l'APK
+ * in uso e la cache EPG XMLTV/short EPG. Il catalogo salvato in `filesDir` non
  * si tocca.
  *
  * Il focus d'ingresso va su "Aggiorna catalogo".
