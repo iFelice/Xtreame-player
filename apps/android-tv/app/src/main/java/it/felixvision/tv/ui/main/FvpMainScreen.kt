@@ -67,7 +67,6 @@ import it.felixvision.tv.data.update.UpdateCheckState
 import it.felixvision.tv.ui.access.AccessViewModel
 import it.felixvision.tv.ui.catalog.CatalogViewModel
 import it.felixvision.tv.ui.catalog.CategorySortStore
-import it.felixvision.tv.ui.catalog.ContinueWatchingSection
 import it.felixvision.tv.ui.catalog.FavoritesSection
 import it.felixvision.tv.ui.catalog.FilmSection
 import it.felixvision.tv.ui.catalog.LiveSection
@@ -668,11 +667,11 @@ fun FvpMainScreen(
         openContinueSeries(entry)
     }
 
-    /** Pressione lunga nella sezione: la voce sparisce finché non viene ripresa. */
+    /** Pressione lunga nella riga: la voce sparisce finché non viene ripresa. */
     fun hideContinueEntry(entry: ContinueEntry) {
         scope.launch {
             container.continueWatchingStore.hide(currentServer, currentUsername, entry.key)
-            favoritesMessage = "Rimosso da Riprendi"
+            favoritesMessage = "Rimosso da Continua a guardare"
         }
     }
 
@@ -736,6 +735,11 @@ fun FvpMainScreen(
         AppBackground(modifier = Modifier.fillMaxSize()) {
             Box(modifier = Modifier.fillMaxSize().padding(scale.dp(8f))) {
                 when {
+                    // La pagina Guida TV è un segnaposto autonomo e non dipende dal catalogo.
+                    selectedTab == DrawerSection.GuidaTv -> GuideTvSection(
+                        contentFocusRequester = contentFocusRequester,
+                        modifier = Modifier.fillMaxSize(),
+                    )
                     // L'attesa del primo catalogo è a schermo intero: il BrandBackdrop
                     // è composto in fondo a questa schermata, sopra il menu laterale.
                     catalogState.isLoading && catalogState.catalog == null -> Unit
@@ -776,34 +780,18 @@ fun FvpMainScreen(
                                     catalogViewModel = catalogViewModel,
                                     contentFocusRequester = contentFocusRequester,
                                     progress = watchProgress,
+                                    continueEntries = visibleContinueEntries,
+                                    continueLoadingKey = continueLoadingKey,
+                                    continueErrorMessage = continueErrorMessage,
+                                    onPlayContinueEntry = { entry -> openContinueEntry(entry) },
+                                    onRemoveContinueEntry = { entry -> hideContinueEntry(entry) },
+                                    onToggleContinueFavorite = { favorite -> toggleFavorite(favorite) },
+                                    playerIsOpen = playerSession != null,
                                     refocusTick = playerReturnTick,
                                     focusEpisodeId = returnEpisodeId,
                                     modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
                                 )
-                                DrawerSection.ContinuaAGuardare -> ContinueWatchingSection(
-                                    entries = visibleContinueEntries,
-                                    scale = scale,
-                                    progress = watchProgress,
-                                    loadingKey = continueLoadingKey,
-                                    errorMessage = continueErrorMessage,
-                                    onPlayEntry = { entry -> openContinueEntry(entry) },
-                                    onRemoveEntry = { entry -> hideContinueEntry(entry) },
-                                    refocusTick = playerReturnTick,
-                                    catalogViewModel = catalogViewModel,
-                                    favorites = visibleFavorites,
-                                    onToggleFavorite = { toggleFavorite(it) },
-                                    onPlayVod = { film -> playMovie(film) },
-                                    onPlayEpisode = { _, playback -> playEpisode(playback) },
-                                    onSetEpisodeWatched = { episode, watched, duration ->
-                                        setEpisodeWatched(episode, watched, duration)
-                                    },
-                                    onToggleWatched = { film, watched, duration ->
-                                        setMovieWatched(film, watched, duration)
-                                    },
-                                    focusEpisodeId = returnEpisodeId,
-                                    contentFocusRequester = contentFocusRequester,
-                                    modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
-                                )
+                                DrawerSection.GuidaTv -> Unit
                                 DrawerSection.Live -> LiveSection(
                                     initialCategoryId = liveCategoryEntry?.categoryId,
                                     onLongPressCategory = { category ->
@@ -1072,7 +1060,7 @@ fun FvpMainScreen(
 
     // Primo caricamento del catalogo: attesa a schermo intero con lo stesso
     // sfondo dell'avvio, sopra il menu laterale.
-    if (catalogState.isLoading && catalogState.catalog == null) {
+    if (selectedTab != DrawerSection.GuidaTv && catalogState.isLoading && catalogState.catalog == null) {
         BrandBackdrop(scale = scale) {
             LoadingState(message = "Caricamento catalogo in corso…", scale = scale)
         }

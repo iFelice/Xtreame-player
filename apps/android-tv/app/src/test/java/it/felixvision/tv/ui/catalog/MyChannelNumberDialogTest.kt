@@ -61,6 +61,7 @@ class MyChannelNumberDialogTest {
         rule.waitForIdle()
 
         rule.onNodeWithTag("my_channel_number_dialog").assertIsDisplayed()
+        rule.onNodeWithTag("channel_number_hint").assertTextEquals("OK conferma · Indietro annulla")
         rule.onNodeWithTag("channel_number_step_up").assertIsDisplayed()
         rule.onNodeWithTag("channel_number_step_down").assertIsDisplayed()
         rule.onNodeWithTag("channel_number_field").assertIsFocused()
@@ -107,6 +108,7 @@ class MyChannelNumberDialogTest {
             .performSemanticsAction(SemanticsActions.OnClick)
         rule.waitForIdle()
 
+        rule.onNodeWithTag("channel_number_hint").assertTextEquals("OK conferma · Indietro annulla")
         rule.onNodeWithTag("channel_number_field").assertIsFocused()
         rule.onNodeWithTag("channel_number_value").assertTextEquals("50")
         rule.onNodeWithTag("channel_number_field").performKeyInput { pressKey(Key.DirectionDown) }

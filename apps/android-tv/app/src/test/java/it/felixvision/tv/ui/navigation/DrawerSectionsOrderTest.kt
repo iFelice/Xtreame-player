@@ -17,7 +17,7 @@ class DrawerSectionsOrderTest {
                 DrawerSection.Live,
                 DrawerSection.Film,
                 DrawerSection.Serie,
-                DrawerSection.ContinuaAGuardare,
+                DrawerSection.GuidaTv,
                 DrawerSection.Cerca,
                 DrawerSection.Impostazioni,
             ),
@@ -27,7 +27,7 @@ class DrawerSectionsOrderTest {
 
     @Test
     fun `etichette delle nuove voci`() {
-        assertEquals("Riprendi", DrawerSection.ContinuaAGuardare.label)
+        assertEquals("Guida TV", DrawerSection.GuidaTv.label)
         assertEquals("Cerca", DrawerSection.Cerca.label)
     }
 

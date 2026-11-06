@@ -65,7 +65,7 @@ enum class DrawerSection(
     Live("Live", R.drawable.ic_nav_tv, FvpColors.LiveActive),
     Film("Film", R.drawable.ic_nav_film, FvpColors.FilmActive),
     Serie("Serie", R.drawable.ic_nav_library, FvpColors.SerieActive),
-    ContinuaAGuardare("Riprendi", R.drawable.ic_nav_history, FvpColors.ContinuaActive),
+    GuidaTv("Guida TV", R.drawable.ic_nav_tv_guide, FvpColors.ContinuaActive),
     Cerca("Cerca", R.drawable.ic_nav_search, FvpColors.CercaActive),
     Impostazioni("Impostazioni", R.drawable.ic_nav_settings, FvpColors.ImpostazioniActive),
 }
