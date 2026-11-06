@@ -370,9 +370,10 @@ fun ChannelNumberDialog(
                     )
                 }
                 Text(
-                    text = "▲ +1 · ▼ −1 · OK conferma · Indietro annulla",
+                    text = "OK conferma · Indietro annulla",
                     color = FvpColors.TextSecondary,
                     fontSize = scale.sp(13f),
+                    modifier = Modifier.testTag("channel_number_hint"),
                 )
             }
         }
