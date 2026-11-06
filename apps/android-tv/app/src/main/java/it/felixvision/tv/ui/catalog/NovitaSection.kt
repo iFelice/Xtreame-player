@@ -1,9 +1,11 @@
 package it.felixvision.tv.ui.catalog
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -43,6 +45,7 @@ import it.felixvision.tv.data.catalog.SeriesInfoResponse
 import it.felixvision.tv.data.catalog.SeriesItem
 import it.felixvision.tv.data.catalog.VodInfoResponse
 import it.felixvision.tv.data.catalog.VodStream
+import it.felixvision.tv.data.continuewatching.ContinueEntry
 import it.felixvision.tv.data.favorites.FavoriteItem
 import it.felixvision.tv.data.playback.SeriesPlayback
 import it.felixvision.tv.data.progress.ProgressKeys
@@ -80,6 +83,13 @@ fun NovitaSection(
     modifier: Modifier = Modifier,
     contentFocusRequester: FocusRequester = remember { FocusRequester() },
     progress: Map<String, WatchProgress> = emptyMap(),
+    continueEntries: List<ContinueEntry> = emptyList(),
+    continueLoadingKey: String? = null,
+    continueErrorMessage: String? = null,
+    onPlayContinueEntry: (ContinueEntry) -> Unit = {},
+    onRemoveContinueEntry: (ContinueEntry) -> Unit = {},
+    onToggleContinueFavorite: (FavoriteItem) -> Unit = {},
+    playerIsOpen: Boolean = false,
     refocusTick: Int = 0,
     focusEpisodeId: String? = null,
 ) {
@@ -166,7 +176,7 @@ fun NovitaSection(
         fallback = contentFocusRequester
     )
 
-    // Con i margini del focus le due righe non stanno sempre in altezza: la
+    // Con i margini del focus le righe non stanno sempre in altezza: la
     // sezione scorre e la riga che riceve il focus viene portata interamente in
     // vista, titolo compreso.
     val rowsScrollState = rememberScrollState()
@@ -180,8 +190,33 @@ fun NovitaSection(
                 .fillMaxSize()
                 .verticalScroll(rowsScrollState)
                 .padding(horizontal = scale.dp(4f)),
-            verticalArrangement = Arrangement.spacedBy(scale.dp(18f)),
+            verticalArrangement = Arrangement.Top,
         ) {
+            ContinueWatchingRow(
+                entries = continueEntries,
+                scale = scale,
+                progress = progress,
+                loadingKey = continueLoadingKey,
+                errorMessage = continueErrorMessage,
+                onPlayEntry = onPlayContinueEntry,
+                onRemoveEntry = onRemoveContinueEntry,
+                refocusTick = refocusTick,
+                playerIsOpen = playerIsOpen,
+                onRowFocused = { rowsBringIntoView.onRowFocused(ROW_CONTINUE) },
+                catalogViewModel = catalogViewModel,
+                favorites = favorites,
+                onToggleFavorite = onToggleContinueFavorite,
+                onPlayVod = onPlayFilm,
+                onPlayEpisode = onPlayEpisode,
+                onSetEpisodeWatched = onSetEpisodeWatched,
+                onToggleWatched = onToggleWatched,
+                focusEpisodeId = focusEpisodeId,
+                contentFocusRequester = contentFocusRequester,
+                modifier = rowsBringIntoView.rowModifier(ROW_CONTINUE),
+            )
+            if (continueEntries.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(scale.dp(18f)))
+            }
             Column(modifier = rowsBringIntoView.rowModifier(ROW_FILMS)) {
                 Text(
                     text = "Ultimi film",
@@ -191,7 +226,15 @@ fun NovitaSection(
                     modifier = Modifier.padding(start = scale.focusSafePadding, bottom = scale.dp(8f))
                 )
                 if (recentFilms.isEmpty()) {
-                    Text(text = "Nessun film disponibile", color = FvpColors.TextSecondary)
+                    Text(
+                        text = "Nessun film disponibile",
+                        color = FvpColors.TextSecondary,
+                        modifier = if (continueEntries.isEmpty() && recentSeries.isEmpty()) {
+                            Modifier.focusRequester(contentFocusRequester).focusable()
+                        } else {
+                            Modifier
+                        },
+                    )
                 } else {
                     LazyRow(
                         state = filmsListState,
@@ -213,7 +256,16 @@ fun NovitaSection(
                                     .width(scale.dp(140f))
                                     .testTag("novita_film_${film.streamId}")
                                     .focusRequester(itemFr)
-                                    .then(if (index == 0) Modifier.focusRequester(filmsFirstFocus).focusRequester(contentFocusRequester) else Modifier)
+                                    .then(
+                                        if (index == 0) {
+                                            Modifier.focusRequester(filmsFirstFocus).then(
+                                                if (continueEntries.isEmpty()) Modifier.focusRequester(contentFocusRequester)
+                                                else Modifier,
+                                            )
+                                        } else {
+                                            Modifier
+                                        },
+                                    )
                                     .onFocusChanged { focusState ->
                                         focused = focusState.isFocused
                                         if (focusState.isFocused) rowsBringIntoView.onRowFocused(ROW_FILMS)
@@ -263,6 +315,7 @@ fun NovitaSection(
                     }
                 }
             }
+            Spacer(modifier = Modifier.height(scale.dp(18f)))
             Column(modifier = rowsBringIntoView.rowModifier(ROW_SERIES)) {
                 Text(
                     text = "Ultime serie",
@@ -291,6 +344,13 @@ fun NovitaSection(
                                 },
                                 modifier = Modifier.width(scale.dp(140f)).testTag("novita_serie_${serie.seriesId}")
                                     .focusRequester(itemFr)
+                                    .then(
+                                        if (index == 0 && continueEntries.isEmpty() && recentFilms.isEmpty()) {
+                                            Modifier.focusRequester(contentFocusRequester)
+                                        } else {
+                                            Modifier
+                                        },
+                                    )
                                     .onFocusChanged { focusState ->
                                         focused = focusState.isFocused
                                         if (focusState.isFocused) rowsBringIntoView.onRowFocused(ROW_SERIES)
@@ -391,6 +451,7 @@ fun NovitaSection(
     }
 }
 
-/** Indici delle righe di Novità, usati per il margine del focus e il ritorno in vista. */
-private const val ROW_FILMS = 0
-private const val ROW_SERIES = 1
+/** Indici stabili delle righe di Novità, usati per il ritorno in vista del focus. */
+private const val ROW_CONTINUE = 0
+private const val ROW_FILMS = 1
+private const val ROW_SERIES = 2

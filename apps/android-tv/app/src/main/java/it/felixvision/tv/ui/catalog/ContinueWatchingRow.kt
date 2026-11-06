@@ -8,14 +8,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.itemsIndexed
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -58,12 +57,9 @@ import it.felixvision.tv.data.playback.SeriesPlayback
 import it.felixvision.tv.data.progress.ProgressKeys
 import it.felixvision.tv.data.progress.WatchProgress
 import it.felixvision.tv.ui.components.CatalogPosterImage
-import it.felixvision.tv.ui.components.EmptyState
 import it.felixvision.tv.ui.components.FvpCompactButton
 import it.felixvision.tv.ui.components.FocusMarqueeText
-import it.felixvision.tv.ui.components.PositionIndicator
 import it.felixvision.tv.ui.components.UiScale
-import it.felixvision.tv.ui.components.gridPosition
 import it.felixvision.tv.ui.components.ignoreHeldOkUntilReleased
 import it.felixvision.tv.ui.components.WatchProgressLine
 import it.felixvision.tv.ui.components.focusSafePadding
@@ -75,17 +71,16 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 
 /**
- * Sezione "Continua a guardare": griglia a 5 colonne come Film e Serie, con
- * copertine 2:3 e titolo sotto. Per i film la barra verde dell'avanzamento
- * esistente; per le serie la riga "S2 E5" e la barra dell'episodio da riprendere.
+ * Riga orizzontale "Continua a guardare" inserita nella schermata Novità.
+ * Mantiene le stesse azioni della precedente schermata: OK riprende dal punto
+ * salvato; la pressione lunga apre la scheda o permette di nascondere la voce.
+ * Le serie mostrano l'episodio da riprendere e il relativo avanzamento.
  *
- * OK avvia subito il player dal punto salvato (senza finestra "Riprendi"); la
- * pressione lunga apre un menu con "Apri scheda" (il dettaglio del film o della
- * serie, come nei Preferiti) e "Rimuovi da Continua a guardare" — in questa
- * sezione non aggiunge ai preferiti.
+ * La chiamata resta composta anche con [entries] vuoto (senza produrre altezza
+ * visibile), così un dettaglio aperto non viene smontato quando una voce sparisce.
  */
 @Composable
-fun ContinueWatchingSection(
+fun ContinueWatchingRow(
     entries: List<ContinueEntry>,
     scale: UiScale,
     progress: Map<String, WatchProgress> = emptyMap(),
@@ -94,6 +89,8 @@ fun ContinueWatchingSection(
     onPlayEntry: (ContinueEntry) -> Unit = {},
     onRemoveEntry: (ContinueEntry) -> Unit = {},
     refocusTick: Int = 0,
+    playerIsOpen: Boolean = false,
+    onRowFocused: () -> Unit = {},
     catalogViewModel: CatalogViewModel? = null,
     favorites: List<FavoriteItem> = emptyList(),
     onToggleFavorite: (FavoriteItem) -> Unit = {},
@@ -105,10 +102,7 @@ fun ContinueWatchingSection(
     contentFocusRequester: FocusRequester = remember { FocusRequester() },
     modifier: Modifier = Modifier,
 ) {
-    val columns = 5
-    val gridState = rememberLazyGridState()
-    // Indice dell'elemento con il focus, per il contatore "N / Totale".
-    var focusedItemIndex by remember(entries) { mutableStateOf<Int?>(null) }
+    val listState = rememberLazyListState()
     val itemFocusRequesters = remember(entries) {
         entries.associate { it.key to FocusRequester() }
     }
@@ -123,8 +117,10 @@ fun ContinueWatchingSection(
     var detailIsLoading by remember { mutableStateOf(false) }
     var detailError by remember { mutableStateOf<String?>(null) }
     var retryKey by remember { mutableIntStateOf(0) }
-    // Voce su cui riportare il focus quando il dettaglio si chiude.
+    // Voce su cui riportare il focus quando il dettaglio o la voce scompaiono.
     var detailRefocusKey by remember { mutableStateOf<String?>(null) }
+    var pendingRemovalKey by remember { mutableStateOf<String?>(null) }
+    var pendingRemovalIndex by remember { mutableIntStateOf(-1) }
 
     // Caricamento della scheda, stesso schema di FavoritesSection.
     LaunchedEffect(detailEntry?.key, retryKey) {
@@ -161,13 +157,23 @@ fun ContinueWatchingSection(
         }
     }
 
-    // Chiuso il dettaglio ("Indietro"): il focus torna sulla voce di partenza.
-    LaunchedEffect(detailRefocusKey) {
+    // Chiuso il dettaglio ("Indietro"): il focus torna alla voce, se ancora
+    // presente; altrimenti alla prima sezione di Novità.
+    LaunchedEffect(detailRefocusKey, entries) {
         val key = detailRefocusKey ?: return@LaunchedEffect
-        detailRefocusKey = null
         delay(80L)
         withFrameNanos { }
-        runCatching { itemFocusRequesters[key]?.requestFocus() }
+        val index = entries.indexOfFirst { it.key == key }
+        if (index < 0) {
+            runCatching { contentFocusRequester.requestFocus() }
+        } else {
+            if (listState.layoutInfo.visibleItemsInfo.none { it.key == key }) {
+                runCatching { listState.scrollToItem(index) }
+                withFrameNanos { }
+            }
+            runCatching { itemFocusRequesters[key]?.requestFocus() }
+        }
+        detailRefocusKey = null
     }
 
     // Ritorno dal player: focus sulla voce appena aperta, oppure sulla prima se
@@ -183,25 +189,38 @@ fun ContinueWatchingSection(
         val target = lastOpenedKey?.takeIf { key -> entries.any { it.key == key } }
             ?: entries.first().key
         val index = entries.indexOfFirst { it.key == target }.coerceAtLeast(0)
-        runCatching { gridState.scrollToItem(index) }
+        runCatching { listState.scrollToItem(index) }
         withFrameNanos { }
         runCatching { itemFocusRequesters[target]?.requestFocus() }
     }
 
-    // Il margine sicuro del focus sta nel contentPadding della griglia: il
-    // contenitore resta senza padding per non sommare due volte la stessa quantità.
-    Box(modifier = modifier.fillMaxSize()) {
+    // Dopo la rimozione il focus passa alla voce che occupa l'indice rimosso
+    // (o a quella precedente); se la riga è vuota, alla prima card di Novità.
+    // Player e schede non perdono focus.
+    LaunchedEffect(pendingRemovalKey, entries, playerIsOpen, menuEntry, detailEntry) {
+        val key = pendingRemovalKey ?: return@LaunchedEffect
+        if (entries.any { it.key == key } || playerIsOpen || menuEntry != null || detailEntry != null) {
+            return@LaunchedEffect
+        }
         if (entries.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester)) {
-                EmptyState(
-                    title = "Niente da riprendere",
-                    description = "Qui trovi film ed episodi che hai iniziato",
-                    scale = scale,
-                    modifier = Modifier.align(Alignment.Center),
-                )
-            }
+            withFrameNanos { }
+            runCatching { contentFocusRequester.requestFocus() }
         } else {
-            Column(modifier = Modifier.fillMaxSize()) {
+            val index = pendingRemovalIndex.coerceIn(0, entries.lastIndex)
+            val target = entries[index]
+            runCatching { listState.scrollToItem(index) }
+            withFrameNanos { }
+            runCatching { itemFocusRequesters[target.key]?.requestFocus() }
+        }
+        pendingRemovalKey = null
+        pendingRemovalIndex = -1
+    }
+
+    // Il composable resta montato anche con lista vuota per non chiudere un
+    // dettaglio aperto; il Box vuoto misura zero, quindi la riga è davvero assente.
+    Box(modifier = modifier.fillMaxWidth()) {
+        if (entries.isNotEmpty()) {
+            Column(modifier = Modifier.fillMaxWidth()) {
                 errorMessage?.let { message ->
                     Text(
                         text = message,
@@ -212,14 +231,19 @@ fun ContinueWatchingSection(
                             .testTag("continua_error"),
                     )
                 }
-                LazyVerticalGrid(
-                    state = gridState,
-                    columns = GridCells.Fixed(columns),
-                    verticalArrangement = Arrangement.spacedBy(scale.dp(12f)),
+                Text(
+                    text = "Continua a guardare",
+                    color = FvpColors.TextPrimary,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .padding(start = scale.focusSafePadding, bottom = scale.dp(8f))
+                        .testTag("continua_heading"),
+                )
+                LazyRow(
+                    state = listState,
                     horizontalArrangement = Arrangement.spacedBy(scale.dp(12f)),
-                    // Ingrandimento e cornice del focus restano dentro la griglia.
                     contentPadding = PaddingValues(scale.focusSafePadding),
-                    modifier = Modifier.weight(1f).fillMaxHeight().testTag("continua_grid_5"),
+                    modifier = Modifier.fillMaxWidth().testTag("continua_row"),
                 ) {
                     itemsIndexed(entries, key = { _, entry -> entry.key }) { index, entry ->
                         val itemFr = remember(entry.key, itemFocusRequesters) {
@@ -235,19 +259,15 @@ fun ContinueWatchingSection(
                                 onPlayEntry(entry)
                             },
                             modifier = Modifier
-                                .fillMaxWidth()
+                                .width(scale.dp(140f))
                                 .testTag("continua_${entry.key}")
                                 .focusRequester(itemFr)
                                 .then(
-                                    if (index == 0) {
-                                        Modifier.focusRequester(contentFocusRequester)
-                                    } else {
-                                        Modifier
-                                    },
+                                    if (index == 0) Modifier.focusRequester(contentFocusRequester) else Modifier,
                                 )
                                 .onFocusChanged { focusState ->
                                     focused = focusState.isFocused
-                                    if (focusState.isFocused) focusedItemIndex = index
+                                    if (focusState.isFocused) onRowFocused()
                                 }
                                 .fvpLongPress { menuEntry = entry },
                             scale = CardDefaults.scale(focusedScale = 1.04f),
@@ -316,16 +336,6 @@ fun ContinueWatchingSection(
                 }
             }
         }
-
-        // Contatore "N / Totale" e barra di scorrimento della griglia.
-        PositionIndicator(
-            position = gridPosition(
-                gridState = gridState,
-                focusedIndex = focusedItemIndex,
-                totalItems = entries.size,
-            ),
-            scale = scale,
-        )
     }
 
     // Menu della pressione lunga, sul modello del menu del player: velo di
@@ -365,6 +375,8 @@ fun ContinueWatchingSection(
                     },
                     onRemove = {
                         menuEntry = null
+                        pendingRemovalKey = entry.key
+                        pendingRemovalIndex = entries.indexOfFirst { it.key == entry.key }
                         onRemoveEntry(entry)
                     },
                 )
@@ -486,7 +498,7 @@ private fun ContinueMenuContent(
                 .testTag("continue_menu_open"),
         )
         FvpCompactButton(
-            text = "Rimuovi da Riprendi",
+            text = "Rimuovi da Continua a guardare",
             onClick = onRemove,
             scale = scale,
             modifier = Modifier.testTag("continue_menu_remove"),

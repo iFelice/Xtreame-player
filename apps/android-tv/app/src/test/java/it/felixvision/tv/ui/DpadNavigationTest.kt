@@ -56,6 +56,7 @@ import it.felixvision.tv.ui.catalog.MyChannelDialog
 import it.felixvision.tv.ui.catalog.NOVITA_CATEGORY_ID
 import it.felixvision.tv.ui.catalog.NovitaSection
 import it.felixvision.tv.ui.catalog.SerieSection
+import it.felixvision.tv.ui.main.GuideTvSection
 import it.felixvision.tv.ui.components.FvpPrimaryButton
 import it.felixvision.tv.ui.components.FvpSecondaryButton
 import it.felixvision.tv.ui.components.UiScale
@@ -270,11 +271,10 @@ class DpadNavigationTest {
                             modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester).testTag("preferiti_section")
                         )
                     }
-                    DrawerSection.ContinuaAGuardare -> {
-                        // Le sezioni nuove non hanno test D-pad dedicati in questo file:
-                        // qui servono solo a rendere esaustivo il quando.
-                        Box(modifier = Modifier.fillMaxSize().testTag("continua_section").focusRequester(contentFocusRequester))
-                    }
+                    DrawerSection.GuidaTv -> GuideTvSection(
+                        contentFocusRequester = contentFocusRequester,
+                        modifier = Modifier.fillMaxSize(),
+                    )
                     DrawerSection.Cerca -> {
                         Box(modifier = Modifier.fillMaxSize().testTag("cerca_section").focusRequester(contentFocusRequester))
                     }
@@ -427,7 +427,8 @@ class DpadNavigationTest {
                         return@forEach
                     }
                     DrawerSection.Impostazioni -> rule.onNodeWithTag("impostazioni_first").assertIsDisplayed()
-                    DrawerSection.ContinuaAGuardare, DrawerSection.Cerca -> Unit
+                    DrawerSection.GuidaTv -> rule.onNodeWithText("disponibile nel prossimo aggiornamento").assertIsDisplayed()
+                    DrawerSection.Cerca -> Unit
                 }
                 val tag = when (section) {
                     DrawerSection.Novita -> "novita_film_201"
@@ -436,7 +437,7 @@ class DpadNavigationTest {
                     DrawerSection.Serie -> "serie_301"
                     DrawerSection.Preferiti -> "drawer_Preferiti"
                     DrawerSection.Impostazioni -> "impostazioni_first"
-                    DrawerSection.ContinuaAGuardare -> "continua_section"
+                    DrawerSection.GuidaTv -> "guide_tv_section"
                     DrawerSection.Cerca -> "cerca_section"
                 }
                 rule.onNodeWithTag(tag).performKeyInput { pressKey(Key.Back) }

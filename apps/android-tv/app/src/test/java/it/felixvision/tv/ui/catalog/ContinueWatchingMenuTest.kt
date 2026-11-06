@@ -2,6 +2,7 @@ package it.felixvision.tv.ui.catalog
 
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.input.key.Key
@@ -26,8 +27,8 @@ import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 
 /**
- * Menu della pressione lunga in "Riprendi": non toglie più la
- * voce subito, apre "Apri scheda" e "Rimuovi da Riprendi".
+ * Menu della pressione lunga nella riga "Continua a guardare": non toglie più la
+ * voce subito, apre "Apri scheda" e "Rimuovi da Continua a guardare".
  * La pressione lunga è quella del test Dpad: keyDown di OK, orologio fermo
  * per 700 ms, keyUp.
  */
@@ -64,10 +65,10 @@ class ContinueWatchingMenuTest {
         removeCalls: MutableList<String> = mutableListOf(),
         playCalls: MutableList<String> = mutableListOf(),
     ) {
-        val contentFocus = FocusRequester()
         rule.setContent {
+            val contentFocus = remember { FocusRequester() }
             FvpTheme {
-                ContinueWatchingSection(
+                ContinueWatchingRow(
                     entries = listOf(seriesEntry, filmEntry),
                     scale = scale,
                     onPlayEntry = { entry -> playCalls.add(entry.key) },
@@ -94,6 +95,19 @@ class ContinueWatchingMenuTest {
     }
 
     @Test
+    fun `OK sulla riga inoltra la ripresa sia del film sia della serie`() {
+        val playCalls = mutableListOf<String>()
+        showSection(playCalls = playCalls)
+
+        rule.onNodeWithTag("continua_series_301")
+            .performSemanticsAction(SemanticsActions.OnClick)
+        rule.onNodeWithTag("continua_vod_201")
+            .performSemanticsAction(SemanticsActions.OnClick)
+
+        assertEquals(listOf("series_301", "vod_201"), playCalls)
+    }
+
+    @Test
     fun `la pressione lunga apre il menu con apri scheda e rimuovi`() {
         val removeCalls = mutableListOf<String>()
         val playCalls = mutableListOf<String>()
@@ -105,7 +119,7 @@ class ContinueWatchingMenuTest {
 
         rule.onNodeWithTag("continue_menu").assertIsDisplayed()
         rule.onNodeWithText("Apri scheda").assertIsDisplayed()
-        rule.onNodeWithText("Rimuovi da Riprendi").assertIsDisplayed()
+        rule.onNodeWithText("Rimuovi da Continua a guardare").assertIsDisplayed()
         rule.onNodeWithTag("continue_menu_open").assertIsFocused()
         // Nessuna azione ancora: la pressione lunga non rimuove più da sola.
         assertTrue(removeCalls.isEmpty())
