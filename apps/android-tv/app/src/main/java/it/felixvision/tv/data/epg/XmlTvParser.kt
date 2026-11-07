@@ -16,7 +16,7 @@ data class XmlTvParseResult(
 
 /** Timestamp XMLTV: i valori senza offset sono UTC per specifica del formato. */
 object XmlTvTimestamp {
-    private val timestampPattern = Regex("^(\\d{14})(?:\\s+(Z|[+-]\\d{4}(?:\\d{2})?))?(?:\\s+.*)?$")
+    private val timestampPattern = Regex("^(\\d{14})(?:\\s*(Z|[+-]\\d{4}(?:\\d{2})?))?(?:\\s+.*)?$")
     private val localFormatter = DateTimeFormatter.ofPattern("yyyyMMddHHmmss", Locale.ROOT)
 
     fun parse(value: String?): Long? {
