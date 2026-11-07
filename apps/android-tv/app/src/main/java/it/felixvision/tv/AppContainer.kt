@@ -18,6 +18,8 @@ import it.felixvision.tv.data.continuewatching.ContinueWatchingStore
 import it.felixvision.tv.data.favorites.FavoritesStore
 import it.felixvision.tv.data.epg.ChannelEpgClient
 import it.felixvision.tv.data.epg.ChannelScheduleLoader
+import it.felixvision.tv.data.epg.GuideEpgRepository
+import it.felixvision.tv.data.epg.XmlTvClient
 import it.felixvision.tv.data.images.CacheCleanup
 import it.felixvision.tv.data.images.FvpImageLoader
 import it.felixvision.tv.data.pairing.PairingClient
@@ -99,6 +101,17 @@ class AppContainer(
     /** Guida "in onda / a seguire": solo i canali richiesti, al massimo 4 richieste insieme. */
     val channelScheduleLoader: ChannelScheduleLoader by lazy {
         ChannelScheduleLoader(client = channelEpgClient)
+    }
+
+    /** XMLTV persistente e fallback seriale per la pagina Guida TV. */
+    val guideEpgRepository: GuideEpgRepository by lazy {
+        GuideEpgRepository(
+            cache = catalogCache,
+            xmlTvClient = XmlTvClient(http = httpClient, clock = clock),
+            channelEpgClient = channelEpgClient,
+            applicationScope = applicationScope,
+            clock = clock,
+        )
     }
 
     val catalogClient: CatalogClient by lazy {

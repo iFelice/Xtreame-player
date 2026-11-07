@@ -1,8 +1,10 @@
 package it.felixvision.tv.data.epg
 
 import java.time.Instant
+import java.time.LocalDateTime
 import java.time.ZoneId
 import java.util.Base64
+import java.util.TimeZone
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -39,6 +41,45 @@ class ChannelEpgClientTest {
         assertEquals("", shortEpg.single().description)
     }
 
+    @Test fun base64IsDecodedOnlyWhenUtf8IsPrintable() {
+        val encodedText = Base64.getEncoder().encodeToString("Titolo leggibile".toByteArray())
+        val invalidUtf8 = Base64.getEncoder().encodeToString(byteArrayOf(0xC3.toByte(), 0x28))
+        val controlText = Base64.getEncoder().encodeToString(("titolo" + 1.toChar()).toByteArray())
+        val lineBreak = Base64.getEncoder().encodeToString("titolo\nseconda riga".toByteArray())
+
+        assertEquals("Titolo leggibile", EpgRules.decode(encodedText))
+        assertEquals(invalidUtf8, EpgRules.decode(invalidUtf8))
+        assertEquals(controlText, EpgRules.decode(controlText))
+        assertEquals(lineBreak, EpgRules.decode(lineBreak))
+        assertEquals("testo libero", EpgRules.decode("testo libero"))
+        assertEquals("", EpgRules.decode(null))
+    }
+
+    @Test fun apiTimestampsWithoutEpochUseLocalZoneAndEpochFieldsWin() {
+        val original = TimeZone.getDefault()
+        try {
+            TimeZone.setDefault(TimeZone.getTimeZone("Europe/Rome"))
+            val local = EpgRules.parse(
+                kotlinx.serialization.json.Json.parseToJsonElement(
+                    """[{"start":"2026-11-06 12:00:00","stop":"2026-11-06 13:00:00","title":"locale"}]""",
+                ),
+            ).single()
+            assertEquals(
+                LocalDateTime.of(2026, 11, 6, 12, 0).atZone(ZoneId.of("Europe/Rome")).toEpochSecond(),
+                local.start,
+            )
+            val preferred = EpgRules.parse(
+                kotlinx.serialization.json.Json.parseToJsonElement(
+                    """[{"start_timestamp":"100","start":"2026-11-06 12:00:00","stop_timestamp":"200","stop":"2026-11-06 13:00:00"}]""",
+                ),
+            ).single()
+            assertEquals(100L, preferred.start)
+            assertEquals(200L, preferred.end)
+        } finally {
+            TimeZone.setDefault(original)
+        }
+    }
+
     @Test fun fallbackThenCachesNonEmptyForThirtyMinutes() = runBlocking {
         server.enqueue(MockResponse().setBody("[]"))
         server.enqueue(MockResponse().setBody(validJson))
@@ -55,6 +96,20 @@ class ChannelEpgClientTest {
         server.enqueue(MockResponse().setBody(validJson))
         api.load(server.url("/").toString(), "demo", "demo", "001")
         assertNotNull(server.takeRequest())
+    }
+
+    @Test fun guideShortRequestUsesOneLimitedGetShortEpgCall() = runBlocking {
+        server.enqueue(MockResponse().setBody(validJson))
+
+        val result = client().loadShort(server.url("/").toString(), "demo", "demo", "001")
+
+        assertTrue(result is EpgFetchResult.Success)
+        assertEquals("Nebbia d'argento", (result as EpgFetchResult.Success).programs.single().title)
+        assertEquals(1, server.requestCount)
+        val request = server.takeRequest()
+        assertEquals("get_short_epg", request.requestUrl!!.queryParameter("action"))
+        assertEquals("001", request.requestUrl!!.queryParameter("stream_id"))
+        assertEquals("50", request.requestUrl!!.queryParameter("limit"))
     }
 
     @Test fun emptyResultsAreCachedForTwoMinutesAndConcurrentCallsCoalesce() = runBlocking {

@@ -52,7 +52,7 @@ object FvpImageLoader {
             }
             .diskCache {
                 DiskCache.Builder()
-                    // Stessa cartella che "Svuota cache immagini" misura e pulisce.
+                    // Stessa cartella che "Svuota cache" misura e pulisce.
                     .directory(CacheCleanup.imageCacheDir(context.cacheDir).toOkioPath())
                     .maxSizeBytes(200L * 1024L * 1024L) // 200 MB
                     .build()

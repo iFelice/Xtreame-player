@@ -2,23 +2,32 @@ package it.felixvision.tv.data.epg
 
 import it.felixvision.tv.core.Clock
 import it.felixvision.tv.core.SystemClock
+import java.io.IOException
 import java.nio.charset.CodingErrorAction
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Base64
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
 
+@Serializable
 data class EpgProgram(val title: String, val description: String, val start: Long, val end: Long, val hasArchive: Boolean)
 data class EpgDay(val today: List<EpgProgram>, val tomorrow: List<EpgProgram>)
 
@@ -28,7 +37,7 @@ object EpgRules {
         return try {
             val bytes = Base64.getDecoder().decode(value)
             Charsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT).onUnmappableCharacter(CodingErrorAction.REPORT).decode(java.nio.ByteBuffer.wrap(bytes)).toString().also { decoded ->
-                require(decoded.none { it.isISOControl() && !it.isWhitespace() })
+                require(decoded.none { it.isISOControl() })
             }
         } catch (_: Exception) { value }
     }
@@ -69,15 +78,43 @@ object EpgRules {
     }
 
     fun parse(root: JsonElement): List<EpgProgram> {
-        val list = when (root) { is JsonArray -> root; is JsonObject -> (root["epg_listings"] as? JsonArray) ?: (root["programs"] as? JsonArray) ?: JsonArray(emptyList()); else -> JsonArray(emptyList()) }
-        return list.mapNotNull { e ->
-            val o = e as? JsonObject ?: return@mapNotNull null
-            fun str(vararg keys: String): String? = keys.firstNotNullOfOrNull { o[it]?.let { v -> (v as? JsonPrimitive)?.contentOrNull } }
-            fun epoch(vararg keys: String): Long? = str(*keys)?.toLongOrNull() ?: str(*keys)?.let { runCatching { Instant.parse(it).epochSecond }.getOrNull() }
-            val start = epoch("start_timestamp", "start") ?: return@mapNotNull null
-            val end = epoch("stop_timestamp", "end") ?: return@mapNotNull null
+        val list = when (root) {
+            is JsonArray -> root
+            is JsonObject -> (root["epg_listings"] as? JsonArray)
+                ?: (root["programs"] as? JsonArray)
+                ?: JsonArray(emptyList())
+            else -> JsonArray(emptyList())
+        }
+        return list.mapNotNull { element ->
+            val item = element as? JsonObject ?: return@mapNotNull null
+            fun text(vararg keys: String): String? = keys.firstNotNullOfOrNull { key ->
+                item[key]?.let { value -> (value as? JsonPrimitive)?.contentOrNull }
+            }
+            fun epoch(value: String?): Long? {
+                val raw = value?.trim()?.takeIf(String::isNotEmpty) ?: return null
+                raw.toLongOrNull()?.let { return it }
+                runCatching { Instant.parse(raw).epochSecond }.getOrNull()?.let { return it }
+                val localText = raw.replace(' ', 'T')
+                val local = runCatching { LocalDateTime.parse(localText, DateTimeFormatter.ISO_LOCAL_DATE_TIME) }.getOrNull()
+                    ?: return null
+                // Alcuni pannelli inviano `start`/`end` senza fuso: per l'API
+                // Xtream il valore è nell'ora locale del dispositivo.
+                return local.atZone(ZoneId.systemDefault()).toEpochSecond()
+            }
+            val start = epoch(text("start_timestamp")) ?: epoch(text("start")) ?: return@mapNotNull null
+            val end = epoch(text("stop_timestamp"))
+                ?: epoch(text("end_timestamp"))
+                ?: epoch(text("stop"))
+                ?: epoch(text("end"))
+                ?: return@mapNotNull null
             if (end <= start) return@mapNotNull null
-            EpgProgram(decode(str("title")), decode(str("description")), start, end, str("has_archive")?.let { it == "1" || it.equals("true", true) } ?: false)
+            EpgProgram(
+                title = decode(text("title")),
+                description = decode(text("description")),
+                start = start,
+                end = end,
+                hasArchive = text("has_archive")?.let { it == "1" || it.equals("true", true) } ?: false,
+            )
         }.sortedBy { it.start }
     }
 
@@ -145,5 +182,70 @@ class ChannelEpgClient(private val http: OkHttpClient, private val clock: Clock 
             programs
         }
     }
-    companion object { const val PROGRAM_TTL_MILLIS = 30 * 60_000L; const val EMPTY_TTL_MILLIS = 2 * 60_000L }
+
+    /**
+     * Singola richiesta get_short_epg per la Guida. La cache persistente e la
+     * deduplica per epg_channel_id sono gestite da [GuideEpgRepository].
+     */
+    suspend fun loadShort(
+        server: String,
+        username: String,
+        password: String,
+        streamId: String,
+    ): EpgFetchResult = withContext(Dispatchers.IO) {
+        val base = server.toHttpUrlOrNull() ?: return@withContext EpgFetchResult.Failure
+        val url = base.newBuilder()
+            .addPathSegment("player_api.php")
+            .addQueryParameter("username", username)
+            .addQueryParameter("password", password)
+            .addQueryParameter("action", "get_short_epg")
+            .addQueryParameter("stream_id", streamId)
+            .addQueryParameter("limit", "50")
+            .build()
+        val request = Request.Builder().url(url).build()
+        try {
+            executeCancellable(request).use { response ->
+                if (!response.isSuccessful) {
+                    EpgFetchResult.Failure
+                } else {
+                    val body = response.body?.string() ?: return@withContext EpgFetchResult.Failure
+                    val programs = EpgRules.normalize(EpgRules.parse(Json.parseToJsonElement(body)))
+                    EpgFetchResult.Success(programs)
+                }
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            EpgFetchResult.Failure
+        }
+    }
+
+    /** Svuota anche la cache in memoria del percorso EPG usato dal Live. */
+    suspend fun clearCache() = withContext(Dispatchers.IO) {
+        cacheMutex.withLock { cache.clear() }
+    }
+
+    private suspend fun executeCancellable(request: Request): Response =
+        suspendCancellableCoroutine { continuation ->
+            val call = http.newCall(request)
+            call.enqueue(object : Callback {
+                override fun onFailure(call: Call, e: IOException) {
+                    if (continuation.isActive) continuation.resumeWith(Result.failure(e))
+                }
+
+                override fun onResponse(call: Call, response: Response) {
+                    if (continuation.isActive) {
+                        continuation.resumeWith(Result.success(response))
+                    } else {
+                        response.close()
+                    }
+                }
+            })
+            continuation.invokeOnCancellation { call.cancel() }
+        }
+
+    companion object {
+        const val PROGRAM_TTL_MILLIS = 30 * 60_000L
+        const val EMPTY_TTL_MILLIS = 2 * 60_000L
+    }
 }

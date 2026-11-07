@@ -41,6 +41,22 @@ class PlayerReturnTest {
     }
 
     @Test
+    fun `live aperto dalla guida torna alla guida`() {
+        assertEquals(
+            PlayerReturnTarget.GUIDE,
+            playerReturnTarget(
+                PlaybackSource.Live(
+                    channels = emptyList(),
+                    startIndex = 0,
+                    categoryId = "1",
+                    categoryName = "News",
+                    returnToGuide = true,
+                ),
+            ),
+        )
+    }
+
+    @Test
     fun `film non ha destinazione live`() {
         assertEquals(
             PlayerReturnTarget.NONE,
