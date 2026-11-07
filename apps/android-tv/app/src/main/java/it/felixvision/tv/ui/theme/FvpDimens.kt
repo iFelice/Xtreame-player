@@ -93,14 +93,11 @@ object FvpDimens {
 
     // --- Volume del player --------------------------------------------------
 
-    /** Larghezza della barra verticale del volume. */
-    const val VOLUME_BAR_WIDTH_BASE = 6f
+    /** Larghezza della barra verticale a capsula del volume. */
+    const val VOLUME_BAR_WIDTH_BASE = 12f
 
-    /** Altezza della barra verticale del volume. */
+    /** Altezza della barra verticale a capsula del volume. */
     const val VOLUME_BAR_HEIGHT_BASE = 150f
-
-    /** Spessore di una tacca del volume. */
-    const val VOLUME_TICK_HEIGHT_BASE = 2f
 
     /** Icona del volume nell'omonimo pannello. */
     const val VOLUME_ICON_BASE = 24f
@@ -188,9 +185,6 @@ val UiScale.volumeBarWidth: Dp get() = dp(FvpDimens.VOLUME_BAR_WIDTH_BASE)
 
 /** Altezza della barra del volume. */
 val UiScale.volumeBarHeight: Dp get() = dp(FvpDimens.VOLUME_BAR_HEIGHT_BASE)
-
-/** Spessore di una tacca del volume. */
-val UiScale.volumeTickHeight: Dp get() = dp(FvpDimens.VOLUME_TICK_HEIGHT_BASE)
 
 /** Icona del volume. */
 val UiScale.volumeIcon: Dp get() = dp(FvpDimens.VOLUME_ICON_BASE)

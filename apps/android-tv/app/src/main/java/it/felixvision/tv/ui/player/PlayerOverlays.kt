@@ -100,7 +100,6 @@ import it.felixvision.tv.ui.theme.volumeBarHeight
 import it.felixvision.tv.ui.theme.volumeBarWidth
 import it.felixvision.tv.ui.theme.volumeIcon
 import it.felixvision.tv.ui.theme.volumeLevelText
-import it.felixvision.tv.ui.theme.volumeTickHeight
 
 /**
  * Opacità delle righe a riposo della lista canali del player: 25% di
@@ -577,9 +576,9 @@ fun PlayerControlsBar(
 }
 
 /**
- * Pannello del volume sul lato destro: barra verticale sottile con 15 tacche,
- * numero del livello e icona Lucide "volume-2" ("volume-x" a zero). Riguarda
- * solo il volume del nostro player, non quello del televisore.
+ * Pannello del volume sul lato destro: barra verticale a capsula con riempimento
+ * proporzionale, numero del livello e icona Lucide "volume-2" ("volume-x" a zero).
+ * Riguarda solo il volume del nostro player, non quello del televisore.
  */
 @Composable
 fun PlayerVolumePanel(
@@ -587,7 +586,6 @@ fun PlayerVolumePanel(
     scale: UiScale,
     modifier: Modifier = Modifier,
 ) {
-    val litTicks = PlayerVolume.litTicks(level)
     val muted = PlayerVolume.isMuted(level)
     Row(
         modifier = modifier
@@ -619,22 +617,25 @@ fun PlayerVolumePanel(
                 modifier = Modifier.testTag("player_volume_level"),
             )
         }
-        // 15 tacche, dall'alto (livello 15) verso il basso (livello 1).
-        Column(
-            modifier = Modifier.height(scale.volumeBarHeight),
-            verticalArrangement = Arrangement.SpaceBetween,
+        // Barra verticale a capsula: la parte verde cresce dal basso, mentre
+        // la traccia conserva il fondo elevato per indicare il volume restante.
+        Box(
+            modifier = Modifier
+                .width(scale.volumeBarWidth)
+                .height(scale.volumeBarHeight)
+                .clip(CircleShape)
+                .background(FvpColors.SurfaceElevated)
+                .testTag("player_volume_bar_track"),
+            contentAlignment = Alignment.BottomCenter,
         ) {
-            repeat(PlayerVolume.TICKS) { index ->
-                val tickLevel = PlayerVolume.TICKS - index
-                Box(
-                    modifier = Modifier
-                        .width(scale.volumeBarWidth)
-                        .height(scale.volumeTickHeight)
-                        .background(
-                            if (tickLevel <= litTicks) FvpColors.Green else FvpColors.SurfaceElevated,
-                        ),
-                )
-            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(PlayerVolume.levelFraction(level))
+                    .clip(CircleShape)
+                    .background(FvpColors.Green)
+                    .testTag("player_volume_bar_fill"),
+            )
         }
     }
 }

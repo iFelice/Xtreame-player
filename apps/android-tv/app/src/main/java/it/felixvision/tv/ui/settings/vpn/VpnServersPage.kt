@@ -8,6 +8,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -243,7 +244,7 @@ internal fun VpnGuide(scale: UiScale, onContinue: () -> Unit, onClose: () -> Uni
         Row(horizontalArrangement = Arrangement.spacedBy(scale.dp(20f))) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(scale.dp(10f))) {
                 listOf(
-                    "Se non lo hai già fatto, per aggiungere un server prima visita la sezione GUIDA."
+                    "Se non lo hai già fatto, per aggiungere un server prima visita la sezione GUIDA.",
                     "Sul telefono inquadra il QR qui a destra e accedi al tuo account Proton VPN (va bene anche quello gratuito).",
                     "Apri Downloads, poi WireGuard configuration.",
                     "Dai un nome alla configurazione, scegli Android come piattaforma e un server, se il tuo piano lo consente. Premi Create, poi Download: il telefono salva un file .conf.",
@@ -253,7 +254,29 @@ internal fun VpnGuide(scale: UiScale, onContinue: () -> Unit, onClose: () -> Uni
             }
             VpnQrImage(VPN_GUIDE_URL, scale)
         }
-        VpnPageCard("Continua", onContinue, scale, Modifier.focusRequester(focus))
-        VpnPageCard("Chiudi", onClose, scale)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(scale.dp(12f)),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
+                FvpPrimaryButton(
+                    text = "Continua",
+                    onClick = onContinue,
+                    scale = scale,
+                    modifier = Modifier
+                        .focusRequester(focus)
+                        .testTag("vpn_guide_continue_button"),
+                )
+            }
+            Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                FvpSecondaryButton(
+                    text = "Chiudi",
+                    onClick = onClose,
+                    scale = scale,
+                    modifier = Modifier.testTag("vpn_guide_close_button"),
+                )
+            }
+        }
     }
 }
