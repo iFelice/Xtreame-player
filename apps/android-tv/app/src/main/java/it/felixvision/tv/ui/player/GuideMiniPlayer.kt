@@ -45,6 +45,7 @@ import it.felixvision.tv.data.playback.VideoFormat
 import it.felixvision.tv.data.volume.PlayerVolume
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.theme.FvpColors
+import it.felixvision.tv.ui.theme.glassBorder
 import it.felixvision.tv.ui.theme.surfaceCorner
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
