@@ -8,6 +8,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -252,7 +253,29 @@ internal fun VpnGuide(scale: UiScale, onContinue: () -> Unit, onClose: () -> Uni
             }
             VpnQrImage(VPN_GUIDE_URL, scale)
         }
-        VpnPageCard("Continua", onContinue, scale, Modifier.focusRequester(focus))
-        VpnPageCard("Chiudi", onClose, scale)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(scale.dp(12f)),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
+                FvpPrimaryButton(
+                    text = "Continua",
+                    onClick = onContinue,
+                    scale = scale,
+                    modifier = Modifier
+                        .focusRequester(focus)
+                        .testTag("vpn_guide_continue_button"),
+                )
+            }
+            Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                FvpSecondaryButton(
+                    text = "Chiudi",
+                    onClick = onClose,
+                    scale = scale,
+                    modifier = Modifier.testTag("vpn_guide_close_button"),
+                )
+            }
+        }
     }
 }

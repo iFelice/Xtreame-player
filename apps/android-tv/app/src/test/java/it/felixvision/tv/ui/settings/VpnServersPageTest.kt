@@ -148,6 +148,16 @@ class VpnServersPageTest {
         click("Aggiungi server")
         rule.onNodeWithText("Come aggiungere un server VPN").assertExists()
         rule.onNodeWithText("Continua").assertIsFocused()
+        val continueBounds = rule.onNodeWithTag("vpn_guide_continue_button").fetchSemanticsNode().boundsInRoot
+        val closeBounds = rule.onNodeWithTag("vpn_guide_close_button").fetchSemanticsNode().boundsInRoot
+        assertEquals(continueBounds.top, closeBounds.top, 1f)
+        assertEquals(continueBounds.bottom, closeBounds.bottom, 1f)
+        assertTrue(continueBounds.right < closeBounds.left)
+        assertTrue(continueBounds.height < SettingsCardDimens.HEIGHT_BASE)
+        rule.onNodeWithTag("vpn_guide_continue_button").performKeyInput { pressKey(Key.DirectionRight) }
+        rule.onNodeWithTag("vpn_guide_close_button").assertIsFocused()
+        rule.onNodeWithTag("vpn_guide_close_button").performKeyInput { pressKey(Key.DirectionLeft) }
+        rule.onNodeWithTag("vpn_guide_continue_button").assertIsFocused()
         click("Continua")
         assertEquals(1, setups)
         rule.onNodeWithText("Come aggiungere un server VPN").assertDoesNotExist()
