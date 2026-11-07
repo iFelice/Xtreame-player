@@ -189,7 +189,6 @@ fun GuideTvSection(
     var selectedProgramStart by remember { mutableStateOf<Long?>(null) }
     var previewStreamId by remember { mutableStateOf<String?>(null) }
     var pendingFullscreen by remember { mutableStateOf<PendingGuidePlayer?>(null) }
-    var rootFocused by remember { mutableStateOf(false) }
 
     val guideFlow = remember(guideDataSource, server, username) {
         guideDataSource?.observe(server, username) ?: flowOf(GuideEpgSnapshot())
@@ -374,17 +373,15 @@ fun GuideTvSection(
         }
     }
 
-    LaunchedEffect(Unit) {
-        withFrameNanos { }
-        categoryRows.firstOrNull()?.id?.let { categoryFocusRequesters[it]?.requestFocus() }
-            ?: filteredStreams.firstOrNull()?.let { channelFocusRequesters[it.streamId]?.requestFocus() }
-    }
-
-    LaunchedEffect(rootFocused, categoryRows, filteredStreams) {
-        if (!rootFocused) return@LaunchedEffect
-        withFrameNanos { }
-        categoryRows.firstOrNull()?.id?.let { categoryFocusRequesters[it]?.requestFocus() }
-            ?: filteredStreams.firstOrNull()?.let { channelFocusRequesters[it.streamId]?.requestFocus() }
+    LaunchedEffect(categoryRows) {
+        val firstCategory = categoryRows.firstOrNull()?.let { category -> categoryFocusRequesters[category.id] }
+        val initialFocusRequester = firstCategory ?: filteredStreams.firstOrNull()?.let { channelFocusRequesters[it.streamId] }
+            ?: return@LaunchedEffect
+        repeat(4) {
+            withFrameNanos { }
+            val focused = runCatching { initialFocusRequester.requestFocus() }.getOrDefault(false)
+            if (focused) return@LaunchedEffect
+        }
     }
 
     LaunchedEffect(focusChannelId, focusChannelTick, filteredStreams, categoryRows, activeCategoryId) {
@@ -430,9 +427,10 @@ fun GuideTvSection(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .focusRequester(contentFocusRequester)
-            .focusable()
-            .onFocusChanged { rootFocused = it.isFocused }
+            .then(
+                if (categoryRows.isEmpty()) Modifier.focusRequester(contentFocusRequester).focusable()
+                else Modifier
+            )
             .testTag("guide_tv_section"),
     ) {
         Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(scale.dp(6f))) {
@@ -592,7 +590,7 @@ fun GuideTvSection(
                             verticalArrangement = Arrangement.spacedBy(scale.dp(4f)),
                             modifier = Modifier.fillMaxSize().testTag("guide_categories"),
                         ) {
-                            itemsIndexed(categoryRows, key = { _, category -> category.id }) { _, category ->
+                            itemsIndexed(categoryRows, key = { _, category -> category.id }) { index, category ->
                                 var focused by remember(category.id) { mutableStateOf(false) }
                                 val selected = category.id == activeCategoryId
                                 DenseListItem(
@@ -611,6 +609,7 @@ fun GuideTvSection(
                                         .fillMaxWidth()
                                         .testTag("guide_category_${category.id}")
                                         .focusRequester(categoryFocusRequesters.getValue(category.id))
+                                        .then(if (index == 0) Modifier.focusRequester(contentFocusRequester) else Modifier)
                                         .onFocusChanged {
                                             focused = it.isFocused
                                             if (it.isFocused) activeCategoryId = category.id

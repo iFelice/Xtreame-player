@@ -57,13 +57,31 @@ object XmlTvParser {
         val cutoff = nowEpochSeconds - MINIMUM_PROGRAM_END_AGE_SECONDS
         var current: ProgrammeBuilder? = null
         var textField: String? = null
+
+        fun appendCurrentProgramme() {
+            val builder = current ?: return
+            val program = EpgProgram(
+                title = EpgRules.decode(builder.title.toString().trim()),
+                description = EpgRules.decode(builder.description.toString().trim()),
+                start = builder.start,
+                end = builder.end,
+                hasArchive = false,
+            )
+            grouped.getOrPut(builder.channelId) { mutableListOf() }.add(program)
+            current = null
+            textField = null
+        }
+
         return try {
             val parser = Xml.newPullParser()
             parser.setFeature(XmlPullParser.FEATURE_PROCESS_DOCDECL, false)
             parser.setInput(input, null)
             var event = parser.eventType
             while (event != XmlPullParser.END_DOCUMENT) {
-                if (!withinTimeLimit()) return result(grouped, complete = false)
+                if (!withinTimeLimit()) {
+                    appendCurrentProgramme()
+                    return result(grouped, complete = false)
+                }
                 when (event) {
                     XmlPullParser.START_TAG -> when (parser.name) {
                         "programme" -> {
@@ -92,26 +110,14 @@ object XmlTvParser {
 
                     XmlPullParser.END_TAG -> when (parser.name) {
                         "title", "desc" -> textField = null
-                        "programme" -> {
-                            current?.let { builder ->
-                                val program = EpgProgram(
-                                    title = EpgRules.decode(builder.title.toString().trim()),
-                                    description = EpgRules.decode(builder.description.toString().trim()),
-                                    start = builder.start,
-                                    end = builder.end,
-                                    hasArchive = false,
-                                )
-                                grouped.getOrPut(builder.channelId) { mutableListOf() }.add(program)
-                            }
-                            current = null
-                            textField = null
-                        }
+                        "programme" -> appendCurrentProgramme()
                     }
                 }
                 event = parser.next()
             }
             result(grouped, complete = true)
         } catch (_: Exception) {
+            appendCurrentProgramme()
             result(grouped, complete = false)
         }
     }
