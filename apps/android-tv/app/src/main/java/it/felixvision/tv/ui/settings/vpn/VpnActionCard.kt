@@ -15,7 +15,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.SemanticsPropertyKey
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -31,6 +34,9 @@ import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.settings.SettingsCardDimens
 import it.felixvision.tv.ui.theme.FvpColors
 
+/** Colore effettivo dell'icona della card VPN, esposto per i test UI. */
+internal val VpnActionCardIconTintKey = SemanticsPropertyKey<Color>("VpnActionCardIconTint")
+
 /**
  * Aspetto delle azioni VPN: la stessa [Card] tv-material delle otto card della
  * griglia Impostazioni (fondo [FvpColors.Surface] in ogni stato, angoli
@@ -44,6 +50,9 @@ import it.felixvision.tv.ui.theme.FvpColors
  * della card è [text]. Dimensioni e misure non sono imposte qui: le decide il
  * chiamante con [modifier], come nella griglia delle Impostazioni.
  *
+ * Con [iconOrange] l'icona resta arancione ([FvpColors.Orange]) anche quando la
+ * card ha il focus. Altrimenti il focus colora l'icona di verde.
+ *
  * Quando [enabled] è falso l'azione non parte, il contenuto si attenua e la
  * card risulta disabilitata anche ai servizi di accessibilità: tv-material non
  * espone `enabled` sulla Card, quindi lo stato è applicato qui, senza toccare
@@ -56,6 +65,8 @@ internal fun VpnActionCard(
     scale: UiScale,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    iconOrange: Boolean = false,
+    iconTag: String? = null,
 ) {
     val shape = remember(scale) { RoundedCornerShape(scale.dp(SettingsCardDimens.CORNER_BASE)) }
     val restBorder = Border(
@@ -75,6 +86,7 @@ internal fun VpnActionCard(
     var focused by remember { mutableStateOf(false) }
     val iconTint = when {
         !enabled -> FvpColors.TextSecondary
+        iconOrange -> FvpColors.Orange
         focused -> FvpColors.GreenFocus
         else -> FvpColors.TextPrimary
     }
@@ -114,7 +126,10 @@ internal fun VpnActionCard(
                 painter = painterResource(R.drawable.ic_settings_vpn),
                 contentDescription = null,
                 tint = iconTint,
-                modifier = Modifier.size(scale.dp(SettingsCardDimens.ICON_BASE)),
+                modifier = Modifier
+                    .size(scale.dp(SettingsCardDimens.ICON_BASE))
+                    .then(if (iconTag != null) Modifier.testTag(iconTag) else Modifier)
+                    .semantics { this[VpnActionCardIconTintKey] = iconTint },
             )
             Text(
                 text = text,

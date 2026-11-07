@@ -405,6 +405,10 @@ fun LiveSection(
                 outcome.consumed
             }
             .then(modifier)
+            // Il drawer usa contentFocusRequester per entrare nel contenuto:
+            // con canali il requester è assegnato solo alla prima riga; senza
+            // canali resta come ripiego sulla colonna delle categorie.
+            .then(if (filtered.isEmpty()) Modifier.focusRequester(contentFocusRequester) else Modifier)
             .fillMaxSize(),
     ) {
         Row(modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(scale.dp(12f))) {

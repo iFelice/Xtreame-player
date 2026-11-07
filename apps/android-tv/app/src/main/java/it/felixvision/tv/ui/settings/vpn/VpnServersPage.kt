@@ -79,6 +79,13 @@ internal fun VpnServersPage(
     ) {
         Text("VPN", color = FvpColors.TextPrimary, fontSize = scale.sp(22f))
         if (servers.isEmpty()) Text("Nessuna configurazione", color = FvpColors.TextSecondary)
+        if (removing) {
+            Text(
+                "Seleziona i server che vuoi rimuovere",
+                color = FvpColors.TextSecondary,
+                fontSize = scale.sp(16f),
+            )
+        }
         val cards = mutableListOf<VpnGridEntry>()
         if (servers.isNotEmpty()) cards.add(VpnGridEntry("toggle") {
             VpnPageCard(
@@ -102,6 +109,8 @@ internal fun VpnServersPage(
                         }
                     },
                     scale = scale,
+                    iconOrange = server.id == active && state is VpnState.Connected,
+                    iconTag = "vpn_server_icon_${server.id}",
                     modifier = Modifier.onPreviewKeyEvent { event ->
                         val ok = event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter
                         if (!ok || removing) false
@@ -124,8 +133,10 @@ internal fun VpnServersPage(
                     .then(if (entryFocus != null) Modifier.focusRequester(entryFocus) else Modifier),
             )
         })
-        if (servers.isNotEmpty() && !removing) cards.add(VpnGridEntry("remove") {
-            VpnPageCard("Rimuovi server", { removing = true }, scale)
+        if (servers.isNotEmpty()) cards.add(VpnGridEntry("remove") {
+            // Non rimuovere questa entry in modalità selezione: la sua
+            // rimozione fa perdere il focus e nasconde lo stato della selezione.
+            VpnPageCard("Rimuovi server", { if (!removing) removing = true }, scale)
         })
         if (selected.isNotEmpty()) cards.add(VpnGridEntry("remove_selected") {
             VpnPageCard("Rimuovi selezionati (${selected.size})", { confirm = true }, scale)
@@ -198,12 +209,16 @@ private fun VpnPageCard(
     scale: UiScale,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    iconOrange: Boolean = false,
+    iconTag: String? = null,
 ) {
     VpnActionCard(
         text = text,
         onClick = onClick,
         scale = scale,
         enabled = enabled,
+        iconOrange = iconOrange,
+        iconTag = iconTag,
         modifier = modifier
             .fillMaxWidth()
             .height(scale.dp(SettingsCardDimens.HEIGHT_BASE)),

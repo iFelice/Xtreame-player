@@ -53,8 +53,9 @@ import kotlinx.coroutines.withContext
 /** Pagina "Configura la VPN": testi e tag di test. */
 const val VPN_SETUP_TITLE = "Configura la VPN"
 const val VPN_SETUP_INSTRUCTIONS =
-    "Per aggiungere un server prima visita la sezione GUIDA, poi nquadra il QR col telefono " 
-        "e incolla il file .conf WireGuard" + "(Proton VPN: account.protonvpn.com → Downloads → WireGuard configuration)"
+    "Per aggiungere un server prima visita la sezione GUIDA, poi inquadra il QR col telefono " +
+        "e incolla il file .conf WireGuard " +
+        "(Proton VPN: account.protonvpn.com → Downloads → WireGuard configuration)"
 const val VPN_SETUP_EXPIRED = "Codice scaduto"
 const val VPN_SETUP_UNREACHABLE = "Servizio non raggiungibile: riprova"
 const val VPN_SETUP_TOO_MANY = "Troppe richieste: riprova tra qualche minuto"
