@@ -109,6 +109,8 @@ internal fun VpnServersPage(
                         }
                     },
                     scale = scale,
+                    iconOrange = server.id == active && state is VpnState.Connected,
+                    iconTag = "vpn_server_icon_${server.id}",
                     modifier = Modifier.onPreviewKeyEvent { event ->
                         val ok = event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter
                         if (!ok || removing) false
@@ -207,12 +209,16 @@ private fun VpnPageCard(
     scale: UiScale,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    iconOrange: Boolean = false,
+    iconTag: String? = null,
 ) {
     VpnActionCard(
         text = text,
         onClick = onClick,
         scale = scale,
         enabled = enabled,
+        iconOrange = iconOrange,
+        iconTag = iconTag,
         modifier = modifier
             .fillMaxWidth()
             .height(scale.dp(SettingsCardDimens.HEIGHT_BASE)),
