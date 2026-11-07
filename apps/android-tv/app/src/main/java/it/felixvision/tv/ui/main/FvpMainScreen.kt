@@ -857,7 +857,7 @@ fun FvpMainScreen(
                                     focusChannelId = returnLiveChannelId,
                                     focusChannelTick = playerReturnTick,
                                     onChannelFocusRestored = { returnLiveChannelId = null },
-                                    modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
+                                    modifier = Modifier.fillMaxSize(),
                                 )
                                 DrawerSection.Film -> FilmSection(
                                     categories = catalog.vodCategories,

@@ -16,6 +16,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,9 +52,13 @@ import it.felixvision.tv.ui.theme.FvpColors
 import it.felixvision.tv.ui.theme.drawerClockTop
 import it.felixvision.tv.ui.theme.drawerItemHeight
 import it.felixvision.tv.ui.theme.drawerVerticalPadding
+import kotlinx.coroutines.flow.first
 
 /** Tag di test del pallino di aggiornamento sull'icona Impostazioni. */
 const val DRAWER_UPDATE_BADGE_ICON_TAG = "drawer_update_badge_icon"
+
+/** Fotogrammi di attesa del contenuto quando il drawer sta chiudendo. */
+private const val CONTENT_FOCUS_REQUEST_ATTEMPTS = 10
 
 enum class DrawerSection(
     val label: String,
@@ -131,8 +136,21 @@ fun FvpNavigationDrawer(
 
     LaunchedEffect(selected, pendingContentFocus) {
         if (pendingContentFocus) {
-            withFrameNanos { }
-            contentFocusRequester.requestFocus()
+            // Attendi che l'animazione abbia chiuso davvero il drawer: una
+            // singola richiesta anticipata può lasciare il focus sulla voce Live.
+            snapshotFlow { drawerState.currentValue }
+                .first { value -> value == DrawerValue.Closed }
+
+            // Le liste lazy possono comporre la prima riga nel fotogramma
+            // successivo alla chiusura; riprova finché il requester è pronto.
+            var focused = false
+            var attempt = 0
+            while (!focused && attempt < CONTENT_FOCUS_REQUEST_ATTEMPTS) {
+                withFrameNanos { }
+                focused = runCatching { contentFocusRequester.requestFocus() }
+                    .getOrDefault(false)
+                attempt++
+            }
             pendingContentFocus = false
         }
     }
