@@ -89,7 +89,9 @@ class LiveDrawerFocusTest {
         // Canale -> categoria -> Indietro riapre il drawer sulla voce Live.
         rule.onNodeWithTag("live_channel_101").performKeyInput { pressKey(Key.DirectionLeft) }
         rule.onNodeWithTag("live_category_001").assertIsFocused()
-        rule.onNodeWithTag("live_category_001").performKeyInput { pressKey(Key.Back) }
+        // Back sul telecomando arriva all'OnBackPressedDispatcher Android,
+        // non come freccia/tasto di navigazione Compose.
+        rule.runOnIdle { rule.activity.onBackPressedDispatcher.onBackPressed() }
         rule.waitUntil(timeoutMillis = 5_000L) { isFocused("drawer_Live") }
         rule.onNodeWithTag("drawer_Live").assertIsFocused()
 
