@@ -244,7 +244,7 @@ internal fun VpnGuide(scale: UiScale, onContinue: () -> Unit, onClose: () -> Uni
         Row(horizontalArrangement = Arrangement.spacedBy(scale.dp(20f))) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(scale.dp(10f))) {
                 listOf(
-                    "Se non lo hai già fatto, per aggiungere un server prima visita la sezione GUIDA."
+                    "Se non lo hai già fatto, per aggiungere un server prima visita la sezione GUIDA.",
                     "Sul telefono inquadra il QR qui a destra e accedi al tuo account Proton VPN (va bene anche quello gratuito).",
                     "Apri Downloads, poi WireGuard configuration.",
                     "Dai un nome alla configurazione, scegli Android come piattaforma e un server, se il tuo piano lo consente. Premi Create, poi Download: il telefono salva un file .conf.",
