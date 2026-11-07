@@ -79,6 +79,13 @@ internal fun VpnServersPage(
     ) {
         Text("VPN", color = FvpColors.TextPrimary, fontSize = scale.sp(22f))
         if (servers.isEmpty()) Text("Nessuna configurazione", color = FvpColors.TextSecondary)
+        if (removing) {
+            Text(
+                "Seleziona i server che vuoi rimuovere",
+                color = FvpColors.TextSecondary,
+                fontSize = scale.sp(16f),
+            )
+        }
         val cards = mutableListOf<VpnGridEntry>()
         if (servers.isNotEmpty()) cards.add(VpnGridEntry("toggle") {
             VpnPageCard(
@@ -124,8 +131,10 @@ internal fun VpnServersPage(
                     .then(if (entryFocus != null) Modifier.focusRequester(entryFocus) else Modifier),
             )
         })
-        if (servers.isNotEmpty() && !removing) cards.add(VpnGridEntry("remove") {
-            VpnPageCard("Rimuovi server", { removing = true }, scale)
+        if (servers.isNotEmpty()) cards.add(VpnGridEntry("remove") {
+            // Non rimuovere questa entry in modalità selezione: la sua
+            // rimozione fa perdere il focus e nasconde lo stato della selezione.
+            VpnPageCard("Rimuovi server", { if (!removing) removing = true }, scale)
         })
         if (selected.isNotEmpty()) cards.add(VpnGridEntry("remove_selected") {
             VpnPageCard("Rimuovi selezionati (${selected.size})", { confirm = true }, scale)

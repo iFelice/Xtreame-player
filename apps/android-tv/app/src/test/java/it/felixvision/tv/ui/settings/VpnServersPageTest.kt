@@ -185,11 +185,36 @@ class VpnServersPageTest {
         assertEquals(1, setups)
     }
 
+    @Test fun `remove mode keeps its card focused and shows selection instructions`() {
+        store.saveConfig(config(), "Uno")
+        show()
+
+        // La card Rimuovi resta nella stessa cella e mantiene il focus dopo OK.
+        rule.onNodeWithText("Aggiungi server").performKeyInput { pressKey(Key.DirectionRight) }
+        rule.onNodeWithText("Rimuovi server").assertIsFocused()
+        rule.onNodeWithText("Rimuovi server").performKeyInput { pressKey(Key.DirectionCenter) }
+        rule.onNodeWithText("Seleziona i server che vuoi rimuovere").assertExists()
+        rule.onNodeWithText("Rimuovi server").assertIsFocused()
+
+        // La selezione continua a usare la spunta; il conteggio compare senza
+        // rimuovere né spostare la card da cui si è entrati nella modalità.
+        rule.onNodeWithText("Rimuovi server").performKeyInput { pressKey(Key.DirectionLeft) }
+        rule.onNodeWithText("Aggiungi server").assertIsFocused()
+        rule.onNodeWithText("Aggiungi server").performKeyInput { pressKey(Key.DirectionLeft) }
+        rule.onNodeWithText("Uno", substring = true).assertIsFocused()
+        rule.onNodeWithText("Uno", substring = true).performKeyInput { pressKey(Key.DirectionCenter) }
+        rule.onNodeWithText("✓ Uno", substring = true).assertIsFocused()
+        rule.onNodeWithText("Rimuovi selezionati (1)").assertExists()
+        rule.onNodeWithText("Rimuovi server").assertExists()
+    }
+
     @Test fun `selection confirmation starts on No and only Yes removes selected servers`() {
         listOf("Uno", "Due", "Tre").forEach { store.saveConfig(config(), it) }
         val before = store.servers
         show()
         click("Rimuovi server")
+        rule.onNodeWithText("Seleziona i server che vuoi rimuovere").assertExists()
+        rule.onNodeWithText("Rimuovi server").assertExists()
         click("Uno"); click("Due")
         rule.onNodeWithText("✓ Uno", substring = true).assertExists()
         rule.onNodeWithText("✓ Due", substring = true).assertExists()
@@ -221,8 +246,10 @@ class VpnServersPageTest {
         click("Rimuovi server"); click("Uno")
         rule.onNode(isRoot()).performKeyInput { pressKey(Key.Back) }
         rule.onNodeWithText("Rimuovi selezionati", substring = true).assertDoesNotExist()
-        rule.onNodeWithText("Rimuovi server").assertDoesNotExist()
+        rule.onNodeWithText("Seleziona i server che vuoi rimuovere").assertExists()
+        rule.onNodeWithText("Rimuovi server").assertExists()
         rule.onNode(isRoot()).performKeyInput { pressKey(Key.Back) }
+        rule.onNodeWithText("Seleziona i server che vuoi rimuovere").assertDoesNotExist()
         rule.onNodeWithText("Rimuovi server").assertExists()
     }
 
