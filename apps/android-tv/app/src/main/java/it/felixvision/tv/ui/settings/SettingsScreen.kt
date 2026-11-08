@@ -124,6 +124,8 @@ fun SettingsScreen(
     // Durata dello zapping salvata: la riga di stato della card Player la legge
     // da questo stato osservato, così tornando dalla pagina è già aggiornata.
     val zappingSeconds by viewModel.zappingSeconds.collectAsState()
+    // Formato del flusso Live: stessa osservazione, per la pagina Player.
+    val liveStreamFormat by viewModel.liveStreamFormat.collectAsState()
     var showVpnSetup by remember { mutableStateOf(false) }
     // Backup: la pagina apre la schermata di esportazione o di importazione.
     var backupFlow by remember { mutableStateOf<BackupFlow?>(null) }
@@ -316,6 +318,8 @@ fun SettingsScreen(
                 modifier = pageModifier,
                 zappingSeconds = zappingSeconds,
                 onZappingSecondsSelected = { seconds -> viewModel.onZappingSecondsSelected(seconds) },
+                liveFormat = liveStreamFormat,
+                onLiveFormatSelected = { format -> viewModel.onLiveStreamFormatSelected(format) },
             )
         },
         appPage = { pageModifier, entryFocus ->

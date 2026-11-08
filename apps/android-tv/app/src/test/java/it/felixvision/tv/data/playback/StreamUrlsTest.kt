@@ -34,6 +34,63 @@ class StreamUrlsTest {
     }
 
     @Test
+    fun `la preferenza hls sceglie m3u8 solo se l'account lo ammette`() {
+        val both = StreamUrls.build(
+            server, "demo", "demo",
+            StreamTarget.Live("001", listOf("ts", "m3u8"), preferredFormat = LiveStreamFormat.HLS),
+        )
+        assertEquals("$base/live/demo/demo/001.m3u8", both)
+
+        // Canale solo in ts: la preferenza non inventa un formato che non c'è.
+        val onlyTs = StreamUrls.build(
+            server, "demo", "demo",
+            StreamTarget.Live("001", listOf("ts"), preferredFormat = LiveStreamFormat.HLS),
+        )
+        assertEquals("$base/live/demo/demo/001.ts", onlyTs)
+    }
+
+    @Test
+    fun `la preferenza ts sceglie il flusso diretto solo se ammesso`() {
+        val both = StreamUrls.build(
+            server, "demo", "demo",
+            StreamTarget.Live("001", listOf("ts", "m3u8"), preferredFormat = LiveStreamFormat.TS),
+        )
+        assertEquals("$base/live/demo/demo/001.ts", both)
+
+        // Account solo HLS: resta m3u8, come con "Automatico".
+        val onlyHls = StreamUrls.build(
+            server, "demo", "demo",
+            StreamTarget.Live("001", listOf("m3u8"), preferredFormat = LiveStreamFormat.TS),
+        )
+        assertEquals("$base/live/demo/demo/001.m3u8", onlyHls)
+    }
+
+    @Test
+    fun `automatico resta la regola di sempre`() {
+        val both = StreamUrls.build(
+            server, "demo", "demo",
+            StreamTarget.Live("001", listOf("ts", "m3u8"), preferredFormat = LiveStreamFormat.AUTO),
+        )
+        assertEquals("$base/live/demo/demo/001.ts", both)
+    }
+
+    @Test
+    fun `il formato alternativo esiste solo se l'account lo ammette`() {
+        assertEquals(
+            LiveStreamFormat.HLS,
+            StreamUrls.alternateLiveFormat(LiveStreamFormat.TS, listOf("ts", "m3u8")),
+        )
+        assertEquals(
+            LiveStreamFormat.TS,
+            StreamUrls.alternateLiveFormat(LiveStreamFormat.HLS, listOf("ts", "m3u8")),
+        )
+        assertNull(StreamUrls.alternateLiveFormat(LiveStreamFormat.HLS, listOf("m3u8")))
+        assertNull(StreamUrls.alternateLiveFormat(LiveStreamFormat.TS, listOf("ts")))
+        // Con "Automatico" non c'è niente da scambiare: decide l'account.
+        assertNull(StreamUrls.alternateLiveFormat(LiveStreamFormat.AUTO, listOf("ts", "m3u8")))
+    }
+
+    @Test
     fun `film usa container_extension con default mp4`() {
         val mkv = StreamUrls.build(
             server,

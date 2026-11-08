@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import it.felixvision.tv.AppContainer
 import it.felixvision.tv.data.store.CredentialStore
+import it.felixvision.tv.data.playback.LiveStreamFormat
 import it.felixvision.tv.data.store.StoredCredentials
 import it.felixvision.tv.player.PlayerPreferences
 import it.felixvision.tv.player.ZappingSeconds
@@ -91,5 +92,24 @@ class SettingsZappingSecondsStateTest {
         viewModel.onZappingSecondsSelected(121)
         assertEquals(ZappingSeconds.DEFAULT, viewModel.zappingSeconds.value)
         assertEquals(ZappingSeconds.DEFAULT, preferences.zappingSeconds)
+    }
+
+    @Test
+    fun `il formato live parte dal valore salvato e onLiveStreamFormatSelected lo pubblica`() {
+        val preferences = freshPreferences()
+        preferences.liveStreamFormat = LiveStreamFormat.HLS
+        val viewModel = newViewModel(preferences)
+
+        assertEquals(LiveStreamFormat.HLS, viewModel.liveStreamFormat.value)
+
+        viewModel.onLiveStreamFormatSelected(LiveStreamFormat.TS)
+        assertEquals(LiveStreamFormat.TS, viewModel.liveStreamFormat.value)
+        assertEquals(LiveStreamFormat.TS, preferences.liveStreamFormat)
+        assertEquals(LiveStreamFormat.TS, PlayerPreferences(ApplicationProvider.getApplicationContext()).liveStreamFormat)
+
+        // Si torna all'automatico: il valore salvato è quello, non l'ultimo scelto.
+        viewModel.onLiveStreamFormatSelected(LiveStreamFormat.AUTO)
+        assertEquals(LiveStreamFormat.AUTO, viewModel.liveStreamFormat.value)
+        assertEquals(LiveStreamFormat.AUTO, preferences.liveStreamFormat)
     }
 }

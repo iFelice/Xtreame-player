@@ -39,6 +39,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.tv.material3.Text
 import it.felixvision.tv.data.images.CacheCleanup
+import it.felixvision.tv.data.playback.LiveStreamFormat
 import it.felixvision.tv.player.ZappingSeconds
 import it.felixvision.tv.ui.access.AccessViewModel
 import it.felixvision.tv.ui.access.PairingPanel
@@ -99,6 +100,23 @@ fun zappingValueLabel(seconds: Int): String = "$seconds s"
 /** Etichetta del pulsante: "<n> s", con "✓ " se è il valore attivo. */
 fun zappingSecondsButtonLabel(seconds: Int, active: Int): String =
     if (seconds == active) "$ZAPPING_ACTIVE_PREFIX${seconds} s" else "${seconds} s"
+
+/** Tag di test della riga "Formato live" dentro la pagina Player. */
+const val SETTINGS_LIVE_FORMAT_SECTION_TAG = "settings_live_format_section"
+
+/** Etichetta della riga di scelta del formato del flusso Live. */
+const val SETTINGS_LIVE_FORMAT_LABEL = "Formato live"
+
+/** Nota sotto le scelte: cosa cambia e quando si applica. */
+const val SETTINGS_LIVE_FORMAT_HINT =
+    "Automatico segue l'account. Cambia il formato solo se un canale non parte."
+
+/** Tag di test del pulsante del formato [format] nella pagina Player. */
+fun liveFormatTag(format: LiveStreamFormat): String = "settings_live_format_${format.storageKey}"
+
+/** Etichetta del pulsante: "✓ " se è il formato attivo. */
+fun liveFormatButtonLabel(format: LiveStreamFormat, active: LiveStreamFormat): String =
+    if (format == active) "$ZAPPING_ACTIVE_PREFIX${format.label}" else format.label
 
 /**
  * Tempi della ripetizione dei pulsanti "−" e "+" della pagina Player: con OK
@@ -416,8 +434,10 @@ internal fun SettingsAppearancePage(
  * zapping automatico la legge al suo avvio e la regola "salta i canali che non
  * partono in 5 s" resta invariata.
  *
- * La pagina è predisposta per accogliere in futuro lingua audio, sottotitoli e
- * formato video, ma per ora contiene solo la durata dello zapping: niente
+ * Sotto c'è "Formato live": Automatico, MPEG-TS o HLS. Il formato scelto vale
+ * per i canali aperti dopo (il player lo legge quando costruisce la sessione) e
+ * non toglie il ripiego automatico sull'altro formato quando il flusso non
+ * parte. La pagina resta predisposta per lingua audio e sottotitoli: niente
  * voci segnaposto.
  *
  * Il focus d'ingresso va su "+", il primo comando della riga del valore:
@@ -429,10 +449,13 @@ internal fun SettingsPlayerPage(
     modifier: Modifier = Modifier,
     zappingSeconds: Int = ZappingSeconds.DEFAULT,
     onZappingSecondsSelected: (Int) -> Unit = {},
+    liveFormat: LiveStreamFormat = LiveStreamFormat.DEFAULT,
+    onLiveFormatSelected: (LiveStreamFormat) -> Unit = {},
 ) {
     // Stato locale: la modifica si vede subito (valore e "✓") e resta salvata
     // nelle preferenze del player a ogni passo.
     var selected by remember { mutableStateOf(ZappingSeconds.normalize(zappingSeconds)) }
+    var selectedFormat by remember { mutableStateOf(liveFormat) }
     val active = selected
     val plusFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) {
@@ -526,6 +549,43 @@ internal fun SettingsPlayerPage(
                     )
                 }
             }
+
+            // Formato del flusso Live: "Automatico" è la regola di sempre
+            // (`.ts` quando l'account lo ammette), TS e HLS lo impongono solo
+            // dove l'account dichiara quel formato. Il ripiego automatico
+            // sull'altro formato dopo un errore resta comunque attivo.
+            Text(
+                text = SETTINGS_LIVE_FORMAT_LABEL,
+                color = FvpColors.TextPrimary,
+                fontSize = scale.sp(16f),
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier
+                    .padding(top = scale.dp(4f))
+                    .testTag(SETTINGS_LIVE_FORMAT_SECTION_TAG),
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(scale.dp(8f)),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                LiveStreamFormat.entries.forEach { format ->
+                    FvpCompactButton(
+                        text = liveFormatButtonLabel(format = format, active = selectedFormat),
+                        onClick = {
+                            if (format != selectedFormat) {
+                                selectedFormat = format
+                                onLiveFormatSelected(format)
+                            }
+                        },
+                        scale = scale,
+                        modifier = Modifier.testTag(liveFormatTag(format)),
+                    )
+                }
+            }
+            Text(
+                text = SETTINGS_LIVE_FORMAT_HINT,
+                color = FvpColors.TextSecondary,
+                fontSize = scale.settingsRowText,
+            )
         }
     }
 }

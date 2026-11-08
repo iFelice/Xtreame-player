@@ -10,6 +10,7 @@ import androidx.media3.datasource.DataSourceException
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.HttpDataSource
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
@@ -57,8 +58,36 @@ object PlayerNetworkConfig {
      */
     val NON_RETRYABLE_HTTP_CODES: Set<Int> = setOf(401, 403, 404)
 
-    /** Riavvii automatici e silenziosi della sorgente live dopo un errore di rete. */
-    const val MAX_LIVE_AUTO_RESTARTS: Int = 1
+    /**
+     * Riavvii automatici e silenziosi della sorgente live dopo un errore di
+     * rete o uno stallo. Tre prove prima di mostrare l'errore (prima era una
+     * sola): un canale che si strozza a metà visione ha così il tempo di
+     * ripartire, senza però restare per sempre in caricamento.
+     */
+    const val MAX_LIVE_AUTO_RESTARTS: Int = 3
+
+    /** Attese dei riavvii silenziosi, nell'ordine: 2 s, 5 s, 10 s. */
+    val LIVE_AUTO_RESTART_DELAYS_MILLIS: List<Long> = listOf(2_000L, 5_000L, 10_000L)
+
+    /**
+     * Buffer del player, valori scelti sul comportamento del pannello di
+     * riferimento (`minBufferMs`/`maxBufferMs` a 50 s, avvio a 2,5 s):
+     *
+     * - [LOAD_CONTROL_MIN_BUFFER_MILLIS], [LOAD_CONTROL_MAX_BUFFER_MILLIS]:
+     *   fino a 50 s di media pronta. Su reti IPTV irregolari è la difesa che
+     *   evita lo stallo a metà visione.
+     * - [LOAD_CONTROL_PLAYBACK_BUFFER_MILLIS]: si parte appena ci sono 2,5 s di
+     *   media, come il riferimento; dopo un'interruzione si aspettano 5 s, per
+     *   non ripartire su un buffer che si svuota subito.
+     * - [LOAD_CONTROL_PRIORITIZE_TIME]: il conteggio del buffer è in tempo, non
+     *   in byte. Senza questo flag un flusso 1080p su TV con poca RAM si ferma
+     *   a "buffer pieno" prima dei 50 s e sembra uno stallo del provider.
+     */
+    const val LOAD_CONTROL_MIN_BUFFER_MILLIS: Int = 50_000
+    const val LOAD_CONTROL_MAX_BUFFER_MILLIS: Int = 50_000
+    const val LOAD_CONTROL_PLAYBACK_BUFFER_MILLIS: Int = 2_500
+    const val LOAD_CONTROL_REBUFFER_BUFFER_MILLIS: Int = 5_000
+    const val LOAD_CONTROL_PRIORITIZE_TIME: Boolean = true
 
     /** Sorgente HTTP del player con i valori qui sopra. */
     fun httpDataSourceFactory(): DefaultHttpDataSource.Factory =
@@ -77,6 +106,22 @@ object PlayerNetworkConfig {
     fun mediaSourceFactory(context: Context, streamUrl: String?): DefaultMediaSourceFactory =
         DefaultMediaSourceFactory(DefaultDataSource.Factory(context, httpDataSourceFactory()))
             .setLoadErrorHandlingPolicy(PlayerLoadErrorPolicy(streamUrl))
+
+    /**
+     * Buffer del player con i valori dell'oggetto: il tempo comanda sulla
+     * dimensione in byte, così i 50 s valgono anche per i flussi 1080p.
+     */
+    fun loadControl(): DefaultLoadControl =
+        DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                LOAD_CONTROL_MIN_BUFFER_MILLIS,
+                LOAD_CONTROL_MAX_BUFFER_MILLIS,
+                LOAD_CONTROL_PLAYBACK_BUFFER_MILLIS,
+                LOAD_CONTROL_REBUFFER_BUFFER_MILLIS,
+            )
+            .setPrioritizeTimeOverSizeThresholds(LOAD_CONTROL_PRIORITIZE_TIME)
+            .setBackBuffer(0, false)
+            .build()
 }
 
 /** Riconoscimento degli errori di rete, separati dalle risposte HTTP del server. */
@@ -212,13 +257,17 @@ enum class PlayerErrorAction {
 /**
  * Riavvio automatico e silenzioso della sorgente: solo per i canali live, solo
  * per errori di rete rimasti dopo i nuovi tentativi (mai per le risposte HTTP,
- * 500/502/503/504 compresi), al massimo [maxRestarts] volte prima di mostrare
- * l'errore. Mai per film, episodi e catch-up. Il conteggio riparte con un
- * nuovo avvio della riproduzione (cambio canale, "Riprova", ritorno alla
- * diretta) o quando lo stream è pronto.
+ * 500/502/503/504 compresi) e per gli stalli senza errore, fino a
+ * [maxRestarts] volte prima di mostrare l'errore. Mai per film, episodi e
+ * catch-up.
+ *
+ * Le attese crescono a ogni tentativo ([delaysMillis]): 2 s, 5 s, 10 s. Il
+ * conteggio riparte con un nuovo avvio della riproduzione (cambio canale,
+ * "Riprova", ritorno alla diretta) o quando lo stream torna pronto per un po'.
  */
 class LiveAutoRestart(
     private val maxRestarts: Int = PlayerNetworkConfig.MAX_LIVE_AUTO_RESTARTS,
+    private val delaysMillis: List<Long> = PlayerNetworkConfig.LIVE_AUTO_RESTART_DELAYS_MILLIS,
 ) {
 
     var restartsUsed: Int = 0
@@ -233,6 +282,17 @@ class LiveAutoRestart(
         }
         restartsUsed += 1
         return PlayerErrorAction.SILENT_RESTART
+    }
+
+    /**
+     * Attesa prima del riavvio appena concesso da [onPlayerError]: il primo
+     * tentativo usa il primo valore di [delaysMillis]. Oltre la lista vale
+     * l'ultimo, così aggiungere tentativi non lascia attese a zero.
+     */
+    fun delayForCurrentRestart(): Long {
+        if (delaysMillis.isEmpty()) return 0L
+        val index = (restartsUsed - 1).coerceIn(0, delaysMillis.lastIndex)
+        return delaysMillis[index]
     }
 
     fun reset() {

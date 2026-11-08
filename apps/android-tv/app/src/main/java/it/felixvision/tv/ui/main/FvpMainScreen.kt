@@ -453,6 +453,9 @@ fun FvpMainScreen(
         username = currentUsername,
         password = currentPassword,
         allowedOutputFormats = allowedOutputFormats,
+        // Formato Live scelto in Impostazioni → Player, letto a ogni sessione:
+        // un cambio di impostazione vale dal canale aperto dopo.
+        liveFormat = container.playerPreferences.liveStreamFormat,
         serverTimezone = serverTimezone,
         source = source,
         autoResume = autoResume,
@@ -774,6 +777,7 @@ fun FvpMainScreen(
                         username = currentUsername,
                         password = currentPassword,
                         allowedOutputFormats = allowedOutputFormats,
+                        liveFormat = container.playerPreferences.liveStreamFormat,
                         videoFormatStore = container.channelVideoFormatStore,
                         scale = scale,
                         clock = container.clock,

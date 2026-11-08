@@ -39,6 +39,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import androidx.tv.material3.Text
 import it.felixvision.tv.data.catalog.LiveStream
+import it.felixvision.tv.data.playback.LiveStreamFormat
 import it.felixvision.tv.data.playback.StreamTarget
 import it.felixvision.tv.data.playback.StreamUrls
 import it.felixvision.tv.data.playback.VideoFormat
@@ -80,6 +81,9 @@ object Media3GuidePreviewPlayerFactory : GuidePreviewPlayerFactory {
         val player = ExoPlayer.Builder(context)
             .setRenderersFactory(renderers)
             .setMediaSourceFactory(PlayerNetworkConfig.mediaSourceFactory(context, streamUrl))
+            // Stesso buffer del player grande: l'anteprima della Guida non
+            // deve fermarsi per un vuoto di rete che il fullscreen assorbe.
+            .setLoadControl(PlayerNetworkConfig.loadControl())
             .build()
         return ExoGuidePreviewPlayer(player, streamUrl, title, videoFormat)
     }
@@ -147,6 +151,8 @@ fun GuideMiniPlayer(
     onLifecycleStop: () -> Unit,
     modifier: Modifier = Modifier,
     playerFactory: GuidePreviewPlayerFactory = Media3GuidePreviewPlayerFactory,
+    /** Formato Live scelto in Impostazioni → Player (automatico se assente). */
+    liveFormat: LiveStreamFormat = LiveStreamFormat.DEFAULT,
 ) {
     val context = LocalContext.current.applicationContext
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -169,13 +175,20 @@ fun GuideMiniPlayer(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    val streamUrl = remember(channel?.streamId, server, username, password, allowedOutputFormats) {
+    val streamUrl = remember(
+        channel?.streamId,
+        server,
+        username,
+        password,
+        allowedOutputFormats,
+        liveFormat,
+    ) {
         channel?.let {
             StreamUrls.build(
                 server = server,
                 username = username,
                 password = password,
-                target = StreamTarget.Live(it.streamId, allowedOutputFormats),
+                target = StreamTarget.Live(it.streamId, allowedOutputFormats, liveFormat),
             )
         }
     }

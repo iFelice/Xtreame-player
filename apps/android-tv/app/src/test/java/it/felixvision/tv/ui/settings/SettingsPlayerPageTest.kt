@@ -22,6 +22,7 @@ import androidx.compose.ui.test.pressKey
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import it.felixvision.tv.core.Clock
+import it.felixvision.tv.data.playback.LiveStreamFormat
 import it.felixvision.tv.player.PlayerPreferences
 import it.felixvision.tv.player.ZappingChannelStatus
 import it.felixvision.tv.player.ZappingCommand
@@ -89,6 +90,7 @@ class SettingsPlayerPageTest {
         rule.setContent {
             FvpTheme {
                 var zappingSeconds by remember { mutableStateOf(prefs.zappingSeconds) }
+                var liveFormat by remember { mutableStateOf(prefs.liveStreamFormat) }
                 SettingsNavigation(
                     cardsState = SettingsCardsState(
                         username = "demo",
@@ -103,6 +105,11 @@ class SettingsPlayerPageTest {
                             onZappingSecondsSelected = { seconds ->
                                 prefs.zappingSeconds = seconds
                                 zappingSeconds = prefs.zappingSeconds
+                            },
+                            liveFormat = liveFormat,
+                            onLiveFormatSelected = { format ->
+                                prefs.liveStreamFormat = format
+                                liveFormat = prefs.liveStreamFormat
                             },
                         )
                     },
@@ -249,6 +256,56 @@ class SettingsPlayerPageTest {
         rule.onNodeWithTag(SETTINGS_CARD_PLAYER_TAG).assertIsFocused()
         rule.onNodeWithTag(SettingsCard.Player.statusTag, useUnmergedTree = true)
             .assertTextEquals("Zapping ogni 12 s")
+    }
+
+    @Test
+    fun `la sezione Formato live parte su Automatico e le altre non hanno il segno`() {
+        val prefs = freshPreferences()
+        assertEquals(LiveStreamFormat.AUTO, prefs.liveStreamFormat)
+        showNavigation(prefs)
+        openPlayerPage()
+
+        rule.onNodeWithTag(SETTINGS_LIVE_FORMAT_SECTION_TAG).assertExists().assertTextEquals(SETTINGS_LIVE_FORMAT_LABEL)
+        // Le tre scelte ci sono tutte; solo quella attiva ha il "✓".
+        LiveStreamFormat.entries.forEach { format ->
+            rule.onNodeWithTag(liveFormatTag(format)).assertExists()
+        }
+        rule.onNodeWithTag(liveFormatTag(LiveStreamFormat.AUTO))
+            .assertTextEquals(liveFormatButtonLabel(LiveStreamFormat.AUTO, LiveStreamFormat.AUTO))
+        rule.onNodeWithTag(liveFormatTag(LiveStreamFormat.AUTO)).assertTextEquals("✓ ${LiveStreamFormat.AUTO.label}")
+        rule.onNodeWithTag(liveFormatTag(LiveStreamFormat.TS))
+            .assertTextEquals(liveFormatButtonLabel(LiveStreamFormat.TS, LiveStreamFormat.AUTO))
+        rule.onNodeWithTag(liveFormatTag(LiveStreamFormat.HLS))
+            .assertTextEquals(liveFormatButtonLabel(LiveStreamFormat.HLS, LiveStreamFormat.AUTO))
+    }
+
+    @Test
+    fun `scegliere HLS sposta il segno e salva la preferenza`() {
+        val prefs = freshPreferences()
+        showNavigation(prefs)
+        openPlayerPage()
+
+        rule.onNodeWithTag(liveFormatTag(LiveStreamFormat.HLS))
+            .performSemanticsAction(SemanticsActions.OnClick)
+        rule.waitForIdle()
+
+        assertEquals(LiveStreamFormat.HLS, prefs.liveStreamFormat)
+        rule.onNodeWithTag(liveFormatTag(LiveStreamFormat.HLS)).assertTextEquals("✓ HLS (.m3u8)")
+        rule.onNodeWithTag(liveFormatTag(LiveStreamFormat.AUTO)).assertTextEquals("Automatico")
+        // Il valore è in archivio, non solo a schermo.
+        assertEquals(
+            LiveStreamFormat.HLS,
+            PlayerPreferences(ApplicationProvider.getApplicationContext()).liveStreamFormat,
+        )
+    }
+
+    @Test
+    fun `una preferenza salvata sconosciuta torna ad Automatico`() {
+        freshPreferences()
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        context.getSharedPreferences(PlayerPreferences.PREFERENCES_NAME, Context.MODE_PRIVATE)
+            .edit().putString(PlayerPreferences.KEY_LIVE_FORMAT, "mkv").commit()
+        assertEquals(LiveStreamFormat.AUTO, PlayerPreferences(context).liveStreamFormat)
     }
 
     /**

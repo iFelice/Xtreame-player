@@ -23,9 +23,17 @@ import java.util.Locale
  */
 sealed interface StreamTarget {
 
+    /**
+     * Canale Live. [allowedOutputFormats] sono i formati dichiarati
+     * dall'account; [preferredFormat] è la preferenza dell'utente (vedi
+     * [LiveStreamFormat]) e vale solo tra i formati ammessi: se chiede un
+     * formato che l'account non dichiara, la regola di [StreamUrls.liveExtension]
+     * resta quella di sempre.
+     */
     data class Live(
         val streamId: String,
         val allowedOutputFormats: List<String>,
+        val preferredFormat: LiveStreamFormat = LiveStreamFormat.AUTO,
     ) : StreamTarget
 
     data class Movie(
@@ -68,7 +76,7 @@ object StreamUrls {
         val pass = encodePathSegment(password)
         return when (target) {
             is StreamTarget.Live -> {
-                val extension = liveExtension(target.allowedOutputFormats)
+                val extension = liveExtension(target.allowedOutputFormats, target.preferredFormat)
                 "$base/live/$user/$pass/${encodePathSegment(target.streamId)}.$extension"
             }
             is StreamTarget.Movie ->
@@ -124,12 +132,44 @@ object StreamUrls {
     /**
      * Regola live: `.ts` è il predefinito. Si passa a `.m3u8` solo quando
      * l'account non dichiara `ts` e dichiara `m3u8`.
+     *
+     * La preferenza dell'utente non cambia questa regola quando il formato
+     * richiesto non è tra quelli dichiarati dall'account: un canale che esiste
+     * solo in `ts` resta in `ts` anche con [LiveStreamFormat.HLS] scelto.
      */
-    fun liveExtension(allowedOutputFormats: List<String>): String {
+    fun liveExtension(
+        allowedOutputFormats: List<String>,
+        preferredFormat: LiveStreamFormat = LiveStreamFormat.AUTO,
+    ): String {
         val normalized = allowedOutputFormats.map { it.trim().lowercase() }
         val hasTs = normalized.contains(LIVE_TS)
         val hasHls = normalized.contains(LIVE_HLS)
-        return if (!hasTs && hasHls) LIVE_HLS else LIVE_TS
+        val fallback = if (!hasTs && hasHls) LIVE_HLS else LIVE_TS
+        return when {
+            preferredFormat == LiveStreamFormat.HLS && hasHls -> LIVE_HLS
+            preferredFormat == LiveStreamFormat.TS && hasTs -> LIVE_TS
+            else -> fallback
+        }
+    }
+
+    /**
+     * L'altro formato live rispetto a [current], per il ripiego dopo un errore
+     * di riproduzione (lo stesso scambio che fa Black tra HLS e flusso diretto).
+     * Restituisce `null` quando l'account non ammette l'altro formato: in quel
+     * caso non c'è nulla da provare e l'errore resta quello vero.
+     */
+    fun alternateLiveFormat(
+        current: LiveStreamFormat,
+        allowedOutputFormats: List<String>,
+    ): LiveStreamFormat? {
+        val normalized = allowedOutputFormats.map { it.trim().lowercase() }
+        val hasTs = normalized.contains(LIVE_TS)
+        val hasHls = normalized.contains(LIVE_HLS)
+        return when (current) {
+            LiveStreamFormat.TS -> LiveStreamFormat.HLS.takeIf { hasHls }
+            LiveStreamFormat.HLS -> LiveStreamFormat.TS.takeIf { hasTs }
+            LiveStreamFormat.AUTO -> null
+        }
     }
 
     fun containerExtension(raw: String?): String {
