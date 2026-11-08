@@ -10,6 +10,7 @@ import it.felixvision.tv.data.catalog.LiveStream
 import it.felixvision.tv.data.catalog.VodStream
 import it.felixvision.tv.data.playback.ChannelNumberOverlay
 import it.felixvision.tv.data.playback.ChannelNumbering
+import it.felixvision.tv.data.playback.LiveStreamFormat
 import it.felixvision.tv.data.playback.SeriesPlayback
 import it.felixvision.tv.data.playback.VideoFormat
 import it.felixvision.tv.data.volume.PlayerVolume
@@ -52,6 +53,8 @@ data class PlayerSession(
     val password: String,
     val allowedOutputFormats: List<String>,
     val source: PlaybackSource,
+    /** Formato Live scelto nelle Impostazioni (`Automatico` se assente). */
+    val liveFormat: LiveStreamFormat = LiveStreamFormat.DEFAULT,
     val serverTimezone: String? = null,
     /**
      * Vero quando il contenuto arriva da "Continua a guardare": la posizione

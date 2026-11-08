@@ -19,8 +19,9 @@ import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 
 /**
- * Riavvio automatico e silenzioso della sorgente: una sola volta e solo per i
- * canali live con errore di rete; mai per film, episodi e catch-up.
+ * Riavvio automatico e silenzioso della sorgente: tre tentativi con attese
+ * crescenti e solo per i canali live con errore di rete; mai per film, episodi
+ * e catch-up.
  */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [34])
@@ -53,19 +54,42 @@ class LiveAutoRestartTest {
     )
 
     @Test
-    fun `il riavvio vale per una sola volta`() {
-        assertEquals(1, PlayerNetworkConfig.MAX_LIVE_AUTO_RESTARTS)
+    fun `il riavvio vale per tre volte`() {
+        assertEquals(3, PlayerNetworkConfig.MAX_LIVE_AUTO_RESTARTS)
     }
 
     @Test
-    fun `live con errore di rete, un solo riavvio automatico poi l'errore`() {
+    fun `live con errore di rete, tre riavvii automatici poi l'errore`() {
+        val restart = LiveAutoRestart()
+
+        repeat(3) { attempt ->
+            assertEquals(PlayerErrorAction.SILENT_RESTART, restart.onPlayerError(PlaybackKind.LIVE, networkError()))
+            assertEquals(attempt + 1, restart.restartsUsed)
+        }
+        assertEquals(PlayerErrorAction.SHOW_ERROR, restart.onPlayerError(PlaybackKind.LIVE, timeoutError()))
+        assertEquals(PlayerErrorAction.SHOW_ERROR, restart.onPlayerError(PlaybackKind.LIVE, networkError()))
+        assertEquals(3, restart.restartsUsed)
+    }
+
+    @Test
+    fun `le attese dei riavvii crescono e non tornano a zero`() {
         val restart = LiveAutoRestart()
 
         assertEquals(PlayerErrorAction.SILENT_RESTART, restart.onPlayerError(PlaybackKind.LIVE, networkError()))
-        assertEquals(1, restart.restartsUsed)
-        assertEquals(PlayerErrorAction.SHOW_ERROR, restart.onPlayerError(PlaybackKind.LIVE, timeoutError()))
-        assertEquals(PlayerErrorAction.SHOW_ERROR, restart.onPlayerError(PlaybackKind.LIVE, networkError()))
-        assertEquals(1, restart.restartsUsed)
+        assertEquals(2_000L, restart.delayForCurrentRestart())
+        assertEquals(PlayerErrorAction.SILENT_RESTART, restart.onPlayerError(PlaybackKind.LIVE, networkError()))
+        assertEquals(5_000L, restart.delayForCurrentRestart())
+        assertEquals(PlayerErrorAction.SILENT_RESTART, restart.onPlayerError(PlaybackKind.LIVE, networkError()))
+        assertEquals(10_000L, restart.delayForCurrentRestart())
+        assertEquals(PlayerNetworkConfig.LIVE_AUTO_RESTART_DELAYS_MILLIS, listOf(2_000L, 5_000L, 10_000L))
+    }
+
+    @Test
+    fun `senza attese configurate il riavvio e immediato`() {
+        val restart = LiveAutoRestart(maxRestarts = 1, delaysMillis = emptyList())
+
+        assertEquals(PlayerErrorAction.SILENT_RESTART, restart.onPlayerError(PlaybackKind.LIVE, networkError()))
+        assertEquals(0L, restart.delayForCurrentRestart())
     }
 
     @Test
@@ -93,16 +117,18 @@ class LiveAutoRestartTest {
     }
 
     @Test
-    fun `un nuovo avvio della riproduzione ridà il riavvio`() {
+    fun `un nuovo avvio della riproduzione ridà i tre riavvii`() {
         val restart = LiveAutoRestart()
 
-        assertEquals(PlayerErrorAction.SILENT_RESTART, restart.onPlayerError(PlaybackKind.LIVE, networkError()))
+        repeat(3) { restart.onPlayerError(PlaybackKind.LIVE, networkError()) }
         assertEquals(PlayerErrorAction.SHOW_ERROR, restart.onPlayerError(PlaybackKind.LIVE, networkError()))
-        // Cambio canale, "Riprova" o stream pronto.
+        // Cambio canale, "Riprova" o stream di nuovo stabile.
         restart.reset()
         assertEquals(0, restart.restartsUsed)
         assertEquals(PlayerErrorAction.SILENT_RESTART, restart.onPlayerError(PlaybackKind.LIVE, networkError()))
-        assertEquals(PlayerErrorAction.SHOW_ERROR, restart.onPlayerError(PlaybackKind.LIVE, networkError()))
+        assertEquals(1, restart.restartsUsed)
+        // Dopo l'azzeramento si riparte dalla prima attesa, non dall'ultima.
+        assertEquals(2_000L, restart.delayForCurrentRestart())
     }
 
     @Test

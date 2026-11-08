@@ -74,6 +74,7 @@ import it.felixvision.tv.data.epg.GuideEpgSnapshot
 import it.felixvision.tv.data.epg.GuideScheduleRules
 import it.felixvision.tv.data.epg.GuideTimeWindow
 import it.felixvision.tv.data.playback.ChannelVideoFormatStore
+import it.felixvision.tv.data.playback.LiveStreamFormat
 import it.felixvision.tv.data.playback.VideoFormat
 import it.felixvision.tv.ui.components.ChannelLogoImage
 import it.felixvision.tv.ui.components.UiScale
@@ -158,6 +159,8 @@ fun GuideTvSection(
     username: String = "",
     password: String = "",
     allowedOutputFormats: List<String> = emptyList(),
+    /** Formato Live scelto in Impostazioni → Player, per l'anteprima del mini-player. */
+    liveFormat: LiveStreamFormat = LiveStreamFormat.DEFAULT,
     videoFormatStore: ChannelVideoFormatStore? = null,
     scale: UiScale = UiScale(1f),
     clock: Clock = SystemClock,
@@ -551,6 +554,7 @@ fun GuideTvSection(
                     onLifecycleStop = { previewStreamId = null },
                     modifier = Modifier.fillMaxHeight(),
                     playerFactory = previewPlayerFactory,
+                    liveFormat = liveFormat,
                 )
             }
 

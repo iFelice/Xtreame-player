@@ -11,6 +11,7 @@ import it.felixvision.tv.data.pairing.PairingCoordinator
 import it.felixvision.tv.data.pairing.PairingPanelState
 import it.felixvision.tv.data.pairing.PairingStep
 import it.felixvision.tv.data.pairing.RemoteCredentials
+import it.felixvision.tv.data.playback.LiveStreamFormat
 import it.felixvision.tv.data.protection.ProtectedContentStore
 import it.felixvision.tv.data.protection.ProtectedPageAccess
 import it.felixvision.tv.data.protection.ProtectedSession
@@ -196,6 +197,20 @@ class SettingsViewModel(
     fun onZappingSecondsSelected(seconds: Int) {
         playerPreferences.zappingSeconds = seconds
         _zappingSeconds.value = playerPreferences.zappingSeconds
+    }
+
+    /**
+     * Formato del flusso Live salvato (Automatico, TS o HLS). Il player lo
+     * legge quando costruisce una sessione nuova: il canale già aperto resta
+     * com'è finché non lo si riapre.
+     */
+    private val _liveStreamFormat = MutableStateFlow(playerPreferences.liveStreamFormat)
+    val liveStreamFormat: StateFlow<LiveStreamFormat> = _liveStreamFormat.asStateFlow()
+
+    /** Salva il formato Live scelto e lo pubblica subito. */
+    fun onLiveStreamFormatSelected(format: LiveStreamFormat) {
+        playerPreferences.liveStreamFormat = format
+        _liveStreamFormat.value = playerPreferences.liveStreamFormat
     }
 
     /** Riepilogo per la riga del riquadro "Contenuti protetti". */

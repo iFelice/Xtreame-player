@@ -34,6 +34,8 @@ import it.felixvision.tv.data.playback.ChannelNumberInput
 import it.felixvision.tv.data.playback.ChannelNumberSession
 import it.felixvision.tv.data.playback.ChannelNumbering
 import it.felixvision.tv.data.playback.EpisodeOrder
+import it.felixvision.tv.data.playback.LiveStallDetector
+import it.felixvision.tv.data.playback.LiveStreamFormat
 import it.felixvision.tv.data.playback.LiveZapping
 import it.felixvision.tv.data.playback.NextEpisodeRules
 import it.felixvision.tv.data.playback.StreamTarget
@@ -156,24 +158,58 @@ class PlayerEngine(
 
     private var nextPromptState = NextPromptState.NONE
 
-    /** Un solo riavvio silenzioso del canale live dopo un errore di rete persistente. */
+    /**
+     * Riavvii automatici e silenziosi della sorgente live dopo un errore di
+     * rete o uno stallo, al massimo tre (vedi [PlayerNetworkConfig]).
+     */
     private val liveAutoRestart = LiveAutoRestart()
+
+    /**
+     * Formato del flusso Live imposto per il canale in onda dopo un errore:
+     * `null` = vale la preferenza della sessione (Impostazioni → Player).
+     * Si azzera cambiando canale o con "Riprova", così il ripiego resta una
+     * prova sola per canale e non un va-e-vieni tra `.ts` e `.m3u8`.
+     */
+    private var liveFormatOverride: LiveStreamFormat? = null
+
+    /**
+     * Ripiego di formato già usato per l'errore in corso: il secondo errore
+     * dopo lo scambio va mostrato, non scambiato di nuovo.
+     */
+    private var liveFormatFlipUsed = false
+
+    private var watchdogJob: Job? = null
+    private var autoRestartJob: Job? = null
+
+    /**
+     * Conteggio dei riavvii: si azzera solo dopo [STABLE_READY_MILLIS] di
+     * riproduzione continua, non appena lo stream torna pronto. Altrimenti un
+     * canale che si strozza ogni pochi secondi riavrebbe sempre tre tentativi
+     * e non arriverebbe mai all'errore, cioè al caso che l'utente deve vedere.
+     */
+    private var stableReadyJob: Job? = null
 
     private val playerListener = object : Player.Listener {
 
         override fun onPlaybackStateChanged(playbackState: Int) {
             when (playbackState) {
-                Player.STATE_BUFFERING -> state = state.copy(isBuffering = true)
+                Player.STATE_BUFFERING -> {
+                    cancelStableReadyReset()
+                    state = state.copy(isBuffering = true)
+                }
                 Player.STATE_READY -> {
-                    // Lo stream è ripartito: un errore futuro ha di nuovo il suo riavvio.
-                    liveAutoRestart.reset()
+                    // Nessun azzeramento immediato: conta la riproduzione continua.
+                    scheduleStableReadyReset()
                     val duration = playerDuration()
                     state = state.copy(
                         isBuffering = false,
                         durationMillis = if (duration > 0L) duration else state.durationMillis,
                     )
                 }
-                Player.STATE_ENDED -> handlePlaybackEnded()
+                Player.STATE_ENDED -> {
+                    cancelStableReadyReset()
+                    handlePlaybackEnded()
+                }
             }
         }
 
@@ -188,6 +224,154 @@ class PlayerEngine(
 
         override fun onTracksChanged(tracks: Tracks) {
             refreshTracks()
+        }
+    }
+
+    /**
+     * Lo stream è pronto: se resta in riproduzione per [STABLE_READY_MILLIS]
+     * senza tornare in caricamento, i riavvii tornano disponibili. Il timer
+     * riparte a ogni nuovo READY e si ferma appena il buffer si svuota.
+     */
+    private fun scheduleStableReadyReset() {
+        cancelStableReadyReset()
+        if (!isLiveSource) return
+        stableReadyJob = scope.launch {
+            delay(STABLE_READY_MILLIS)
+            val current = exoPlayer ?: return@launch
+            if (current.playbackState == Player.STATE_READY && current.isPlaying) {
+                liveAutoRestart.reset()
+            }
+        }
+    }
+
+    private fun cancelStableReadyReset() {
+        stableReadyJob?.cancel()
+        stableReadyJob = null
+    }
+
+    /** Annulla un riavvio silenzioso in coda, se c'è. */
+    private fun cancelLiveRestart() {
+        autoRestartJob?.cancel()
+        autoRestartJob = null
+    }
+
+    /**
+     * Cane da guardia del Live: ExoPlayer non segnala un errore quando il
+     * flusso si strozza, resta in caricamento (o "pronto" con la riproduzione
+     * ferma) per sempre. Ogni [WATCHDOG_TICK_MILLIS] il [LiveStallDetector]
+     * guarda da quanto dura la stessa condizione; alla soglia si passa dallo
+     * stesso riavvio silenzioso degli errori di rete, quindi con lo stesso
+     * limite di tentativi e la stessa schermata di errore alla fine.
+     *
+     * Fuori dal Live e mentre l'utente ha messo in pausa il cane è spento:
+     * una pausa voluta non è uno stallo. Nel replay il tempo scorre dalla
+     * sorgente, non dal flusso, e la posizione fissa è normale.
+     */
+    private fun startLiveWatchdog() {
+        watchdogJob?.cancel()
+        if (!isLiveSource) return
+        watchdogJob = scope.launch {
+            val detector = LiveStallDetector()
+            while (!exited) {
+                delay(WATCHDOG_TICK_MILLIS)
+                // Player assente (uscita o secondo piano): il conteggio riparte
+                // da zero quando torna, non accumula il tempo in cui non c'era.
+                val current = exoPlayer
+                val now = android.os.SystemClock.elapsedRealtime()
+                val stalled = detector.timedOut(
+                    playbackState = current?.playbackState,
+                    eligible = current != null && watchdogEligible(current),
+                    nowMillis = now,
+                )
+                if (stalled) {
+                    AppLog.warn(
+                        "Player: canale fermo nello stato ${current?.playbackState}, " +
+                            "riavvio automatico",
+                    )
+                    restartLiveAfterStall()
+                }
+            }
+        }
+    }
+
+    /**
+     * Il cane guardia interviene solo quando la riproduzione è davvero ferma
+     * per colpa nostra. Stesso criterio del player mobile: il player dovrebbe
+     * andare (`playWhenReady`) ma non avanza (`!isPlaying`) e nessuno l'ha
+     * fermato di proposito (nessuna soppressione, per esempio l'audio in
+     * pausa da un'app che ha il focus).
+     *
+     * Un flusso che va non entra mai nel conteggio: `isPlaying` vero azzera
+     * l'attesa, quindi il riavvio non arriva a un canale sano.
+     */
+    private fun watchdogEligible(player: Player): Boolean {
+        if (!isLiveSource || replayProgram != null) return false
+        if (state.errorMessage != null) return false
+        if (autoRestartJob?.isActive == true) return false
+        return player.playWhenReady &&
+            !player.isPlaying &&
+            player.playbackSuppressionReason == Player.PLAYBACK_SUPPRESSION_REASON_NONE
+    }
+
+    /**
+     * Intervento del cane da guardia: usa lo stesso conteggio degli errori di
+     * rete. Alla fine dei tentativi arriva la schermata di errore vera, con
+     * "Riprova", invece di un caricamento infinito.
+     */
+    private fun restartLiveAfterStall() {
+        when (liveAutoRestart.onPlayerError(PlaybackKind.LIVE, networkError = true)) {
+            PlayerErrorAction.SILENT_RESTART -> scheduleLiveRestart()
+            PlayerErrorAction.SHOW_ERROR -> showStallError()
+        }
+    }
+
+    /** Schermata di errore per uno stallo senza errore di rete. */
+    private fun showStallError() {
+        AppLog.warn("Player: canale live fermo dopo i riavvii automatici, errore a schermo")
+        cancelLiveRestart()
+        saveProgress()
+        nextPromptState = NextPromptState.NONE
+        channelNumberJob?.cancel()
+        channelNumberJob = null
+        channelNumberSession.dismissOverlay()
+        state = state.copy(
+            errorMessage = PlaybackErrors.GENERIC,
+            isBuffering = false,
+            isPlaying = false,
+            controlsVisible = false,
+            banner = null,
+            channelListVisible = false,
+            channelNumberOverlay = null,
+            trackPanel = null,
+            nextEpisode = null,
+        )
+        destroyPlayer()
+        container.playbackActivity.setActive(false)
+    }
+
+    /**
+     * Riapre il canale Live dopo il tempo del tentativo corrente (2, 5, 10 s
+     * secondi), così un provider momentaneamente sovraccarico non riceve tre
+     * richieste di fila. Nel frattempo il caricamento resta visibile; un nuovo
+     * avvio o l'uscita dal player annullano la coda.
+     */
+    private fun scheduleLiveRestart() {
+        cancelLiveRestart()
+        val waitMillis = liveAutoRestart.delayForCurrentRestart()
+        AppLog.warn(
+            "Player: riavvio automatico ${liveAutoRestart.restartsUsed} di " +
+                "${PlayerNetworkConfig.MAX_LIVE_AUTO_RESTARTS} tra $waitMillis ms",
+        )
+        autoRestartJob = scope.launch {
+            if (waitMillis > 0L) delay(waitMillis)
+            // Uscita dal player o schermata in secondo piano nel frattempo:
+            // niente player nuovo finché non si torna visibili.
+            if (exited || hostStopped) return@launch
+            // Il flusso si è ripreso durante l'attesa: non lo si interrompe.
+            val current = exoPlayer
+            if (current != null && current.isPlaying) return@launch
+            destroyPlayer()
+            buildPlayer(startPositionMillis = 0L, autoPlay = true)
         }
     }
 
@@ -261,7 +445,7 @@ class PlayerEngine(
         if (!hostStopped || exited) return
         hostStopped = false
         if (!state.isReady || state.errorMessage != null) return
-        liveAutoRestart.reset()
+        resetLiveRecovery()
         val resumeVisible = state.resumePositionMillis != null
         buildPlayer(
             startPositionMillis = lastPositionBeforeStop,
@@ -341,9 +525,17 @@ class PlayerEngine(
         val newPlayer = ExoPlayer.Builder(context)
             .setRenderersFactory(renderersFactory)
             .setMediaSourceFactory(mediaSourceFactory)
+            // Buffer fino a 50 s, avvio a 2,5 s: il flusso IPTV non si svuota
+            // più a metà visione (vedi PlayerNetworkConfig.loadControl).
+            .setLoadControl(PlayerNetworkConfig.loadControl())
             .build()
         newPlayer.addListener(playerListener)
         newPlayer.addAnalyticsListener(analyticsListener)
+        // Live diretto: a fine stream si riparte dal bordo del live invece di
+        // restare sull'ultimo fotogramma. Nel replay e nel VOD resta spento:
+        // un episodio che finisce deve arrivare a handlePlaybackEnded.
+        newPlayer.repeatMode =
+            if (isLiveSource && replayProgram == null) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
         val mediaItem = MediaItem.Builder()
             .setUri(url)
             .setMediaMetadata(MediaMetadata.Builder().setTitle(replayProgram?.title ?: titleForCurrent()).build())
@@ -354,6 +546,8 @@ class PlayerEngine(
         newPlayer.prepare()
         newPlayer.playWhenReady = autoPlay
         exoPlayer = newPlayer
+        // Il cane da guardia riparte con il player nuovo: ogni istanza ha il suo.
+        startLiveWatchdog()
         container.playbackActivity.setActive(true)
         state = state.copy(
             isReady = true,
@@ -373,6 +567,11 @@ class PlayerEngine(
     }
 
     private fun destroyPlayer() {
+        // Il cane da guardia muore con il player: un'interruzione voluta non
+        // deve contare come stallo.
+        watchdogJob?.cancel()
+        watchdogJob = null
+        cancelStableReadyReset()
         val player = exoPlayer ?: return
         exoPlayer = null
         player.removeListener(playerListener)
@@ -401,7 +600,13 @@ class PlayerEngine(
         val target = when (val currentSource = source) {
             is PlaybackSource.Live -> {
                 val channel = currentLiveChannel() ?: return null
-                StreamTarget.Live(channel.streamId, session.allowedOutputFormats)
+                StreamTarget.Live(
+                    streamId = channel.streamId,
+                    allowedOutputFormats = session.allowedOutputFormats,
+                    // Impostazioni → Player; dopo un errore vale il formato
+                    // scambiato, finché il canale non cambia.
+                    preferredFormat = liveFormatOverride ?: session.liveFormat,
+                )
             }
             is PlaybackSource.Movie -> StreamTarget.Movie(
                 streamId = currentSource.stream.streamId,
@@ -719,7 +924,7 @@ class PlayerEngine(
             durationMillis = 0L,
         )
         showBanner()
-        liveAutoRestart.reset()
+        resetLiveRecovery()
         destroyPlayer()
         buildPlayer(startPositionMillis = 0L, autoPlay = true)
     }
@@ -852,7 +1057,7 @@ class PlayerEngine(
         state = state.copy(isReplay = false, errorMessage = null, positionMillis = 0L,
             durationMillis = 0L, controlsVisible = false, isBuffering = true, isPlaying = false,
             currentTitle = currentLiveChannel()?.name.orEmpty())
-        liveAutoRestart.reset()
+        resetLiveRecovery()
         destroyPlayer()
         buildPlayer(0L, autoPlay = true)
     }
@@ -1169,9 +1374,21 @@ class PlayerEngine(
         val startPosition = state.positionMillis
         nextPromptState = NextPromptState.NONE
         state = state.copy(errorMessage = null, nextEpisode = null)
-        liveAutoRestart.reset()
+        resetLiveRecovery()
         destroyPlayer()
         buildPlayer(startPositionMillis = startPosition, autoPlay = true)
+    }
+
+    /**
+     * Un nuovo inizio (cambio canale, "Riprova", ritorno alla diretta): i tre
+     * riavvii tornano disponibili e il formato del flusso riparte dalla
+     * preferenza dell'utente, non da quello imposto da un errore precedente.
+     */
+    private fun resetLiveRecovery() {
+        liveAutoRestart.reset()
+        liveFormatOverride = null
+        liveFormatFlipUsed = false
+        cancelLiveRestart()
     }
 
     // --- Fine riproduzione ---
@@ -1180,6 +1397,16 @@ class PlayerEngine(
         if (exited) return
         if (replayProgram != null) {
             if ((exoPlayer?.currentPosition ?: 0L) < 1_000L) showReplayUnavailable() else returnToLive()
+            return
+        }
+        // Canale Live chiuso dal provider: si rientra nella diretta invece di
+        // restare sull'ultimo fotogramma. `REPEAT_MODE_ONE` copre i flussi che
+        // Media3 sa riavvolgere da solo; questo copre gli altri (per esempio
+        // alcuni HLS live). Il Live non si segna come "visto" e il conteggio
+        // dei riavvii evita il ciclo infinito: esauriti i tentativi arriva
+        // l'errore con "Riprova".
+        if (isLiveSource) {
+            restartLiveAfterStall()
             return
         }
         saveProgress(completed = true)
@@ -1296,21 +1523,30 @@ class PlayerEngine(
             showReplayUnavailable()
             return
         }
-        // Canale live ancora senza rete dopo i nuovi tentativi: un solo riavvio
-        // silenzioso dello stesso canale prima di mostrare l'errore.
+        // Live: prima di riprovare lo stesso indirizzo si prova l'altro formato
+        // (`.ts` ↔ `.m3u8`), come fa il pannello di riferimento. Un canale che
+        // non parte in MPEG-TS spesso parte in HLS e viceversa; il tentativo è
+        // uno solo per errore e non consuma i riavvii automatici.
+        if (swapLiveFormatOnError(error)) return
+        // Canale live ancora senza rete dopo i nuovi tentativi: riavvio
+        // silenzioso dello stesso canale, con attese crescenti, prima di
+        // mostrare l'errore.
         if (liveAutoRestart.onPlayerError(currentPlaybackKind(), error) == PlayerErrorAction.SILENT_RESTART) {
             AppLog.warn(
                 "Player: errore di rete codice ${error.errorCode}, riavvio automatico " +
                     "${liveAutoRestart.restartsUsed} di ${PlayerNetworkConfig.MAX_LIVE_AUTO_RESTARTS} su " +
                     StreamUrls.redactStreamUrl(currentUrl()),
             )
-            restartLiveSilently()
+            scheduleLiveRestart()
             return
         }
         AppLog.warn(
             "Player: errore codice ${error.errorCode} su " +
                 StreamUrls.redactStreamUrl(currentUrl()),
         )
+        // Nessun riavvio in coda: l'errore a schermo resta finché non si tocca
+        // "Riprova".
+        cancelLiveRestart()
         saveProgress()
         nextPromptState = NextPromptState.NONE
         channelNumberJob?.cancel()
@@ -1332,12 +1568,48 @@ class PlayerEngine(
     }
 
     /**
-     * Riapre la sorgente del canale live corrente senza messaggi intermedi:
-     * [buildPlayer] lascia il caricamento visibile e nessun errore a schermo.
+     * Ripiego di formato dopo un errore del Live: se il canale in onda è in
+     * `.ts` e l'account ammette anche `.m3u8` (o viceversa), si riapre lo
+     * stesso canale nell'altro formato, una volta sola per errore. Così un
+     * canale che il provider non riesce a servire in MPEG-TS parte comunque,
+     * senza che l'utente veda niente; se anche l'altro formato fallisce,
+     * l'errore vero arriva subito dopo.
+     *
+     * [liveFormatFlipUsed] impedisce il va-e-vieni: uno scambio per errore,
+     * poi valgono i riavvii silenziosi normali.
+     *
+     * Solo per gli errori che non vengono da una risposta HTTP: un 404/456 o
+     * un 5xx dice che il server ha risposto e che l'altro formato non
+     * cambierebbe niente (con l'accesso negato sarebbe anche una connessione
+     * in più su un account già al limite). Lì l'errore arriva com'è.
      */
-    private fun restartLiveSilently() {
+    private fun swapLiveFormatOnError(error: PlaybackException?): Boolean {
+        if (!isLiveSource || replayProgram != null || liveFormatFlipUsed) return false
+        if (PlaybackErrors.isHttpResponseError(error)) return false
+        val current = liveFormatOverride ?: session.liveFormat
+        // Con "Automatico" conta il formato davvero in uso, non la preferenza.
+        val inUse = if (current == LiveStreamFormat.AUTO) {
+            val url = currentUrl() ?: return false
+            when {
+                url.endsWith(".${StreamUrls.LIVE_HLS}") -> LiveStreamFormat.HLS
+                url.endsWith(".${StreamUrls.LIVE_TS}") -> LiveStreamFormat.TS
+                else -> return false
+            }
+        } else {
+            current
+        }
+        val alternate = StreamUrls.alternateLiveFormat(inUse, session.allowedOutputFormats) ?: return false
+        cancelLiveRestart()
+        liveFormatFlipUsed = true
+        liveFormatOverride = alternate
+        AppLog.warn(
+            "Player: canale live non parte in ${inUse.storageKey}, secondo tentativo in " +
+                "${alternate.storageKey} su ${StreamUrls.redactStreamUrl(currentUrl())}",
+        )
+        // Il formato nuovo può cambiare la sorgente: il player va ricostruito.
         destroyPlayer()
         buildPlayer(startPositionMillis = 0L, autoPlay = true)
+        return true
     }
 
     private fun refreshTracks() {
@@ -1415,5 +1687,11 @@ class PlayerEngine(
 
     private companion object {
         const val BANNER_DURATION_MILLIS = 4_000L
+
+        /** Riproduzione continua oltre la quale il conteggio dei riavvii riparte. */
+        const val STABLE_READY_MILLIS = 30_000L
+
+        /** Passo del cane da guardia: ogni stallo è visto entro mezzo secondo. */
+        const val WATCHDOG_TICK_MILLIS = 500L
     }
 }
