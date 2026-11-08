@@ -1,0 +1,84 @@
+.class public final synthetic LD0/L;
+.super Ljava/lang/Object;
+.source "SourceFile"
+
+# interfaces
+.implements Landroid/media/AudioRouting$OnRoutingChangedListener;
+
+
+# instance fields
+.field public final synthetic a:Lm2/u;
+
+
+# direct methods
+.method public synthetic constructor <init>(Lm2/u;)V
+    .locals 0
+
+    .line 1
+    invoke-direct {p0}, Ljava/lang/Object;-><init>()V
+
+    .line 2
+    .line 3
+    .line 4
+    iput-object p1, p0, LD0/L;->a:Lm2/u;
+
+    .line 5
+    .line 6
+    return-void
+.end method
+
+
+# virtual methods
+.method public final onRoutingChanged(Landroid/media/AudioRouting;)V
+    .locals 2
+
+    .line 1
+    iget-object v0, p0, LD0/L;->a:Lm2/u;
+
+    .line 2
+    .line 3
+    iget-object v1, v0, Lm2/u;->J:Ljava/lang/Object;
+
+    .line 4
+    .line 5
+    check-cast v1, Landroid/media/AudioRouting$OnRoutingChangedListener;
+
+    .line 6
+    .line 7
+    if-nez v1, :cond_0
+
+    .line 8
+    .line 9
+    goto :goto_0
+
+    .line 10
+    :cond_0
+    invoke-static {p1}, LD0/y;->e(Landroid/media/AudioRouting;)Landroid/media/AudioDeviceInfo;
+
+    .line 11
+    .line 12
+    .line 13
+    move-result-object p1
+
+    .line 14
+    if-eqz p1, :cond_1
+
+    .line 15
+    .line 16
+    iget-object v0, v0, Lm2/u;->I:Ljava/lang/Object;
+
+    .line 17
+    .line 18
+    check-cast v0, LD0/f;
+
+    .line 19
+    .line 20
+    invoke-virtual {v0, p1}, LD0/f;->b(Landroid/media/AudioDeviceInfo;)V
+
+    .line 21
+    .line 22
+    .line 23
+    :cond_1
+    :goto_0
+    return-void
+.end method

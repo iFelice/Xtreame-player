@@ -1,0 +1,9 @@
+package com.google.android.gms.internal.ads;
+
+import p090l3.C3117z0;
+
+/* JADX INFO: renamed from: com.google.android.gms.internal.ads.sj, reason: case insensitive filesystem */
+/* JADX INFO: loaded from: classes.dex */
+public interface InterfaceC1993sj {
+    void y(C3117z0 c3117z0);
+}

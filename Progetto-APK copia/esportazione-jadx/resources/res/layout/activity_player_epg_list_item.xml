@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+    <LinearLayout
+        android:orientation="vertical"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+        <LinearLayout
+            android:layout_gravity="left"
+            android:orientation="horizontal"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content">
+            <TextView
+                android:textColor="#f1c71b"
+                android:layout_gravity="center"
+                android:id="@+id/txt_epg_time"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="10dp"
+                android:text="Time"
+                android:fontFamily="@font/quicksand_regular"/>
+            <TextView
+                android:textColor="#e3f1fc"
+                android:layout_gravity="left"
+                android:id="@+id/txt_epg_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="10dp"
+                android:text="Programe Title"
+                android:fontFamily="@font/quicksand_regular"/>
+        </LinearLayout>
+        <TextView
+            android:textColor="@color/orplayer_skyblue_font_color"
+            android:layout_gravity="left"
+            android:id="@+id/txt_epg_desc"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="10dp"
+            android:layout_marginBottom="5dp"
+            android:text="Description"
+            android:lines="1"
+            android:marqueeRepeatLimit="marquee_forever"
+            android:fontFamily="@font/quicksand_light"/>
+    </LinearLayout>
+</FrameLayout>

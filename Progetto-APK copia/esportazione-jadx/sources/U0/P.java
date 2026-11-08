@@ -1,0 +1,8 @@
+package U0;
+
+/* JADX INFO: loaded from: classes.dex */
+public interface P {
+    void a(long j8);
+
+    void skip();
+}

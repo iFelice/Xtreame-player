@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+    <FrameLayout
+        android:id="@+id/layout_epg_holder"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+        <TextView
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="#dbe6fc"
+            android:gravity="center_vertical"
+            android:layout_gravity="center_vertical"
+            android:id="@+id/txt_cat_name_epg"
+            android:paddingTop="5dp"
+            android:paddingBottom="5dp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="30dp"
+            android:text=""
+            android:lines="1"
+            android:fontFamily="@font/quicksand_bold"/>
+    </FrameLayout>
+</LinearLayout>
