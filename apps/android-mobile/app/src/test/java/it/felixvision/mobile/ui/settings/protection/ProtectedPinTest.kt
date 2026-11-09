@@ -30,6 +30,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestCoroutineScheduler
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
@@ -120,7 +121,15 @@ class ProtectedPinTest {
 
     @Before
     fun createCollaborators() {
-        store = ProtectedContentStore(context = context)
+        // La verifica del PIN legge l'archivio in `Dispatchers.IO`. Con il
+        // dispatcher vero il risultato arriva quando decide lui: `settle()`
+        // pompa il dispatcher di Main, non IO, quindi la UI può essere letta
+        // prima che l'errore sia stato disegnato e il test fallisce a
+        // intermittenza sulle macchine più lente. Il dispatcher non confinato
+        // esegue subito, sullo stesso tempo virtuale, e i `runBlocking` del
+        // setup non si bloccano (con `StandardTestDispatcher` resterebbero in
+        // attesa di un avanzamento che nessuno fa).
+        store = ProtectedContentStore(context = context, io = UnconfinedTestDispatcher(scheduler))
         session = ProtectedSession(clock = virtualClock)
         credentials = FakeCredentialStore(
             stored = StoredCredentials(
@@ -280,9 +289,13 @@ class ProtectedPinTest {
     fun `verifica - cinque errori bloccano trenta secondi con il conto alla rovescia`() {
         runBlocking { store.setPin(server, username, pin) }
         mount()
+        // La verifica gira sul dispatcher non confinato impostato in
+        // `createCollaborators`: quando `typePin` torna, il conteggio dei
+        // tentativi è già stato aggiornato e non c'è nulla da attendere.
         repeat(4) { typePinIfEnabled("4321") }
-        // Quattro errori: nessun blocco, solo il messaggio del PIN errato.
-        assertEquals(PROTECTED_PIN_WRONG, textOf(MOBILE_PIN_ERROR_TAG))
+        // Quattro errori: nessun blocco e il conteggio prosegue.
+        assertFalse(session.isLocked())
+        awaitPinMessage(PROTECTED_PIN_WRONG)
         typePinIfEnabled("4321")
 
         awaitPinMessage(tooManyAttemptsMessage(30L))
@@ -303,7 +316,10 @@ class ProtectedPinTest {
     fun `verifica - dopo trenta secondi il tastierino torna attivo e il PIN giusto apre`() {
         runBlocking { store.setPin(server, username, pin) }
         mount()
-        repeat(5) { typePinIfEnabled("4321") }
+        repeat(4) { typePinIfEnabled("4321") }
+        assertFalse(session.isLocked())
+        // Quinto errore: da qui scatta il blocco.
+        typePinIfEnabled("4321")
         awaitPinMessage(tooManyAttemptsMessage(30L))
 
         advance(30_000L)
@@ -320,6 +336,7 @@ class ProtectedPinTest {
         runBlocking { store.setPin(server, username, pin) }
         mount()
         repeat(4) { typePinIfEnabled("4321") }
+        assertFalse(session.isLocked())
         typePinIfEnabled(pin)
         awaitTag("protected_title")
 
@@ -329,9 +346,7 @@ class ProtectedPinTest {
         awaitTag(MOBILE_PIN_ENTRY_TAG)
         repeat(4) { typePinIfEnabled("9999") }
 
-        // La verifica legge l'archivio in IO: attendi l'aggiornamento Compose
-        // dell'errore invece di asserire subito dopo l'ultimo click.
-        awaitPinMessage(PROTECTED_PIN_WRONG)
+        // Nessuna attesa: la verifica è già conclusa quando `typePin` torna.
         assertEquals(PROTECTED_PIN_WRONG, textOf(MOBILE_PIN_ERROR_TAG))
         assertFalse(session.isLocked())
     }

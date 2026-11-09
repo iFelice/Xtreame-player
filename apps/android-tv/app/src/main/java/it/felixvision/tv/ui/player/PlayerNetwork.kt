@@ -66,8 +66,39 @@ object PlayerNetworkConfig {
      */
     const val MAX_LIVE_AUTO_RESTARTS: Int = 3
 
-    /** Attese dei riavvii silenziosi, nell'ordine: 2 s, 5 s, 10 s. */
-    val LIVE_AUTO_RESTART_DELAYS_MILLIS: List<Long> = listOf(2_000L, 5_000L, 10_000L)
+    /**
+     * Attese dei riavvii silenziosi, nell'ordine: immediato, immediato, 1 s.
+     *
+     * Il primo riavvio deve essere invisibile, come il `prepare()` immediato del
+     * pannello di riferimento: su un canale che si strappa a metà visione ogni
+     * attesa è tempo con il video fermo.
+     */
+    val LIVE_AUTO_RESTART_DELAYS_MILLIS: List<Long> = listOf(0L, 0L, 1_000L)
+
+    /**
+     * Tentativi interni di Media3 su un Live progressivo (`.ts`): zero.
+     *
+     * Un TS non è segmentato: alla riapertura Media3 chiede `Range: bytes=N-`.
+     * Se il pannello risponde 200 ignorando il `Range` (comportamento tipico dei
+     * balancer Xtream), la sorgente HTTP scarica e scarta N byte prima di
+     * riprendere: con 660 kB/s e 50 s di buffer sono ~35 s di download buttato
+     * per ogni riapertura, che l'utente vede come "si blocca". Con zero
+     * tentativi interni l'errore arriva subito al player, che riapre da zero.
+     */
+    const val PROGRESSIVE_LIVE_MIN_LOADABLE_RETRY_COUNT: Int = 0
+
+    /** Il Live servito come flusso progressivo (`.ts`) ha i retry interni spenti. */
+    fun isProgressiveLiveUrl(streamUrl: String?): Boolean =
+        streamUrl != null && streamUrl.substringBefore('?').endsWith(".${StreamUrls.LIVE_TS}", ignoreCase = true)
+
+    /**
+     * Oltre questo numero di riavvii consecutivi la sorgente si rigenera da
+     * capo (nuova catena di redirect e nuovo token, e per il Live anche
+     * l'altro formato): è il "refresh" che nei pannelli Xtream rimedia ai
+     * token e alle sessioni appese, e che il pannello di riferimento ottiene
+     * ricostruendo ogni volta l'indirizzo da zero.
+     */
+    const val RESTARTS_BEFORE_SOURCE_REFRESH: Int = 2
 
     /**
      * Buffer del player, valori scelti sul comportamento del pannello di
@@ -105,7 +136,13 @@ object PlayerNetworkConfig {
      */
     fun mediaSourceFactory(context: Context, streamUrl: String?): DefaultMediaSourceFactory =
         DefaultMediaSourceFactory(DefaultDataSource.Factory(context, httpDataSourceFactory()))
-            .setLoadErrorHandlingPolicy(PlayerLoadErrorPolicy(streamUrl))
+            .setLoadErrorHandlingPolicy(
+                PlayerLoadErrorPolicy(
+                    streamUrl = streamUrl,
+                    // `.ts` = flusso progressivo: si riapre da zero, mai a metà.
+                    progressiveLive = isProgressiveLiveUrl(streamUrl),
+                ),
+            )
 
     /**
      * Buffer del player con i valori dell'oggetto: il tempo comanda sulla
@@ -217,7 +254,34 @@ object PlayerNetworkErrors {
  */
 class PlayerLoadErrorPolicy(
     private val streamUrl: String?,
+    /**
+     * Vero per il Live diretto servito come flusso progressivo (`.ts`): lì i
+     * nuovi tentativi interni di Media3 vanno spenti (vedi
+     * [PlayerNetworkConfig.PROGRESSIVE_LIVE_MIN_LOADABLE_RETRY_COUNT]).
+     */
+    private val progressiveLive: Boolean = false,
 ) : DefaultLoadErrorHandlingPolicy(PlayerNetworkConfig.MAX_NETWORK_RETRIES) {
+
+    /**
+     * Numero minimo di tentativi interni prima che l'errore arrivi al player.
+     *
+     * Sul Live progressivo è **zero**: Media3 riaprirebbe lo stesso indirizzo a
+     * un offset diverso da zero (`Range: bytes=<offset>-`), ma i pannelli
+     * Xtream ignorano il `Range` e rispondono 200 con il flusso da capo, quindi
+     * `DefaultHttpDataSource` deve scaricare e **buttare via** tutti i byte
+     * fino all'offset: minuti di download inutile, con il video fermo. Meglio
+     * lasciar arrivare subito l'errore a [it.felixvision.tv.ui.player.PlayerEngine],
+     * che ricostruisce la sorgente da zero: nessun byte da scartare.
+     *
+     * Per il resto (film, episodi, replay, HLS) restano i
+     * [PlayerNetworkConfig.MAX_NETWORK_RETRIES] di sempre.
+     */
+    override fun getMinimumLoadableRetryCount(dataType: Int): Int =
+        if (progressiveLive && dataType == C.DATA_TYPE_MEDIA_PROGRESSIVE_LIVE) {
+            PlayerNetworkConfig.PROGRESSIVE_LIVE_MIN_LOADABLE_RETRY_COUNT
+        } else {
+            super.getMinimumLoadableRetryCount(dataType)
+        }
 
     override fun getRetryDelayMsFor(loadErrorInfo: LoadErrorHandlingPolicy.LoadErrorInfo): Long {
         val error = loadErrorInfo.exception
@@ -261,9 +325,11 @@ enum class PlayerErrorAction {
  * [maxRestarts] volte prima di mostrare l'errore. Mai per film, episodi e
  * catch-up.
  *
- * Le attese crescono a ogni tentativo ([delaysMillis]): 2 s, 5 s, 10 s. Il
- * conteggio riparte con un nuovo avvio della riproduzione (cambio canale,
- * "Riprova", ritorno alla diretta) o quando lo stream torna pronto per un po'.
+ * Le attese restano minime ([delaysMillis]: immediato, immediato, 1 s) perché
+ * il riavvio ricostruisce la sorgente da capo: farlo aspettare non recupera
+ * niente e allunga soltanto il tempo con il video fermo. Il conteggio riparte
+ * con un nuovo avvio della riproduzione (cambio canale, "Riprova", ritorno alla
+ * diretta) o quando lo stream è stabile per un po'.
  */
 class LiveAutoRestart(
     private val maxRestarts: Int = PlayerNetworkConfig.MAX_LIVE_AUTO_RESTARTS,
@@ -294,6 +360,14 @@ class LiveAutoRestart(
         val index = (restartsUsed - 1).coerceIn(0, delaysMillis.lastIndex)
         return delaysMillis[index]
     }
+
+    /**
+     * Vero quando il riavvio appena concesso è il punto in cui conviene
+     * rigenerare la sorgente invece di riaprire lo stesso indirizzo: dal
+     * [PlayerNetworkConfig.RESTARTS_BEFORE_SOURCE_REFRESH]-esimo in poi.
+     */
+    fun shouldRefreshSource(): Boolean =
+        restartsUsed >= PlayerNetworkConfig.RESTARTS_BEFORE_SOURCE_REFRESH
 
     fun reset() {
         restartsUsed = 0

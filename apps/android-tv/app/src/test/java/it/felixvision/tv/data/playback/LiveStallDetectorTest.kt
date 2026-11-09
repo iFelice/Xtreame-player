@@ -80,11 +80,34 @@ class LiveStallDetectorTest {
         assertFalse(detector.timedOut(ended, eligible = true, nowMillis = 60_000L))
     }
 
+    /**
+     * Sul `.ts` la riapertura a metà può costare decine di secondi di download
+     * scartato: la soglia di caricamento è più corta, così si ricostruisce da
+     * zero (immediato) invece di aspettare.
+     */
+    @Test
+    fun `il live progressivo ha la soglia di caricamento piu corta`() {
+        val progressive = LiveStallDetector(progressiveLive = true)
+
+        assertFalse(progressive.timedOut(buffering, eligible = true, nowMillis = 0L))
+        assertFalse(progressive.timedOut(buffering, eligible = true, nowMillis = 7_500L))
+        assertTrue(progressive.timedOut(buffering, eligible = true, nowMillis = 8_500L))
+        // Il "pronto ma fermo" resta a 5 s, come per gli altri flussi.
+        assertFalse(progressive.timedOut(ready, eligible = true, nowMillis = 9_000L))
+        assertTrue(progressive.timedOut(ready, eligible = true, nowMillis = 14_500L))
+    }
+
     @Test
     fun `le soglie stanno sotto il timeout di lettura della rete`() {
         // Un caricamento più lungo del read timeout arriva come errore vero:
         // il cane da guardia non deve sovrapporsi.
         assertTrue(LiveStallDetector.BUFFERING_TIMEOUT_MILLIS < 30_000L)
         assertTrue(LiveStallDetector.READY_TIMEOUT_MILLIS < LiveStallDetector.BUFFERING_TIMEOUT_MILLIS)
+        // La soglia stretta resta sopra l'avvio normale del player (2,5 s).
+        assertTrue(LiveStallDetector.PROGRESSIVE_LIVE_BUFFERING_TIMEOUT_MILLIS > 2_500L)
+        assertTrue(
+            LiveStallDetector.PROGRESSIVE_LIVE_BUFFERING_TIMEOUT_MILLIS <
+                LiveStallDetector.BUFFERING_TIMEOUT_MILLIS,
+        )
     }
 }

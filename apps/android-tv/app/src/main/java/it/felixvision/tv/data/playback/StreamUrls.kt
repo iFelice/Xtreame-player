@@ -130,25 +130,37 @@ object StreamUrls {
     }
 
     /**
-     * Regola live: `.ts` è il predefinito. Si passa a `.m3u8` solo quando
-     * l'account non dichiara `ts` e dichiara `m3u8`.
+     * Regola live con [LiveStreamFormat.AUTO]: `.m3u8` quando l'account lo
+     * dichiara, altrimenti `.ts`.
      *
-     * La preferenza dell'utente non cambia questa regola quando il formato
-     * richiesto non è tra quelli dichiarati dall'account: un canale che esiste
-     * solo in `ts` resta in `ts` anche con [LiveStreamFormat.HLS] scelto.
+     * Il motivo è misurato, non estetico. Un `.ts` è un flusso unico e continuo:
+     * quando si impunta, Media3 riapre lo stesso indirizzo con
+     * `Range: bytes=<offset>-`. I pannelli Xtream ignorano il `Range` e
+     * rispondono 200 con il flusso da capo, quindi la sorgente HTTP deve
+     * scaricare e buttare via tutti i byte fino all'offset: con 660 kB/s e 50 s
+     * di buffer sono decine di secondi di download inutile, e il video resta
+     * fermo. Un HLS invece è fatto di segmenti brevi, ognuno richiesto da zero:
+     * la riapertura non ha nulla da scartare. Su un pannello che non conosce il
+     * `Range`, HLS è semplicemente più solido.
+     *
+     * [LiveStreamFormat.TS] resta disponibile per chi vuole imporre il flusso
+     * diretto (per esempio su un pannello che non serve HLS in modo corretto).
+     * Se il formato richiesto non è tra quelli dichiarati dall'account vale
+     * l'altro: un canale solo `ts` resta in `ts` anche con [LiveStreamFormat.HLS].
      */
     fun liveExtension(
         allowedOutputFormats: List<String>,
-        preferredFormat: LiveStreamFormat = LiveStreamFormat.AUTO,
+        preferredFormat: LiveStreamFormat = LiveStreamFormat.DEFAULT,
     ): String {
         val normalized = allowedOutputFormats.map { it.trim().lowercase() }
         val hasTs = normalized.contains(LIVE_TS)
         val hasHls = normalized.contains(LIVE_HLS)
-        val fallback = if (!hasTs && hasHls) LIVE_HLS else LIVE_TS
         return when {
             preferredFormat == LiveStreamFormat.HLS && hasHls -> LIVE_HLS
             preferredFormat == LiveStreamFormat.TS && hasTs -> LIVE_TS
-            else -> fallback
+            // Automatico (o preferenza non ammessa): HLS se c'è.
+            hasHls -> LIVE_HLS
+            else -> LIVE_TS
         }
     }
 

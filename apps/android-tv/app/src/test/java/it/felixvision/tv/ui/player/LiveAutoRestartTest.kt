@@ -72,16 +72,30 @@ class LiveAutoRestartTest {
     }
 
     @Test
-    fun `le attese dei riavvii crescono e non tornano a zero`() {
+    fun `i riavvii sono immediati, solo l'ultimo aspetta un secondo`() {
         val restart = LiveAutoRestart()
 
         assertEquals(PlayerErrorAction.SILENT_RESTART, restart.onPlayerError(PlaybackKind.LIVE, networkError()))
-        assertEquals(2_000L, restart.delayForCurrentRestart())
+        assertEquals(0L, restart.delayForCurrentRestart())
         assertEquals(PlayerErrorAction.SILENT_RESTART, restart.onPlayerError(PlaybackKind.LIVE, networkError()))
-        assertEquals(5_000L, restart.delayForCurrentRestart())
+        assertEquals(0L, restart.delayForCurrentRestart())
         assertEquals(PlayerErrorAction.SILENT_RESTART, restart.onPlayerError(PlaybackKind.LIVE, networkError()))
-        assertEquals(10_000L, restart.delayForCurrentRestart())
-        assertEquals(PlayerNetworkConfig.LIVE_AUTO_RESTART_DELAYS_MILLIS, listOf(2_000L, 5_000L, 10_000L))
+        assertEquals(1_000L, restart.delayForCurrentRestart())
+        assertEquals(PlayerNetworkConfig.LIVE_AUTO_RESTART_DELAYS_MILLIS, listOf(0L, 0L, 1_000L))
+    }
+
+    @Test
+    fun `dopo due riavvii la sorgente si rigenera`() {
+        val restart = LiveAutoRestart()
+        assertEquals(PlayerNetworkConfig.RESTARTS_BEFORE_SOURCE_REFRESH, 2)
+
+        assertEquals(PlayerErrorAction.SILENT_RESTART, restart.onPlayerError(PlaybackKind.LIVE, networkError()))
+        assertEquals(false, restart.shouldRefreshSource())
+        assertEquals(PlayerErrorAction.SILENT_RESTART, restart.onPlayerError(PlaybackKind.LIVE, networkError()))
+        // Secondo riavvio: nuovo token e, se possibile, l'altro formato.
+        assertTrue(restart.shouldRefreshSource())
+        restart.reset()
+        assertEquals(false, restart.shouldRefreshSource())
     }
 
     @Test
@@ -127,8 +141,8 @@ class LiveAutoRestartTest {
         assertEquals(0, restart.restartsUsed)
         assertEquals(PlayerErrorAction.SILENT_RESTART, restart.onPlayerError(PlaybackKind.LIVE, networkError()))
         assertEquals(1, restart.restartsUsed)
-        // Dopo l'azzeramento si riparte dalla prima attesa, non dall'ultima.
-        assertEquals(2_000L, restart.delayForCurrentRestart())
+        // Dopo l'azzeramento si riparte dal primo tentativo, immediato.
+        assertEquals(0L, restart.delayForCurrentRestart())
     }
 
     @Test
