@@ -143,10 +143,37 @@ class PlayerLoadErrorPolicyTest {
     }
 
     @Test
-    fun `il player segnala l'errore solo dopo i tre nuovi tentativi`() {
+    fun `VOD e manifest segnalano l'errore solo dopo i tre nuovi tentativi`() {
         assertEquals(3, policy.getMinimumLoadableRetryCount(C.DATA_TYPE_MEDIA))
-        assertEquals(3, policy.getMinimumLoadableRetryCount(C.DATA_TYPE_MEDIA_PROGRESSIVE_LIVE))
         assertEquals(3, policy.getMinimumLoadableRetryCount(C.DATA_TYPE_MANIFEST))
+        // Anche il live progressivo, se la politica non sa che lo è.
+        assertEquals(3, policy.getMinimumLoadableRetryCount(C.DATA_TYPE_MEDIA_PROGRESSIVE_LIVE))
+    }
+
+    /**
+     * Il punto che sui pannelli Xtream fa la differenza tra "va a scatti" e
+     * "va": un TS riaperto a un offset non zero chiede un `Range` che il
+     * pannello ignora, e la sorgente deve scaricare e buttare via tutti i byte
+     * fino a quell'offset. Con zero tentativi interni l'errore arriva subito al
+     * player, che ricostruisce la sorgente da zero.
+     */
+    @Test
+    fun `il live progressivo non fa tentativi interni e riapre da zero`() {
+        val progressive = PlayerLoadErrorPolicy(streamUrl, progressiveLive = true)
+
+        assertEquals(0, progressive.getMinimumLoadableRetryCount(C.DATA_TYPE_MEDIA_PROGRESSIVE_LIVE))
+        // Gli altri tipi di dato restano come prima: 3.
+        assertEquals(3, progressive.getMinimumLoadableRetryCount(C.DATA_TYPE_MEDIA))
+        assertEquals(3, progressive.getMinimumLoadableRetryCount(C.DATA_TYPE_MANIFEST))
+    }
+
+    @Test
+    fun `il formato lo decide l'URL del flusso`() {
+        assertTrue(PlayerNetworkConfig.isProgressiveLiveUrl("http://server.esempio/live/demo/demo/1.ts"))
+        assertTrue(PlayerNetworkConfig.isProgressiveLiveUrl("http://server.esempio:8080/live/a/b/1.TS?token=x"))
+        assertFalse(PlayerNetworkConfig.isProgressiveLiveUrl("http://server.esempio/live/demo/demo/1.m3u8"))
+        assertFalse(PlayerNetworkConfig.isProgressiveLiveUrl("http://server.esempio/movie/a/b/1.mp4"))
+        assertFalse(PlayerNetworkConfig.isProgressiveLiveUrl(null))
     }
 
     @Test

@@ -24,6 +24,15 @@ class LiveStallDetector(
     private val bufferingTimeoutMillis: Long = BUFFERING_TIMEOUT_MILLIS,
 ) {
 
+    /** Il caso più stretto: Live progressivo (`.ts`) che non riparte. */
+    constructor(progressiveLive: Boolean) : this(
+        bufferingTimeoutMillis = if (progressiveLive) {
+            PROGRESSIVE_LIVE_BUFFERING_TIMEOUT_MILLIS
+        } else {
+            BUFFERING_TIMEOUT_MILLIS
+        },
+    )
+
     private var sinceMillis: Long? = null
     private var previousState: Int = UNKNOWN_STATE
 
@@ -84,5 +93,17 @@ class LiveStallDetector(
 
         /** In caricamento: 25 s (sotto il read timeout di rete di 30 s). */
         const val BUFFERING_TIMEOUT_MILLIS: Long = 25_000L
+
+        /**
+         * Live progressivo (`.ts`) in caricamento: 8 s.
+         *
+         * Sui flussi `.ts` una riapertura a metà può costare decine di secondi
+         * di download scartato (vedi
+         * [it.felixvision.tv.ui.player.PlayerNetworkConfig.PROGRESSIVE_LIVE_MIN_LOADABLE_RETRY_COUNT]):
+         * meglio accorgersi subito che non sta avanzando e ricostruire la
+         * sorgente da zero, che è immediato. Il valore resta sopra il tempo di
+         * avvio normale (2,5 s di buffer di partenza).
+         */
+        const val PROGRESSIVE_LIVE_BUFFERING_TIMEOUT_MILLIS: Long = 8_000L
     }
 }

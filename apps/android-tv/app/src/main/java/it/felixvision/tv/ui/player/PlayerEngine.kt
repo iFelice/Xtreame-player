@@ -249,6 +249,43 @@ class PlayerEngine(
         stableReadyJob = null
     }
 
+    /**
+     * Il Live in onda è un flusso progressivo (`.ts`)? Serve alla politica dei
+     * retry interni e alla soglia del cane da guardia: è il caso in cui una
+     * riapertura a metà costa decine di secondi di download scartato.
+     */
+    private fun isProgressiveLiveSource(): Boolean =
+        isLiveSource && replayProgram == null &&
+            PlayerNetworkConfig.isProgressiveLiveUrl(currentUrl())
+
+    /**
+     * Rigenera la sorgente del canale in onda invece di riaprire lo stesso
+     * indirizzo: `currentUrl()` viene ricostruito a ogni apertura, quindi si
+     * ottiene una catena di redirect e un token nuovi. Sul Live si prova anche
+     * l'altro formato (`.ts` ↔ `.m3u8`) se l'account lo ammette, che è la
+     * differenza sostanziale tra flusso unico e segmenti.
+     */
+    private fun refreshLiveSource() {
+        if (!isLiveSource || replayProgram != null) return
+        val inUse = liveFormatOverride ?: session.liveFormat
+        val effective = if (inUse == LiveStreamFormat.AUTO) {
+            // "Automatico" risolve in base ai formati dell'account.
+            if (StreamUrls.liveExtension(session.allowedOutputFormats) == StreamUrls.LIVE_HLS) {
+                LiveStreamFormat.HLS
+            } else {
+                LiveStreamFormat.TS
+            }
+        } else {
+            inUse
+        }
+        val alternate = StreamUrls.alternateLiveFormat(effective, session.allowedOutputFormats)
+        AppLog.warn(
+            "Player: sorgente rigenerata dopo ${liveAutoRestart.restartsUsed} riavvii" +
+                if (alternate != null) ", cambio formato ${effective.storageKey} → ${alternate.storageKey}" else "",
+        )
+        if (alternate != null) liveFormatOverride = alternate
+    }
+
     /** Annulla un riavvio silenzioso in coda, se c'è. */
     private fun cancelLiveRestart() {
         autoRestartJob?.cancel()
@@ -271,7 +308,9 @@ class PlayerEngine(
         watchdogJob?.cancel()
         if (!isLiveSource) return
         watchdogJob = scope.launch {
-            val detector = LiveStallDetector()
+            // Sul `.ts` la soglia di caricamento è più corta: riaprire da zero
+            // costa meno che aspettare una riapertura a metà flusso.
+            val detector = LiveStallDetector(progressiveLive = isProgressiveLiveSource())
             while (!exited) {
                 delay(WATCHDOG_TICK_MILLIS)
                 // Player assente (uscita o secondo piano): il conteggio riparte
@@ -370,6 +409,11 @@ class PlayerEngine(
             // Il flusso si è ripreso durante l'attesa: non lo si interrompe.
             val current = exoPlayer
             if (current != null && current.isPlaying) return@launch
+            // Dopo qualche tentativo fallito lo stesso indirizzo non basta:
+            // si rigenera la sorgente (nuovo token e, sul Live, l'altro
+            // formato). È quello che fa di fatto il pannello di riferimento
+            // ricostruendo l'indirizzo a ogni `prepare()`.
+            if (liveAutoRestart.shouldRefreshSource()) refreshLiveSource()
             destroyPlayer()
             buildPlayer(startPositionMillis = 0L, autoPlay = true)
         }

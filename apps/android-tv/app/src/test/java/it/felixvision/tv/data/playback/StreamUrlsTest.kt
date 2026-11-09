@@ -13,21 +13,29 @@ class StreamUrlsTest {
     private val base = ServerAddress.normalize(server) ?: error("server di test non valido")
 
     @Test
-    fun `live predefinito in ts`() {
+    fun `live senza formati dichiarati resta in ts`() {
         val url = StreamUrls.build(server, "demo", "demo", StreamTarget.Live("001", emptyList()))
         assertEquals("$base/live/demo/demo/001.ts", url)
     }
 
+    /**
+     * Regola nuova, con il motivo misurato: un `.ts` riaperto a metà su un
+     * pannello che ignora il `Range` costa decine di secondi di download
+     * scartato, un HLS no. Quindi con "Automatico" vince HLS quando c'è.
+     */
     @Test
-    fun `live resta ts quando l'account ammette sia ts sia m3u8`() {
+    fun `live automatico sceglie m3u8 quando l'account ammette sia ts sia m3u8`() {
         val url = StreamUrls.build(server, "demo", "demo", StreamTarget.Live("001", listOf("ts", "m3u8")))
-        assertEquals("$base/live/demo/demo/001.ts", url)
+        assertEquals("$base/live/demo/demo/001.m3u8", url)
     }
 
     @Test
-    fun `live passa a m3u8 solo se manca ts ed esiste m3u8`() {
+    fun `live passa a m3u8 se esiste, altrimenti resta ts`() {
         val hls = StreamUrls.build(server, "demo", "demo", StreamTarget.Live("001", listOf("M3U8")))
         assertEquals("$base/live/demo/demo/001.m3u8", hls)
+
+        val onlyTs = StreamUrls.build(server, "demo", "demo", StreamTarget.Live("001", listOf("ts")))
+        assertEquals("$base/live/demo/demo/001.ts", onlyTs)
 
         val neither = StreamUrls.build(server, "demo", "demo", StreamTarget.Live("001", listOf("mp4")))
         assertEquals("$base/live/demo/demo/001.ts", neither)
@@ -50,13 +58,7 @@ class StreamUrlsTest {
     }
 
     @Test
-    fun `la preferenza ts sceglie il flusso diretto solo se ammesso`() {
-        val both = StreamUrls.build(
-            server, "demo", "demo",
-            StreamTarget.Live("001", listOf("ts", "m3u8"), preferredFormat = LiveStreamFormat.TS),
-        )
-        assertEquals("$base/live/demo/demo/001.ts", both)
-
+    fun `la preferenza ts vale solo se l'account ammette ts`() {
         // Account solo HLS: resta m3u8, come con "Automatico".
         val onlyHls = StreamUrls.build(
             server, "demo", "demo",
@@ -66,12 +68,27 @@ class StreamUrlsTest {
     }
 
     @Test
-    fun `automatico resta la regola di sempre`() {
+    fun `automatico preferisce hls ma resta ts se hls non c'e`() {
         val both = StreamUrls.build(
             server, "demo", "demo",
             StreamTarget.Live("001", listOf("ts", "m3u8"), preferredFormat = LiveStreamFormat.AUTO),
         )
-        assertEquals("$base/live/demo/demo/001.ts", both)
+        assertEquals("$base/live/demo/demo/001.m3u8", both)
+
+        val onlyTs = StreamUrls.build(
+            server, "demo", "demo",
+            StreamTarget.Live("001", listOf("ts"), preferredFormat = LiveStreamFormat.AUTO),
+        )
+        assertEquals("$base/live/demo/demo/001.ts", onlyTs)
+    }
+
+    @Test
+    fun `la preferenza ts impone il flusso diretto`() {
+        val forced = StreamUrls.build(
+            server, "demo", "demo",
+            StreamTarget.Live("001", listOf("ts", "m3u8"), preferredFormat = LiveStreamFormat.TS),
+        )
+        assertEquals("$base/live/demo/demo/001.ts", forced)
     }
 
     @Test
