@@ -111,13 +111,14 @@ internal fun PinKeypad(
                 )
             }
         }
-        if (errorMessage != null) {
-            FvpErrorText(
-                message = errorMessage,
-                testTag = MOBILE_PIN_ERROR_TAG,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
+        // Riga del messaggio sempre presente, anche senza testo: quando
+        // l'errore compare o sparisce il tastierino non si sposta di lato sotto
+        // le dita (e nei test le cifre restano dove sono).
+        FvpErrorText(
+            message = errorMessage.orEmpty(),
+            testTag = MOBILE_PIN_ERROR_TAG,
+            modifier = Modifier.fillMaxWidth(),
+        )
         Column(
             verticalArrangement = Arrangement.spacedBy(8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
