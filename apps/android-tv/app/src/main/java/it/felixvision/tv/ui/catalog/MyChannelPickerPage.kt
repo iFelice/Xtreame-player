@@ -100,7 +100,8 @@ fun myChannelPickerWholeCategoryTag(categoryId: String?): String =
  *
  * **Livello 2 — canali della categoria aperta**:
  * - la prima riga è "Tutta la categoria" (✓ se è tutta scelta): equivale alla
- *   pressione lunga del livello 1;
+ *   pressione lunga del livello 1, ma all'ingresso il focus è sul primo canale,
+ *   così un OK immediato sceglie un canale e non tutto il gruppo;
  * - OK su un canale spunta o toglie quel canale;
  * - Indietro (o "Indietro") torna all'elenco delle categorie, con il focus
  *   sulla categoria da cui si è usciti. Da lì Indietro chiude la pagina.
@@ -297,9 +298,13 @@ private fun PickerChannelsLevel(
 
     LaunchedEffect(group) {
         withFrameNanos { }
-        // Appena entrati, il focus è sulla prima riga: "Tutta la categoria".
-        // Così una pressione lunga lì ripete il gesto del livello 1.
-        runCatching { wholeCategoryFocus.requestFocus() }
+        // Appena entrati il focus va sul **primo canale**, non su "Tutta la
+        // categoria": si è entrati per scegliere i singoli canali, e un OK
+        // buttato lì non deve spuntare l'intero gruppo. La riga del gruppo
+        // resta raggiungibile con la freccia su (e con la pressione lunga al
+        // livello 1).
+        val firstStream = streamRequesters[group.streams.firstOrNull()?.streamId]
+        runCatching { (firstStream ?: wholeCategoryFocus).requestFocus() }
     }
 
     Column(
@@ -311,7 +316,6 @@ private fun PickerChannelsLevel(
             subtitle = MyChannelPickerTexts.categorySubtitle(group.name, group.total),
             onBack = onBack,
             scale = scale,
-            backLabel = MyChannelPickerTexts.BACK,
         )
         LazyColumn(
             state = listState,
@@ -324,7 +328,11 @@ private fun PickerChannelsLevel(
                 PickerRow(
                     headline = (if (allChecked) MyChannelPickerTexts.CHECK else "") +
                         MyChannelPickerTexts.ALL_CATEGORY,
-                    trailing = "${group.checkedCount(selected)}/${group.total}",
+                    trailing = if (group.checkedCount(selected) > 0) {
+                        "${group.checkedCount(selected)}/${group.total}"
+                    } else {
+                        "${group.total}"
+                    },
                     scale = scale,
                     modifier = Modifier
                         .focusRequester(wholeCategoryFocus)
@@ -367,7 +375,6 @@ private fun PickerHeader(
     subtitle: String?,
     onBack: () -> Unit,
     scale: UiScale,
-    backLabel: String = MyChannelPickerTexts.BACK,
 ) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(scale.dp(12f)),
@@ -391,7 +398,7 @@ private fun PickerHeader(
             }
         }
         FvpCompactButton(
-            text = backLabel,
+            text = MyChannelPickerTexts.BACK,
             onClick = onBack,
             scale = scale,
             modifier = Modifier.testTag(MY_CHANNEL_PICKER_BACK_TAG),

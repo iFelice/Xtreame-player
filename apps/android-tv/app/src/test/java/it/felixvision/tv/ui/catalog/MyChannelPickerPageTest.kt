@@ -91,11 +91,13 @@ class MyChannelPickerPageTest {
         // All'apertura il focus è sulla prima categoria.
         rule.onNodeWithTag(myChannelPickerCategoryTag("1")).assertIsFocused()
 
-        // OK entra nella categoria: si apre il livello 2, con il focus su
-        // "Tutta la categoria". La selezione resta vuota.
+        // OK entra nella categoria: si apre il livello 2 con il focus sul
+        // primo canale (non su "Tutta la categoria", che con un OK darebbe
+        // subito tutto il gruppo). La selezione resta vuota.
         rule.onNodeWithTag(myChannelPickerCategoryTag("1")).performKeyInput { pressKey(Key.DirectionCenter) }
         rule.waitForIdle()
-        rule.onNodeWithTag(myChannelPickerWholeCategoryTag("1")).assertIsFocused()
+        rule.onNodeWithTag(myChannelPickerStreamTag("a")).assertIsFocused()
+        rule.onNodeWithTag(myChannelPickerWholeCategoryTag("1")).assertExists()
         assertTrue(selection.isEmpty())
         // Le categorie non aperte non sono più nell'albero: solo i canali di
         // questa categoria, così non si attraversano centinaia di righe.
@@ -196,7 +198,8 @@ class MyChannelPickerPageTest {
         rule.onNodeWithTag(myChannelPickerStreamTag("b")).assertExists()
         rule.onNodeWithTag(myChannelPickerStreamTag("s")).assertDoesNotExist()
 
-        // "Tutta la categoria" sceglie solo questo gruppo, non gli altri.
+        // "Tutta la categoria" è la riga sopra i canali e sceglie solo questo
+        // gruppo, non gli altri.
         rule.onNodeWithTag(myChannelPickerWholeCategoryTag("1"))
             .performSemanticsAction(SemanticsActions.OnClick)
         rule.waitForIdle()

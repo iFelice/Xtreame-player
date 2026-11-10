@@ -424,6 +424,8 @@ server Xtream raggiunti con indirizzo privato non risponderebbero.
 - **Gesti, livello 2 (dentro una categoria)**: in cima c'è "Tutta la categoria" (✓ se è
   tutta scelta), che spunta o toglie il gruppo con OK o con la pressione lunga; sotto ci
   sono **solo i canali di quella categoria**, e OK su un canale spunta o toglie il singolo.
+  Entrando il focus va sul **primo canale**, non sulla riga del gruppo: un OK dato subito
+  non deve spuntare tutta la categoria.
   **Indietro** torna all'elenco delle categorie con il focus sulla categoria da cui si è
   usciti (il secondo Indietro chiude la pagina): la selezione resta, e si vede subito il
   conteggio aggiornato sulla riga della categoria.
