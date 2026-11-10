@@ -799,7 +799,7 @@ fun PlayerFormatPanel(
         Column(
             modifier = Modifier
                 .width(IntrinsicSize.Max)
-                .playerOverlay(scale, FvpColors.PlayerPanelLight)
+                .playerOverlay(scale)
                 .padding(scale.dp(18f)),
             verticalArrangement = Arrangement.spacedBy(scale.dp(8f)),
         ) {
@@ -969,7 +969,7 @@ fun PlayerNextEpisodePrompt(
             modifier = Modifier
                 .padding(scale.dp(28f))
                 .widthIn(max = scale.dp(340f))
-                .playerOverlay(scale, FvpColors.PlayerPanelLight)
+                .playerOverlay(scale)
                 .padding(scale.dp(14f)),
             horizontalAlignment = Alignment.Start,
             verticalArrangement = Arrangement.spacedBy(scale.dp(8f)),
@@ -1029,7 +1029,7 @@ fun PlayerNextEpisodeLabel(prompt: NextEpisodePrompt, scale: UiScale) {
             fontSize = scale.sp(13f),
             modifier = Modifier
                 .padding(scale.dp(28f))
-                .playerOverlay(scale, FvpColors.PlayerPanelLight)
+                .playerOverlay(scale)
                 .padding(horizontal = scale.dp(10f), vertical = scale.dp(6f))
                 .testTag("player_next_label"),
         )
