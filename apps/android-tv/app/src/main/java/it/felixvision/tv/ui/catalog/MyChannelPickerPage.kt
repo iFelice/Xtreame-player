@@ -32,6 +32,9 @@ import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.components.focusSafePadding
 import it.felixvision.tv.ui.components.fvpLongPress
 import it.felixvision.tv.ui.theme.FvpColors
+import it.felixvision.tv.ui.theme.rowSpacing
+import it.felixvision.tv.ui.theme.rowText
+import it.felixvision.tv.ui.theme.settingsRowText
 
 /** Testi della pagina di scelta multipla dei canali. */
 object MyChannelPickerTexts {
