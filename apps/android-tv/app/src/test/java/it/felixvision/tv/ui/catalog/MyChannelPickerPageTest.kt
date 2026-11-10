@@ -5,12 +5,16 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.assertDoesNotExist
+import androidx.compose.ui.test.assertExists
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.pressKey
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import it.felixvision.tv.data.catalog.Category
@@ -89,11 +93,16 @@ class MyChannelPickerPageTest {
         // All'apertura il focus è sulla prima categoria.
         rule.onNodeWithTag(myChannelPickerCategoryTag("1")).assertIsFocused()
 
-        // OK entra: il focus va al primo canale, la selezione resta vuota.
+        // OK entra nella categoria: si apre il livello 2, con il focus su
+        // "Tutta la categoria". La selezione resta vuota.
         rule.onNodeWithTag(myChannelPickerCategoryTag("1")).performKeyInput { pressKey(Key.DirectionCenter) }
         rule.waitForIdle()
-        rule.onNodeWithTag(myChannelPickerStreamTag("a")).assertIsFocused()
+        rule.onNodeWithTag(myChannelPickerWholeCategoryTag("1")).assertIsFocused()
         assertTrue(selection.isEmpty())
+        // Le categorie non aperte non sono più nell'albero: solo i canali di
+        // questa categoria, così non si attraversano centinaia di righe.
+        rule.onNodeWithTag(myChannelPickerCategoryTag("2")).assertDoesNotExist()
+        rule.onNodeWithTag(myChannelPickerStreamTag("s")).assertDoesNotExist()
 
         // OK sul canale lo spunta.
         rule.onNodeWithTag(myChannelPickerStreamTag("a")).performKeyInput { pressKey(Key.DirectionCenter) }
@@ -103,6 +112,15 @@ class MyChannelPickerPageTest {
         rule.onNodeWithTag(MY_CHANNEL_PICKER_CONFIRM_TAG).assertIsDisplayed()
         rule.onNodeWithText(MyChannelPickerTexts.confirmLabel(adding = true, count = 1))
             .assertIsDisplayed()
+
+        // Indietro dentro la categoria non chiude la pagina: si torna
+        // all'elenco con il focus sulla categoria aperta, e la scelta resta.
+        rule.onNodeWithTag(MY_CHANNEL_PICKER_BACK_TAG)
+            .performSemanticsAction(SemanticsActions.OnClick)
+        rule.waitForIdle()
+        rule.onNodeWithTag(myChannelPickerCategoryTag("1")).assertIsFocused()
+        rule.onNodeWithTag(myChannelPickerCategoryTag("2")).assertExists()
+        assertEquals(listOf("a"), selection)
     }
 
     @Test
@@ -138,11 +156,58 @@ class MyChannelPickerPageTest {
 
         assertEquals(listOf("a", "b"), selection)
         assertFalse(selection.contains("s"))
+        // La pressione lunga non apre la categoria: si resta sull'elenco.
+        rule.onNodeWithTag(myChannelPickerCategoryTag("2")).assertExists()
 
         // Con la pressione lunga ancora una volta il gruppo si svuota: è un
         // interruttore, come nei Contenuti protetti.
         rule.onNodeWithTag(myChannelPickerCategoryTag("1")).performKeyInput { pressKey(Key.Menu) }
         rule.waitForIdle()
         assertTrue(selection.isEmpty())
+    }
+
+    @Test
+    fun `dentro la categoria solo i suoi canali e Tutta la categoria`() {
+        val groups = myChannelPickerGroups(categories, streams)
+        var selection by mutableStateOf(emptyList<String>())
+        rule.setContent {
+            FvpTheme {
+                MyChannelPickerPage(
+                    adding = true,
+                    groups = groups,
+                    checkedIds = selection,
+                    scale = scale,
+                    onToggleStream = { selection = MyChannelSelection.toggle(selection, it) },
+                    onToggleGroup = { selection = MyChannelSelection.toggleAll(selection, it.streamIds) },
+                    onToggleAll = { selection = MyChannelSelection.toggleEvery(selection, groups.flatMap { g -> g.streamIds }) },
+                    onConfirm = {},
+                    onBack = { },
+                )
+            }
+        }
+        rule.waitForIdle()
+
+        // Entra nella categoria "Serie A" (canali a e b).
+        rule.onNodeWithTag(myChannelPickerCategoryTag("1"))
+            .performKeyInput { pressKey(Key.DirectionCenter) }
+        rule.waitForIdle()
+
+        // Solo i canali di questa categoria, più la riga "Tutta la categoria".
+        rule.onNodeWithTag(myChannelPickerWholeCategoryTag("1")).assertExists()
+        rule.onNodeWithTag(myChannelPickerStreamTag("a")).assertExists()
+        rule.onNodeWithTag(myChannelPickerStreamTag("b")).assertExists()
+        rule.onNodeWithTag(myChannelPickerStreamTag("s")).assertDoesNotExist()
+
+        // "Tutta la categoria" sceglie solo questo gruppo, non gli altri.
+        rule.onNodeWithTag(myChannelPickerWholeCategoryTag("1"))
+            .performSemanticsAction(SemanticsActions.OnClick)
+        rule.waitForIdle()
+        assertEquals(listOf("a", "b"), selection)
+
+        // Il canale singolo si toglie e si rimette.
+        rule.onNodeWithTag(myChannelPickerStreamTag("a"))
+            .performSemanticsAction(SemanticsActions.OnClick)
+        rule.waitForIdle()
+        assertEquals(listOf("b"), selection)
     }
 }
