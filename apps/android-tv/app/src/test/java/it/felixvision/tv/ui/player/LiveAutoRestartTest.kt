@@ -183,7 +183,8 @@ class LiveAutoRestartTest {
         assertEquals(PlayerErrorAction.SILENT_RESTART, restart.onPlayerError(PlaybackKind.LIVE, httpError(456)))
         repeat(3) { restart.onPlayerError(PlaybackKind.LIVE, networkError()) }
 
-        assertEquals(2, restart.sessionRestartsUsed)
+        // Un solo 456: un solo riavvio di sessione, e i tre di rete intatti.
+        assertEquals(1, restart.sessionRestartsUsed)
         assertEquals(3, restart.restartsUsed)
         // E il 456 può ancora valere, il suo budget è indipendente.
         restart.reset()

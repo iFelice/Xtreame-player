@@ -160,8 +160,10 @@ object StreamUrls {
             preferredFormat == LiveStreamFormat.HLS && hasHls -> LIVE_HLS
             preferredFormat == LiveStreamFormat.TS && hasTs -> LIVE_TS
             // Automatico (o preferenza non ammessa): il formato del pannello.
-            hasTs -> LIVE_TS
-            else -> LIVE_HLS
+            // Con un elenco vuoto o sconosciuto resta `.ts`, che è il flusso
+            // che i pannelli servono da sempre e quello dei due più leggero.
+            hasHls && !hasTs -> LIVE_HLS
+            else -> LIVE_TS
         }
     }
 
