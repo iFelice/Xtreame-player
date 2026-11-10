@@ -460,8 +460,9 @@ server Xtream raggiunti con indirizzo privato non risponderebbero.
     effettiva** (la pausa non conta, un salto avanti non accelera il conto).
   - Qualsiasi tasto azzera il conto degli episodi; il conto del tempo non si
     azzera, perché per queste sorgenti la soglia è "due ore di visione".
-  - Senza risposta entro 60 s il player si chiude e si torna alla scheda o alla
-    lista dei canali.
+  - "Sì, sto guardando" azzera anche il conto del tempo, così l'avviso non torna
+    subito dopo; senza risposta entro 60 s il player si chiude e si torna alla
+    scheda o alla lista dei canali.
   - Regole pure in `StillWatchingMonitor`, coperte da `StillWatchingTest`.
 - **Standby**: fuori dal player lo standby è quello del televisore (nessun
   wakelock nell'app); con il player aperto lo schermo resta accesso e l'avviso

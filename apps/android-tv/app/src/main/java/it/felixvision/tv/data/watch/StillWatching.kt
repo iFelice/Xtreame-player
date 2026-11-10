@@ -62,6 +62,17 @@ class StillWatchingMonitor(
     }
 
     /**
+     * Risposta "Sì, sto guardando": vale come un tasto e **azzera il conto del
+     * tempo**. Senza l'azzeramento l'avviso tornerebbe al primo aggiornamento
+     * successivo, perché le due ore sono già state superate.
+     */
+    fun onPromptAnswered() {
+        autoEpisodes = 0
+        watchedMillis = 0L
+        prompted = false
+    }
+
+    /**
      * Parte un episodio **da solo** (controllo automatico della coda). Il primo
      * episodio della sessione non conta: il conto misura quelli passati senza
      * interazione, non l'ultimo scelto a mano.

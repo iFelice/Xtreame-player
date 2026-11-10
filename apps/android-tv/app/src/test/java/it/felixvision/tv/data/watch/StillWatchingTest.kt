@@ -59,9 +59,9 @@ class StillWatchingTest {
         assertFalse(monitor.shouldPrompt())
         repeat(60 * 60 * 2) { monitor.onTimeAdvanced(500L) }
         assertTrue("due ore esatte: chiede", monitor.shouldPrompt())
-        // L'avviso è già stato mostrato: non si ripete da solo.
+        // L'avviso è già stato mostrato: non si ripete e il tempo non cresce più.
         assertFalse(monitor.onTimeAdvanced(500L))
-        assertEquals(StillWatchingMonitor.LIVE_LIMIT_MILLIS + 500L, monitor.watchedMillis)
+        assertEquals(StillWatchingMonitor.LIVE_LIMIT_MILLIS, monitor.watchedMillis)
     }
 
     @Test
@@ -84,7 +84,7 @@ class StillWatchingTest {
         // Allo scadere l'avviso non si ripete finché non si risponde o cambia il contenuto.
         assertFalse(monitor.onTimeAdvanced(500L))
         // "Sì, sto guardando": si riparte puliti, con il conto del tempo a zero.
-        monitor.onUserInput()
+        monitor.onPromptAnswered()
         assertFalse(monitor.shouldPrompt())
         assertEquals(0L, monitor.watchedMillis)
         assertEquals(0, monitor.autoEpisodes)

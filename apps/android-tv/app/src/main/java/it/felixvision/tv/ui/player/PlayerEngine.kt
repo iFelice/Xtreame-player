@@ -1468,9 +1468,9 @@ class PlayerEngine(
     fun confirmStillWatching() {
         stillWatchingTimeoutJob?.cancel()
         stillWatchingTimeoutJob = null
-        // "Sì, sto guardando" vale come un tasto: nessun riavviso immediato, il
-        // conto resta e riparte solo se l'utente continua senza toccare nulla.
-        stillWatching.onUserInput()
+        // "Sì, sto guardando" riparte da zero: azzera anche il conto del tempo,
+        // altrimenti le due ore già superate farebbero tornare l'avviso subito.
+        stillWatching.onPromptAnswered()
         if (state.stillWatchingEpisodes != null) {
             state = state.copy(stillWatchingEpisodes = null)
         }
