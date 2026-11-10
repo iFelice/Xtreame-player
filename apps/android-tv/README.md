@@ -409,22 +409,31 @@ server Xtream raggiunti con indirizzo privato non risponderebbero.
   Aggiungi canali, Rimuovi canali) è sulla pressione lunga di un canale, in Live, nella
   ricerca e nella sezione Preferiti; sopra il player le due voci in più non compaiono,
   perché lì la pagina di scelta non esiste.
-- **Una sola pagina di scelta** per aggiungere e per togliere, nella stessa finestra a
-  schermo intero delle altre schermate: in cima le categorie con i loro canali sotto,
-  raggruppati nell'ordine del catalogo; i canali senza categoria finiscono in "Altri
-  canali", così nessuno resta fuori dalla selezione. In aggiunta i canali che sono già
-  nella lista personale non vengono mostrati (il numero sul tasto conta solo quelli che
-  entrano davvero).
-- **Gesti**: OK su una categoria **entra** nei suoi canali (il focus va al primo, le righe
-  restano al loro posto: nessuna pagina annidata da aprire e chiudere); **pressione lunga**
-  su una categoria spunta o toglie tutto il gruppo, come nei Contenuti protetti, e
-  l'intestazione mostra "✓" quando è tutto scelto o "•" con "3/12" quando è parziale; OK su
-  un canale spunta o toglie il singolo. Con più di un gruppo compare anche "Tutti i canali",
+- **Due livelli, non una lista unica**: la pagina di scelta (aggiunta e rimozione, nella
+  stessa finestra a schermo intero delle altre schermate) apre sull'**elenco delle
+  categorie**, non sui canali. Così da una categoria all'altra bastano poche frecce invece
+  di attraversare centinaia di canali. I canali senza categoria finiscono in "Altri canali",
+  così nessuno resta fuori dalla selezione; in aggiunta i canali che sono già nella lista
+  personale non vengono mostrati (il numero sul tasto conta solo quelli che entrano davvero).
+- **Gesti, livello 1 (categorie)**: **pressione breve (OK)** su una categoria **entra** nei
+  suoi canali; **pressione lunga** spunta o toglie **tutta** la categoria senza entrare, come
+  nei Contenuti protetti, con "✓" quando è tutta scelta o "•" e "3/12" quando è parziale.
+  La riga mostra sempre il conteggio: con nessuna scelta il totale della categoria, con una
+  scelta parziale quanti sono presi. Con più di una categoria compare anche "Tutti i canali",
   che spunta o azzera l'intera selezione.
-- **Conferma unica**: il tasto in fondo c'è solo con almeno una scelta e dice quanti canali
-  muoverà ("Aggiungi (12)", "Rimuovi (3)"); una sola finestra di conferma per tutta la
-  selezione, con il focus iniziale su "No" e Indietro che non modifica nulla. Una sola
-  scrittura sull'archivio, come nella rimozione multipla dei Contenuti protetti.
+- **Gesti, livello 2 (dentro una categoria)**: in cima c'è "Tutta la categoria" (✓ se è
+  tutta scelta), che spunta o toglie il gruppo con OK o con la pressione lunga; sotto ci
+  sono **solo i canali di quella categoria**, e OK su un canale spunta o toglie il singolo.
+  Entrando il focus va sul **primo canale**, non sulla riga del gruppo: un OK dato subito
+  non deve spuntare tutta la categoria.
+  **Indietro** torna all'elenco delle categorie con il focus sulla categoria da cui si è
+  usciti (il secondo Indietro chiude la pagina): la selezione resta, e si vede subito il
+  conteggio aggiornato sulla riga della categoria.
+- **Conferma unica**: il tasto in fondo c'è in entrambi i livelli, solo con almeno una
+  scelta, e dice quanti canali muoverà ("Aggiungi (12)", "Rimuovi (3)"); una sola finestra di
+  conferma per tutta la selezione, con il focus iniziale su "No" e Indietro che non modifica
+  nulla. Una sola scrittura sull'archivio, come nella rimozione multipla dei Contenuti
+  protetti.
 - **Ordine e numerazione**: i canali scelti si aggiungono **in fondo**, nell'ordine di
   scelta, e la numerazione personale continua dopo l'ultimo esistente (1..N, nessun buco);
   un canale già presente resta dov'è e non viene duplicato. Togliendo, i numeri si
