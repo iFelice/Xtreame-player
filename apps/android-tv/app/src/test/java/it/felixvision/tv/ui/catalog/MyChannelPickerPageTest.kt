@@ -139,9 +139,10 @@ class MyChannelPickerPageTest {
         assertEquals(listOf("a", "b"), selection)
         assertFalse(selection.contains("s"))
 
-        // Con "Tutti i canali" una pressione lunga sola prende anche il resto.
-        rule.onNodeWithTag(MY_CHANNEL_PICKER_ALL_TAG).performKeyInput { pressKey(Key.Menu) }
+        // Con la pressione lunga ancora una volta il gruppo si svuota: è un
+        // interruttore, come nei Contenuti protetti.
+        rule.onNodeWithTag(myChannelPickerCategoryTag("1")).performKeyInput { pressKey(Key.Menu) }
         rule.waitForIdle()
-        assertEquals(listOf("a", "b", "s"), selection)
+        assertTrue(selection.isEmpty())
     }
 }

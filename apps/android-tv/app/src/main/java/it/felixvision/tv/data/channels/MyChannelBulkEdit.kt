@@ -232,8 +232,10 @@ fun myChannelRemovalGroups(
     streams: List<LiveStream>,
 ): List<MyChannelPickerGroup> {
     val known = categories.associateBy { it.categoryId }
+    // streamId -> categoryId del catalogo: la mappa serve a sapere sotto quale
+    // intestazione finisce ogni canale personale.
     val categoryOfStream = streams
-        .mapNotNull { stream -> stream.categoryId?.let { it to stream.streamId } }
+        .mapNotNull { stream -> stream.categoryId?.let { stream.streamId to it } }
         .toMap()
     val byCategory = LinkedHashMap<String?, MutableList<MyChannel>>()
     channels.forEach { channel ->
