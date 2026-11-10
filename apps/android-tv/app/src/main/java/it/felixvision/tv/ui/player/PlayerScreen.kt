@@ -243,7 +243,16 @@ fun PlayerScreen(
             delay(ZAPPING_TICK_MILLIS)
             // Stato letto a ogni giro: la lambda del ciclo non può usare la
             // fotografia della composizione iniziale.
-            zapping.tick(status = zappingChannelStatus(engine.state))
+            // In HLS l'avvio è più lento (segmenti da scaricare): la finestra
+            // per saltare un canale che non parte è più larga.
+            zapping.tick(
+                status = zappingChannelStatus(engine.state),
+                startGraceMillis = if (engine.isLiveHlsInAir()) {
+                    ZappingController.START_GRACE_MILLIS_HLS
+                } else {
+                    ZappingController.START_GRACE_MILLIS
+                },
+            )
         }
     }
 
@@ -451,6 +460,9 @@ fun PlayerScreen(
                     when (event.type) {
                         KeyEventType.KeyDown -> {
                             keyTick++
+                            // Un tasto di conferma è un utente presente: il conto
+                            // di "Stai ancora guardando?" riparte da zero.
+                            engine.noteUserInput()
                             // Qualsiasi tasto rimanda la chiusura del pannello volume.
                             if (state.volumePanelVisible) engine.keepVolumePanelAlive()
                             if (state.channelListVisible && event.key == Key.DirectionRight) {
@@ -733,6 +745,16 @@ fun PlayerScreen(
                             .padding(top = scale.dp(80f)),
                     )
                 }
+            }
+
+            // "Stai ancora guardando?": ultimo pannello, sopra tutto il resto.
+            state.stillWatchingEpisodes?.let { episodes ->
+                PlayerStillWatchingPrompt(
+                    autoEpisodes = episodes,
+                    scale = scale,
+                    onContinue = { engine.confirmStillWatching() },
+                    onExit = { engine.exitForStillWatching() },
+                )
             }
 
             if (state.epgVisible && session.source is PlaybackSource.Live) {

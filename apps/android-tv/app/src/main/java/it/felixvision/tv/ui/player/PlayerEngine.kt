@@ -38,6 +38,7 @@ import it.felixvision.tv.data.playback.LiveStallDetector
 import it.felixvision.tv.data.playback.LiveStreamFormat
 import it.felixvision.tv.data.playback.LiveZapping
 import it.felixvision.tv.data.playback.NextEpisodeRules
+import it.felixvision.tv.data.watch.StillWatchingMonitor
 import it.felixvision.tv.data.playback.StreamTarget
 import it.felixvision.tv.data.playback.StreamUrls
 import it.felixvision.tv.data.playback.VideoFormat
@@ -159,6 +160,18 @@ class PlayerEngine(
     private var nextPromptState = NextPromptState.NONE
 
     /**
+     * Rilevatore "Stai ancora guardando?": conta gli episodi partiti da soli e
+     * il tempo di riproduzione effettiva, e si azzera a **qualsiasi** tasto.
+     */
+    private val stillWatching = StillWatchingMonitor()
+
+    /** Ultima posizione nota: serve a contare solo il tempo davvero riprodotto. */
+    private var lastWatchedPositionMillis: Long = 0L
+
+    /** Timer che chiude il player se all'avviso nessuno risponde. */
+    private var stillWatchingTimeoutJob: Job? = null
+
+    /**
      * Riavvii automatici e silenziosi della sorgente live dopo un errore di
      * rete o uno stallo, al massimo tre (vedi [PlayerNetworkConfig]).
      */
@@ -189,6 +202,12 @@ class PlayerEngine(
      */
     private var stableReadyJob: Job? = null
 
+    /**
+     * Quando è partita l'apertura del player in onda, per misurare l'avvio nel
+     * log diagnostico. `null` fuori dal Live, o quando la misura non serve.
+     */
+    private var playbackOpenedAtMillis: Long? = null
+
     private val playerListener = object : Player.Listener {
 
         override fun onPlaybackStateChanged(playbackState: Int) {
@@ -198,6 +217,7 @@ class PlayerEngine(
                     state = state.copy(isBuffering = true)
                 }
                 Player.STATE_READY -> {
+                    logLiveStartupIfNeeded()
                     // Nessun azzeramento immediato: conta la riproduzione continua.
                     scheduleStableReadyReset()
                     val duration = playerDuration()
@@ -225,6 +245,27 @@ class PlayerEngine(
         override fun onTracksChanged(tracks: Tracks) {
             refreshTracks()
         }
+    }
+
+    /**
+     * Una riga per ogni avvio del Live: formato davvero in onda e tempo al
+     * primo fotogramma.
+     *
+     * Serve a **misurare** invece di dedurre: con questa riga un canale che
+     * impiega troppo si riconosce dal log, e si vede subito se è in `.ts` o in
+     * HLS. Nessun dato personale: solo il formato, il tempo e il codice canale
+     * oscurato.
+     */
+    private fun logLiveStartupIfNeeded() {
+        val openedAt = playbackOpenedAtMillis ?: return
+        if (!isLiveSource) return
+        playbackOpenedAtMillis = null
+        val elapsed = android.os.SystemClock.elapsedRealtime() - openedAt
+        val inAir = currentUrl()?.substringBefore('?')?.substringAfterLast('.')?.lowercase()
+        AppLog.info(
+            "Player: canale pronto in $elapsed ms, formato ${inAir ?: "sconosciuto"}, " +
+                StreamUrls.redactStreamUrl(currentUrl()),
+        )
     }
 
     /**
@@ -438,6 +479,9 @@ class PlayerEngine(
     fun start() {
         if (started) return
         started = true
+        // Nuova sessione del player: il rilevatore "Stai ancora guardando?"
+        // riparte pulito, senza eredità della visione precedente.
+        stillWatching.onContentStarted()
         scope.launch {
             // Livello del volume salvato: ripristinato a ogni avvio del player.
             volumeLevel = runCatching { container.volumeStore.level() }
@@ -587,6 +631,7 @@ class PlayerEngine(
         // Volume del nostro player: curva percettiva sul livello salvato.
         newPlayer.volume = PlayerVolume.volumeForLevel(volumeLevel)
         newPlayer.setMediaItem(mediaItem, startPositionMillis.coerceAtLeast(0L))
+        playbackOpenedAtMillis = android.os.SystemClock.elapsedRealtime()
         newPlayer.prepare()
         newPlayer.playWhenReady = autoPlay
         exoPlayer = newPlayer
@@ -618,10 +663,22 @@ class PlayerEngine(
         cancelStableReadyReset()
         val player = exoPlayer ?: return
         exoPlayer = null
+        // La posizione riparte da zero: al prossimo aggiornamento il conto del
+        // tempo di visione si riallinea da solo.
+        lastWatchedPositionMillis = 0L
         player.removeListener(playerListener)
         player.removeAnalyticsListener(analyticsListener)
         player.release()
     }
+
+    /**
+     * Il canale in onda è servito in HLS? Serve allo zapping, dove l'avvio è
+     * più lento ([it.felixvision.tv.player.ZappingController.START_GRACE_MILLIS_HLS]).
+     */
+    fun isLiveHlsInAir(): Boolean =
+        isLiveSource && replayProgram == null && currentUrl()
+            ?.substringBefore('?')
+            ?.endsWith(".${StreamUrls.LIVE_HLS}", ignoreCase = true) == true
 
     private fun currentUrl(): String? {
         replayProgram?.let { program ->
@@ -746,6 +803,7 @@ class PlayerEngine(
             durationMillis = if (replayProgram != null) replayDurationMillis else if (duration > 0L) duration else state.durationMillis,
             isPlaying = player.isPlaying,
         )
+        trackStillWatching(positionMillis = position, playing = player.isPlaying)
         updateNextEpisodePrompt(
             positionMillis = position,
             durationMillis = if (duration > 0L) duration else state.durationMillis,
@@ -1367,6 +1425,73 @@ class PlayerEngine(
         }
     }
 
+    /** Massimo accreditato per singolo aggiornamento di posizione (refresh 500 ms). */
+    private val MAX_TRACKED_STEP_MILLIS = 2_000L
+
+    /**
+     * Conta solo la riproduzione **effettiva**: la differenza fra la posizione
+     * attuale e quella dell'aggiornamento precedente, mai un salto.
+     *
+     * Un salto avanti di 10 minuti (o un ritorno all'inizio del Live) non è
+     * tempo guardato: si accreditano al massimo [MAX_TRACKED_STEP_MILLIS] per
+     * aggiornamento, così un seek non falsa il conto.
+     */
+    private fun trackStillWatching(positionMillis: Long, playing: Boolean) {
+        val previous = lastWatchedPositionMillis
+        // Nuovo contenuto (canale, film, episodio scelto a mano): il conto del
+        // tempo riparte, altrimenti un seek al primo aggiornamento non farebbe
+        // partire il conteggio dall'inizio.
+        if (positionMillis < previous) {
+            stillWatching.onContentStarted()
+        }
+        lastWatchedPositionMillis = positionMillis
+        stillWatching.onPlayback(playing)
+        if (!playing) return
+        val delta = (positionMillis - previous).coerceIn(0L, MAX_TRACKED_STEP_MILLIS)
+        if (delta <= 0L) return
+        if (!stillWatching.onTimeAdvanced(delta)) return
+        showStillWatching()
+    }
+
+    /** Mostra l'avviso e fa partire il timer che chiude il player se nessuno risponde. */
+    private fun showStillWatching() {
+        val episodes = stillWatching.autoEpisodes
+        state = state.copy(stillWatchingEpisodes = episodes)
+        stillWatchingTimeoutJob?.cancel()
+        stillWatchingTimeoutJob = scope.launch {
+            delay(StillWatchingMonitor.PROMPT_TIMEOUT_MILLIS)
+            requestExit()
+        }
+    }
+
+    /** "Sì, sto guardando": l'avviso sparisce e il conto riparte da zero. */
+    fun confirmStillWatching() {
+        stillWatchingTimeoutJob?.cancel()
+        stillWatchingTimeoutJob = null
+        // "Sì, sto guardando" riparte da zero: azzera anche il conto del tempo,
+        // altrimenti le due ore già superate farebbero tornare l'avviso subito.
+        stillWatching.onPromptAnswered()
+        if (state.stillWatchingEpisodes != null) {
+            state = state.copy(stillWatchingEpisodes = null)
+        }
+    }
+
+    /** "No, esci": si chiude il player e si torna alla scheda o alla lista. */
+    fun exitForStillWatching() {
+        stillWatchingTimeoutJob?.cancel()
+        stillWatchingTimeoutJob = null
+        requestExit()
+    }
+
+    /**
+     * Qualunque tasto dell'utente azzera il conteggio degli episodi automatici:
+     * se il telecomando si muove, c'è qualcuno. Non tocca i pannelli già aperti,
+     * così il rilevatore non interferisce con i comandi.
+     */
+    fun noteUserInput() {
+        stillWatching.onUserInput()
+    }
+
     fun playNextEpisode() {
         val seriesSource = source as? PlaybackSource.Series ?: return
         val nextIndex = episodeIndex + 1
@@ -1375,6 +1500,9 @@ class PlayerEngine(
             return
         }
         nextPromptState = NextPromptState.NONE
+        // Episodio partito da solo: è questo che conta per "Stai ancora
+        // guardando?", non quello aperto a mano.
+        stillWatching.onAutoEpisodeStarted()
         episodeIndex = nextIndex
         state = state.copy(
             nextEpisode = null,
@@ -1576,9 +1704,21 @@ class PlayerEngine(
         // silenzioso dello stesso canale, con attese crescenti, prima di
         // mostrare l'errore.
         if (liveAutoRestart.onPlayerError(currentPlaybackKind(), error) == PlayerErrorAction.SILENT_RESTART) {
+            val sessionLimit = PlayerNetworkErrors.isSessionLimit(error)
+            val used = if (sessionLimit) {
+                liveAutoRestart.sessionRestartsUsed
+            } else {
+                liveAutoRestart.restartsUsed
+            }
+            val total = if (sessionLimit) {
+                PlayerNetworkConfig.MAX_SESSION_RESTARTS
+            } else {
+                PlayerNetworkConfig.MAX_LIVE_AUTO_RESTARTS
+            }
             AppLog.warn(
-                "Player: errore di rete codice ${error.errorCode}, riavvio automatico " +
-                    "${liveAutoRestart.restartsUsed} di ${PlayerNetworkConfig.MAX_LIVE_AUTO_RESTARTS} su " +
+                "Player: " +
+                    (if (sessionLimit) "risposta di sessione" else "errore di rete") +
+                    " codice ${error.errorCode}, riavvio automatico $used di $total su " +
                     StreamUrls.redactStreamUrl(currentUrl()),
             )
             scheduleLiveRestart()
@@ -1622,14 +1762,17 @@ class PlayerEngine(
      * [liveFormatFlipUsed] impedisce il va-e-vieni: uno scambio per errore,
      * poi valgono i riavvii silenziosi normali.
      *
-     * Solo per gli errori che non vengono da una risposta HTTP: un 404/456 o
-     * un 5xx dice che il server ha risposto e che l'altro formato non
-     * cambierebbe niente (con l'accesso negato sarebbe anche una connessione
-     * in più su un account già al limite). Lì l'errore arriva com'è.
+     * Non scatta su un 404/403 (lì l'altro formato non cambierebbe niente) né
+     * sui 5xx (il server è guasto, non è il formato), ma **sì** sulle risposte
+     * di sessione ([PlayerNetworkConfig.SESSION_HTTP_CODES]): un HLS apre più
+     * richieste in parallelo e su un pannello che conta le connessioni è
+     * proprio l'HLS a farsi rifiutare con 456, quindi passare al flusso unico
+     * è la cura giusta, non una connessione in più.
      */
     private fun swapLiveFormatOnError(error: PlaybackException?): Boolean {
         if (!isLiveSource || replayProgram != null || liveFormatFlipUsed) return false
-        if (PlaybackErrors.isHttpResponseError(error)) return false
+        val sessionLimit = PlayerNetworkErrors.isSessionLimit(error)
+        if (!sessionLimit && PlaybackErrors.isHttpResponseError(error)) return false
         val current = liveFormatOverride ?: session.liveFormat
         // Con "Automatico" conta il formato davvero in uso, non la preferenza.
         val inUse = if (current == LiveStreamFormat.AUTO) {

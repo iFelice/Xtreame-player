@@ -57,6 +57,38 @@ class ZappingControllerTest {
         assertEquals(2, controller.state?.currentIndex)
     }
 
+    /**
+     * In HLS l'avvio è più lento (Media3 parte a `3 × TARGETDURATION` dal bordo
+     * e scarica segmenti interi): con la stessa finestra dei 5 s lo zapping
+     * salterebbe sempre il canale. Con la finestra da 8 s ha il tempo di partire.
+     */
+    @Test
+    fun `in hls la finestra per saltare un canale non partito e piu larga`() {
+        controller.start(seconds = 30, index = 0, size = 3)
+
+        // A 6 secondi, con la finestra HLS il canale sta ancora caricando: non si salta.
+        clock.advanceSeconds(6)
+        assertEquals(
+            ZappingCommand.None,
+            controller.tick(
+                status = ZappingChannelStatus.LOADING,
+                startGraceMillis = ZappingController.START_GRACE_MILLIS_HLS,
+            ),
+        )
+
+        // A 8 secondi non è partito: si salta, come con i 5 s nel flusso diretto.
+        clock.advanceSeconds(2)
+        assertEquals(
+            ZappingCommand.SwitchTo(1, ZappingReason.CHANNEL_NOT_STARTED),
+            controller.tick(
+                status = ZappingChannelStatus.LOADING,
+                startGraceMillis = ZappingController.START_GRACE_MILLIS_HLS,
+            ),
+        )
+        assertEquals(8_000L, ZappingController.START_GRACE_MILLIS_HLS)
+        assertEquals(5_000L, ZappingController.START_GRACE_MILLIS)
+    }
+
     @Test
     fun `un canale in errore o in caricamento dopo cinque secondi si salta subito`() {
         controller.start(seconds = 30, index = 0, size = 3)

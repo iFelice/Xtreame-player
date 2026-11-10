@@ -59,6 +59,29 @@ object PlayerNetworkConfig {
     val NON_RETRYABLE_HTTP_CODES: Set<Int> = setOf(401, 403, 404)
 
     /**
+     * Risposte di **sessione**: 456 ("connection limit") e 429 (troppe
+     * richieste). Sui pannelli Xtream non sono un divieto, sono un "adesso no":
+     * la connessione precedente non è ancora stata chiusa dal server. Riaprire
+     * dopo un attimo funziona quasi sempre, ed è quello che fa il pannello di
+     * riferimento, che non le tratta in modo speciale e riapre e basta.
+     *
+     * Restano fuori da [RETRYABLE_HTTP_CODES] perché non sono guasti del
+     * server: hanno un budget di riavvii proprio ([MAX_SESSION_RESTARTS]) che
+     * non consuma quello degli errori di rete.
+     */
+    val SESSION_HTTP_CODES: Set<Int> = setOf(456, 429)
+
+    /**
+     * Riavvii dedicati alle risposte di sessione ([SESSION_HTTP_CODES]): due,
+     * il primo immediato e il secondo dopo [SESSION_RETRY_DELAY_MILLIS]. È il
+     * "Riprova" che l'utente faceva a mano, fatto da solo e senza messaggio.
+     */
+    const val MAX_SESSION_RESTARTS: Int = 2
+
+    /** Attesa fra i due riavvii di sessione: 1,5 s, il tempo di liberare la linea. */
+    const val SESSION_RETRY_DELAY_MILLIS: Long = 1_500L
+
+    /**
      * Riavvii automatici e silenziosi della sorgente live dopo un errore di
      * rete o uno stallo. Tre prove prima di mostrare l'errore (prima era una
      * sola): un canale che si strozza a metà visione ha così il tempo di
@@ -223,6 +246,14 @@ object PlayerNetworkErrors {
     }
 
     /**
+     * Vero per le risposte di sessione ([PlayerNetworkConfig.SESSION_HTTP_CODES]):
+     * 456 e 429. Non sono un divieto del server ma un "riprova fra un attimo",
+     * quindi meritano un riavvio silenzioso invece del messaggio.
+     */
+    fun isSessionLimit(error: PlaybackException?): Boolean =
+        httpResponseCode(error) in PlayerNetworkConfig.SESSION_HTTP_CODES
+
+    /**
      * Attesa prima del nuovo tentativo numero [errorCount] (1, 2, 3), oppure
      * `null` se non si riprova: errore senza nuovi tentativi (vedi
      * [isRetryable]) o tentativi esauriti.
@@ -334,19 +365,52 @@ enum class PlayerErrorAction {
 class LiveAutoRestart(
     private val maxRestarts: Int = PlayerNetworkConfig.MAX_LIVE_AUTO_RESTARTS,
     private val delaysMillis: List<Long> = PlayerNetworkConfig.LIVE_AUTO_RESTART_DELAYS_MILLIS,
+    private val maxSessionRestarts: Int = PlayerNetworkConfig.MAX_SESSION_RESTARTS,
 ) {
 
+    /** Riavvii consumati per errori di rete e stalli (budget di [maxRestarts]). */
     var restartsUsed: Int = 0
         private set
 
-    fun onPlayerError(kind: PlaybackKind, error: PlaybackException): PlayerErrorAction =
-        onPlayerError(kind, networkError = PlayerNetworkErrors.isNetworkError(error))
+    /**
+     * Riavvii consumati dalle risposte di sessione (456/429): budget separato,
+     * perché "la linea è ancora occupata" e "la rete è caduta" sono problemi
+     * diversi e non devono rubarsi i tentativi a vicenda.
+     */
+    var sessionRestartsUsed: Int = 0
+        private set
 
-    fun onPlayerError(kind: PlaybackKind, networkError: Boolean): PlayerErrorAction {
-        if (kind != PlaybackKind.LIVE || !networkError || restartsUsed >= maxRestarts) {
-            return PlayerErrorAction.SHOW_ERROR
+    /**
+     * Vero se l'ultimo riavvio concesso era per una risposta di sessione: la
+     * sua attesa è [PlayerNetworkConfig.SESSION_RETRY_DELAY_MILLIS], non quella
+     * degli errori di rete.
+     */
+    private var sessionRestartInFlight: Boolean = false
+
+    fun onPlayerError(kind: PlaybackKind, error: PlaybackException): PlayerErrorAction =
+        onPlayerError(
+            kind = kind,
+            networkError = PlayerNetworkErrors.isNetworkError(error),
+            sessionLimit = PlayerNetworkErrors.isSessionLimit(error),
+        )
+
+    fun onPlayerError(
+        kind: PlaybackKind,
+        networkError: Boolean,
+        sessionLimit: Boolean = false,
+    ): PlayerErrorAction {
+        if (kind != PlaybackKind.LIVE) return PlayerErrorAction.SHOW_ERROR
+        // Risposta di sessione (456/429): il server si è solo rifiutato per un
+        // attimo, si riapre finché il budget dedicato lo consente.
+        if (sessionLimit) {
+            if (sessionRestartsUsed >= maxSessionRestarts) return PlayerErrorAction.SHOW_ERROR
+            sessionRestartsUsed += 1
+            sessionRestartInFlight = true
+            return PlayerErrorAction.SILENT_RESTART
         }
+        if (!networkError || restartsUsed >= maxRestarts) return PlayerErrorAction.SHOW_ERROR
         restartsUsed += 1
+        sessionRestartInFlight = false
         return PlayerErrorAction.SILENT_RESTART
     }
 
@@ -356,6 +420,11 @@ class LiveAutoRestart(
      * l'ultimo, così aggiungere tentativi non lascia attese a zero.
      */
     fun delayForCurrentRestart(): Long {
+        if (sessionRestartInFlight) {
+            // Il primo riavvio di sessione è immediato (la linea si libera
+            // subito), i successivi aspettano il tempo di liberarla davvero.
+            return if (sessionRestartsUsed <= 1) 0L else PlayerNetworkConfig.SESSION_RETRY_DELAY_MILLIS
+        }
         if (delaysMillis.isEmpty()) return 0L
         val index = (restartsUsed - 1).coerceIn(0, delaysMillis.lastIndex)
         return delaysMillis[index]
@@ -371,5 +440,7 @@ class LiveAutoRestart(
 
     fun reset() {
         restartsUsed = 0
+        sessionRestartsUsed = 0
+        sessionRestartInFlight = false
     }
 }

@@ -145,6 +145,11 @@ data class PlayerUiState(
     val videoFormat: VideoFormat = VideoFormat.FIT,
     /** Vero mentre è aperto il pannello del formato dello schermo. */
     val formatPanelVisible: Boolean = false,
+    /**
+     * Avviso "Stai ancora guardando?" con il numero di episodi automatici
+     * visti di fila (0 per Live, film e singolo episodio).
+     */
+    val stillWatchingEpisodes: Int? = null,
 ) {
     val progressFraction: Float
         get() = if (durationMillis <= 0L) {
@@ -158,6 +163,7 @@ data class PlayerUiState(
             formatPanelVisible ||
             channelListVisible ||
             epgVisible ||
+            stillWatchingEpisodes != null ||
             errorMessage != null ||
             resumePositionMillis != null ||
             (nextEpisode != null && !nextEpisode.minimized)

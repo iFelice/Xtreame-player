@@ -25,8 +25,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -52,8 +52,14 @@ import it.felixvision.tv.data.catalog.Episode
 import it.felixvision.tv.data.catalog.LiveStream
 import it.felixvision.tv.data.catalog.VodStream
 import it.felixvision.tv.data.channels.MyChannel
+import it.felixvision.tv.data.channels.MyChannelBulk
+import it.felixvision.tv.data.channels.MyChannelBulkResult
 import it.felixvision.tv.data.channels.MyChannelPlayback
+import it.felixvision.tv.data.channels.MyChannelSelection
 import it.felixvision.tv.data.channels.MyChannels
+import it.felixvision.tv.data.channels.myChannelPickerGroups
+import it.felixvision.tv.data.channels.myChannelRemovalGroups
+import it.felixvision.tv.data.channels.toMyChannel
 import it.felixvision.tv.data.continuewatching.ContinueEntry
 import it.felixvision.tv.data.favorites.FavoriteItem
 import it.felixvision.tv.data.playback.ChannelListOrigin
@@ -70,7 +76,10 @@ import it.felixvision.tv.ui.catalog.CategorySortStore
 import it.felixvision.tv.ui.catalog.FavoritesSection
 import it.felixvision.tv.ui.catalog.FilmSection
 import it.felixvision.tv.ui.catalog.LiveSection
+import it.felixvision.tv.ui.catalog.MyChannelBulkConfirmDialog
 import it.felixvision.tv.ui.catalog.MyChannelDialog
+import it.felixvision.tv.ui.catalog.MyChannelPickerPage
+import it.felixvision.tv.ui.catalog.MyChannelsTabMenuDialog
 import it.felixvision.tv.ui.catalog.myChannelFocusTargetAfterRemoval
 import it.felixvision.tv.ui.catalog.myChannelFocusTargetAtOriginalPosition
 import it.felixvision.tv.ui.catalog.NovitaSection
@@ -138,6 +147,9 @@ fun catalogSessionKey(
 /** Durata degli avvisi della VPN nel riquadro in basso. */
 private const val VPN_MESSAGE_MILLIS = 4_000L
 
+/** Aggiunta o rimozione multipla da "I miei canali": stessa pagina, due esiti. */
+enum class MyChannelPickerMode { Add, Remove }
+
 @Composable
 fun FvpMainScreen(
     container: AppContainer,
@@ -181,6 +193,17 @@ fun FvpMainScreen(
     var myChannelEditFromMyChannels by remember(sessionId, currentServer, currentUsername) { mutableStateOf(false) }
     var myChannelFocusId by remember(sessionId, currentServer, currentUsername) { mutableStateOf<String?>(null) }
     var myChannelFocusTick by remember(sessionId) { mutableIntStateOf(0) }
+    // Pagina di scelta multipla dei canali: aggiunta o rimozione in un colpo
+    // solo, sia dalla scheda "I miei canali" sia dal menu di un canale.
+    var myChannelPicker by remember(sessionId, currentServer, currentUsername) {
+        mutableStateOf<MyChannelPickerMode?>(null)
+    }
+    // Selezione della pagina: lista di id, così le spunte si aggiornano da sole.
+    var myChannelPickerSelection by remember(sessionId) { mutableStateOf<List<String>>(emptyList()) }
+    // Conferma unica per tutta la selezione, come nella rimozione dei protetti.
+    var myChannelPickerConfirm by remember(sessionId) { mutableStateOf(false) }
+    // Menu della scheda "I miei canali" (pressione lunga sulla scheda).
+    var myChannelsTabMenu by remember(sessionId) { mutableStateOf(false) }
     var favoritesMessage by remember(sessionId) { mutableStateOf<String?>(null) }
     // Avvisi della VPN (connessione caduta, configurazione salvata…): 4 s nel
     // riquadro in basso dei preferiti. Il contatore riavvia il tempo anche se
@@ -594,6 +617,61 @@ fun FvpMainScreen(
         }
     }
 
+    /** Apre la pagina di scelta multipla, con la selezione azzerata. */
+    fun openMyChannelPicker(mode: MyChannelPickerMode) {
+        myChannelsTabMenu = false
+        myChannelPickerSelection = emptyList()
+        myChannelPicker = mode
+    }
+
+    fun closeMyChannelPicker() {
+        myChannelPicker = null
+        myChannelPickerConfirm = false
+        myChannelPickerSelection = emptyList()
+    }
+
+    /**
+     * Scrive la selezione: aggiunta in fondo nell'ordine di scelta (i canali già
+     * presenti restano dove sono e non si duplicano) oppure rimozione. Una sola
+     * scrittura sull'archivio, come la rimozione multipla dei Contenuti
+     * protetti; il focus torna alla scheda "I miei canali".
+     */
+    fun confirmMyChannelPicker() {
+        val mode = myChannelPicker ?: return
+        val selectedIds = myChannelPickerSelection.toList()
+        myChannelPickerConfirm = false
+        if (selectedIds.isEmpty()) {
+            closeMyChannelPicker()
+            return
+        }
+        val catalogNow = visibleCatalog
+        val catalogStreams = catalogNow?.liveStreams.orEmpty()
+        scope.launch {
+            val current = container.myChannelsStore.getChannels(currentServer, currentUsername)
+            val updated: MyChannelBulkResult = when (mode) {
+                MyChannelPickerMode.Add -> {
+                    val byId = catalogStreams.associateBy { it.streamId }
+                    val toAdd = selectedIds.mapNotNull { byId[it]?.toMyChannel() }
+                    MyChannelBulk.addAll(current, toAdd)
+                }
+                MyChannelPickerMode.Remove ->
+                    MyChannelBulk.removeAll(current, selectedIds)
+            }
+            if (updated.channels != current) {
+                container.myChannelsStore.setChannels(currentServer, currentUsername, updated.channels)
+            }
+            val message = when {
+                mode == MyChannelPickerMode.Add && updated.added.isNotEmpty() ->
+                    if (updated.added.size == 1) "1 canale aggiunto" else "${updated.added.size} canali aggiunti"
+                mode == MyChannelPickerMode.Remove && updated.removed.isNotEmpty() ->
+                    if (updated.removed.size == 1) "1 canale rimosso" else "${updated.removed.size} canali rimossi"
+                else -> null
+            }
+            closeMyChannelPicker()
+            if (message != null) favoritesMessage = message
+        }
+    }
+
     fun playMovie(film: VodStream, autoResume: Boolean = false) {
         // Da Preferiti/Novità/Continua a guardare la card può non avere
         // l'estensione del contenitore: se il catalogo è disponibile si usa la
@@ -779,6 +857,9 @@ fun FvpMainScreen(
                         allowedOutputFormats = allowedOutputFormats,
                         liveFormat = container.playerPreferences.liveStreamFormat,
                         videoFormatStore = container.channelVideoFormatStore,
+                        // Volume unico: la Guida TV legge e scrive lo stesso
+                        // livello del player grande.
+                        volumeStore = container.volumeStore,
                         scale = scale,
                         clock = container.clock,
                         focusChannelId = guideReturnChannelId,
@@ -949,6 +1030,7 @@ fun FvpMainScreen(
                                             myChannelEditFromMyChannels = true
                                             myChannelEdit = channel
                                         },
+                                        onLongPressMyChannelsTab = { myChannelsTabMenu = true },
                                         focusMyChannelId = myChannelFocusId,
                                         focusMyChannelTick = myChannelFocusTick,
                                         onMyChannelFocusRestored = { myChannelFocusId = null },
@@ -1106,8 +1188,101 @@ fun FvpMainScreen(
             onMoveUp = { moveMyChannel(channel, up = true) },
             onMoveDown = { moveMyChannel(channel, up = false) },
             onRemove = { removeMyChannel(channel) },
+            onAddChannels = {
+                closeMyChannelDialog(null)
+                openMyChannelPicker(MyChannelPickerMode.Add)
+            },
+            onRemoveChannels = {
+                closeMyChannelDialog(null)
+                openMyChannelPicker(MyChannelPickerMode.Remove)
+            },
             // Indietro chiude e riporta il focus sul canale modificato.
             onDismiss = { closeMyChannelDialog(channel) },
+        )
+    }
+
+    // Pressione lunga sulla scheda "I miei canali": due voci, e con la lista
+    // vuota solo l'aggiunta (non c'è niente da togliere).
+    if (myChannelsTabMenu) {
+        MyChannelsTabMenuDialog(
+            scale = scale,
+            canRemove = visibleMyChannels.isNotEmpty(),
+            onAddChannels = { openMyChannelPicker(MyChannelPickerMode.Add) },
+            onRemoveChannels = { openMyChannelPicker(MyChannelPickerMode.Remove) },
+            onDismiss = { myChannelsTabMenu = false },
+        )
+    }
+
+    // Pagina di scelta multipla dentro una finestra a schermo intero: come le
+    // altre finestre dell'app, così alla chiusura il focus torna da solo sulla
+    // scheda "I miei canali" e Indietro non ha casi particolari.
+    myChannelPicker?.let { mode ->
+        val adding = mode == MyChannelPickerMode.Add
+        val catalogNow = visibleCatalog
+        // Raggruppamento memorizzato: senza, l'elenco sarebbe un oggetto nuovo a
+        // ogni ricomposizione e il focus tornerebbe sulla prima categoria.
+        val groups = remember(adding, catalogNow, visibleMyChannels) {
+            if (adding) {
+                // In aggiunta i canali già presenti non si mostrano: sono già
+                // dentro, e il numero sul tasto deve dire quanti ne entrano.
+                myChannelPickerGroups(
+                    categories = catalogNow?.liveCategories.orEmpty(),
+                    streams = catalogNow?.liveStreams.orEmpty()
+                        .filterNot { it.streamId in visibleMyChannelIds },
+                )
+            } else {
+                myChannelRemovalGroups(
+                    channels = visibleMyChannels,
+                    categories = catalogNow?.liveCategories.orEmpty(),
+                    streams = catalogNow?.liveStreams.orEmpty(),
+                )
+            }
+        }
+        val allIds = groups.flatMap { it.streamIds }
+        Dialog(
+            onDismissRequest = { closeMyChannelPicker() },
+            properties = DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            BackHandler { closeMyChannelPicker() }
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(FvpColors.Background)
+                    .padding(scale.dp(32f))
+                    .testTag("my_channel_picker_screen"),
+            ) {
+                MyChannelPickerPage(
+                    adding = adding,
+                    groups = groups,
+                    checkedIds = myChannelPickerSelection,
+                    scale = scale,
+                    onToggleStream = { streamId ->
+                        myChannelPickerSelection =
+                            MyChannelSelection.toggle(myChannelPickerSelection, streamId)
+                    },
+                    onToggleGroup = { group ->
+                        myChannelPickerSelection =
+                            MyChannelSelection.toggleAll(myChannelPickerSelection, group.streamIds)
+                    },
+                    onToggleAll = {
+                        myChannelPickerSelection =
+                            MyChannelSelection.toggleEvery(myChannelPickerSelection, allIds)
+                    },
+                    onConfirm = { myChannelPickerConfirm = true },
+                    onBack = { closeMyChannelPicker() },
+                )
+            }
+        }
+    }
+
+    // Conferma della selezione: una sola finestra, sopra la pagina di scelta.
+    if (myChannelPickerConfirm && myChannelPickerSelection.isNotEmpty()) {
+        MyChannelBulkConfirmDialog(
+            count = myChannelPickerSelection.size,
+            adding = myChannelPicker == MyChannelPickerMode.Add,
+            scale = scale,
+            onYes = { confirmMyChannelPicker() },
+            onNo = { myChannelPickerConfirm = false },
         )
     }
 

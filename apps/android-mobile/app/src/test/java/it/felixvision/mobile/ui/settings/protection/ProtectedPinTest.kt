@@ -30,7 +30,6 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestCoroutineScheduler
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
@@ -121,15 +120,15 @@ class ProtectedPinTest {
 
     @Before
     fun createCollaborators() {
-        // La verifica del PIN legge l'archivio in `Dispatchers.IO`. Con il
-        // dispatcher vero il risultato arriva quando decide lui: `settle()`
-        // pompa il dispatcher di Main, non IO, quindi la UI può essere letta
-        // prima che l'errore sia stato disegnato e il test fallisce a
-        // intermittenza sulle macchine più lente. Il dispatcher non confinato
-        // esegue subito, sullo stesso tempo virtuale, e i `runBlocking` del
-        // setup non si bloccano (con `StandardTestDispatcher` resterebbero in
-        // attesa di un avanzamento che nessuno fa).
-        store = ProtectedContentStore(context = context, io = UnconfinedTestDispatcher(scheduler))
+        // La verifica del PIN legge l'archivio su un thread di IO vero, come in
+        // produzione: è il comportamento che va provato. Non si usa un
+        // dispatcher di test non confinato perché completerebbe la verifica
+        // *dentro* la gestione del click, e Compose può perdere
+        // l'aggiornamento di stato scritto in quel momento (test che falliva a
+        // intermittenza con il messaggio vuoto). Con il dispatcher reale
+        // l'aggiornamento arriva sempre e l'attesa è esplicita:
+        // `awaitPinMessage` / `awaitTag` aspettano fino a 5 s.
+        store = ProtectedContentStore(context = context)
         session = ProtectedSession(clock = virtualClock)
         credentials = FakeCredentialStore(
             stored = StoredCredentials(
@@ -340,13 +339,19 @@ class ProtectedPinTest {
         typePinIfEnabled(pin)
         awaitTag("protected_title")
 
-        // Quattro nuovi errori dopo la verifica riuscita: il conteggio è
-        // ripartito, quindi nessun blocco.
+        // Nuovi errori dopo la verifica riuscita: se il conteggio è davvero
+        // ripartito da zero, tre errori sono lontani dal blocco (che scatta al
+        // quinto). Tre e non quattro di proposito: quattro sarebbero a una
+        // lunghezza dal blocco, e un click in più capitato durante il
+        // ridisegno farebbe fallire il test per un motivo che non è quello in
+        // esame. Qui l'intento è "il conteggio è ripartito", non "il confine
+        // esatto è a cinque".
         click("protected_change_pin")
         awaitTag(MOBILE_PIN_ENTRY_TAG)
-        repeat(4) { typePinIfEnabled("9999") }
+        repeat(3) { typePinIfEnabled("9999") }
 
-        // Nessuna attesa: la verifica è già conclusa quando `typePin` torna.
+        // La verifica passa dal thread di IO: si attende il messaggio disegnato.
+        awaitPinMessage(PROTECTED_PIN_WRONG)
         assertEquals(PROTECTED_PIN_WRONG, textOf(MOBILE_PIN_ERROR_TAG))
         assertFalse(session.isLocked())
     }

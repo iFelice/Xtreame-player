@@ -32,6 +32,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -81,6 +82,8 @@ import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.components.rememberMinuteNow
 import it.felixvision.tv.ui.navigation.DrawerClockFormatting
 import it.felixvision.tv.ui.player.GuideMiniPlayer
+import it.felixvision.tv.data.volume.PlayerVolume
+import it.felixvision.tv.data.volume.VolumeStore
 import it.felixvision.tv.ui.player.GuidePreviewPlayerFactory
 import it.felixvision.tv.ui.player.Media3GuidePreviewPlayerFactory
 import it.felixvision.tv.ui.theme.FvpColors
@@ -169,6 +172,8 @@ fun GuideTvSection(
     onChannelFocusRestored: () -> Unit = {},
     onPlayFullscreen: (LiveStream, GuideCategory, List<LiveStream>) -> Unit = { _, _, _ -> },
     previewPlayerFactory: GuidePreviewPlayerFactory = Media3GuidePreviewPlayerFactory,
+    /** Volume unico dell'app: la Guida legge e scrive lo stesso archivio del player. */
+    volumeStore: VolumeStore? = null,
 ) {
     val categoryRows = remember(categories, streams) { guideCategories(categories, streams) }
     var activeCategoryId by remember(categoryRows) { mutableStateOf(categoryRows.firstOrNull()?.id) }
@@ -190,6 +195,14 @@ fun GuideTvSection(
         mutableStateOf(guideStreamsForCategory(categoryRows.firstOrNull()?.id, streams).firstOrNull()?.streamId)
     }
     var selectedProgramStart by remember { mutableStateOf<Long?>(null) }
+    // Volume unico: si parte dal livello salvato del player e ogni tasto lo
+    // salva, così Guida TV e player restano sempre allineati.
+    var volumeLevel by remember { mutableStateOf(PlayerVolume.DEFAULT_LEVEL) }
+    var volumeTick by remember { mutableIntStateOf(0) }
+    LaunchedEffect(volumeStore) {
+        val stored = runCatching { volumeStore?.level() }.getOrNull()
+        if (stored != null) volumeLevel = PlayerVolume.clampLevel(stored)
+    }
     var previewStreamId by remember { mutableStateOf<String?>(null) }
     var pendingFullscreen by remember { mutableStateOf<PendingGuidePlayer?>(null) }
 
@@ -434,6 +447,22 @@ fun GuideTvSection(
                 if (categoryRows.isEmpty()) Modifier.focusRequester(contentFocusRequester).focusable()
                 else Modifier
             )
+            // Tasti Volume del telecomando: stesso comportamento e stesso
+            // archivio del player grande, così l'anteprima non riparte mai a
+            // palla dopo che il volume è stato abbassato.
+            .onPreviewKeyEvent { event ->
+                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                val delta = when (event.nativeKeyEvent.keyCode) {
+                    android.view.KeyEvent.KEYCODE_VOLUME_UP -> 1
+                    android.view.KeyEvent.KEYCODE_VOLUME_DOWN -> -1
+                    else -> return@onPreviewKeyEvent false
+                }
+                volumeLevel = PlayerVolume.step(volumeLevel, delta)
+                volumeTick += 1
+                val saved = volumeLevel
+                scope.launch { runCatching { volumeStore?.saveLevel(saved) } }
+                true
+            }
             .testTag("guide_tv_section"),
     ) {
         Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(scale.dp(6f))) {
@@ -555,6 +584,8 @@ fun GuideTvSection(
                     modifier = Modifier.fillMaxHeight(),
                     playerFactory = previewPlayerFactory,
                     liveFormat = liveFormat,
+                    volumeLevel = volumeLevel,
+                    volumeChangedTick = volumeTick,
                 )
             }
 

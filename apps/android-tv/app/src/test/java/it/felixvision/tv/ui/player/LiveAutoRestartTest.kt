@@ -84,6 +84,22 @@ class LiveAutoRestartTest {
         assertEquals(PlayerNetworkConfig.LIVE_AUTO_RESTART_DELAYS_MILLIS, listOf(0L, 0L, 1_000L))
     }
 
+    /**
+     * Il passaggio all'altro formato (`swapLiveFormatOnError`) avviene **prima**
+     * di [LiveAutoRestart] e non consuma né i tre riavvii di rete né i due di
+     * sessione: è un tentativo diverso, non un riavvio dello stesso indirizzo.
+     */
+    @Test
+    fun `un cambio formato non consuma alcun budget`() {
+        val restart = LiveAutoRestart()
+        assertEquals(0, restart.restartsUsed)
+        assertEquals(0, restart.sessionRestartsUsed)
+        assertEquals(false, restart.shouldRefreshSource())
+        // Subito dopo un flip, il primo errore di rete ha ancora tutto il budget.
+        assertEquals(PlayerErrorAction.SILENT_RESTART, restart.onPlayerError(PlaybackKind.LIVE, networkError()))
+        assertEquals(1, restart.restartsUsed)
+    }
+
     @Test
     fun `dopo due riavvii la sorgente si rigenera`() {
         val restart = LiveAutoRestart()
@@ -128,6 +144,52 @@ class LiveAutoRestartTest {
         }
         assertEquals(PlayerErrorAction.SHOW_ERROR, restart.onPlayerError(PlaybackKind.LIVE, malformedStream()))
         assertEquals(0, restart.restartsUsed)
+        assertEquals(0, restart.sessionRestartsUsed)
+    }
+
+    /**
+     * 456 e 429 non sono un divieto ma un "riprova fra un attimo" (la linea non
+     * è ancora stata liberata dal server). Hanno un budget **proprio**: due
+     * riavvii, il primo immediato e il secondo dopo 1,5 s, e non consumano i
+     * tre riavvii degli errori di rete.
+     */
+    @Test
+    fun `456 e 429 hanno due riavvii propri, immediati poi dopo un secondo e mezzo`() {
+        val restart = LiveAutoRestart()
+
+        for (code in listOf(456, 429)) {
+            val fresh = LiveAutoRestart()
+            assertEquals("HTTP $code", PlayerErrorAction.SILENT_RESTART, fresh.onPlayerError(PlaybackKind.LIVE, httpError(code)))
+            assertEquals("HTTP $code", 0L, fresh.delayForCurrentRestart())
+            assertEquals("HTTP $code", 1, fresh.sessionRestartsUsed)
+
+            assertEquals(PlayerErrorAction.SILENT_RESTART, fresh.onPlayerError(PlaybackKind.LIVE, httpError(code)))
+            assertEquals(PlayerNetworkConfig.SESSION_RETRY_DELAY_MILLIS, fresh.delayForCurrentRestart())
+
+            // Esaurito il budget di sessione: arriva il messaggio.
+            assertEquals(PlayerErrorAction.SHOW_ERROR, fresh.onPlayerError(PlaybackKind.LIVE, httpError(code)))
+            assertEquals(2, fresh.sessionRestartsUsed)
+        }
+        assertEquals(2, PlayerNetworkConfig.MAX_SESSION_RESTARTS)
+        assertEquals(setOf(456, 429), PlayerNetworkConfig.SESSION_HTTP_CODES)
+        // I riavvii di rete sono rimasti intatti: budget separato.
+        assertEquals(0, restart.restartsUsed)
+    }
+
+    @Test
+    fun `un 456 non consuma i riavvii degli errori di rete`() {
+        val restart = LiveAutoRestart()
+
+        assertEquals(PlayerErrorAction.SILENT_RESTART, restart.onPlayerError(PlaybackKind.LIVE, httpError(456)))
+        repeat(3) { restart.onPlayerError(PlaybackKind.LIVE, networkError()) }
+
+        // Un solo 456: un solo riavvio di sessione, e i tre di rete intatti.
+        assertEquals(1, restart.sessionRestartsUsed)
+        assertEquals(3, restart.restartsUsed)
+        // E il 456 può ancora valere, il suo budget è indipendente.
+        restart.reset()
+        assertEquals(0, restart.sessionRestartsUsed)
+        assertEquals(PlayerErrorAction.SILENT_RESTART, restart.onPlayerError(PlaybackKind.LIVE, httpError(456)))
     }
 
     @Test

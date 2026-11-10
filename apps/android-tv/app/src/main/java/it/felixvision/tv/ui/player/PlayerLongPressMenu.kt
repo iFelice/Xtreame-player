@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -102,7 +101,9 @@ fun PlayerLongPressMenuContent(
     }
     Column(
         modifier = modifier
-            .background(FvpColors.Surface, shape = RoundedCornerShape(scale.dp(12f)))
+            // Stessa superficie di ogni altro pannello del player: fondo
+            // unico al 60%, angoli e bordo di [playerOverlay].
+            .playerOverlay(scale)
             .padding(scale.dp(20f))
             .testTag("player_long_press_menu"),
         horizontalAlignment = Alignment.CenterHorizontally,

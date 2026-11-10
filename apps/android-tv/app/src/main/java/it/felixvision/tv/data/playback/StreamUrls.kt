@@ -130,23 +130,24 @@ object StreamUrls {
     }
 
     /**
-     * Regola live con [LiveStreamFormat.AUTO]: `.m3u8` quando l'account lo
-     * dichiara, altrimenti `.ts`.
+     * Regola live con [LiveStreamFormat.AUTO]: il formato che il pannello
+     * dichiara per primo, cioè `.ts` quando è ammesso e `.m3u8` altrimenti.
      *
-     * Il motivo è misurato, non estetico. Un `.ts` è un flusso unico e continuo:
-     * quando si impunta, Media3 riapre lo stesso indirizzo con
-     * `Range: bytes=<offset>-`. I pannelli Xtream ignorano il `Range` e
-     * rispondono 200 con il flusso da capo, quindi la sorgente HTTP deve
-     * scaricare e buttare via tutti i byte fino all'offset: con 660 kB/s e 50 s
-     * di buffer sono decine di secondi di download inutile, e il video resta
-     * fermo. Un HLS invece è fatto di segmenti brevi, ognuno richiesto da zero:
-     * la riapertura non ha nulla da scartare. Su un pannello che non conosce il
-     * `Range`, HLS è semplicemente più solido.
+     * È la regola del pannello di riferimento, che costruisce l'indirizzo con
+     * `streamType` del server (`SplashActivity`: `streamFormat = stream_type`)
+     * e non con una preferenza propria. Non è una scelta estetica: un `.ts` è
+     * un flusso unico, si apre con **una** richiesta e il primo fotogramma
+     * arriva in 2-3 s, mentre un HLS deve leggere la playlist e scaricare
+     * prima i segmenti interi che coprono l'avvio (in Media3 l'avvio è a
+     * `3 × TARGETDURATION` dal bordo del live), con più richieste in parallelo
+     * che sui pannelli Xtream contano come più connessioni. Il risultato
+     * misurato sul campo: HLS 5-12 s per canale, `.ts` 2-3 s, e lo zapping
+     * automatico (5 s di grazia) salta solo in HLS.
      *
-     * [LiveStreamFormat.TS] resta disponibile per chi vuole imporre il flusso
-     * diretto (per esempio su un pannello che non serve HLS in modo corretto).
-     * Se il formato richiesto non è tra quelli dichiarati dall'account vale
-     * l'altro: un canale solo `ts` resta in `ts` anche con [LiveStreamFormat.HLS].
+     * [LiveStreamFormat.HLS] resta scegliibile per chi vuole imporre i
+     * segmenti. Se il formato richiesto non è tra quelli dichiarati
+     * dall'account vale l'altro: un canale solo `ts` resta in `ts` anche con
+     * [LiveStreamFormat.HLS].
      */
     fun liveExtension(
         allowedOutputFormats: List<String>,
@@ -158,8 +159,10 @@ object StreamUrls {
         return when {
             preferredFormat == LiveStreamFormat.HLS && hasHls -> LIVE_HLS
             preferredFormat == LiveStreamFormat.TS && hasTs -> LIVE_TS
-            // Automatico (o preferenza non ammessa): HLS se c'è.
-            hasHls -> LIVE_HLS
+            // Automatico (o preferenza non ammessa): il formato del pannello.
+            // Con un elenco vuoto o sconosciuto resta `.ts`, che è il flusso
+            // che i pannelli servono da sempre e quello dei due più leggero.
+            hasHls && !hasTs -> LIVE_HLS
             else -> LIVE_TS
         }
     }
