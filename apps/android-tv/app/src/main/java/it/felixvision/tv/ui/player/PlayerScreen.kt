@@ -243,7 +243,16 @@ fun PlayerScreen(
             delay(ZAPPING_TICK_MILLIS)
             // Stato letto a ogni giro: la lambda del ciclo non può usare la
             // fotografia della composizione iniziale.
-            zapping.tick(status = zappingChannelStatus(engine.state))
+            // In HLS l'avvio è più lento (segmenti da scaricare): la finestra
+            // per saltare un canale che non parte è più larga.
+            zapping.tick(
+                status = zappingChannelStatus(engine.state),
+                startGraceMillis = if (engine.isLiveHlsInAir()) {
+                    ZappingController.START_GRACE_MILLIS_HLS
+                } else {
+                    ZappingController.START_GRACE_MILLIS
+                },
+            )
         }
     }
 

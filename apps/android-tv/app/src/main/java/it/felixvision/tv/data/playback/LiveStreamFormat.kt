@@ -5,10 +5,10 @@ package it.felixvision.tv.data.playback
  * HLS (`.m3u8`, tanti segmenti brevi).
  *
  * La scelta è dell'utente e vive in
- * [it.felixvision.tv.player.PlayerPreferences]. [AUTO] usa **HLS quando
- * l'account lo dichiara**, altrimenti MPEG-TS: un HLS è più solido sui pannelli
- * che non gestiscono il `Range`, perché ogni segmento è richiesto da zero e una
- * riapertura non deve scaricare e buttare via decine di megabyte (vedi
+ * [it.felixvision.tv.player.PlayerPreferences]. [AUTO] usa **il formato che il
+ * pannello dichiara** (`.ts` quando è ammesso, `.m3u8` altrimenti), come il
+ * pannello di riferimento: un `.ts` si apre con una richiesta e parte in 2-3 s,
+ * un HLS deve scaricare prima i segmenti interi dell'avvio (vedi
  * [StreamUrls.liveExtension]).
  *
  * Il tipo è qui, in `data/` e senza dipendenze Android o Media3, perché serve
@@ -27,7 +27,7 @@ enum class LiveStreamFormat(val storageKey: String, val label: String) {
 
     companion object {
 
-        /** Formato predefinito: HLS se l'account lo dichiara, altrimenti TS. */
+        /** Formato predefinito: quello dichiarato dal pannello (di norma TS). */
         val DEFAULT: LiveStreamFormat = AUTO
 
         /**

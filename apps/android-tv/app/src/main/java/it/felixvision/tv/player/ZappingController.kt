@@ -170,6 +170,7 @@ class ZappingController(
     fun tick(
         nowMillis: Long = clock.nowMillis(),
         status: ZappingChannelStatus = ZappingChannelStatus.PLAYING,
+        startGraceMillis: Long = START_GRACE_MILLIS,
     ): ZappingCommand {
         val current = state ?: return ZappingCommand.None
         if (current.awaitingEndOfList) {
@@ -184,12 +185,13 @@ class ZappingController(
             return ZappingCommand.None
         }
         val elapsedSinceChannelStart = nowMillis - channelStartedAtMillis
-        if (elapsedSinceChannelStart >= START_GRACE_MILLIS &&
+        val graceMillis = startGraceMillis.coerceAtLeast(0L)
+        if (elapsedSinceChannelStart >= graceMillis &&
             status != ZappingChannelStatus.PLAYING
         ) {
             return nextChannel(nowMillis, current, ZappingReason.CHANNEL_NOT_STARTED)
         }
-        if (elapsedSinceChannelStart >= START_GRACE_MILLIS && nowMillis >= nextSwitchAtMillis) {
+        if (elapsedSinceChannelStart >= graceMillis && nowMillis >= nextSwitchAtMillis) {
             return nextChannel(nowMillis, current, ZappingReason.TIMER)
         }
         state = current.copy(
@@ -262,8 +264,19 @@ class ZappingController(
     }
 
     companion object {
-        /** Finestra dall'avvio del canale entro cui un canale non partito si salta. */
+        /**
+         * Finestra dall'avvio del canale entro cui un canale non partito si
+         * salta, per il flusso diretto (`.ts`): parte in 2-3 s.
+         */
         const val START_GRACE_MILLIS = 5_000L
+
+        /**
+         * La stessa finestra per un canale in HLS ([START_GRACE_MILLIS_HLS],
+         * 8 s): Media3 avvia un live a `3 × TARGETDURATION` dal bordo e deve
+         * scaricare i segmenti interi, quindi 5 s non bastano e lo zapping lo
+         * salterebbe sempre.
+         */
+        const val START_GRACE_MILLIS_HLS = 8_000L
 
         /** Attesa della risposta alla domanda di fine lista. */
         const val END_OF_LIST_TIMEOUT_MILLIS = 15_000L

@@ -50,10 +50,18 @@ class PlayerZapping(
         state = controller.start(seconds = seconds, index = index, size = size)?.toUiState()
     }
 
-    /** Avanza il conto con lo stato del canale in onda, come fa il player. */
-    fun tick(status: ZappingChannelStatus) {
+    /**
+     * Avanza il conto con lo stato del canale in onda, come fa il player.
+     *
+     * [startGraceMillis] è la finestra entro cui un canale che non è ancora
+     * partito viene saltato: più larga in HLS, dove l'avvio è più lento.
+     */
+    fun tick(
+        status: ZappingChannelStatus,
+        startGraceMillis: Long = ZappingController.START_GRACE_MILLIS,
+    ) {
         if (state == null) return
-        apply(controller.tick(status = status))
+        apply(controller.tick(status = status, startGraceMillis = startGraceMillis))
     }
 
     /** Risposta alla domanda di fine lista: "Sì" riparte dal primo canale. */

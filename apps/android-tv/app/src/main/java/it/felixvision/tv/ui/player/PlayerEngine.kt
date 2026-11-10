@@ -189,6 +189,12 @@ class PlayerEngine(
      */
     private var stableReadyJob: Job? = null
 
+    /**
+     * Quando è partita l'apertura del player in onda, per misurare l'avvio nel
+     * log diagnostico. `null` fuori dal Live, o quando la misura non serve.
+     */
+    private var playbackOpenedAtMillis: Long? = null
+
     private val playerListener = object : Player.Listener {
 
         override fun onPlaybackStateChanged(playbackState: Int) {
@@ -198,6 +204,7 @@ class PlayerEngine(
                     state = state.copy(isBuffering = true)
                 }
                 Player.STATE_READY -> {
+                    logLiveStartupIfNeeded()
                     // Nessun azzeramento immediato: conta la riproduzione continua.
                     scheduleStableReadyReset()
                     val duration = playerDuration()
@@ -225,6 +232,27 @@ class PlayerEngine(
         override fun onTracksChanged(tracks: Tracks) {
             refreshTracks()
         }
+    }
+
+    /**
+     * Una riga per ogni avvio del Live: formato davvero in onda e tempo al
+     * primo fotogramma.
+     *
+     * Serve a **misurare** invece di dedurre: con questa riga un canale che
+     * impiega troppo si riconosce dal log, e si vede subito se è in `.ts` o in
+     * HLS. Nessun dato personale: solo il formato, il tempo e il codice canale
+     * oscurato.
+     */
+    private fun logLiveStartupIfNeeded() {
+        val openedAt = playbackOpenedAtMillis ?: return
+        if (!isLiveSource) return
+        playbackOpenedAtMillis = null
+        val elapsed = android.os.SystemClock.elapsedRealtime() - openedAt
+        val inAir = currentUrl()?.substringBefore('?')?.substringAfterLast('.')?.lowercase()
+        AppLog.info(
+            "Player: canale pronto in $elapsed ms, formato ${inAir ?: "sconosciuto"}, " +
+                StreamUrls.redactStreamUrl(currentUrl()),
+        )
     }
 
     /**
@@ -587,6 +615,7 @@ class PlayerEngine(
         // Volume del nostro player: curva percettiva sul livello salvato.
         newPlayer.volume = PlayerVolume.volumeForLevel(volumeLevel)
         newPlayer.setMediaItem(mediaItem, startPositionMillis.coerceAtLeast(0L))
+        playbackOpenedAtMillis = android.os.SystemClock.elapsedRealtime()
         newPlayer.prepare()
         newPlayer.playWhenReady = autoPlay
         exoPlayer = newPlayer
@@ -622,6 +651,15 @@ class PlayerEngine(
         player.removeAnalyticsListener(analyticsListener)
         player.release()
     }
+
+    /**
+     * Il canale in onda è servito in HLS? Serve allo zapping, dove l'avvio è
+     * più lento ([it.felixvision.tv.player.ZappingController.START_GRACE_MILLIS_HLS]).
+     */
+    fun isLiveHlsInAir(): Boolean =
+        isLiveSource && replayProgram == null && currentUrl()
+            ?.substringBefore('?')
+            ?.endsWith(".${StreamUrls.LIVE_HLS}", ignoreCase = true) == true
 
     private fun currentUrl(): String? {
         replayProgram?.let { program ->
@@ -1576,9 +1614,21 @@ class PlayerEngine(
         // silenzioso dello stesso canale, con attese crescenti, prima di
         // mostrare l'errore.
         if (liveAutoRestart.onPlayerError(currentPlaybackKind(), error) == PlayerErrorAction.SILENT_RESTART) {
+            val sessionLimit = PlayerNetworkErrors.isSessionLimit(error)
+            val used = if (sessionLimit) {
+                liveAutoRestart.sessionRestartsUsed
+            } else {
+                liveAutoRestart.restartsUsed
+            }
+            val total = if (sessionLimit) {
+                PlayerNetworkConfig.MAX_SESSION_RESTARTS
+            } else {
+                PlayerNetworkConfig.MAX_LIVE_AUTO_RESTARTS
+            }
             AppLog.warn(
-                "Player: errore di rete codice ${error.errorCode}, riavvio automatico " +
-                    "${liveAutoRestart.restartsUsed} di ${PlayerNetworkConfig.MAX_LIVE_AUTO_RESTARTS} su " +
+                "Player: " +
+                    (if (sessionLimit) "risposta di sessione" else "errore di rete") +
+                    " codice ${error.errorCode}, riavvio automatico $used di $total su " +
                     StreamUrls.redactStreamUrl(currentUrl()),
             )
             scheduleLiveRestart()
@@ -1622,14 +1672,17 @@ class PlayerEngine(
      * [liveFormatFlipUsed] impedisce il va-e-vieni: uno scambio per errore,
      * poi valgono i riavvii silenziosi normali.
      *
-     * Solo per gli errori che non vengono da una risposta HTTP: un 404/456 o
-     * un 5xx dice che il server ha risposto e che l'altro formato non
-     * cambierebbe niente (con l'accesso negato sarebbe anche una connessione
-     * in più su un account già al limite). Lì l'errore arriva com'è.
+     * Non scatta su un 404/403 (lì l'altro formato non cambierebbe niente) né
+     * sui 5xx (il server è guasto, non è il formato), ma **sì** sulle risposte
+     * di sessione ([PlayerNetworkConfig.SESSION_HTTP_CODES]): un HLS apre più
+     * richieste in parallelo e su un pannello che conta le connessioni è
+     * proprio l'HLS a farsi rifiutare con 456, quindi passare al flusso unico
+     * è la cura giusta, non una connessione in più.
      */
     private fun swapLiveFormatOnError(error: PlaybackException?): Boolean {
         if (!isLiveSource || replayProgram != null || liveFormatFlipUsed) return false
-        if (PlaybackErrors.isHttpResponseError(error)) return false
+        val sessionLimit = PlayerNetworkErrors.isSessionLimit(error)
+        if (!sessionLimit && PlaybackErrors.isHttpResponseError(error)) return false
         val current = liveFormatOverride ?: session.liveFormat
         // Con "Automatico" conta il formato davvero in uso, non la preferenza.
         val inUse = if (current == LiveStreamFormat.AUTO) {

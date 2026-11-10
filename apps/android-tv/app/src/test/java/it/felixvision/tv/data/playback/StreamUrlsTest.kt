@@ -19,14 +19,18 @@ class StreamUrlsTest {
     }
 
     /**
-     * Regola nuova, con il motivo misurato: un `.ts` riaperto a metà su un
-     * pannello che ignora il `Range` costa decine di secondi di download
-     * scartato, un HLS no. Quindi con "Automatico" vince HLS quando c'è.
+     * Regola del pannello di riferimento: con "Automatico" vale il formato che
+     * il pannello dichiara, cioè `.ts` quando è ammesso. Un `.ts` si apre con
+     * una richiesta e parte in 2-3 s; un HLS deve scaricare prima i segmenti
+     * dell'avvio (in Media3 a `3 × TARGETDURATION` dal bordo) e impiega 5-12 s.
      */
     @Test
-    fun `live automatico sceglie m3u8 quando l'account ammette sia ts sia m3u8`() {
-        val url = StreamUrls.build(server, "demo", "demo", StreamTarget.Live("001", listOf("ts", "m3u8")))
-        assertEquals("$base/live/demo/demo/001.m3u8", url)
+    fun `live automatico segue il formato dichiarato dal pannello`() {
+        val both = StreamUrls.build(server, "demo", "demo", StreamTarget.Live("001", listOf("ts", "m3u8")))
+        assertEquals("$base/live/demo/demo/001.ts", both)
+
+        val hlsFirst = StreamUrls.build(server, "demo", "demo", StreamTarget.Live("001", listOf("m3u8", "ts")))
+        assertEquals("$base/live/demo/demo/001.ts", hlsFirst)
     }
 
     @Test
@@ -68,18 +72,24 @@ class StreamUrlsTest {
     }
 
     @Test
-    fun `automatico preferisce hls ma resta ts se hls non c'e`() {
+    fun `automatico usa ts se ammesso e m3u8 solo se ts manca`() {
         val both = StreamUrls.build(
             server, "demo", "demo",
             StreamTarget.Live("001", listOf("ts", "m3u8"), preferredFormat = LiveStreamFormat.AUTO),
         )
-        assertEquals("$base/live/demo/demo/001.m3u8", both)
+        assertEquals("$base/live/demo/demo/001.ts", both)
 
         val onlyTs = StreamUrls.build(
             server, "demo", "demo",
             StreamTarget.Live("001", listOf("ts"), preferredFormat = LiveStreamFormat.AUTO),
         )
         assertEquals("$base/live/demo/demo/001.ts", onlyTs)
+
+        val onlyHls = StreamUrls.build(
+            server, "demo", "demo",
+            StreamTarget.Live("001", listOf("m3u8"), preferredFormat = LiveStreamFormat.AUTO),
+        )
+        assertEquals("$base/live/demo/demo/001.m3u8", onlyHls)
     }
 
     @Test
