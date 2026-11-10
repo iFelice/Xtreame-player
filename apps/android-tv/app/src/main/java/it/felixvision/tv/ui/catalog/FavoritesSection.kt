@@ -156,6 +156,9 @@ fun FavoritesSection(
     epgPassword: String = "",
     onPlayMyChannel: (MyChannel) -> Unit = {},
     onLongPressMyChannel: (MyChannel) -> Unit = {},
+    // Pressione lunga sulla scheda "I miei canali": apre la scelta fra
+    // aggiungere e rimuovere canali, senza dover passare da una riga.
+    onLongPressMyChannelsTab: () -> Unit = {},
     focusMyChannelId: String? = null,
     focusMyChannelTick: Int = 0,
     onMyChannelFocusRestored: () -> Unit = {},
@@ -252,6 +255,9 @@ fun FavoritesSection(
                 requestTabContentFocus(tab)
             },
             onDown = { requestTabContentFocus(selectedTab) },
+            onLongPressTab = { tab ->
+                if (tab == FavoritesTab.MY_CHANNELS) onLongPressMyChannelsTab()
+            },
         )
         Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
             when (selectedTab) {
@@ -392,6 +398,7 @@ private fun FavoritesTabsRow(
     contentFocusRequester: FocusRequester,
     onSelect: (FavoritesTab) -> Unit,
     onDown: () -> Unit,
+    onLongPressTab: (FavoritesTab) -> Unit = {},
 ) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(scale.dp(12f)),
@@ -414,6 +421,15 @@ private fun FavoritesTabsRow(
                     .onFocusChanged { focusState ->
                         focused = focusState.isFocused
                     }
+                    // Solo la scheda "I miei canali" ha la pressione lunga: le
+                    // altre non hanno nulla da raggruppare.
+                    .then(
+                        if (tab == FavoritesTab.MY_CHANNELS) {
+                            Modifier.fvpLongPress { onLongPressTab(tab) }
+                        } else {
+                            Modifier
+                        }
+                    )
                     .onPreviewKeyEvent { event ->
                         if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                         when (event.key) {

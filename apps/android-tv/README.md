@@ -401,6 +401,41 @@ server Xtream raggiunti con indirizzo privato non risponderebbero.
   campo di ricerca con tastiera di sistema e risultati per tipo), senza riuso di codice,
   stringhe, layout o risorse.
 
+### "I miei canali" e contenuti protetti: scelta multipla
+
+- **Aggiungi/Rimuovi canali dal telecomando**: la pressione lunga sulla scheda
+  "I miei canali" apre un menu con "Aggiungi canali" e "Rimuovi canali"; con la lista
+  personale vuota resta solo l'aggiunta. Lo stesso menu a tre voci (Modifica numero,
+  Aggiungi canali, Rimuovi canali) è sulla pressione lunga di un canale, in Live, nella
+  ricerca e nella sezione Preferiti; sopra il player le due voci in più non compaiono,
+  perché lì la pagina di scelta non esiste.
+- **Una sola pagina di scelta** per aggiungere e per togliere, nella stessa finestra a
+  schermo intero delle altre schermate: in cima le categorie con i loro canali sotto,
+  raggruppati nell'ordine del catalogo; i canali senza categoria finiscono in "Altri
+  canali", così nessuno resta fuori dalla selezione. In aggiunta i canali che sono già
+  nella lista personale non vengono mostrati (il numero sul tasto conta solo quelli che
+  entrano davvero).
+- **Gesti**: OK su una categoria **entra** nei suoi canali (il focus va al primo, le righe
+  restano al loro posto: nessuna pagina annidata da aprire e chiudere); **pressione lunga**
+  su una categoria spunta o toglie tutto il gruppo, come nei Contenuti protetti, e
+  l'intestazione mostra "✓" quando è tutto scelto o "•" con "3/12" quando è parziale; OK su
+  un canale spunta o toglie il singolo. Con più di un gruppo compare anche "Tutti i canali",
+  che spunta o azzera l'intera selezione.
+- **Conferma unica**: il tasto in fondo c'è solo con almeno una scelta e dice quanti canali
+  muoverà ("Aggiungi (12)", "Rimuovi (3)"); una sola finestra di conferma per tutta la
+  selezione, con il focus iniziale su "No" e Indietro che non modifica nulla. Una sola
+  scrittura sull'archivio, come nella rimozione multipla dei Contenuti protetti.
+- **Ordine e numerazione**: i canali scelti si aggiungono **in fondo**, nell'ordine di
+  scelta, e la numerazione personale continua dopo l'ultimo esistente (1..N, nessun buco);
+  un canale già presente resta dov'è e non viene duplicato. Togliendo, i numeri si
+  ricompattano. La selezione non è salvata: si azzera uscendo dalla pagina o con Indietro.
+- **Contenuti protetti — pressione lunga sulla categoria**: nell'elenco delle categorie del
+  flusso "Aggiungi" la pressione lunga su una riga nasconde (o mostra di nuovo) subito tutta
+  la categoria, con la stessa scrittura e lo stesso interruttore della riga "Tutta la
+  categoria" dentro la categoria; quella riga resta al suo posto per chi preferisce
+  entrare. Regole pure in `MyChannelSelection`, `MyChannelBulk`, `myChannelPickerGroups` e
+  `myChannelRemovalGroups`, coperte da `MyChannelBulkEditTest`.
+
 ### VPN WireGuard (solo traffico di FelixVP)
 
 - **Libreria**: `com.wireguard.android:tunnel` (Apache-2.0, vedi `THIRD_PARTY_NOTICES.md`),
@@ -492,6 +527,7 @@ simulato e implementazioni finte per cifrario e preferenze:
 | `CatalogSortingTest` | ordinamento puro delle categorie: data di aggiunta in secondi e millisecondi, data assente in fondo, parità per identificativo decrescente, A-Z con maiuscole e accenti ("Èlite", "elite", "Zorro", "àmbito"), Anno dal campo `year`, dall'anno tra parentesi nel titolo e senza anno, serie con `lastModified` e `releaseDate`, ciclo dei tre ordini e preferenza per categoria con valore non valido che vale "aggiunta" (JVM, nessun emulatore) |
 | `CategorySortStoreTest` | preferenze `fvp_sort` vere in Robolectric: valore assente e valore non valido valgono "aggiunta", scelta riletta da una nuova istanza, chiavi `vod_<categoria>` e `series_<categoria>` distinte |
 | `CatalogSortButtonTest` | pulsante di ordinamento in una categoria di Film e assente in NOVITÀ, OK che passa ad A-Z cambiando il primo titolo e lasciando il focus sul pulsante, ordine che resta uscendo e rientrando nella categoria mentre un'altra resta su "Aggiunti di recente", Freccia su dalla prima riga e Freccia giù dal pulsante, pulsante e preferenza distinti per le Serie (Robolectric, un solo `setContent` per test) |
+| `MyChannelBulkEditTest` | selezione multipla pura: aggiunta in fondo nell'ordine di scelta con numerazione che continua dopo l'ultimo, canale già presente non duplicato, rimozione in blocco che ricompatta i numeri, interruttore per canale, per gruppo e per l'intero elenco, gruppi per categoria nell'ordine del catalogo con le categorie vuote saltate e i canali senza categoria in "Altri canali", spunte piena/parziale/assente del gruppo, pagina di rimozione che tiene l'ordine personale e lascia rimovibili i canali spariti dal catalogo (JVM, nessun emulatore) |
 
 ---
 

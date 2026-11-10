@@ -49,6 +49,8 @@ object MyChannelDialogTexts {
     const val MOVE_UP = "Sposta su"
     const val MOVE_DOWN = "Sposta giù"
     const val REMOVE = "Rimuovi"
+    const val ADD_CHANNELS = "Aggiungi canali"
+    const val REMOVE_CHANNELS = "Rimuovi canali"
     const val REMOVE_CONFIRM = "Rimuovere il canale da I miei canali?"
     const val CANCEL = "Annulla"
     const val CONFIRM = "OK"
@@ -116,6 +118,11 @@ fun MyChannelDialog(
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
     onRemove: () -> Unit,
+    // Niente da raggruppare dove la pagina di scelta non esiste (per esempio
+    // sopra il player): con `null` le due voci non compaiono affatto, invece di
+    // restare lì a non fare nulla.
+    onAddChannels: (() -> Unit)? = null,
+    onRemoveChannels: (() -> Unit)? = null,
     onDismiss: () -> Unit,
 ) {
     val number = MyChannels.numberOf(channels, channel.streamId)
@@ -244,6 +251,25 @@ fun MyChannelDialog(
                             .focusRequester(removeMenuButton)
                             .testTag("my_channel_remove"),
                     )
+                    // Scorciatoie alle selezioni multiple: la stessa cosa che si
+                    // ottiene tenendo premuto sulla scheda "I miei canali", qui
+                    // però partendo da un canale.
+                    if (onAddChannels != null) {
+                        FvpSecondaryButton(
+                            text = MyChannelDialogTexts.ADD_CHANNELS,
+                            onClick = onAddChannels,
+                            scale = scale,
+                            modifier = Modifier.testTag("my_channel_add_channels"),
+                        )
+                    }
+                    if (onRemoveChannels != null && channels.isNotEmpty()) {
+                        FvpSecondaryButton(
+                            text = MyChannelDialogTexts.REMOVE_CHANNELS,
+                            onClick = onRemoveChannels,
+                            scale = scale,
+                            modifier = Modifier.testTag("my_channel_remove_channels"),
+                        )
+                    }
                 }
             }
         }
@@ -379,3 +405,175 @@ fun ChannelNumberDialog(
         }
     }
 }
+
+/** Testi del menu della scheda "I miei canali" e della conferma multipla. */
+object MyChannelsMenuTexts {
+    const val TITLE = "I miei canali"
+    const val BACK = "Indietro"
+
+    const val ADD_CHANNELS = "Aggiungi canali"
+    const val REMOVE_CHANNELS = "Rimuovi canali"
+
+    fun addConfirm(count: Int): String = if (count == 1) {
+        "Aggiungere 1 canale a I miei canali?"
+    } else {
+        "Aggiungere $count canali a I miei canali?"
+    }
+
+    fun removeConfirm(count: Int): String = if (count == 1) {
+        "Rimuovere 1 canale da I miei canali?"
+    } else {
+        "Rimuovere $count canali da I miei canali?"
+    }
+}
+
+/**
+ * Menu della pressione lunga sulla scheda "I miei canali": aggiungere o
+ * togliere canali in blocco. Con la lista personale vuota resta solo
+ * l'aggiunta, gli altri ingressi non servono.
+ *
+ * Indietro chiude senza fare nulla; il primo pulsante prende il focus
+ * all'apertura, così il telecomando è subito utilizzabile.
+ */
+@Composable
+fun MyChannelsTabMenuDialog(
+    scale: UiScale,
+    canRemove: Boolean,
+    onAddChannels: () -> Unit,
+    onRemoveChannels: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val firstButton = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        runCatching { firstButton.requestFocus() }
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        BackHandler { onDismiss() }
+        Box(
+            modifier = Modifier
+                .closeDialogOnBack(onDismiss)
+                // Aperta dalla pressione lunga di OK: il tasto ancora premuto
+                // non deve attivare subito la prima voce.
+                .ignoreHeldOkUntilReleased()
+                .fillMaxSize()
+                .background(FvpColors.Background.copy(alpha = 0.85f))
+                .padding(scale.dp(32f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(
+                modifier = Modifier
+                    .background(FvpColors.Surface, shape = RoundedCornerShape(scale.dp(12f)))
+                    .padding(scale.dp(20f))
+                    .testTag(MY_CHANNELS_TAB_MENU_TAG),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(scale.dp(10f)),
+            ) {
+                Text(
+                    text = MyChannelsMenuTexts.TITLE,
+                    color = FvpColors.TextPrimary,
+                    fontSize = scale.sp(20f),
+                    fontWeight = FontWeight.Bold,
+                )
+                FvpPrimaryButton(
+                    text = MyChannelsMenuTexts.ADD_CHANNELS,
+                    onClick = onAddChannels,
+                    scale = scale,
+                    modifier = Modifier
+                        .focusRequester(firstButton)
+                        .testTag(MY_CHANNELS_TAB_MENU_ADD_TAG),
+                )
+                if (canRemove) {
+                    FvpSecondaryButton(
+                        text = MyChannelsMenuTexts.REMOVE_CHANNELS,
+                        onClick = onRemoveChannels,
+                        scale = scale,
+                        modifier = Modifier.testTag(MY_CHANNELS_TAB_MENU_REMOVE_TAG),
+                    )
+                }
+            }
+        }
+    }
+}
+
+const val MY_CHANNELS_TAB_MENU_TAG = "my_channels_tab_menu"
+const val MY_CHANNELS_TAB_MENU_ADD_TAG = "my_channels_tab_menu_add"
+const val MY_CHANNELS_TAB_MENU_REMOVE_TAG = "my_channels_tab_menu_remove"
+
+/**
+ * Unica conferma della modifica multipla: "No" ha il focus iniziale ed è la
+ * scelta sicura, Indietro chiude senza toccare nulla. Una sola scrittura
+ * sull'archivio per tutta la selezione, come nei Contenuti protetti.
+ */
+@Composable
+fun MyChannelBulkConfirmDialog(
+    count: Int,
+    adding: Boolean,
+    scale: UiScale,
+    onYes: () -> Unit,
+    onNo: () -> Unit,
+) {
+    val noFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        runCatching { noFocus.requestFocus() }
+    }
+
+    Dialog(
+        onDismissRequest = onNo,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        BackHandler { onNo() }
+        Box(
+            modifier = Modifier
+                .closeDialogOnBack(onNo)
+                .ignoreHeldOkUntilReleased()
+                .fillMaxSize()
+                .background(FvpColors.Background.copy(alpha = 0.85f))
+                .padding(scale.dp(32f))
+                .testTag(MY_CHANNEL_BULK_CONFIRM_TAG),
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(
+                modifier = Modifier
+                    .background(FvpColors.Surface, shape = RoundedCornerShape(scale.dp(12f)))
+                    .padding(scale.dp(20f)),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(scale.dp(14f)),
+            ) {
+                Text(
+                    text = if (adding) {
+                        MyChannelsMenuTexts.addConfirm(count)
+                    } else {
+                        MyChannelsMenuTexts.removeConfirm(count)
+                    },
+                    color = FvpColors.TextPrimary,
+                    fontSize = scale.sp(18f),
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(scale.dp(12f))) {
+                    FvpSecondaryButton(
+                        text = MyChannelDialogTexts.CANCEL,
+                        onClick = onNo,
+                        scale = scale,
+                        modifier = Modifier
+                            .focusRequester(noFocus)
+                            .testTag(MY_CHANNEL_BULK_CONFIRM_NO_TAG),
+                    )
+                    FvpPrimaryButton(
+                        text = if (adding) "Aggiungi" else "Rimuovi",
+                        onClick = onYes,
+                        scale = scale,
+                        modifier = Modifier.testTag(MY_CHANNEL_BULK_CONFIRM_YES_TAG),
+                    )
+                }
+            }
+        }
+    }
+}
+
+const val MY_CHANNEL_BULK_CONFIRM_TAG = "my_channel_bulk_confirm"
+const val MY_CHANNEL_BULK_CONFIRM_NO_TAG = "my_channel_bulk_confirm_no"
+const val MY_CHANNEL_BULK_CONFIRM_YES_TAG = "my_channel_bulk_confirm_yes"

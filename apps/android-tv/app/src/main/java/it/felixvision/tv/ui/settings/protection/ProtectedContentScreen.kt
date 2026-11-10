@@ -66,6 +66,7 @@ import it.felixvision.tv.data.store.CredentialStore
 import it.felixvision.tv.ui.components.FvpCompactButton
 import it.felixvision.tv.ui.components.FvpPasswordField
 import it.felixvision.tv.ui.components.UiScale
+import it.felixvision.tv.ui.components.fvpLongPress
 import it.felixvision.tv.ui.components.focusSafePadding
 import it.felixvision.tv.ui.theme.FvpColors
 import it.felixvision.tv.ui.theme.rowSpacing
@@ -453,6 +454,17 @@ fun ProtectedContentScreen(
                 onOpenCategory = { categoryId, categoryName ->
                     lastCategoryByKind[page.kind] = categoryId
                     stack.add(ProtectedPage.AddItems(page.kind, categoryId, categoryName))
+                },
+                onToggleCategory = { categoryId, categoryName ->
+                    scope.launch {
+                        store.toggleCategory(
+                            server = server,
+                            username = username,
+                            kind = page.kind,
+                            categoryId = categoryId,
+                            name = categoryName,
+                        )
+                    }
                 },
             )
 
@@ -915,6 +927,9 @@ internal fun ProtectedAddCategoriesPage(
     restoreCategoryId: String?,
     listState: LazyListState,
     onOpenCategory: (categoryId: String, categoryName: String) -> Unit,
+    // Pressione lunga sulla riga: nasconde (o mostra) subito tutta la
+    // categoria, senza entrare nell'elenco dei contenuti.
+    onToggleCategory: (categoryId: String, categoryName: String) -> Unit = { _, _ -> },
 ) {
     val categories = categoriesForKind(catalog, kind)
     val categoryFocuses = remember(categories) {
@@ -985,6 +1000,7 @@ internal fun ProtectedAddCategoriesPage(
                                     Modifier
                                 },
                             )
+                            .fvpLongPress { onToggleCategory(categoryId, categoryName) }
                             .testTag("protected_catrow_${kind.storageKey}_$categoryId"),
                     )
                 }
