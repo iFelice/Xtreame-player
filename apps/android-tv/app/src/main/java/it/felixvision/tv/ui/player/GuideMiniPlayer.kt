@@ -60,7 +60,13 @@ interface GuidePreviewPlayer {
 }
 
 fun interface GuidePreviewPlayerFactory {
-    fun create(context: Context, streamUrl: String, title: String, videoFormat: VideoFormat): GuidePreviewPlayer
+    fun create(
+        context: Context,
+        streamUrl: String,
+        title: String,
+        videoFormat: VideoFormat,
+        volumeLevel: Int,
+    ): GuidePreviewPlayer
 }
 
 private data class GuidePreviewHandleState(
@@ -75,6 +81,7 @@ object Media3GuidePreviewPlayerFactory : GuidePreviewPlayerFactory {
         streamUrl: String,
         title: String,
         videoFormat: VideoFormat,
+        volumeLevel: Int,
     ): GuidePreviewPlayer {
         val renderers = DefaultRenderersFactory(context)
             .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
@@ -85,7 +92,7 @@ object Media3GuidePreviewPlayerFactory : GuidePreviewPlayerFactory {
             // deve fermarsi per un vuoto di rete che il fullscreen assorbe.
             .setLoadControl(PlayerNetworkConfig.loadControl())
             .build()
-        return ExoGuidePreviewPlayer(player, streamUrl, title, videoFormat)
+        return ExoGuidePreviewPlayer(player, streamUrl, title, videoFormat, volumeLevel)
     }
 }
 
@@ -94,6 +101,7 @@ private class ExoGuidePreviewPlayer(
     streamUrl: String,
     title: String,
     videoFormat: VideoFormat,
+    volumeLevel: Int,
 ) : GuidePreviewPlayer {
     private val buffering = MutableStateFlow(false)
     private var released = false
@@ -112,7 +120,11 @@ private class ExoGuidePreviewPlayer(
 
     init {
         exoPlayer.addListener(listener)
-        exoPlayer.volume = PlayerVolume.volumeForLevel(PlayerVolume.DEFAULT_LEVEL)
+        // Volume unico dell'app: l'anteprima parte dallo stesso livello del
+        // player grande, mai a palla se l'utente l'ha abbassato.
+        exoPlayer.volume = PlayerVolume.volumeForLevel(
+            PlayerVolume.clampLevel(volumeLevel)
+        )
         exoPlayer.setMediaItem(
             MediaItem.Builder()
                 .setUri(streamUrl)
@@ -153,6 +165,10 @@ fun GuideMiniPlayer(
     playerFactory: GuidePreviewPlayerFactory = Media3GuidePreviewPlayerFactory,
     /** Formato Live scelto in Impostazioni → Player (automatico se assente). */
     liveFormat: LiveStreamFormat = LiveStreamFormat.DEFAULT,
+    /** Volume unico dell'app (0–15): l'anteprima parte da qui e segue i tasti. */
+    volumeLevel: Int = PlayerVolume.DEFAULT_LEVEL,
+    /** Vero quando i tasti Volume del telecomando sono stati premuti in Guida. */
+    volumeChangedTick: Int = 0,
 ) {
     val context = LocalContext.current.applicationContext
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -200,6 +216,7 @@ fun GuideMiniPlayer(
         playing,
         lifecycleStarted,
         playerFactory,
+        volumeLevel,
     ) {
         if (!playing || !lifecycleStarted || streamUrl == null) {
             value = GuidePreviewHandleState()
@@ -211,12 +228,17 @@ fun GuideMiniPlayer(
                 streamUrl = streamUrl,
                 title = channel?.name.orEmpty(),
                 videoFormat = videoFormat,
+                volumeLevel = volumeLevel,
             )
         }.getOrNull()
         value = GuidePreviewHandleState(player = created, creationFailed = created == null)
         awaitDispose { created?.release() }
     }
     val handle = previewState.player
+    // Volume unico: cambiarlo nel player grande o qui deve valere subito.
+    LaunchedEffect(handle, volumeLevel, volumeChangedTick) {
+        handle?.player?.volume = PlayerVolume.volumeForLevel(PlayerVolume.clampLevel(volumeLevel))
+    }
     val bufferingState = handle?.isBuffering?.collectAsState(initial = false)
     val buffering = bufferingState?.value == true
     val waitingForPlayer = playing && lifecycleStarted && streamUrl != null &&

@@ -160,6 +160,7 @@ class GuideTvSectionTest {
             streamUrl: String,
             title: String,
             videoFormat: VideoFormat,
+            volumeLevel: Int,
         ): GuidePreviewPlayer {
             createCount++
             assertEquals("http://server.esempio:8080/live/demo/demo/001.ts", streamUrl)

@@ -460,6 +460,9 @@ fun PlayerScreen(
                     when (event.type) {
                         KeyEventType.KeyDown -> {
                             keyTick++
+                            // Un tasto di conferma è un utente presente: il conto
+                            // di "Stai ancora guardando?" riparte da zero.
+                            engine.noteUserInput()
                             // Qualsiasi tasto rimanda la chiusura del pannello volume.
                             if (state.volumePanelVisible) engine.keepVolumePanelAlive()
                             if (state.channelListVisible && event.key == Key.DirectionRight) {
@@ -742,6 +745,16 @@ fun PlayerScreen(
                             .padding(top = scale.dp(80f)),
                     )
                 }
+            }
+
+            // "Stai ancora guardando?": ultimo pannello, sopra tutto il resto.
+            state.stillWatchingEpisodes?.let { episodes ->
+                PlayerStillWatchingPrompt(
+                    autoEpisodes = episodes,
+                    scale = scale,
+                    onContinue = { engine.confirmStillWatching() },
+                    onExit = { engine.exitForStillWatching() },
+                )
             }
 
             if (state.epgVisible && session.source is PlaybackSource.Live) {

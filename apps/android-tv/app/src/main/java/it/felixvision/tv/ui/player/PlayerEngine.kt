@@ -38,6 +38,7 @@ import it.felixvision.tv.data.playback.LiveStallDetector
 import it.felixvision.tv.data.playback.LiveStreamFormat
 import it.felixvision.tv.data.playback.LiveZapping
 import it.felixvision.tv.data.playback.NextEpisodeRules
+import it.felixvision.tv.data.watch.StillWatchingMonitor
 import it.felixvision.tv.data.playback.StreamTarget
 import it.felixvision.tv.data.playback.StreamUrls
 import it.felixvision.tv.data.playback.VideoFormat
@@ -157,6 +158,18 @@ class PlayerEngine(
     }
 
     private var nextPromptState = NextPromptState.NONE
+
+    /**
+     * Rilevatore "Stai ancora guardando?": conta gli episodi partiti da soli e
+     * il tempo di riproduzione effettiva, e si azzera a **qualsiasi** tasto.
+     */
+    private val stillWatching = StillWatchingMonitor()
+
+    /** Ultima posizione nota: serve a contare solo il tempo davvero riprodotto. */
+    private var lastWatchedPositionMillis: Long = 0L
+
+    /** Timer che chiude il player se all'avviso nessuno risponde. */
+    private var stillWatchingTimeoutJob: Job? = null
 
     /**
      * Riavvii automatici e silenziosi della sorgente live dopo un errore di
@@ -466,6 +479,9 @@ class PlayerEngine(
     fun start() {
         if (started) return
         started = true
+        // Nuova sessione del player: il rilevatore "Stai ancora guardando?"
+        // riparte pulito, senza eredità della visione precedente.
+        stillWatching.onContentStarted()
         scope.launch {
             // Livello del volume salvato: ripristinato a ogni avvio del player.
             volumeLevel = runCatching { container.volumeStore.level() }
@@ -647,6 +663,9 @@ class PlayerEngine(
         cancelStableReadyReset()
         val player = exoPlayer ?: return
         exoPlayer = null
+        // La posizione riparte da zero: al prossimo aggiornamento il conto del
+        // tempo di visione si riallinea da solo.
+        lastWatchedPositionMillis = 0L
         player.removeListener(playerListener)
         player.removeAnalyticsListener(analyticsListener)
         player.release()
@@ -784,6 +803,7 @@ class PlayerEngine(
             durationMillis = if (replayProgram != null) replayDurationMillis else if (duration > 0L) duration else state.durationMillis,
             isPlaying = player.isPlaying,
         )
+        trackStillWatching(positionMillis = position, playing = player.isPlaying)
         updateNextEpisodePrompt(
             positionMillis = position,
             durationMillis = if (duration > 0L) duration else state.durationMillis,
@@ -1405,6 +1425,73 @@ class PlayerEngine(
         }
     }
 
+    /** Massimo accreditato per singolo aggiornamento di posizione (refresh 500 ms). */
+    private val MAX_TRACKED_STEP_MILLIS = 2_000L
+
+    /**
+     * Conta solo la riproduzione **effettiva**: la differenza fra la posizione
+     * attuale e quella dell'aggiornamento precedente, mai un salto.
+     *
+     * Un salto avanti di 10 minuti (o un ritorno all'inizio del Live) non è
+     * tempo guardato: si accreditano al massimo [MAX_TRACKED_STEP_MILLIS] per
+     * aggiornamento, così un seek non falsa il conto.
+     */
+    private fun trackStillWatching(positionMillis: Long, playing: Boolean) {
+        val previous = lastWatchedPositionMillis
+        // Nuovo contenuto (canale, film, episodio scelto a mano): il conto del
+        // tempo riparte, altrimenti un seek al primo aggiornamento non farebbe
+        // partire il conteggio dall'inizio.
+        if (positionMillis < previous) {
+            stillWatching.onContentStarted()
+        }
+        lastWatchedPositionMillis = positionMillis
+        stillWatching.onPlayback(playing)
+        if (!playing) return
+        val delta = (positionMillis - previous).coerceIn(0L, MAX_TRACKED_STEP_MILLIS)
+        if (delta <= 0L) return
+        if (!stillWatching.onTimeAdvanced(delta)) return
+        showStillWatching()
+    }
+
+    /** Mostra l'avviso e fa partire il timer che chiude il player se nessuno risponde. */
+    private fun showStillWatching() {
+        val episodes = stillWatching.autoEpisodes
+        state = state.copy(stillWatchingEpisodes = episodes)
+        stillWatchingTimeoutJob?.cancel()
+        stillWatchingTimeoutJob = scope.launch {
+            delay(StillWatchingMonitor.PROMPT_TIMEOUT_MILLIS)
+            requestExit()
+        }
+    }
+
+    /** "Sì, sto guardando": l'avviso sparisce e il conto riparte da zero. */
+    fun confirmStillWatching() {
+        stillWatchingTimeoutJob?.cancel()
+        stillWatchingTimeoutJob = null
+        // "Sì, sto guardando" vale come un tasto: nessun riavviso immediato, il
+        // conto resta e riparte solo se l'utente continua senza toccare nulla.
+        stillWatching.onUserInput()
+        if (state.stillWatchingEpisodes != null) {
+            state = state.copy(stillWatchingEpisodes = null)
+        }
+    }
+
+    /** "No, esci": si chiude il player e si torna alla scheda o alla lista. */
+    fun exitForStillWatching() {
+        stillWatchingTimeoutJob?.cancel()
+        stillWatchingTimeoutJob = null
+        requestExit()
+    }
+
+    /**
+     * Qualunque tasto dell'utente azzera il conteggio degli episodi automatici:
+     * se il telecomando si muove, c'è qualcuno. Non tocca i pannelli già aperti,
+     * così il rilevatore non interferisce con i comandi.
+     */
+    fun noteUserInput() {
+        stillWatching.onUserInput()
+    }
+
     fun playNextEpisode() {
         val seriesSource = source as? PlaybackSource.Series ?: return
         val nextIndex = episodeIndex + 1
@@ -1413,6 +1500,9 @@ class PlayerEngine(
             return
         }
         nextPromptState = NextPromptState.NONE
+        // Episodio partito da solo: è questo che conta per "Stai ancora
+        // guardando?", non quello aperto a mano.
+        stillWatching.onAutoEpisodeStarted()
         episodeIndex = nextIndex
         state = state.copy(
             nextEpisode = null,

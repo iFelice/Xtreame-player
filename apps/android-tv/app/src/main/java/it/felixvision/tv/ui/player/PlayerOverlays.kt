@@ -73,6 +73,7 @@ import it.felixvision.tv.core.Clock
 import it.felixvision.tv.core.SystemClock
 import it.felixvision.tv.data.catalog.LiveStream
 import it.felixvision.tv.data.epg.ChannelScheduleLoader
+import it.felixvision.tv.data.watch.StillWatchingTexts
 import it.felixvision.tv.data.epg.EpgProgram
 import it.felixvision.tv.data.playback.NextEpisodeRules
 import it.felixvision.tv.data.playback.PlaybackFormatting
@@ -81,6 +82,8 @@ import it.felixvision.tv.data.playback.VideoFormat
 import it.felixvision.tv.data.volume.PlayerVolume
 import it.felixvision.tv.ui.components.ChannelLogoImage
 import it.felixvision.tv.ui.components.ChannelScheduleInfo
+import it.felixvision.tv.ui.components.MinuteClockText
+import it.felixvision.tv.ui.components.PLAYER_BANNER_CLOCK_TAG
 import it.felixvision.tv.ui.components.FocusMarqueeText
 import it.felixvision.tv.ui.components.FvpCompactButton
 import it.felixvision.tv.ui.components.FvpPrimaryButton
@@ -176,6 +179,14 @@ fun PlayerChannelBanner(
             modifier = Modifier.widthIn(max = scale.dp(420f)),
             verticalArrangement = Arrangement.spacedBy(scale.dp(2f)),
         ) {
+            // Ora corrente, lo stesso orologio della home: nel Live è l'unico
+            // riferimento temporale, perché non c'è una posizione nel video.
+            MinuteClockText(
+                scale = scale,
+                fontSize = scale.sp(13f),
+                color = FvpColors.TextSecondary,
+                modifier = Modifier.testTag(PLAYER_BANNER_CLOCK_TAG),
+            )
             val number = banner.number?.let { "#$it · " }.orEmpty()
             Text(
                 text = number + banner.name,
@@ -447,14 +458,28 @@ fun PlayerControlsBar(
             .testTag("player_controls_bar"),
         verticalArrangement = Arrangement.spacedBy(scale.dp(8f)),
     ) {
-        Text(
-            text = state.currentTitle,
-            color = FvpColors.TextPrimary,
-            fontSize = scale.sp(20f),
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(scale.dp(16f)),
+        ) {
+            Text(
+                text = state.currentTitle,
+                color = FvpColors.TextPrimary,
+                fontSize = scale.sp(20f),
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            // Ora corrente anche in film e serie: sta nella barra comandi, dove
+            // c'è già il titolo, e non copre il minutaggio della riproduzione.
+            MinuteClockText(
+                scale = scale,
+                fontSize = scale.sp(15f),
+                color = FvpColors.TextSecondary,
+            )
+        }
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1148,3 +1173,82 @@ fun PlayerSeekFeedback(
             .testTag("player_seek_feedback"),
     )
 }
+
+/**
+ * Avviso "Stai ancora guardando?".
+ *
+ * Stessa vestizione di tutti i pannelli sopra il video: superficie `playerOverlay`
+ * (60% di nero, angoli 14 dp, bordo bianco al 10%), testo primario e secondario
+ * della palette, pulsanti compatti del player. Centrato, con il focus iniziale
+ * su "Sì, sto guardando": se il telecomando è in mano la risposta più probabile
+ * è quella, e con il focus lì basta un OK.
+ *
+ * Il countdown alla scadenza non è disegnato qui: allo scadere il player esce da
+ * solo (comportamento del chiamante), così l'avviso non introduce un secondo
+ * tipo di timer da spiegare.
+ */
+@Composable
+fun PlayerStillWatchingPrompt(
+    autoEpisodes: Int,
+    scale: UiScale,
+    onContinue: () -> Unit,
+    onExit: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val continueFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { continueFocus.requestFocus() } }
+    Box(
+        // L'avviso è modale: mentre è aperto il player sotto non riceve tasti
+        // (`hasModalOverlay` nel player), quindi l'OK dato su "Sì" o "No" non
+        // mette in pausa né apre pannelli. Indietro è consumato qui.
+        modifier = modifier
+            .fillMaxSize()
+            .onPreviewKeyEvent { event -> event.key == Key.Back }
+            .testTag(PLAYER_STILL_WATCHING_TAG),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            modifier = Modifier
+                .widthIn(max = scale.dp(520f))
+                .playerOverlay(scale)
+                .padding(scale.dp(22f)),
+            horizontalAlignment = Alignment.Start,
+            verticalArrangement = Arrangement.spacedBy(scale.dp(10f)),
+        ) {
+            Text(
+                text = StillWatchingTexts.TITLE,
+                color = FvpColors.TextPrimary,
+                fontSize = scale.sp(20f),
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = StillWatchingTexts.reason(autoEpisodes),
+                color = FvpColors.TextSecondary,
+                fontSize = scale.sp(14f),
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(scale.dp(10f)),
+                modifier = Modifier.padding(top = scale.dp(4f)),
+            ) {
+                FvpCompactButton(
+                    text = StillWatchingTexts.CONTINUE,
+                    onClick = onContinue,
+                    scale = scale,
+                    modifier = Modifier
+                        .focusRequester(continueFocus)
+                        .testTag(PLAYER_STILL_WATCHING_CONTINUE_TAG),
+                )
+                FvpSecondaryButton(
+                    text = StillWatchingTexts.EXIT,
+                    onClick = onExit,
+                    scale = scale,
+                    modifier = Modifier.testTag(PLAYER_STILL_WATCHING_EXIT_TAG),
+                )
+            }
+        }
+    }
+}
+
+const val PLAYER_STILL_WATCHING_TAG = "player_still_watching"
+const val PLAYER_STILL_WATCHING_CONTINUE_TAG = "player_still_watching_continue"
+const val PLAYER_STILL_WATCHING_EXIT_TAG = "player_still_watching_exit"

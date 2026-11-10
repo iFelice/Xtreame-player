@@ -436,6 +436,37 @@ server Xtream raggiunti con indirizzo privato non risponderebbero.
   entrare. Regole pure in `MyChannelSelection`, `MyChannelBulk`, `myChannelPickerGroups` e
   `myChannelRemovalGroups`, coperte da `MyChannelBulkEditTest`.
 
+### Ora, volume unico e "Stai ancora guardando?"
+
+- **Ora nel player**: sopra il video compare l'ora corrente `HH:mm`, la stessa
+  dell'orologio del menu laterale (stesso formato italiano, stesso font Sora,
+  cifre a larghezza fissa, aggiornamento allo scatto del minuto). Nel **Live**
+  sta dentro il banner del canale, sopra `#numero · nome`; in **film e serie**
+  sta nella barra comandi, a destra del titolo, così non copre il minutaggio
+  della riproduzione e resta invisibile quando la barra è chiusa.
+- **Volume unico dell'app**: il livello 0–15 è uno solo per Live, film, serie e
+  mini-player della **Guida TV**, salvato in `fvp_player_volume.preferences_pb`.
+  Il mini-player parte dal livello salvato (mai più a palla dopo che è stato
+  abbassato) e i **tasti Volume del telecomando** funzionano anche in Guida TV:
+  cambiano il livello, lo salvano e l'anteprima lo segue subito.
+- **"Stai ancora guardando?"**: avviso a schermo nello stesso stile dei pannelli
+  del player (superficie al 60% di nero, angoli 14 dp, bordo bianco al 10%,
+  pulsanti compatti), con "Sì, sto guardando" (focus iniziale) e "No, esci".
+  - **Serie**: scatta quando parte il **terzo episodio** senza che sia stato
+    premuto alcun tasto — i due precedenti sono passati per intero da soli.
+    Contano solo gli avvii **automatici** della coda; l'episodio scelto a mano
+    non conta e il conto riparte.
+  - **Live, film e singolo episodio**: dopo **due ore di riproduzione
+    effettiva** (la pausa non conta, un salto avanti non accelera il conto).
+  - Qualsiasi tasto azzera il conto degli episodi; il conto del tempo non si
+    azzera, perché per queste sorgenti la soglia è "due ore di visione".
+  - Senza risposta entro 60 s il player si chiude e si torna alla scheda o alla
+    lista dei canali.
+  - Regole pure in `StillWatchingMonitor`, coperte da `StillWatchingTest`.
+- **Standby**: fuori dal player lo standby è quello del televisore (nessun
+  wakelock nell'app); con il player aperto lo schermo resta accesso e l'avviso
+  sopra si occupa delle visioni lunghe.
+
 ### VPN WireGuard (solo traffico di FelixVP)
 
 - **Libreria**: `com.wireguard.android:tunnel` (Apache-2.0, vedi `THIRD_PARTY_NOTICES.md`),
@@ -528,6 +559,7 @@ simulato e implementazioni finte per cifrario e preferenze:
 | `CategorySortStoreTest` | preferenze `fvp_sort` vere in Robolectric: valore assente e valore non valido valgono "aggiunta", scelta riletta da una nuova istanza, chiavi `vod_<categoria>` e `series_<categoria>` distinte |
 | `CatalogSortButtonTest` | pulsante di ordinamento in una categoria di Film e assente in NOVITÀ, OK che passa ad A-Z cambiando il primo titolo e lasciando il focus sul pulsante, ordine che resta uscendo e rientrando nella categoria mentre un'altra resta su "Aggiunti di recente", Freccia su dalla prima riga e Freccia giù dal pulsante, pulsante e preferenza distinti per le Serie (Robolectric, un solo `setContent` per test) |
 | `MyChannelBulkEditTest` | selezione multipla pura: aggiunta in fondo nell'ordine di scelta con numerazione che continua dopo l'ultimo, canale già presente non duplicato, rimozione in blocco che ricompatta i numeri, interruttore per canale, per gruppo e per l'intero elenco, gruppi per categoria nell'ordine del catalogo con le categorie vuote saltate e i canali senza categoria in "Altri canali", spunte piena/parziale/assente del gruppo, pagina di rimozione che tiene l'ordine personale e lascia rimovibili i canali spariti dal catalogo (JVM, nessun emulatore) |
+| `StillWatchingTest` | "Stai ancora guardando?" puro: silenzio iniziale, avviso al via del terzo episodio automatico e non al secondo, tasto che azzera il conto degli episodi, due ore di riproduzione effettiva che chiedono una volta sola, pausa che non avanza, tasti sparsi che non azzerano le due ore, nuovo contenuto e chiusura del player che ripartono puliti, avanzamenti negativi ignorati (JVM, nessun emulatore) |
 
 ---
 

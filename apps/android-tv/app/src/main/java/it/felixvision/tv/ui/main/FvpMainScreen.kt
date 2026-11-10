@@ -857,6 +857,9 @@ fun FvpMainScreen(
                         allowedOutputFormats = allowedOutputFormats,
                         liveFormat = container.playerPreferences.liveStreamFormat,
                         videoFormatStore = container.channelVideoFormatStore,
+                        // Volume unico: la Guida TV legge e scrive lo stesso
+                        // livello del player grande.
+                        volumeStore = container.volumeStore,
                         scale = scale,
                         clock = container.clock,
                         focusChannelId = guideReturnChannelId,
