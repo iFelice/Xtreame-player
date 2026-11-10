@@ -340,11 +340,16 @@ class ProtectedPinTest {
         typePinIfEnabled(pin)
         awaitTag("protected_title")
 
-        // Quattro nuovi errori dopo la verifica riuscita: il conteggio è
-        // ripartito, quindi nessun blocco.
+        // Nuovi errori dopo la verifica riuscita: se il conteggio è davvero
+        // ripartito da zero, tre errori sono lontani dal blocco (che scatta al
+        // quinto). Tre e non quattro di proposito: quattro sarebbero a una
+        // lunghezza dal blocco, e un click in più capitato durante il
+        // ridisegno farebbe fallire il test per un motivo che non è quello in
+        // esame. Qui l'intento è "il conteggio è ripartito", non "il confine
+        // esatto è a cinque".
         click("protected_change_pin")
         awaitTag(MOBILE_PIN_ENTRY_TAG)
-        repeat(4) { typePinIfEnabled("9999") }
+        repeat(3) { typePinIfEnabled("9999") }
 
         // Nessuna attesa: la verifica è già conclusa quando `typePin` torna.
         assertEquals(PROTECTED_PIN_WRONG, textOf(MOBILE_PIN_ERROR_TAG))
