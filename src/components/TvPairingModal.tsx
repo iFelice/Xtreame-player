@@ -30,6 +30,7 @@ import {
   PAIRING_RELAY_REQUIRED_MESSAGE,
 } from '../services/pairingRequests';
 import { isStaticDeploy } from '../utils/deployTarget';
+import { isBackKeyCode } from '../platform/tvBack';
 
 const DEFAULT_PAIRING_SERVER = 'https://login-extream-neyt.onrender.com';
 
@@ -94,6 +95,25 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
   const savedAccounts = storage.getAccounts();
   const isTv = isTvEnvironment();
   const relayMissing = (isStaticDeploy() || import.meta.env.VITE_TARGET === 'webos') && !getPairingRelayUrl();
+
+  useEffect(() => {
+    if (!isOpen || !isTv) return;
+    const timer = window.setTimeout(() => {
+      if (typeof document.querySelector !== 'function') return;
+      document.querySelector<HTMLElement>('[data-tv-layer="pairing"] button:not([disabled])')?.focus({ preventScroll: true });
+    }, 0);
+    const onBack = (event: KeyboardEvent) => {
+      if (!isBackKeyCode(event.keyCode)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      onClose();
+    };
+    window.addEventListener('keydown', onBack, true);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener('keydown', onBack, true);
+    };
+  }, [isOpen, isTv, onClose]);
 
   // If initialCode changes, set remotePin and switch mode
   useEffect(() => {
@@ -347,7 +367,7 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
   const qrSizeClasses = isTv ? 'w-52 h-52' : 'w-44 h-44 sm:w-52 sm:h-52';
 
   return (
-    <div className="tv-pairing-modal fixed inset-0 z-50 flex items-center justify-center bg-black/50 safe-area-overlay overflow-y-auto animate-in fade-in duration-200">
+    <div className="tv-pairing-modal fixed inset-0 z-50 flex items-center justify-center bg-black/50 safe-area-overlay overflow-y-auto animate-in fade-in duration-200" aria-modal="true" data-tv-layer={isTv ? 'pairing' : undefined}>
       <div className="tv-pairing-panel glass border border-glass-edge rounded-3xl max-w-2xl w-full shadow-2xl overflow-hidden relative my-auto">
         {/* Header Tabs */}
         <div className="flex items-center justify-between border-b border-separator p-4 sm:p-5">

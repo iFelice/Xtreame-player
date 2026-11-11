@@ -165,10 +165,13 @@ async function ensureMockServer() {
 
 // ── scena ───────────────────────────────────────────────────────────────────
 async function typeIntoTvField(page, selector, value) {
-  // In modalità TV i campi restano in readOnly finché non vengono attivati
-  // (esattamente come sul telecomando): un clic li sblocca, poi si digita.
-  await page.click(selector);
-  await page.waitForTimeout(80);
+  // In modalità TV i campi restano readOnly finché OK non attiva la tastiera.
+  await page.locator(selector).focus();
+  await page.keyboard.press('Enter');
+  await page.waitForFunction((query) => {
+    const input = document.querySelector(query);
+    return input && !input.readOnly;
+  }, selector, { timeout: 3000 });
   await page.keyboard.type(value, { delay: 8 });
 }
 
@@ -227,7 +230,7 @@ async function run() {
     await page.waitForFunction(() => document.querySelector('[data-tv-layer="pairing"]')?.contains(document.activeElement), null, { timeout: 5000 });
     check('pairing TV prende il focus e isola il login sottostante', await page.evaluate(() => {
       const layer = document.querySelector('[data-tv-layer="pairing"]');
-      const field = document.querySelector('input[placeholder="http://server.iptv.com:8080"]');
+      const field = document.querySelector('input[placeholder="http://server.esempio:8080"]');
       return Boolean(layer?.contains(document.activeElement) && field?.closest('[inert]'));
     }));
     await pressRemoteKey(page, 'ArrowDown', 40);
@@ -242,7 +245,7 @@ async function run() {
     ));
 
     // 2) login al server finto → Novità
-    await typeIntoTvField(page, 'input[placeholder="http://server.iptv.com:8080"]', mockUrl);
+    await typeIntoTvField(page, 'input[placeholder="http://server.esempio:8080"]', mockUrl);
     await typeIntoTvField(page, 'input[placeholder="Nome utente"]', 'demo');
     await typeIntoTvField(page, 'input[placeholder="Password"]', 'demo');
     await page.click('#tv-login-submit');
