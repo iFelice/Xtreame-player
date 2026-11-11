@@ -196,7 +196,12 @@ class MyChannelPickerPageTest {
         }
         rule.waitForIdle()
 
-        // Entra nella seconda categoria e sceglie un canale.
+        // Scende sulla seconda categoria (il focus parte dalla prima) ed entra,
+        // poi sceglie un canale.
+        rule.onNodeWithTag(myChannelPickerCategoryTag("1"))
+            .performKeyInput { pressKey(Key.DirectionDown) }
+        rule.waitForIdle()
+        rule.onNodeWithTag(myChannelPickerCategoryTag("2")).assertIsFocused()
         rule.onNodeWithTag(myChannelPickerCategoryTag("2"))
             .performKeyInput { pressKey(Key.DirectionCenter) }
         rule.waitForIdle()
