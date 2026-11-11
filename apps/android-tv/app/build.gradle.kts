@@ -1,3 +1,5 @@
+import org.gradle.api.tasks.testing.Test
+
 plugins {
     alias(libs.plugins.android.application)
     // Con AGP 9 il supporto a Kotlin è integrato: non si applica più
@@ -7,7 +9,41 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+// La release è firmata soltanto quando tutte le credenziali arrivano
+// dall'ambiente (mai da file di configurazione versionati).
+val releaseKeystorePath = System.getenv("FVP_KEYSTORE_PATH")
+val releaseKeystorePassword = System.getenv("FVP_KEYSTORE_PASSWORD")
+val releaseKeyAlias = System.getenv("FVP_KEY_ALIAS")
+val releaseKeyPassword = System.getenv("FVP_KEY_PASSWORD")
+val releaseSigningValues = listOf(
+    releaseKeystorePath,
+    releaseKeystorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword,
+)
+val hasReleaseSigning = releaseSigningValues.all { !it.isNullOrBlank() }
+
+if (!hasReleaseSigning) {
+    logger.warn(
+        "FVP release signing is not configured: set FVP_KEYSTORE_PATH, " +
+            "FVP_KEYSTORE_PASSWORD, FVP_KEY_ALIAS and FVP_KEY_PASSWORD to sign release APKs. " +
+            "The release APK will be unsigned.",
+    )
+}
+
 android {
+    if (hasReleaseSigning) {
+        signingConfigs {
+            create("release") {
+                storeFile = file(releaseKeystorePath!!)
+                storePassword = releaseKeystorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+                storeType = "PKCS12"
+            }
+        }
+    }
+
     namespace = "it.felixvision.tv"
     compileSdk = libs.versions.androidCompileSdk.get().toInt()
 
@@ -15,8 +51,9 @@ android {
         applicationId = "it.felixvision.tv"
         minSdk = libs.versions.androidMinSdk.get().toInt()
         targetSdk = libs.versions.androidTargetSdk.get().toInt()
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = (System.getenv("FVP_VERSION_CODE") ?: "1").toIntOrNull()
+            ?: throw GradleException("FVP_VERSION_CODE must be an integer")
+        versionName = System.getenv("FVP_VERSION_NAME") ?: "0.1.0"
 
         // Indirizzo del servizio di abbinamento (Cloudflare Worker) usato per il
         // pairing da remoto. Per puntare a un altro deployment si modifica qui
@@ -36,6 +73,9 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // Richiesto dalla libreria WireGuard (java.time, stream): stessa
+        // configurazione dell'app WireGuard ufficiale.
+        isCoreLibraryDesugaringEnabled = true
     }
 
     buildTypes {
@@ -43,6 +83,9 @@ android {
             // Nessuna minificazione in questa fase: l'APK è quello di debug/release
             // senza shrinker, così i simboli restano leggibili nei log.
             isMinifyEnabled = false
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 
@@ -56,6 +99,14 @@ android {
         // dipendenze (Dependabot/aggiornamenti) ma solo per errori reali.
         abortOnError = true
         disable += setOf("GradleDependency", "AndroidGradlePluginVersion", "NewerVersionAvailable")
+    }
+}
+
+tasks.withType<Test>().configureEach {
+    testLogging {
+        events("failed")
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+        showStackTraces = true
     }
 }
 
@@ -96,6 +147,12 @@ dependencies {
     implementation(libs.media3.exoplayer.hls)
     implementation(libs.media3.ui)
     implementation(libs.media3.ffmpeg.decoder)
+
+    // VPN di FelixVP: tunnel WireGuard (GoBackend con wireguard-go). Nel tunnel
+    // passa solo il traffico di questa app. Il manifest della libreria dichiara
+    // già il proprio VpnService.
+    implementation(libs.wireguard.tunnel)
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
 
     testImplementation(libs.junit)
     testImplementation(libs.okhttp.mockwebserver)

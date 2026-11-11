@@ -2,6 +2,10 @@ package it.felixvision.tv.data.playback
 
 import it.felixvision.tv.data.xtream.ServerAddress
 import java.nio.charset.StandardCharsets
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 /**
  * URL di riproduzione Xtream, costruiti senza dipendenze Android per poterli
@@ -19,9 +23,17 @@ import java.nio.charset.StandardCharsets
  */
 sealed interface StreamTarget {
 
+    /**
+     * Canale Live. [allowedOutputFormats] sono i formati dichiarati
+     * dall'account; [preferredFormat] è la preferenza dell'utente (vedi
+     * [LiveStreamFormat]) e vale solo tra i formati ammessi: se chiede un
+     * formato che l'account non dichiara, la regola di [StreamUrls.liveExtension]
+     * resta quella di sempre.
+     */
     data class Live(
         val streamId: String,
         val allowedOutputFormats: List<String>,
+        val preferredFormat: LiveStreamFormat = LiveStreamFormat.AUTO,
     ) : StreamTarget
 
     data class Movie(
@@ -45,7 +57,7 @@ object StreamUrls {
     private const val UNRESERVED =
         "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"
 
-    private val CREDENTIALS_IN_PATH = Regex("""(/(?:live|movie|series)/)([^/?#]+)/([^/?#]+)""")
+    private val CREDENTIALS_IN_PATH = Regex("""(/(?:live|movie|series|timeshift)/)([^/?#]+)/([^/?#]+)""")
 
     /**
      * Costruisce l'URL di riproduzione. Restituisce `null` se server o
@@ -64,7 +76,7 @@ object StreamUrls {
         val pass = encodePathSegment(password)
         return when (target) {
             is StreamTarget.Live -> {
-                val extension = liveExtension(target.allowedOutputFormats)
+                val extension = liveExtension(target.allowedOutputFormats, target.preferredFormat)
                 "$base/live/$user/$pass/${encodePathSegment(target.streamId)}.$extension"
             }
             is StreamTarget.Movie ->
@@ -76,15 +88,103 @@ object StreamUrls {
         }
     }
 
+    /** URL Xtream timeshift. Gli epoch sono secondi e la durata è secondi effettivi. */
+    fun buildCatchup(
+        server: String,
+        username: String,
+        password: String,
+        streamId: String,
+        startEpochSeconds: Long,
+        durationSeconds: Long,
+        serverTimezone: String?,
+        deviceTimezone: ZoneId = ZoneId.systemDefault(),
+    ): String? {
+        if (username.isEmpty() || password.isEmpty() || durationSeconds <= 0L) return null
+        val base = ServerAddress.normalize(server) ?: return null
+        val zone = serverTimezone?.let { runCatching { ZoneId.of(it) }.getOrNull() } ?: deviceTimezone
+        val startMinute = Instant.ofEpochSecond(startEpochSeconds).atZone(zone).withSecond(0).withNano(0)
+        val minutes = ((durationSeconds + 59L) / 60L).coerceAtLeast(1L)
+        val formattedStart = DateTimeFormatter.ofPattern("yyyy-MM-dd:HH-mm", Locale.ROOT).format(startMinute)
+        return "$base/timeshift/${encodePathSegment(username)}/${encodePathSegment(password)}/$minutes/$formattedStart/${encodePathSegment(streamId)}.ts"
+    }
+
+    /** Riposiziona il timeshift: arrotonda l'inizio spostato al minuto e ricalcola la durata residua. */
+    fun buildShiftedCatchup(
+        server: String,
+        username: String,
+        password: String,
+        streamId: String,
+        startEpochSeconds: Long,
+        durationSeconds: Long,
+        offsetSeconds: Long,
+        serverTimezone: String?,
+        deviceTimezone: ZoneId = ZoneId.systemDefault(),
+    ): String? {
+        if (durationSeconds <= 0L) return null
+        val requested = startEpochSeconds + offsetSeconds
+        val roundedStart = Math.floorDiv(requested, 60L) * 60L
+        val end = startEpochSeconds + durationSeconds
+        val remaining = end - roundedStart
+        if (remaining <= 0L) return null
+        return buildCatchup(server, username, password, streamId, roundedStart, remaining, serverTimezone, deviceTimezone)
+    }
+
     /**
-     * Regola live: `.ts` è il predefinito. Si passa a `.m3u8` solo quando
-     * l'account non dichiara `ts` e dichiara `m3u8`.
+     * Regola live con [LiveStreamFormat.AUTO]: il formato che il pannello
+     * dichiara per primo, cioè `.ts` quando è ammesso e `.m3u8` altrimenti.
+     *
+     * È la regola del pannello di riferimento, che costruisce l'indirizzo con
+     * `streamType` del server (`SplashActivity`: `streamFormat = stream_type`)
+     * e non con una preferenza propria. Non è una scelta estetica: un `.ts` è
+     * un flusso unico, si apre con **una** richiesta e il primo fotogramma
+     * arriva in 2-3 s, mentre un HLS deve leggere la playlist e scaricare
+     * prima i segmenti interi che coprono l'avvio (in Media3 l'avvio è a
+     * `3 × TARGETDURATION` dal bordo del live), con più richieste in parallelo
+     * che sui pannelli Xtream contano come più connessioni. Il risultato
+     * misurato sul campo: HLS 5-12 s per canale, `.ts` 2-3 s, e lo zapping
+     * automatico (5 s di grazia) salta solo in HLS.
+     *
+     * [LiveStreamFormat.HLS] resta scegliibile per chi vuole imporre i
+     * segmenti. Se il formato richiesto non è tra quelli dichiarati
+     * dall'account vale l'altro: un canale solo `ts` resta in `ts` anche con
+     * [LiveStreamFormat.HLS].
      */
-    fun liveExtension(allowedOutputFormats: List<String>): String {
+    fun liveExtension(
+        allowedOutputFormats: List<String>,
+        preferredFormat: LiveStreamFormat = LiveStreamFormat.DEFAULT,
+    ): String {
         val normalized = allowedOutputFormats.map { it.trim().lowercase() }
         val hasTs = normalized.contains(LIVE_TS)
         val hasHls = normalized.contains(LIVE_HLS)
-        return if (!hasTs && hasHls) LIVE_HLS else LIVE_TS
+        return when {
+            preferredFormat == LiveStreamFormat.HLS && hasHls -> LIVE_HLS
+            preferredFormat == LiveStreamFormat.TS && hasTs -> LIVE_TS
+            // Automatico (o preferenza non ammessa): il formato del pannello.
+            // Con un elenco vuoto o sconosciuto resta `.ts`, che è il flusso
+            // che i pannelli servono da sempre e quello dei due più leggero.
+            hasHls && !hasTs -> LIVE_HLS
+            else -> LIVE_TS
+        }
+    }
+
+    /**
+     * L'altro formato live rispetto a [current], per il ripiego dopo un errore
+     * di riproduzione (lo stesso scambio che fa Black tra HLS e flusso diretto).
+     * Restituisce `null` quando l'account non ammette l'altro formato: in quel
+     * caso non c'è nulla da provare e l'errore resta quello vero.
+     */
+    fun alternateLiveFormat(
+        current: LiveStreamFormat,
+        allowedOutputFormats: List<String>,
+    ): LiveStreamFormat? {
+        val normalized = allowedOutputFormats.map { it.trim().lowercase() }
+        val hasTs = normalized.contains(LIVE_TS)
+        val hasHls = normalized.contains(LIVE_HLS)
+        return when (current) {
+            LiveStreamFormat.TS -> LiveStreamFormat.HLS.takeIf { hasHls }
+            LiveStreamFormat.HLS -> LiveStreamFormat.TS.takeIf { hasTs }
+            LiveStreamFormat.AUTO -> null
+        }
     }
 
     fun containerExtension(raw: String?): String {

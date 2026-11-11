@@ -2,6 +2,7 @@ package it.felixvision.tv.data.catalog
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -18,22 +19,81 @@ class CatalogRefreshTest {
         assertEquals(listOf("Live", "Film", "Serie"), rows.map { it.section.label })
         assertTrue(rows.all { it.status == CatalogSectionStatus.PENDING })
         assertTrue(rows.all { it.statusLabel == "In attesa" })
+        assertTrue(rows.all { it.progressFraction == 0f })
+        assertTrue(rows.all { !it.isIndeterminate })
         assertFalse(CatalogRefresh.isFinished(rows))
     }
 
     @Test
-    fun `scaricamento e completamento aggiornano una sola riga`() {
+    fun `scaricamento con totale noto senza totale elaborazione e completamento`() {
         var rows = CatalogRefresh.idle()
-        rows = CatalogRefresh.apply(rows, CatalogStage(CatalogSection.LIVE, CatalogSectionStatus.DOWNLOADING))
+
+        // Scaricamento con totale noto: 62% · 14,8 di 23,9 MB
+        val totalBytes = (23.9 * CATALOG_BYTES_PER_MB).toLong()
+        val receivedBytes = (totalBytes * 0.62).toLong()
+        rows = CatalogRefresh.apply(
+            rows,
+            CatalogStage(
+                section = CatalogSection.LIVE,
+                status = CatalogSectionStatus.DOWNLOADING,
+                bytesReceived = receivedBytes,
+                bytesTotal = totalBytes,
+            ),
+        )
         assertEquals(CatalogSectionStatus.DOWNLOADING, rows[0].status)
-        assertEquals("Scaricamento…", rows[0].statusLabel)
+        assertEquals("62% · 14,8 di 23,9 MB", rows[0].statusLabel)
+        assertEquals(62, rows[0].progressPercent)
+        assertFalse(rows[0].isIndeterminate)
+        assertEquals(0.62f, rows[0].progressFraction, 0.01f)
         assertEquals(CatalogSectionStatus.PENDING, rows[1].status)
 
-        rows = CatalogRefresh.apply(rows, CatalogStage(CatalogSection.LIVE, CatalogSectionStatus.COMPLETED, 220))
+        // Scaricamento senza totale noto: 14,8 MB
+        val unknownTotalReceived = (14.8 * CATALOG_BYTES_PER_MB).toLong()
+        rows = CatalogRefresh.apply(
+            rows,
+            CatalogStage(
+                section = CatalogSection.LIVE,
+                status = CatalogSectionStatus.DOWNLOADING,
+                bytesReceived = unknownTotalReceived,
+                bytesTotal = null,
+            ),
+        )
+        assertEquals("14,8 MB", rows[0].statusLabel)
+        assertNull(rows[0].progressPercent)
+        assertTrue(rows[0].isIndeterminate)
+        assertFalse(CatalogRefresh.isFinished(rows))
+
+        // Elaborazione in corso: barra piena e "Elaborazione…"
+        rows = CatalogRefresh.apply(
+            rows,
+            CatalogStage(
+                section = CatalogSection.LIVE,
+                status = CatalogSectionStatus.PROCESSING,
+                bytesReceived = totalBytes,
+                bytesTotal = totalBytes,
+            ),
+        )
+        assertEquals(CatalogSectionStatus.PROCESSING, rows[0].status)
+        assertEquals("Elaborazione…", rows[0].statusLabel)
+        assertEquals(1f, rows[0].progressFraction, 0f)
+        assertFalse(rows[0].isIndeterminate)
+        assertFalse(CatalogRefresh.isFinished(rows))
+
+        // Completato con punto delle migliaia
+        rows = CatalogRefresh.apply(
+            rows,
+            CatalogStage(
+                section = CatalogSection.LIVE,
+                status = CatalogSectionStatus.COMPLETED,
+                itemCount = 21_277,
+                bytesReceived = totalBytes,
+                bytesTotal = totalBytes,
+            ),
+        )
         assertEquals(CatalogSectionStatus.COMPLETED, rows[0].status)
-        assertEquals("Completato (220 elementi)", rows[0].statusLabel)
-        assertEquals(CatalogSectionStatus.PENDING, rows[1].status)
-        assertEquals(220, rows[0].itemCount)
+        assertEquals("Completato · 21.277 elementi", rows[0].statusLabel)
+        assertEquals(1f, rows[0].progressFraction, 0f)
+        assertEquals(21_277, rows[0].itemCount)
     }
 
     @Test
@@ -43,8 +103,9 @@ class CatalogRefreshTest {
         rows = CatalogRefresh.apply(rows, CatalogStage(CatalogSection.FILM, CatalogSectionStatus.DOWNLOADING))
         rows = CatalogRefresh.apply(rows, CatalogStage(CatalogSection.FILM, CatalogSectionStatus.ERROR))
 
-        assertEquals("Completato (220 elementi)", rows[0].statusLabel)
+        assertEquals("Completato · 220 elementi", rows[0].statusLabel)
         assertEquals("Errore", rows[1].statusLabel)
+        assertEquals(1f, rows[1].progressFraction, 0f)
         assertEquals("In attesa", rows[2].statusLabel)
         assertTrue(CatalogRefresh.hasError(rows))
         // La serie non è mai partita: l'aggiornamento non è "finito".
@@ -55,16 +116,127 @@ class CatalogRefreshTest {
     fun `tutte le righe concluse chiudono l'aggiornamento`() {
         var rows = CatalogRefresh.idle()
         rows = CatalogRefresh.apply(rows, CatalogStage(CatalogSection.LIVE, CatalogSectionStatus.COMPLETED, 220))
-        rows = CatalogRefresh.apply(rows, CatalogStage(CatalogSection.FILM, CatalogSectionStatus.COMPLETED, 144))
+        rows = CatalogRefresh.apply(rows, CatalogStage(CatalogSection.FILM, CatalogSectionStatus.COMPLETED, 1_440))
         rows = CatalogRefresh.apply(rows, CatalogStage(CatalogSection.SERIES, CatalogSectionStatus.COMPLETED, 42))
 
         assertTrue(CatalogRefresh.isFinished(rows))
         assertFalse(CatalogRefresh.hasError(rows))
-        assertEquals("Completato (42 elementi)", rows[2].statusLabel)
+        assertEquals("Completato · 1.440 elementi", rows[1].statusLabel)
+        assertEquals("Completato · 42 elementi", rows[2].statusLabel)
         assertEquals(
             listOf(CatalogSection.LIVE, CatalogSection.FILM, CatalogSection.SERIES),
             rows.map { it.section },
         )
+    }
+
+    @Test
+    fun `tappe interlacciate di sezioni diverse restano nelle righe Live Film Serie`() {
+        var rows = CatalogRefresh.idle()
+
+        // Ordine volutamente non sequenziale: Serie parte prima, poi Live,
+        // poi Film, con le fasi che si interlacciano.
+        rows = CatalogRefresh.apply(
+            rows,
+            CatalogStage(CatalogSection.SERIES, CatalogSectionStatus.DOWNLOADING, bytesReceived = 10L, bytesTotal = 100L),
+        )
+        rows = CatalogRefresh.apply(
+            rows,
+            CatalogStage(CatalogSection.LIVE, CatalogSectionStatus.COMPLETED, itemCount = 220, bytesReceived = 500L),
+        )
+        rows = CatalogRefresh.apply(
+            rows,
+            CatalogStage(CatalogSection.FILM, CatalogSectionStatus.DOWNLOADING, bytesReceived = 40L, bytesTotal = 80L),
+        )
+        rows = CatalogRefresh.apply(
+            rows,
+            CatalogStage(CatalogSection.SERIES, CatalogSectionStatus.PROCESSING, bytesReceived = 100L, bytesTotal = 100L),
+        )
+        rows = CatalogRefresh.apply(
+            rows,
+            CatalogStage(CatalogSection.FILM, CatalogSectionStatus.COMPLETED, itemCount = 1_440, bytesReceived = 80L),
+        )
+        rows = CatalogRefresh.apply(
+            rows,
+            CatalogStage(CatalogSection.SERIES, CatalogSectionStatus.COMPLETED, itemCount = 42, bytesReceived = 100L),
+        )
+
+        assertEquals(
+            listOf(CatalogSection.LIVE, CatalogSection.FILM, CatalogSection.SERIES),
+            rows.map { it.section },
+        )
+        assertEquals(
+            listOf(CatalogSectionStatus.COMPLETED, CatalogSectionStatus.COMPLETED, CatalogSectionStatus.COMPLETED),
+            rows.map { it.status },
+        )
+        assertEquals(listOf(220, 1_440, 42), rows.map { it.itemCount })
+        assertEquals(listOf(500L, 80L, 100L), rows.map { it.bytesReceived })
+        assertTrue(CatalogRefresh.isFinished(rows))
+        assertFalse(CatalogRefresh.hasError(rows))
+    }
+
+    @Test
+    fun `una lista parziale o in ordine diverso viene normalizzata`() {
+        val partial = listOf(
+            CatalogSectionProgress(
+                section = CatalogSection.SERIES,
+                status = CatalogSectionStatus.DOWNLOADING,
+                bytesReceived = 12L,
+                bytesTotal = 48L,
+            ),
+            CatalogSectionProgress(section = CatalogSection.LIVE, status = CatalogSectionStatus.PENDING),
+        )
+
+        val rows = CatalogRefresh.apply(
+            partial,
+            CatalogStage(CatalogSection.FILM, CatalogSectionStatus.COMPLETED, itemCount = 7),
+        )
+
+        assertEquals(
+            listOf(CatalogSection.LIVE, CatalogSection.FILM, CatalogSection.SERIES),
+            rows.map { it.section },
+        )
+        assertEquals(CatalogSectionStatus.PENDING, rows[0].status)
+        assertEquals(CatalogSectionStatus.COMPLETED, rows[1].status)
+        assertEquals(7, rows[1].itemCount)
+        assertEquals(CatalogSectionStatus.DOWNLOADING, rows[2].status)
+        assertEquals(12L, rows[2].bytesReceived)
+
+        // Lista vuota: la tappa crea comunque le tre righe canoniche.
+        val fromEmpty = CatalogRefresh.apply(
+            emptyList(),
+            CatalogStage(CatalogSection.SERIES, CatalogSectionStatus.DOWNLOADING),
+        )
+        assertEquals(
+            listOf(CatalogSection.LIVE, CatalogSection.FILM, CatalogSection.SERIES),
+            fromEmpty.map { it.section },
+        )
+        assertEquals(CatalogSectionStatus.DOWNLOADING, fromEmpty[2].status)
+    }
+
+    @Test
+    fun `una tappa di scaricamento in ritardo non riapre una riga conclusa`() {
+        var rows = CatalogRefresh.idle()
+        rows = CatalogRefresh.apply(
+            rows,
+            CatalogStage(CatalogSection.FILM, CatalogSectionStatus.COMPLETED, itemCount = 12, bytesReceived = 400L),
+        )
+        // Con le sezioni in parallelo una tappa già in volo può arrivare dopo
+        // la conclusione: la riga non deve tornare a "scaricamento".
+        rows = CatalogRefresh.apply(
+            rows,
+            CatalogStage(CatalogSection.FILM, CatalogSectionStatus.DOWNLOADING, bytesReceived = 40L),
+        )
+        assertEquals(CatalogSectionStatus.COMPLETED, rows[1].status)
+        assertEquals(12, rows[1].itemCount)
+        assertEquals(400L, rows[1].bytesReceived)
+
+        // Un errore invece può ancora sostituire una riga completata.
+        rows = CatalogRefresh.apply(
+            rows,
+            CatalogStage(CatalogSection.FILM, CatalogSectionStatus.ERROR),
+        )
+        assertEquals(CatalogSectionStatus.ERROR, rows[1].status)
+        assertTrue(CatalogRefresh.hasError(rows))
     }
 
     @Test

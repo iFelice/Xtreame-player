@@ -17,6 +17,7 @@ import { RecentProductsShelf } from './components/RecentProductsShelf';
 import { SettingsSyncModal } from './components/SettingsSyncModal';
 import { RemoteLoginView } from './components/RemoteLoginView';
 import { MobileSectionBar } from './components/MobileSectionBar';
+import { StandaloneNotice } from './components/StandaloneNotice';
 
 import {
   XtreamParsedUrl,
@@ -31,18 +32,9 @@ import { xtreamClient } from './services/xtreamClient';
 import { pingPairingRelayHealth } from './services/pairingRequests';
 import { storage, SavedAccount } from './services/storage';
 import { buildStreamUrl } from './utils/parseXtreamUrl';
+import { STATIC_DEPLOY } from './utils/deployTarget';
 import { cleanupLegacyNativeDownloads, isTvEnvironment } from './utils/downloadHelper';
-import { exitTvApp, isDirectMode, isWebOsBuild } from './platform/runtime';
-import {
-  isBackKeyCode,
-  resolveTvBackAction,
-  resolveTvExitConfirmAction,
-  type TvBackAction,
-  type TvBackState,
-} from './platform/tvBack';
-import { closeTvOverlay, isTvOverlayOpen } from './platform/tvOverlays';
 import { useTvNavigation } from './utils/tvNavigation';
-import { chooseLiveZapChannels, wrapLiveChannelIndex } from './player/liveZapping';
 import { chooseInitialTab, shouldShowMobileBar } from './utils/navigation';
 import type { SectionTab } from './utils/navigation';
 
@@ -51,34 +43,11 @@ const VodCatalog = lazy(() => import('./components/VodCatalog').then((module) =>
 const LiveCatalog = lazy(() => import('./components/LiveCatalog').then((module) => ({ default: module.LiveCatalog })));
 const SeriesCatalog = lazy(() => import('./components/SeriesCatalog').then((module) => ({ default: module.SeriesCatalog })));
 const FavoritesView = lazy(() => import('./components/FavoritesView').then((module) => ({ default: module.FavoritesView })));
+const SearchPage = lazy(() => import('./components/SearchPage').then((module) => ({ default: module.SearchPage })));
 
 export default function App() {
-  // Il target webOS è sempre una TV anche se in futuro il suo user-agent
-  // smettesse di corrispondere all'euristica di isTvEnvironment().
-  const isTv = isTvEnvironment() || isWebOsBuild();
+  const isTv = isTvEnvironment();
   useTvNavigation(isTv);
-  useEffect(() => {
-    const applyExitFocusStyle = (event: FocusEvent) => {
-      const target = event.target;
-      if (!(target instanceof HTMLElement) || !target.matches('[data-tv-exit-choice="exit"]')) return;
-      target.style.setProperty('border-color', '#10B981', 'important');
-      target.style.setProperty('background-color', '#10B981', 'important');
-      target.style.setProperty('color', '#FFFFFF', 'important');
-    };
-    const clearExitFocusStyle = (event: FocusEvent) => {
-      const target = event.target;
-      if (!(target instanceof HTMLElement) || !target.matches('[data-tv-exit-choice="exit"]')) return;
-      target.style.removeProperty('border-color');
-      target.style.removeProperty('background-color');
-      target.style.removeProperty('color');
-    };
-    document.addEventListener('focusin', applyExitFocusStyle, true);
-    document.addEventListener('focusout', clearExitFocusStyle, true);
-    return () => {
-      document.removeEventListener('focusin', applyExitFocusStyle, true);
-      document.removeEventListener('focusout', clearExitFocusStyle, true);
-    };
-  }, []);
   const [serverUrl, setServerUrl] = useState<string>('');
   const [username, setUsername] = useState<string>('');
   const [password, setPassword] = useState<string>('');
@@ -89,9 +58,10 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<SectionTab>('recent');
   const [showTvHome, setShowTvHome] = useState<boolean>(false);
   const [activeMedia, setActiveMedia] = useState<PlayableMediaItem | null>(null);
-  const [liveZapChannels, setLiveZapChannels] = useState<XtreamLiveStream[] | undefined>(undefined);
   const [isPlayerFullscreen, setIsPlayerFullscreen] = useState<boolean>(false);
   const [selectedSeriesForModal, setSelectedSeriesForModal] = useState<string | number | null>(null);
+  // Cerca su tutto il catalogo: vista dedicata, mai in modalità TV.
+  const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
 
   const [isLoadingCatalog, setIsLoadingCatalog] = useState<boolean>(false);
   const [isRefreshingCatalog, setIsRefreshingCatalog] = useState<boolean>(false);
@@ -100,14 +70,8 @@ export default function App() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showServerInfo, setShowServerInfo] = useState<boolean>(false);
   const [showSettingsSyncModal, setShowSettingsSyncModal] = useState<boolean>(false);
-  // Only webOS needs an explicit "esci dall'app?" step: the Back key has no
-  // system-level meaning there, so the app owns its own exit.
-  const [showTvExitConfirm, setShowTvExitConfirm] = useState<boolean>(false);
   const [isRemoteLoginPage, setIsRemoteLoginPage] = useState<boolean>(() => {
-    // La schermata RemoteLogin usa /api/session/submit (endpoint Express): su
-    // webOS l'abbinamento passa solo dal relay esterno configurato e quella
-    // route non esiste nel pacchetto .ipk.
-    if (isWebOsBuild() || typeof window === 'undefined') return false;
+    if (typeof window === 'undefined') return false;
     const path = window.location.pathname.toLowerCase();
     const search = new URLSearchParams(window.location.search);
     return path.includes('remote-login') || search.get('page') === 'remote-login' || search.has('code');
@@ -149,6 +113,24 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!isTv) return;
+    const handleTvBack = () => {
+      if (activeMedia) {
+        setActiveMedia(null);
+      } else if (showServerInfo) {
+        setShowServerInfo(false);
+      } else if (showSettingsSyncModal) {
+        setShowSettingsSyncModal(false);
+      } else if (selectedSeriesForModal) {
+        setSelectedSeriesForModal(null);
+      } else if (!showTvHome) {
+        setShowTvHome(true);
+      }
+    };
+    window.addEventListener('android-tv-back', handleTvBack);
+    return () => window.removeEventListener('android-tv-back', handleTvBack);
+  }, [isTv, activeMedia, showServerInfo, showSettingsSyncModal, selectedSeriesForModal, showTvHome]);
 
   // Catalog data
   const [vodCategories, setVodCategories] = useState<XtreamCategory[]>([]);
@@ -289,47 +271,37 @@ export default function App() {
     let cancelled = false;
 
     const restoreSession = async () => {
-      // Modalità diretta (Capacitor, pacchetto webOS da file://): non esiste
-      // alcun Express da interrogare, quindi la safe mode è semplicemente
-      // spenta e si passa subito al ripristino dell'ultimo account.
-      let runtimeSafeMode = false;
-      if (!isDirectMode()) {
-        try {
-          const response = await fetch('/api/runtime-config');
-          const runtime = (await response.json()) as { safeMode?: boolean };
-          runtimeSafeMode = Boolean(runtime.safeMode);
-        } catch (e) {
-          // Il runtime config è un dettaglio del deploy web: se non risponde
-          // (servizio statico, proxy spento, rete instabile) l'app deve
-          // comunque riaprire l'ultimo account salvato.
-          console.warn('Runtime config non disponibile, ripristino account regolare:', e);
-        }
-      }
-      if (cancelled) return;
-      setSafeMode(runtimeSafeMode);
       try {
-        if (runtimeSafeMode) sessionStorage.setItem('xtream_safe_mode', '1');
-        else sessionStorage.removeItem('xtream_safe_mode');
-      } catch {
-        // Storage non disponibile (TV in modalità privata): nessun blocco.
-      }
-      if (isRemoteLoginPage) return;
-      if (runtimeSafeMode) {
-        connectToServer('http://localhost:3333', 'demo', 'demo');
+        // Static hosting has no /api routes. Restore the account and query
+        // parameters as in a normal non-safe deployment, without Express.
+        const runtime: { safeMode?: boolean } = STATIC_DEPLOY
+          ? { safeMode: false }
+          : await (await fetch('/api/runtime-config')).json();
+        if (cancelled) return;
+        setSafeMode(Boolean(runtime.safeMode));
+        if (isRemoteLoginPage) return;
+        if (!runtime.safeMode) sessionStorage.removeItem('xtream_safe_mode');
+        if (runtime.safeMode) {
+          sessionStorage.setItem('xtream_safe_mode', '1');
+          connectToServer('http://localhost:3333', 'demo', 'demo');
+          return;
+        }
+
+        const searchParams = new URLSearchParams(window.location.search);
+        const paramServer = searchParams.get('server') || searchParams.get('url');
+        const paramUser = searchParams.get('user') || searchParams.get('username');
+        const paramPass = searchParams.get('pass') || searchParams.get('password');
+        const paramSettings = searchParams.get('settings') || searchParams.get('setup');
+
+        if (paramServer && paramUser && paramPass) {
+          connectToServer(paramServer, paramUser, paramPass);
+          return;
+        }
+        if (paramSettings) setShowSettingsSyncModal(true);
+      } catch (e) {
+        console.error('Error restoring app session:', e);
         return;
       }
-
-      const searchParams = new URLSearchParams(window.location.search);
-      const paramServer = searchParams.get('server') || searchParams.get('url');
-      const paramUser = searchParams.get('user') || searchParams.get('username');
-      const paramPass = searchParams.get('pass') || searchParams.get('password');
-      const paramSettings = searchParams.get('settings') || searchParams.get('setup');
-
-      if (paramServer && paramUser && paramPass) {
-        connectToServer(paramServer, paramUser, paramPass);
-        return;
-      }
-      if (paramSettings) setShowSettingsSyncModal(true);
 
       const last = storage.getLastAccount();
       if (last?.serverUrl && last.username && last.password) {
@@ -344,44 +316,15 @@ export default function App() {
     return () => { cancelled = true; };
   }, [connectToServer, isRemoteLoginPage]);
 
-  const makeLiveMedia = (stream: XtreamLiveStream, categoryName?: string): PlayableMediaItem => ({
-    id: `live_${stream.stream_id}`,
-    title: stream.name,
-    type: 'live',
-    streamUrl: stream.direct_source || buildStreamUrl(
-      serverUrl, username, password, 'live', stream.stream_id, 'm3u8', false
-    ),
-    poster: stream.stream_icon,
-    categoryName: categoryName || liveCategories.find((category) => String(category.category_id) === String(stream.category_id))?.category_name || 'Canale Live TV',
-    containerExtension: 'm3u8',
-  });
-
-  const handlePlayDirect = (
-    media: PlayableMediaItem,
-    origin?: { channels: XtreamLiveStream[]; categoryName: string }
-  ) => {
-    if (media.type === 'live') {
-      setLiveZapChannels(chooseLiveZapChannels(origin?.channels, liveStreams));
-      if (origin?.categoryName) media = { ...media, categoryName: origin.categoryName };
-    } else {
-      setLiveZapChannels(undefined);
-    }
+  const handlePlayDirect = (media: PlayableMediaItem) => {
     setActiveMedia(media);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleFavoritePlay = (media: PlayableMediaItem) => {
-    if (media.type !== 'live') {
-      handlePlayDirect(media);
-      return;
-    }
-    const favoriteIds = storage.getFavorites(currentAccountKey)
-      .filter((favorite) => favorite.type === 'live')
-      .map((favorite) => favorite.id.replace(/^live_/, ''));
-    const channels = favoriteIds
-      .map((id) => liveStreams.find((stream) => String(stream.stream_id) === id))
-      .filter((stream): stream is XtreamLiveStream => Boolean(stream));
-    handlePlayDirect(media, { channels, categoryName: 'Preferiti' });
+  // Qualsiasi cambio di sezione chiude la ricerca: si torna alla vista normale.
+  const handleSelectTab = (tab: SectionTab) => {
+    setActiveTab(tab);
+    setIsSearchOpen(false);
   };
 
   const handleSelectSavedAccount = (account: SavedAccount) => {
@@ -401,32 +344,65 @@ export default function App() {
     setSeriesCategories([]);
     setSeriesList([]);
     setActiveMedia(null);
-    setLiveZapChannels(undefined);
     setErrorMessage(null);
     setRefreshSuccessMessage(null);
+    setIsSearchOpen(false);
   };
 
-  const stepLiveChannel = (delta: -1 | 1) => {
-    if (!activeMedia || activeMedia.type !== 'live') return;
-    const channels = chooseLiveZapChannels(liveZapChannels, liveStreams);
-    if (!channels.length) return;
-    const currentId = activeMedia.id.replace('live_', '');
-    const currentIndex = channels.findIndex((stream) => String(stream.stream_id) === currentId);
-    const nextIndex = wrapLiveChannelIndex(currentIndex < 0 ? (delta === 1 ? -1 : 0) : currentIndex, delta, channels.length);
-    const nextStream = channels[nextIndex];
-    if (!nextStream) return;
-    const categoryName = liveZapChannels === undefined
-      ? undefined
-      : activeMedia.categoryName;
-    setActiveMedia(makeLiveMedia(nextStream, categoryName));
+  const handleNextChannel = () => {
+    if (!activeMedia || activeMedia.type !== 'live' || liveStreams.length === 0) return;
+    const currentStreamId = activeMedia.id.replace('live_', '');
+    const currentIndex = liveStreams.findIndex((s) => String(s.stream_id) === String(currentStreamId));
+    const nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % liveStreams.length;
+    const nextStream = liveStreams[nextIndex];
+    if (nextStream) {
+      const streamUrl = buildStreamUrl(
+        serverUrl,
+        username,
+        password,
+        'live',
+        nextStream.stream_id,
+        'm3u8',
+        false
+      );
+      setActiveMedia({
+        id: `live_${nextStream.stream_id}`,
+        title: nextStream.name,
+        type: 'live',
+        streamUrl,
+        poster: nextStream.stream_icon,
+        categoryName: 'Canale Live TV',
+        containerExtension: 'm3u8',
+      });
+    }
   };
 
-  const handleNextChannel = () => stepLiveChannel(1);
-  const handlePreviousChannel = () => stepLiveChannel(-1);
-  const handleSelectLiveChannel = (stream: XtreamLiveStream) => {
-    const channels = chooseLiveZapChannels(liveZapChannels, liveStreams);
-    setLiveZapChannels(channels);
-    setActiveMedia(makeLiveMedia(stream, activeMedia?.categoryName));
+  const handlePreviousChannel = () => {
+    if (!activeMedia || activeMedia.type !== 'live' || liveStreams.length === 0) return;
+    const currentStreamId = activeMedia.id.replace('live_', '');
+    const currentIndex = liveStreams.findIndex((s) => String(s.stream_id) === String(currentStreamId));
+    const prevIndex = currentIndex === -1 ? liveStreams.length - 1 : (currentIndex - 1 + liveStreams.length) % liveStreams.length;
+    const prevStream = liveStreams[prevIndex];
+    if (prevStream) {
+      const streamUrl = buildStreamUrl(
+        serverUrl,
+        username,
+        password,
+        'live',
+        prevStream.stream_id,
+        'm3u8',
+        false
+      );
+      setActiveMedia({
+        id: `live_${prevStream.stream_id}`,
+        title: prevStream.name,
+        type: 'live',
+        streamUrl,
+        poster: prevStream.stream_icon,
+        categoryName: 'Canale Live TV',
+        containerExtension: 'm3u8',
+      });
+    }
   };
 
   const isConnected = Boolean(serverUrl && username && password);
@@ -437,109 +413,6 @@ export default function App() {
     isLoadingCatalog,
     isPlayerFullscreen,
   });
-
-  // ── Tasto Indietro del telecomando ────────────────────────────────────────
-  // La scelta di cosa chiudere sta in `resolveTvBackAction` (funzione pura,
-  // coperta dai test); qui si legge lo stato reale e si esegue il comando.
-  const buildTvBackState = useCallback((): TvBackState => {
-    return {
-      playerOpen: Boolean(activeMedia),
-      serverInfoOpen: showServerInfo,
-      settingsSyncOpen: showSettingsSyncModal,
-      tvPairingOpen: isTvOverlayOpen('tv-pairing'),
-      seriesModalOpen: selectedSeriesForModal !== null || isTvOverlayOpen('series-modal'),
-      categoryPanelOpen: isTvOverlayOpen('category-panel'),
-      showTvHome: Boolean(isTv && isConnected && !isLoadingCatalog && showTvHome && !activeMedia),
-      exitConfirmOpen: showTvExitConfirm,
-      // Su webOS il lettore gestisce da solo il 461 (come fa Escape con il
-      // proprio schermo intero): l'App non deve chiuderlo una seconda volta.
-      playerHandlesBack: isWebOsBuild() && Boolean(activeMedia),
-      canExitApp: isWebOsBuild(),
-    };
-  }, [
-    activeMedia,
-    showServerInfo,
-    showSettingsSyncModal,
-    selectedSeriesForModal,
-    showTvHome,
-    showTvExitConfirm,
-    isTv,
-    isConnected,
-    isLoadingCatalog,
-  ]);
-
-  const applyTvBackAction = useCallback((action: TvBackAction) => {
-    switch (action.type) {
-      case 'close-layer':
-        switch (action.layer) {
-          case 'player':
-            setActiveMedia(null);
-            break;
-          case 'server-info':
-            setShowServerInfo(false);
-            break;
-          case 'settings-sync':
-            setShowSettingsSyncModal(false);
-            break;
-          case 'tv-pairing':
-            closeTvOverlay('tv-pairing');
-            break;
-          case 'series-modal':
-            if (!closeTvOverlay('series-modal')) setSelectedSeriesForModal(null);
-            break;
-          case 'category-panel':
-            closeTvOverlay('category-panel');
-            break;
-        }
-        return;
-      case 'show-tv-home':
-        setShowTvHome(true);
-        return;
-      case 'open-exit-confirm':
-        setShowTvExitConfirm(true);
-        return;
-      case 'close-exit-confirm':
-        setShowTvExitConfirm(false);
-        return;
-      case 'exit-app':
-        setShowTvExitConfirm(false);
-        exitTvApp();
-        return;
-      case 'none':
-      default:
-        return;
-    }
-  }, []);
-
-  const handleTvBackPress = useCallback(() => {
-    applyTvBackAction(resolveTvBackAction(buildTvBackState()));
-  }, [applyTvBackAction, buildTvBackState]);
-
-  useEffect(() => {
-    if (!isTv && !isWebOsBuild()) return;
-    // 1) Bridge Capacitor (Android TV): evento dedicato.
-    window.addEventListener('android-tv-back', handleTvBackPress);
-    // 2) webOS: il tasto Indietro arriva come keyCode 461 (key "GoBack",
-    //    `code` vuoto) perché l'app è pacchettizzata con
-    //    "disableBackHistoryAPI": true. Si riconosce solo per keyCode.
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (!isWebOsBuild() || !isBackKeyCode(event.keyCode)) return;
-      // The mounted player owns Back so it can close nested live layers and
-      // its controls bar before the App considers closing the player itself.
-      if (activeMedia && !showTvExitConfirm) return;
-      event.preventDefault();
-      handleTvBackPress();
-    };
-    if (isWebOsBuild()) window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('android-tv-back', handleTvBackPress);
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [isTv, handleTvBackPress, activeMedia, showTvExitConfirm]);
-
-  const handleTvExitChoice = (confirmed: boolean) => {
-    applyTvBackAction(resolveTvExitConfirmAction(confirmed));
-  };
 
   if (isRemoteLoginPage) {
     return (
@@ -557,7 +430,7 @@ export default function App() {
     <div className="min-h-screen bg-surface-0 text-label flex flex-col selection:bg-accent/15 selection:text-accent-strong w-full max-w-full overflow-x-clip">
       <div className="sticky top-0 z-40">
         {safeMode && (
-          <div className="flex items-center justify-center gap-2 border-b border-accent/40 bg-accent px-3 py-1.5 text-xs font-bold tracking-[0.16em] text-on-accent shadow-lg" role="status">
+          <div className="flex items-center justify-center gap-2 border-b border-accent/40 bg-accent safe-area-banner text-xs font-bold tracking-[0.16em] text-on-accent shadow-lg" role="status">
             <span className="h-2 w-2 rounded-full bg-on-accent" aria-hidden="true" />
             MODALITÀ SICURA · MOCK LOCALE
           </div>
@@ -573,10 +446,12 @@ export default function App() {
           onRefreshCatalog={handleRefreshCatalog}
           isRefreshingCatalog={isRefreshingCatalog}
           lastRefreshedAt={lastRefreshedAt}
+          onOpenSearch={isConnected && !isTv ? () => setIsSearchOpen(true) : undefined}
+          isSearchOpen={isSearchOpen}
         />
       </div>
       {downloadFeedback && (
-        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[100] max-w-[90vw] px-5 py-3 rounded-2xl bg-surface-0/95 border border-series/70 text-label shadow-2xl flex items-center gap-3">
+        <div className="fixed top-5 mt-[env(safe-area-inset-top)] left-1/2 -translate-x-1/2 z-[100] max-w-[90vw] px-5 py-3 rounded-2xl bg-surface-0/95 border border-series/70 text-label shadow-2xl flex items-center gap-3">
           {downloadFeedback.status === 'finished' ? (
             <CheckCircle2 className="w-5 h-5 text-accent shrink-0" />
           ) : (
@@ -597,6 +472,9 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className={`flex-1 w-full max-w-[2400px] mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-6 overflow-x-hidden ${showMobileBar ? 'pb-[calc(56px+env(safe-area-inset-bottom)+1.5rem)] md:pb-6' : ''}`}>
+        {/* One-time notice: PiP and downloads need a Safari tab, not the Home Screen app. */}
+        <StandaloneNotice />
+
         {/* Refresh Success Notification Banner */}
         {refreshSuccessMessage && (
           <div className="p-4 rounded-2xl bg-accent/15 border border-accent/40 text-label flex items-center justify-between gap-3 animate-in fade-in shadow-xl">
@@ -618,11 +496,9 @@ export default function App() {
           <section className="space-y-3 animate-in fade-in slide-in-from-top-4 duration-300">
             <MediaPlayer
               media={activeMedia}
-              liveChannels={activeMedia.type === 'live' ? chooseLiveZapChannels(liveZapChannels, liveStreams) : undefined}
-              onSelectLiveChannel={handleSelectLiveChannel}
               onClose={() => setActiveMedia(null)}
-              onNext={activeMedia.type === 'live' && chooseLiveZapChannels(liveZapChannels, liveStreams).length > 1 ? handleNextChannel : undefined}
-              onPrevious={activeMedia.type === 'live' && chooseLiveZapChannels(liveZapChannels, liveStreams).length > 1 ? handlePreviousChannel : undefined}
+              onNext={activeMedia.type === 'live' && liveStreams.length > 1 ? handleNextChannel : undefined}
+              onPrevious={activeMedia.type === 'live' && liveStreams.length > 1 ? handlePreviousChannel : undefined}
               onFullscreenChange={setIsPlayerFullscreen}
               accountKey={currentAccountKey}
             />
@@ -703,7 +579,7 @@ export default function App() {
               )}
               {/* 1. Live TV */}
               <button
-                onClick={() => setActiveTab('live')}
+                onClick={() => handleSelectTab('live')}
                 className={`flex items-center gap-2.5 px-4 sm:px-5 py-2.5 rounded-2xl text-sm sm:text-base font-bold transition cursor-pointer shadow-md ${
                   activeTab === 'live'
                     ? 'bg-live text-on-accent  scale-105'
@@ -719,7 +595,7 @@ export default function App() {
 
               {/* 2. Film & VOD */}
               <button
-                onClick={() => setActiveTab('movies')}
+                onClick={() => handleSelectTab('movies')}
                 className={`flex items-center gap-2.5 px-4 sm:px-5 py-2.5 rounded-2xl text-sm sm:text-base font-bold transition cursor-pointer shadow-md ${
                   activeTab === 'movies'
                     ? 'bg-accent text-on-accent  scale-105'
@@ -735,7 +611,7 @@ export default function App() {
 
               {/* 3. Serie TV */}
               <button
-                onClick={() => setActiveTab('series')}
+                onClick={() => handleSelectTab('series')}
                 className={`flex items-center gap-2.5 px-4 sm:px-5 py-2.5 rounded-2xl text-sm sm:text-base font-bold transition cursor-pointer shadow-md ${
                   activeTab === 'series'
                     ? 'bg-series text-on-accent  scale-105'
@@ -751,7 +627,7 @@ export default function App() {
 
               {/* 4. Novità & Recenti */}
               <button
-                onClick={() => setActiveTab('recent')}
+                onClick={() => handleSelectTab('recent')}
                 className={`flex items-center gap-2.5 px-4 sm:px-5 py-2.5 rounded-2xl text-sm sm:text-base font-bold transition cursor-pointer shadow-md ${
                   activeTab === 'recent'
                     ? 'bg-fresh text-on-accent scale-105'
@@ -764,7 +640,7 @@ export default function App() {
 
               {/* 5. Preferiti & Continua a Guardare */}
               <button
-                onClick={() => setActiveTab('favorites')}
+                onClick={() => handleSelectTab('favorites')}
                 className={`flex items-center gap-2.5 px-4 sm:px-5 py-2.5 rounded-2xl text-sm sm:text-base font-bold transition cursor-pointer shadow-md ${
                   activeTab === 'favorites'
                     ? 'bg-favorite hover:brightness-110 text-on-accent border-2 border-favorite/80 scale-105'
@@ -808,6 +684,26 @@ export default function App() {
               Caricamento categorie, canali in diretta, film VOD e serie TV per l'account specificato.
             </p>
           </div>
+        ) : isSearchOpen && isConnected ? (
+          /* Cerca su tutto il catalogo: Live, Film e Serie in un'unica vista. */
+          <Suspense fallback={<div className="mt-4 py-16 text-center text-label-secondary">Caricamento ricerca…</div>}>
+            <SearchPage
+              liveStreams={liveStreams}
+              movies={vodStreams}
+              seriesList={seriesList}
+              serverUrl={serverUrl}
+              username={username}
+              password={password}
+              onPlay={handlePlayDirect}
+              onOpenSeries={(series) => {
+                setSelectedSeriesForModal(series.series_id);
+                handleSelectTab('series');
+              }}
+              onClose={() => setIsSearchOpen(false)}
+              activeMediaId={activeMedia?.id}
+              accountKey={currentAccountKey}
+            />
+          </Suspense>
         ) : isConnected ? (
           isTv && showTvHome ? null : (
           <Suspense fallback={<div className="mt-4 py-16 text-center text-label-secondary">Caricamento sezione…</div>}>
@@ -866,20 +762,23 @@ export default function App() {
                 onPlay={handlePlayDirect}
                 onOpenSeries={(series) => {
                   setSelectedSeriesForModal(series.series_id);
-                  setActiveTab('series');
+                  handleSelectTab('series');
                 }}
-                onNavigateToTab={(tab) => setActiveTab(tab)}
+                onNavigateToTab={(tab) => handleSelectTab(tab)}
               />
             )}
 
             {activeTab === 'favorites' && (
               <FavoritesView
-                onPlay={handleFavoritePlay}
+                onPlay={handlePlayDirect}
                 onOpenSeries={(seriesId) => {
                   setSelectedSeriesForModal(seriesId);
-                  setActiveTab('series');
+                  handleSelectTab('series');
                 }}
                 accountKey={currentAccountKey}
+                serverUrl={serverUrl}
+                username={username}
+                password={password}
               />
             )}
           </div>
@@ -923,55 +822,6 @@ export default function App() {
         }}
       />
 
-      {/* webOS: the Back key on the TV home screen asks before closing the app. */}
-      {isWebOsBuild() && showTvExitConfirm && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="tv-exit-title"
-          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/85 p-6"
-        >
-          <div className="w-full max-w-2xl rounded-3xl border-2 border-separator-strong bg-surface-0 p-8 text-center shadow-2xl">
-            <h2 id="tv-exit-title" className="text-3xl font-black text-label">
-              Vuoi uscire?
-            </h2>
-            <p className="mt-3 text-lg text-label-secondary">
-              L'app viene chiusa. Gli account salvati restano sul televisore.
-            </p>
-            <div className="mt-8 flex items-center justify-center gap-4">
-              {/* Annulla riceve il focus: un secondo Indietro chiude la conferma. */}
-              <button
-                type="button"
-                autoFocus
-                data-tv-exit-choice="cancel"
-                onClick={() => handleTvExitChoice(false)}
-                className="min-w-40 rounded-2xl border-2 border-separator-strong bg-surface-1 px-6 py-3 text-xl font-bold text-label transition hover:bg-surface-2"
-              >
-                Annulla
-              </button>
-              <button
-                type="button"
-                data-tv-exit-choice="exit"
-                onFocus={(event) => {
-                  event.currentTarget.style.borderColor = '#10B981';
-                  event.currentTarget.style.backgroundColor = '#10B981';
-                  event.currentTarget.style.color = '#FFFFFF';
-                }}
-                onBlur={(event) => {
-                  event.currentTarget.style.removeProperty('border-color');
-                  event.currentTarget.style.removeProperty('background-color');
-                  event.currentTarget.style.removeProperty('color');
-                }}
-                onClick={() => handleTvExitChoice(true)}
-                className="min-w-40 rounded-2xl border-2 border-separator-strong bg-surface-1 px-6 py-3 text-xl font-bold text-label transition hover:bg-surface-2 focus-visible:border-[#10B981] focus-visible:bg-[#10B981] focus-visible:text-white"
-              >
-                Esci
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Footer */}
       <footer className={`w-full border-t border-separator bg-surface-0 py-4 text-center text-xs sm:text-sm text-label-tertiary ${showMobileBar ? 'mb-[calc(56px+env(safe-area-inset-bottom))] md:mb-0' : ''}`}>
         FelixVisionPlayer &bull; Riproduttore multimediale per server Xtream Codes
@@ -981,7 +831,7 @@ export default function App() {
       {showMobileBar && (
         <MobileSectionBar
           activeTab={activeTab}
-          onSelect={(tab) => setActiveTab(tab)}
+          onSelect={(tab) => handleSelectTab(tab)}
         />
       )}
     </div>

@@ -1,17 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { xtreamClient } from './xtreamClient';
+import { Capacitor } from '@capacitor/core';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-function stubFetch(payload: unknown = []) {
-  const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
-    new Response(JSON.stringify(payload), { status: 200 })
-  );
-  vi.stubGlobal('fetch', fetchMock);
-  return fetchMock;
-}
-
-beforeEach(() => {
-  (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-});
+const server = 'http://server.esempio:8080';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -19,37 +9,28 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('xtream request routing', () => {
-  it('uses the Express proxy on the web build', async () => {
-    vi.stubEnv('VITE_TARGET', '');
-    const fetchMock = stubFetch();
-
-    await xtreamClient.authenticate('http://server.esempio:8080', 'demo', 'demo');
-
-    const requested = String(fetchMock.mock.calls[0][0]);
-    expect(requested.startsWith('/api/proxy/api?url=')).toBe(true);
-    expect(requested).toContain(encodeURIComponent('http://server.esempio:8080/player_api.php'));
+describe('Xtream client routing', () => {
+  it('calls the provider directly in static mode', async () => {
+    vi.stubEnv('MODE', 'static');
+    vi.resetModules();
+    const { xtreamClient } = await import('./xtreamClient');
+    vi.spyOn(Capacitor, 'isNativePlatform').mockReturnValue(false);
+    const fetchMock = vi.fn(async (_url: RequestInfo | URL, _options?: RequestInit) => new Response(JSON.stringify({ user_info: { auth: 1 } }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await xtreamClient.authenticate(server, 'demo', 'demo');
+    expect(fetchMock.mock.calls[0][0]).toBe(`${server}/player_api.php?username=demo&password=demo`);
+    expect(String(fetchMock.mock.calls[0][0])).not.toContain('/api/proxy');
   });
 
-  it('calls the Xtream server directly in the webOS build', async () => {
-    vi.stubEnv('VITE_TARGET', 'webos');
-    const fetchMock = stubFetch();
-
-    await xtreamClient.authenticate('http://server.esempio:8080', 'demo', 'demo');
-    await xtreamClient.getLiveStreams('http://server.esempio:8080', 'demo', 'demo', 'all');
-
-    expect(String(fetchMock.mock.calls[0][0])).toBe(
-      'http://server.esempio:8080/player_api.php?username=demo&password=demo'
-    );
-    expect(String(fetchMock.mock.calls[1][0])).toContain('action=get_live_streams');
-    for (const call of fetchMock.mock.calls) {
-      expect(String(call[0])).not.toContain('/api/');
-    }
-  });
-
-  it('never returns a non-array catalogue as a list', async () => {
-    vi.stubEnv('VITE_TARGET', 'webos');
-    stubFetch({ provider_message: 'nope' } as unknown);
-    await expect(xtreamClient.getVodCategories('http://server.esempio:8080', 'demo', 'demo')).resolves.toEqual([]);
+  it('still uses the Express API proxy on normal web builds', async () => {
+    vi.stubEnv('MODE', 'production');
+    vi.resetModules();
+    const { xtreamClient } = await import('./xtreamClient');
+    vi.spyOn(Capacitor, 'isNativePlatform').mockReturnValue(false);
+    const fetchMock = vi.fn(async (_url: RequestInfo | URL, _options?: RequestInit) => new Response('[]', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await xtreamClient.getVodCategories(server, 'demo', 'demo');
+    const direct = `${server}/player_api.php?username=demo&password=demo&action=get_vod_categories`;
+    expect(fetchMock.mock.calls[0][0]).toBe(`/api/proxy/api?url=${encodeURIComponent(direct)}`);
   });
 });

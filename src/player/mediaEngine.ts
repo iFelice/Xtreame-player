@@ -9,29 +9,20 @@ export interface MediaEngineRefs {
 
 export type MediaEngineKind = 'mpegts' | 'hls-js' | 'native-hls' | 'native-video';
 
-export interface MediaEngineSelection {
+export function selectMediaEngine(options: {
   isLive: boolean;
   liveFormat: 'm3u8' | 'ts';
   mediaExtension?: string;
   supportsMpegTs: boolean;
   supportsHlsJs: boolean;
   supportsNativeHls: boolean;
-  /**
-   * Explicit request for the platform's own `<video>` element: no hls.js and
-   * no mpegts.js are ever created. Used by the LG webOS build, where the
-   * native decoder plays both `.ts` and `.m3u8` (verified on the TV) and MSE
-   * remuxing would only add latency and a second open connection — the Xtream
-   * server allows a single concurrent connection per account.
-   */
-  preferNativeOnly?: boolean;
-}
-
-export function selectMediaEngine(options: MediaEngineSelection): MediaEngineKind {
-  if (options.preferNativeOnly) return 'native-video';
+  isAppleMobile: boolean;
+}): MediaEngineKind {
   const isHls = options.isLive
     ? options.liveFormat === 'm3u8'
     : options.mediaExtension?.toLowerCase() === 'm3u8';
   if (options.isLive && !isHls && options.supportsMpegTs) return 'mpegts';
+  if (isHls && options.isAppleMobile && options.supportsNativeHls) return 'native-hls';
   if (isHls && options.supportsHlsJs) return 'hls-js';
   if (isHls && options.supportsNativeHls) return 'native-hls';
   return 'native-video';

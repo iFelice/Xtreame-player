@@ -23,6 +23,22 @@ object PlaybackErrors {
     fun messageFor(error: Throwable?): String =
         if (isAccessDenied(error)) ACCESS_DENIED else GENERIC
 
+    /**
+     * Vero per ogni risposta HTTP di errore (401/403/404, 5xx, ...): il server
+     * ha risposto, quindi il problema non è "quel formato non parte" e un
+     * secondo tentativo sull'altro formato non aiuta.
+     */
+    fun isHttpResponseError(error: Throwable?): Boolean {
+        var cause = error
+        var depth = 0
+        while (cause != null && depth < 8) {
+            if (cause is HttpDataSource.InvalidResponseCodeException) return true
+            cause = cause.cause
+            depth++
+        }
+        return false
+    }
+
     fun isAccessDenied(error: Throwable?): Boolean {
         var cause = error
         var depth = 0

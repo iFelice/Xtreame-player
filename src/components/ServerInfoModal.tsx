@@ -22,7 +22,7 @@ export const ServerInfoModal: React.FC<ServerInfoModalProps> = ({
   const server = authData.server_info;
 
   return (
-    <div data-tv-layer="server-info" role="dialog" aria-modal="true" className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center safe-area-overlay-lg">
       <div className="relative w-full max-w-lg glass border border-glass-edge rounded-2xl overflow-hidden shadow-2xl p-6">
         <div className="flex items-center justify-between pb-4 border-b border-separator">
           <div className="flex items-center gap-2">

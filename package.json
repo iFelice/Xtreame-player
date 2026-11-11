@@ -12,6 +12,7 @@
     "install:webos-tv": "npm --prefix apps/webos-tv run install-tv",
     "launch:webos-tv": "npm --prefix apps/webos-tv run launch",
     "test:webos:tv": "node tools/webos/tv-smoke.mjs",
+    "build:static": "vite build --mode static",
     "start": "tsx server.ts",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",

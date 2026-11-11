@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -29,22 +30,32 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.tv.material3.Text
+import it.felixvision.tv.ui.components.BrandBackdrop
 import it.felixvision.tv.ui.components.FvpErrorText
 import it.felixvision.tv.ui.components.FvpPasswordField
 import it.felixvision.tv.ui.components.FvpPrimaryButton
 import it.felixvision.tv.ui.components.FvpSecondaryButton
 import it.felixvision.tv.ui.components.FvpStatusText
 import it.felixvision.tv.ui.components.FvpTextField
+import it.felixvision.tv.ui.components.LoadingState
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.theme.FvpColors
 import kotlinx.coroutines.flow.distinctUntilChanged
+
+/** Tag di test dei campi del modulo di accesso (l'elemento che riceve il focus). */
+const val LOGIN_SERVER_FIELD_TAG = "login_server_field"
+const val LOGIN_USERNAME_FIELD_TAG = "login_username_field"
+const val LOGIN_PASSWORD_FIELD_TAG = "login_password_field"
 
 /**
  * Schermata di accesso: modulo a sinistra, abbinamento remoto a destra.
  *
  * Navigazione solo con il telecomando: ogni elemento interattivo è focalizzabile
- * e mostra il focus con bordo verde e leggero ingrandimento. Il pannello di
- * abbinamento vive solo finché la schermata è in primo piano.
+ * e mostra il focus con bordo verde e leggero ingrandimento. I campi aprono la
+ * tastiera solo con OK: il focus da solo non la mostra, così Su/Giù passano da
+ * un campo all'altro senza tastiera. All'apertura il focus va su "Server o
+ * codice". Il pannello di abbinamento vive solo finché la schermata è in primo
+ * piano.
  */
 @Composable
 fun LoginScreen(
@@ -97,32 +108,47 @@ fun LoginScreen(
         onStopOrDispose { onPairingHidden() }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .fillMaxHeight()
-            .padding(horizontal = scale.dp(38f), vertical = scale.dp(26f)),
-    ) {
-        BrandHeader(scale = scale)
-        Spacer(Modifier.height(scale.dp(20f)))
-        Row(modifier = Modifier.fillMaxWidth()) {
-            LoginForm(
-                state = state,
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight()
+                .padding(horizontal = scale.dp(38f), vertical = scale.dp(26f)),
+        ) {
+            BrandHeader(scale = scale)
+            Spacer(Modifier.height(scale.dp(20f)))
+            Row(modifier = Modifier.fillMaxWidth()) {
+                LoginForm(
+                    state = state,
+                    scale = scale,
+                    serverState = serverState,
+                    usernameState = usernameState,
+                    passwordState = passwordState,
+                    serverFocus = serverFocus,
+                    onSubmit = onSubmit,
+                    onTogglePasswordVisible = onTogglePasswordVisible,
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(Modifier.width(scale.dp(26f)))
+                PairingPanel(
+                    state = state.pairing,
+                    scale = scale,
+                    modifier = Modifier.width(scale.dp(340f)),
+                    onRenewCode = onRenewCode,
+                )
+            }
+        }
+    }
+
+    // Accesso automatico, invio del modulo e verifica delle credenziali
+    // ricevute dal telefono: attesa a schermo intero con lo stesso sfondo
+    // dell'avvio. La schermata sottostante resta com'è e riappare appena
+    // l'attesa finisce (per esempio con l'errore da correggere).
+    if (state.busy) {
+        BrandBackdrop(scale = scale) {
+            LoadingState(
+                message = state.statusMessage ?: "Accesso in corso…",
                 scale = scale,
-                serverState = serverState,
-                usernameState = usernameState,
-                passwordState = passwordState,
-                serverFocus = serverFocus,
-                onSubmit = onSubmit,
-                onTogglePasswordVisible = onTogglePasswordVisible,
-                modifier = Modifier.weight(1f),
-            )
-            Spacer(Modifier.width(scale.dp(26f)))
-            PairingPanel(
-                state = state.pairing,
-                scale = scale,
-                modifier = Modifier.width(scale.dp(340f)),
-                onRenewCode = onRenewCode,
             )
         }
     }
@@ -183,6 +209,8 @@ private fun LoginForm(
                 keyboardType = KeyboardType.Uri,
                 imeAction = ImeAction.Next,
             ),
+            openKeyboardOnOk = true,
+            fieldTag = LOGIN_SERVER_FIELD_TAG,
         )
         FvpTextField(
             label = "Utente",
@@ -194,6 +222,8 @@ private fun LoginForm(
                 keyboardType = KeyboardType.Text,
                 imeAction = ImeAction.Next,
             ),
+            openKeyboardOnOk = true,
+            fieldTag = LOGIN_USERNAME_FIELD_TAG,
         )
         Row(verticalAlignment = Alignment.Bottom) {
             FvpPasswordField(
@@ -203,6 +233,10 @@ private fun LoginForm(
                 visible = state.passwordVisible,
                 scale = scale,
                 enabled = !state.busy,
+                // "Fine" chiude la tastiera e lascia il focus sulla password.
+                imeAction = ImeAction.Done,
+                openKeyboardOnOk = true,
+                fieldTag = LOGIN_PASSWORD_FIELD_TAG,
                 modifier = Modifier.weight(1f),
             )
             Spacer(Modifier.width(scale.dp(10f)))

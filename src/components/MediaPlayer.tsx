@@ -14,7 +14,7 @@ import {
   Film,
   AlertCircle,
   RefreshCw,
-  Cast,
+  PictureInPicture2,
   Download,
   ChevronLeft,
   ChevronRight,
@@ -24,33 +24,29 @@ import {
 } from 'lucide-react';
 import Hls from 'hls.js';
 import mpegts from 'mpegts.js';
-import { PlayableMediaItem, XtreamLiveStream } from '../types/xtream';
+import { Capacitor } from '@capacitor/core';
+import { PlayableMediaItem } from '../types/xtream';
 import { storage } from '../services/storage';
-import { triggerMediaDownload, isDirectFileDownload, canOfferDownloads, isTvEnvironment } from '../utils/downloadHelper';
+import { triggerMediaDownload, isDirectFileDownload, isTvEnvironment } from '../utils/downloadHelper';
 import { getSecureImageUrl } from '../utils/imageUrl';
 import { initialPlaybackState, isPlaybackLoading, playbackReducer } from '../player/playbackState';
 import { destroyMediaEngines, releaseVideoElement, selectMediaEngine } from '../player/mediaEngine';
 import { HLS_CONFIG, MPEGTS_CONFIG } from '../player/engineConfig';
-import {
-  defaultLiveStreamFormat,
-  liveFormatForChannel,
-  isPublicMockStream,
-  nextLiveFormatAfterFailure,
-  normalizeLiveStreamUrl,
-  type PlaybackTarget,
-} from '../player/streamFormat';
-import { isDirectMode, isWebOsBuild } from '../platform/runtime';
-import { accumulateSeekBurst, resolveWebOsPlayerKey, seekBurstDelta, type SeekBurst } from '../player/webosRemote';
+import { canFallbackToMpegTs, isPublicMockStream } from '../player/streamFormat';
 import { useIsMobileViewport } from '../utils/mobileLayout';
 import { MobilePlayerErrorPanel } from './MobilePlayerErrorPanel';
+import { AppleUnsupportedFormatPanel } from './AppleUnsupportedFormatPanel';
+import { isAppleMobile } from '../utils/appleMobile';
+import { STATIC_DEPLOY } from '../utils/deployTarget';
+import { getPlaybackStreamUrl } from '../utils/streamUrl';
+import { needsVlcOnAppleMobile } from '../utils/vlc';
+import { shouldShowPipButton } from '../utils/pictureInPicture';
 
 interface MediaPlayerProps {
   media: PlayableMediaItem | null;
   onClose: () => void;
   onNext?: () => void;
   onPrevious?: () => void;
-  liveChannels?: XtreamLiveStream[];
-  onSelectLiveChannel?: (stream: XtreamLiveStream) => void;
   onFullscreenChange?: (isFullscreen: boolean) => void;
   accountKey?: string;
 }
@@ -60,8 +56,6 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   onClose,
   onNext,
   onPrevious,
-  liveChannels,
-  onSelectLiveChannel,
   onFullscreenChange,
   accountKey,
 }) => {
@@ -97,34 +91,24 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [isWindowFullscreen, setIsWindowFullscreen] = useState<boolean>(false);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
-  const isTv = isTvEnvironment() || isWebOsBuild();
+  const isTv = isTvEnvironment();
   const isMobile = useIsMobileViewport();
-  // Modalità diretta: app Capacitor (WebView senza server locale) e pacchetto
-  // webOS (pagina aperta da file://, nessun Express da raggiungere).
-  const isDirect =
-    isDirectMode() || (typeof window !== 'undefined' && window.location.protocol === 'capacitor:');
-  // Su webOS il motore è sempre il <video> nativo: niente hls.js né mpegts.js.
-  const playbackTarget: PlaybackTarget = isWebOsBuild() ? 'webos' : 'web';
-  const preferNativeOnly = playbackTarget === 'webos';
-  const isSafeMode =
-    typeof window !== 'undefined' && !isDirect && sessionStorage.getItem('xtream_safe_mode') === '1';
-  const canSwitchLiveFormat = Boolean(media?.type === 'live' && !isPublicMockStream(media.streamUrl));
+  const appleMobile = isAppleMobile();
+  const needsExternalPlayer = Boolean(media && needsVlcOnAppleMobile(media.type, media.containerExtension, appleMobile));
+  const staticDeploy = STATIC_DEPLOY;
+  const isNative = typeof window !== 'undefined' && (Capacitor.isNativePlatform() || window.location.protocol === 'capacitor:');
+  const isSafeMode = typeof window !== 'undefined' && !staticDeploy && !isNative && sessionStorage.getItem('xtream_safe_mode') === '1';
+  const canSwitchLiveFormat = Boolean(!appleMobile && media?.type === 'live' && !isPublicMockStream(media.streamUrl));
   const [aspectRatio, setAspectRatio] = useState<'contain' | '16_9' | '4_3' | 'cover' | 'fill'>('contain');
   const [showSettings, setShowSettings] = useState<boolean>(false);
+  // WebKit reports PiP availability per video element, and only after the
+  // element exists, so the button appears once the source is ready.
+  const [showPipButton, setShowPipButton] = useState<boolean>(() => shouldShowPipButton(appleMobile, null));
   const [controlsVisible, setControlsVisible] = useState<boolean>(true);
-  const [controlsFocused, setControlsFocused] = useState(false);
-  const [channelListOpen, setChannelListOpen] = useState(false);
-  const [channelListFocusIndex, setChannelListFocusIndex] = useState(0);
-  const [channelBannerOpen, setChannelBannerOpen] = useState(false);
-  const [pendingSeek, setPendingSeek] = useState<SeekBurst | null>(null);
-  const seekBurstRef = useRef<SeekBurst | null>(null);
-  const seekTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const channelBannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [useProxy, setUseProxy] = useState<boolean>(() => {
-    // A Capacitor WebView has no Express server behind capacitor://localhost,
-    // and neither does the webOS package: never restore a web proxy
-    // preference in direct mode.
-    if (isDirect) return false;
+    // A Capacitor WebView has no Express server behind capacitor://localhost.
+    // Never restore a web proxy preference when running the native app.
+    if (isNative || staticDeploy) return false;
     try {
       // Safe development must never inherit a previous "direct stream" choice.
       if (sessionStorage.getItem('xtream_safe_mode') === '1') return true;
@@ -135,19 +119,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       return true;
     }
   });
-  // webOS parte sempre da .ts; le scelte manuali vengono associate all'id
-  // del canale e non sopravvivono allo zapping o a una nuova apertura.
-  const [liveFormatState, setLiveFormatState] = useState<'m3u8' | 'ts'>(() => defaultLiveStreamFormat(playbackTarget));
-  const liveFormatChannelRef = useRef<string | null>(null);
-  const liveFormat = media?.type === 'live'
-    ? liveFormatForChannel(playbackTarget, liveFormatChannelRef.current, media.id, liveFormatState)
-    : liveFormatState;
-  const setLiveFormat = (format: 'm3u8' | 'ts') => {
-    if (media?.type === 'live') liveFormatChannelRef.current = media.id;
-    setLiveFormatState(format);
-  };
-  // Un solo tentativo automatico con l'altro formato per ogni contenuto.
-  const liveFormatFallbackRef = useRef<boolean>(false);
+  const [liveFormat, setLiveFormat] = useState<'m3u8' | 'ts'>('m3u8');
   const hideControlsTimerRef = useRef<any>(null);
   const startupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bufferingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -165,60 +137,20 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     bufferingTimeoutRef.current = null;
   }, []);
 
-  // Un contenuto nuovo (zapping, episodio successivo, "Riprova") merita di
-  // nuovo un tentativo automatico con l'altro formato live.
-  useEffect(() => {
-    liveFormatFallbackRef.current = false;
-    if (playbackTarget === 'webos' && media?.type === 'live' && liveFormatChannelRef.current !== media.id) {
-      liveFormatChannelRef.current = media.id;
-      setLiveFormatState(defaultLiveStreamFormat('webos'));
-    } else if (media?.type !== 'live') {
-      liveFormatChannelRef.current = null;
-    }
-  }, [media?.id, media?.type, playbackAttempt, playbackTarget]);
-
-  /**
-   * Un flusso live che non parte o che errore riceve un solo tentativo
-   * automatico con l'altro contenitore, poi il messaggio d'errore. La scelta
-   * dell'ordine (webOS: .ts -> .m3u8, web: .m3u8 -> .ts) vive in
-   * `nextLiveFormatAfterFailure`, coperta dai test.
-   */
-  const handleLiveStartFailure = useCallback(
-    (message: string) => {
-      const decision = nextLiveFormatAfterFailure({
-        target: playbackTarget,
-        currentFormat: liveFormat,
-        fallbackAlreadyTried: liveFormatFallbackRef.current,
-        canSwitchFormat: canSwitchLiveFormat,
-      });
-      if (decision.kind === 'retry') {
-        liveFormatFallbackRef.current = true;
-        console.warn(`Formato live ${liveFormat} non riproducibile: nuovo tentativo in ${decision.format}`);
-        setLiveFormat(decision.format);
-        return;
-      }
-      setIsLoading(false);
-      setErrorMessage(message);
-    },
-    [playbackTarget, liveFormat, canSwitchLiveFormat, media?.id, setIsLoading, setErrorMessage]
-  );
-
   useEffect(() => () => {
     if (hideControlsTimerRef.current) clearTimeout(hideControlsTimerRef.current);
     if (bufferingUiDelayRef.current) clearTimeout(bufferingUiDelayRef.current);
-    if (seekTimerRef.current) clearTimeout(seekTimerRef.current);
-    if (channelBannerTimerRef.current) clearTimeout(channelBannerTimerRef.current);
   }, []);
 
   useEffect(() => {
-    if (playback.status !== 'loading') {
+    if (needsExternalPlayer || playback.status !== 'loading') {
       setStartupSeconds(0);
       return;
     }
     setStartupSeconds(0);
     const timer = window.setInterval(() => setStartupSeconds((value) => value + 1), 1000);
     return () => window.clearInterval(timer);
-  }, [playback.status, media?.id]);
+  }, [playback.status, media?.id, needsExternalPlayer]);
 
   // Keep the app shell (mobile section bar and page padding) in sync with the
   // player takeover, whether it comes from the document or the window mode.
@@ -258,53 +190,23 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     return () => video.removeEventListener('webkitendfullscreen', handleNativeFullscreenEnd);
   }, [media?.id]);
 
-  // Derive source URL: either through backend proxy or direct
+  // Static and native builds always unwrap saved proxy URLs before playback.
   const getEffectiveUrl = useCallback(() => {
     if (!media) return '';
-    let target = media.streamUrl;
-
-    if (media.type === 'live') {
-      target = normalizeLiveStreamUrl(target, liveFormat);
-    }
-
-    // Direct builds (Capacitor, webOS) cannot use relative Express routes.
-    // Unwrap any previously generated proxy URL and always reach the IPTV
-    // host itself: on the TV the verified working request is the direct one.
-    if (isDirect && target.startsWith('/api/proxy/stream?url=')) {
-      const query = target.split('?')[1] || '';
-      return new URLSearchParams(query).get('url') || target;
-    }
-    if (isDirect) return target;
-
-    if (useProxy) {
-      if (target.startsWith('/api/proxy/stream')) {
-        return target;
-      }
-      return `/api/proxy/stream?url=${encodeURIComponent(target)}`;
-    }
-
-    if (target.startsWith('/api/proxy/stream?url=')) {
-      const query = target.split('?')[1] || '';
-      return new URLSearchParams(query).get('url') || target;
-    }
-    return target;
-  }, [media, useProxy, liveFormat, isDirect]);
+    return getPlaybackStreamUrl(media, { useProxy, isNative, isAppleMobile: appleMobile, liveFormat });
+  }, [media, useProxy, liveFormat, isNative, appleMobile]);
 
   // Activity timer to hide controls during playback
   const showControlsTemporarily = useCallback(() => {
     setControlsVisible(true);
     if (hideControlsTimerRef.current) clearTimeout(hideControlsTimerRef.current);
-    if (isPlaying || playbackTarget === 'webos') {
+    if (isPlaying) {
       hideControlsTimerRef.current = setTimeout(() => {
         setControlsVisible(false);
-        setControlsFocused(false);
         setShowSettings(false);
-        if (playbackTarget === 'webos' && containerRef.current?.contains(document.activeElement)) {
-          containerRef.current.focus({ preventScroll: true });
-        }
-      }, playbackTarget === 'webos' ? 5000 : 4000);
+      }, 4000);
     }
-  }, [isPlaying, playbackTarget]);
+  }, [isPlaying]);
 
   // Load and play video
   useEffect(() => {
@@ -312,9 +214,11 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
 
     const video = videoRef.current;
     const url = getEffectiveUrl();
-    // Il server Xtream accetta una sola connessione per account: ogni nuovo
-    // flusso rilascia sempre il precedente prima di chiederne un altro.
-    releaseVideoElement(video);
+    if (!url) {
+      setIsLoading(false);
+      setErrorMessage('Il link diretto dello stream non è disponibile.');
+      return;
+    }
     if (bufferingUiDelayRef.current) clearTimeout(bufferingUiDelayRef.current);
     bufferingUiDelayRef.current = null;
     setShowBufferingIndicator(false);
@@ -332,36 +236,36 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       video.pause();
       destroyEngines();
       setIsPlaying(false);
-      const timeoutMessage = 'Il contenuto non ha risposto entro 20 secondi. Riprova oppure torna al catalogo.';
-      // Sul TV il primo fotogramma che non arriva vale come errore di formato:
-      // prima di arrendersi si prova l'altro contenitore (una sola volta).
-      if (playbackTarget === 'webos' && media.type === 'live') {
-        handleLiveStartFailure(timeoutMessage);
-        return;
-      }
       setIsLoading(false);
-      setErrorMessage(timeoutMessage);
+      setErrorMessage('Il contenuto non ha risposto entro 20 secondi. Riprova oppure torna al catalogo.');
     }, 20_000);
 
     // Engine cleanup is centralized and idempotent.
     destroyEngines();
 
     const isLive = media.type === 'live';
-    const failOrFallback = (message: string) => handleLiveStartFailure(message);
+    const allowsMpegTsFallback = !appleMobile && canFallbackToMpegTs(media.type, media.streamUrl);
+    const failOrFallback = (message: string) => {
+      if (allowsMpegTsFallback) {
+        setLiveFormat('ts');
+      } else {
+        setIsLoading(false);
+        setErrorMessage(message);
+      }
+    };
     const engine = selectMediaEngine({
       isLive,
-      liveFormat,
+      liveFormat: appleMobile ? 'm3u8' : liveFormat,
       mediaExtension: media.containerExtension,
-      // Su webOS il decodificatore del TV gestisce da solo .ts e .m3u8: le
-      // librerie MSE restano fuori gioco, e con loro la connessione extra che
-      // ciascun motore aprirebbe su un server che ne accetta una sola.
-      preferNativeOnly,
-      supportsMpegTs: !preferNativeOnly && mpegts.isSupported(),
-      supportsHlsJs: !preferNativeOnly && Hls.isSupported(),
+      supportsMpegTs: mpegts.isSupported(),
+      supportsHlsJs: Hls.isSupported(),
       supportsNativeHls: Boolean(video.canPlayType('application/vnd.apple.mpegurl')),
+      isAppleMobile: appleMobile,
     });
 
     if (engine === 'mpegts') {
+      // Engine diagnostics may contain provider URLs with credentials.
+      mpegts.LoggingControl.enableAll = false;
       // Enhanced Real-time MPEG-TS streaming with higher buffer & latency protection
       try {
         const player = mpegts.createPlayer(
@@ -381,8 +285,9 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
           setIsPlaying(true);
         });
 
-        player.on(mpegts.Events.ERROR, (errorType: string, errorDetail: string, info: any) => {
-          console.warn('mpegts event warning/error:', errorType, errorDetail, info);
+        player.on(mpegts.Events.ERROR, () => {
+          // Engine diagnostics may contain the stream URL and credentials.
+          console.warn('Errore del motore MPEG-TS.');
           if (video && (video.currentTime > 1 || video.readyState >= 2)) {
             return;
           }
@@ -398,12 +303,12 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
             setIsLoading(false);
             setIsPlaying(true);
           })
-          .catch((e) => {
-            console.warn('Playback waiting on user action:', e);
+          .catch(() => {
+            console.warn('Playback waiting on user action.');
             setIsLoading(false);
           });
-      } catch (err: any) {
-        console.error('MPEG-TS init failed, falling back to HLS:', err);
+      } catch {
+        console.error('MPEG-TS init failed, falling back to HLS.');
         setLiveFormat('m3u8');
       }
     } else if (engine === 'hls-js') {
@@ -419,8 +324,8 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
         video
           .play()
           .then(() => setIsPlaying(true))
-          .catch((e) => {
-            console.warn('Autoplay prevented:', e);
+          .catch(() => {
+            console.warn('Autoplay prevented.');
             setIsLoading(false);
           });
       });
@@ -435,7 +340,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
               hls.startLoad();
             } else {
               const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
-              if (isHttps && !useProxy) {
+              if (isHttps && !useProxy && !staticDeploy) {
                 setErrorMessage(
                   'Il browser blocca lo stream HTTP diretto. Clicca su "Attiva Proxy HTTPS" sotto.'
                 );
@@ -487,8 +392,8 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
           setIsLoading(false);
           setIsPlaying(true);
         })
-        .catch((err) => {
-          console.warn('Autoplay prevented or playback error:', err);
+        .catch(() => {
+          console.warn('Autoplay prevented or playback error.');
           setIsLoading(false);
         });
     }
@@ -501,21 +406,22 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       // after the player is closed or another title is selected.
       releaseVideoElement(video);
     };
-  }, [
-    media,
-    getEffectiveUrl,
-    liveFormat,
-    playbackAttempt,
-    clearPlaybackWatchdogs,
-    destroyEngines,
-    handleLiveStartFailure,
-    preferNativeOnly,
-    playbackTarget,
-  ]);
+  }, [media, getEffectiveUrl, liveFormat, playbackAttempt, clearPlaybackWatchdogs, destroyEngines, appleMobile, staticDeploy, useProxy]);
 
   // Video event handlers
+  const refreshPipAvailability = useCallback(() => {
+    setShowPipButton(shouldShowPipButton(appleMobile, videoRef.current));
+  }, [appleMobile]);
+
+  // The video element exists as soon as a title is selected, so ask it before
+  // any media event arrives (WebKit needs no decoding to answer).
+  useEffect(() => {
+    refreshPipAvailability();
+  }, [refreshPipAvailability, media?.id]);
+
   const handlePlaybackReady = () => {
     hasStartedPlaybackRef.current = true;
+    refreshPipAvailability();
     if (startupTimeoutRef.current) clearTimeout(startupTimeoutRef.current);
     if (bufferingTimeoutRef.current) clearTimeout(bufferingTimeoutRef.current);
     startupTimeoutRef.current = null;
@@ -563,6 +469,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     if (videoRef.current) {
       setDuration(videoRef.current.duration || 0);
     }
+    refreshPipAvailability();
   };
 
   const togglePlay = () => {
@@ -632,83 +539,9 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
 
   const handleSkip = (seconds: number) => {
     if (videoRef.current) {
-      const maximum = duration > 0 ? duration : Number.POSITIVE_INFINITY;
-      videoRef.current.currentTime = Math.max(0, Math.min(videoRef.current.currentTime + seconds, maximum));
+      videoRef.current.currentTime = Math.max(0, Math.min(videoRef.current.currentTime + seconds, duration));
     }
   };
-
-  const showLiveBannerTemporarily = () => {
-    setChannelBannerOpen(true);
-    if (channelBannerTimerRef.current) clearTimeout(channelBannerTimerRef.current);
-    channelBannerTimerRef.current = setTimeout(() => setChannelBannerOpen(false), 4000);
-  };
-
-  const queueTvSeek = (direction: 'backward' | 'forward', repeat: boolean) => {
-    const nextBurst = accumulateSeekBurst(seekBurstRef.current, direction, Date.now(), repeat);
-    seekBurstRef.current = nextBurst;
-    setPendingSeek(nextBurst);
-    showControlsTemporarily();
-    if (seekTimerRef.current) clearTimeout(seekTimerRef.current);
-    seekTimerRef.current = setTimeout(() => {
-      const burst = seekBurstRef.current;
-      seekBurstRef.current = null;
-      setPendingSeek(null);
-      const delta = seekBurstDelta(burst);
-      if (delta) handleSkip(delta);
-    }, 1500);
-  };
-
-  const getWebOsControlButtons = () => Array.from(
-    containerRef.current?.querySelectorAll<HTMLElement>('[data-webos-control]') || []
-  ).filter((button) => {
-    const style = window.getComputedStyle(button);
-    return style.display !== 'none' && style.visibility !== 'hidden' && !button.closest('[inert], [hidden]');
-  });
-
-  const focusWebOsControl = (index: number) => {
-    const buttons = getWebOsControlButtons();
-    if (!buttons.length) return;
-    const boundedIndex = Math.max(0, Math.min(index, buttons.length - 1));
-    setControlsFocused(true);
-    setControlsVisible(true);
-    showControlsTemporarily();
-    buttons[boundedIndex].focus({ preventScroll: true });
-    buttons[boundedIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
-  };
-
-  useEffect(() => {
-    if (channelListOpen) {
-      const currentIndex = liveChannels?.findIndex((channel) => String(channel.stream_id) === media?.id.replace(/^live_/, '')) ?? 0;
-      const index = currentIndex < 0 ? 0 : currentIndex;
-      setChannelListFocusIndex(index);
-      const timer = window.setTimeout(() => {
-        const row = containerRef.current?.querySelector<HTMLElement>(`[data-channel-index="${index}"]`);
-        row?.focus({ preventScroll: true });
-        row?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }, 60);
-      return () => window.clearTimeout(timer);
-    }
-    return undefined;
-  }, [channelListOpen, liveChannels, media?.id]);
-
-  useEffect(() => {
-    if (media?.type === 'live') {
-      setChannelListOpen(false);
-      setChannelBannerOpen(true);
-      if (channelBannerTimerRef.current) clearTimeout(channelBannerTimerRef.current);
-      channelBannerTimerRef.current = setTimeout(() => setChannelBannerOpen(false), 4000);
-    } else if (playbackTarget === 'webos' && media) {
-      setControlsVisible(true);
-      setControlsFocused(false);
-      showControlsTemporarily();
-    }
-  }, [media?.id, media?.type, playbackTarget]);
-
-  useEffect(() => {
-    if (!media || playbackTarget !== 'webos') return;
-    const timer = window.requestAnimationFrame(() => containerRef.current?.focus({ preventScroll: true }));
-    return () => window.cancelAnimationFrame(timer);
-  }, [media?.id, playbackTarget]);
 
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseFloat(e.target.value);
@@ -748,8 +581,8 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
         } else if ((videoRef.current as any)?.webkitEnterFullscreen) {
           (videoRef.current as any).webkitEnterFullscreen();
         }
-      } catch (err) {
-        console.warn('Native requestFullscreen fallback to full window', err);
+      } catch {
+        console.warn('Native requestFullscreen fallback to full window.');
       }
     }
   };
@@ -781,13 +614,29 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   const togglePiP = async () => {
     if (!videoRef.current) return;
     try {
+      const video = videoRef.current as HTMLVideoElement & {
+        webkitPresentationMode?: string;
+        webkitSupportsPresentationMode?: (mode: string) => boolean;
+        webkitSetPresentationMode?: (mode: string) => void;
+      };
       if (document.pictureInPictureElement) {
         await document.exitPictureInPicture();
-      } else if (document.pictureInPictureEnabled) {
-        await videoRef.current.requestPictureInPicture();
+        return;
       }
-    } catch (e) {
-      console.error('PiP error:', e);
+      // In the Home Screen web app document.pictureInPictureEnabled stays true
+      // although requestPictureInPicture() is unsupported (WebKit bug 303885);
+      // the WebKit presentation mode is the reliable path on Apple mobile.
+      if (appleMobile && video.webkitSupportsPresentationMode?.('picture-in-picture') && video.webkitSetPresentationMode) {
+        video.webkitSetPresentationMode(
+          video.webkitPresentationMode === 'picture-in-picture' ? 'inline' : 'picture-in-picture',
+        );
+        return;
+      }
+      if (document.pictureInPictureEnabled && video.requestPictureInPicture) {
+        await video.requestPictureInPicture();
+      }
+    } catch {
+      console.error('Picture-in-Picture non disponibile.');
     }
   };
 
@@ -799,126 +648,28 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     setShowSettings(false);
   };
 
-  // Keyboard controls. webOS arrows have different semantics in live, VOD,
-  // the channel picker, and the player button row; those decisions are pure.
+  // Keyboard controls
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (playbackTarget === 'webos') {
-        const isRemoteBack = e.keyCode === 461 || e.key === 'GoBack';
-        if (e.defaultPrevented && !isRemoteBack) return;
-        const errorPanelOpen = Boolean(errorMessage);
-        const action = resolveWebOsPlayerKey({
-          mediaType: media?.type || 'direct',
-          bannerOpen: channelBannerOpen,
-          channelListOpen,
-          controlsOpen: controlsVisible,
-          errorPanelOpen,
-          controlsFocused,
-        }, {
-          key: e.key === 'Unidentified' && e.keyCode === 13 ? 'Enter' : e.key,
-          keyCode: e.keyCode,
-          repeat: e.repeat,
-        });
-        if (action.type === 'none') return;
-        e.preventDefault();
-
-        switch (action.type) {
-          case 'previous-channel':
-            onPrevious?.();
-            break;
-          case 'next-channel':
-            onNext?.();
-            break;
-          case 'toggle-banner':
-            if (channelBannerOpen) {
-              if (channelBannerTimerRef.current) clearTimeout(channelBannerTimerRef.current);
-              setChannelBannerOpen(false);
-            } else showLiveBannerTemporarily();
-            break;
-          case 'open-channel-list':
-            setChannelListOpen(true);
-            break;
-          case 'close-channel-list':
-            setChannelListOpen(false);
-            containerRef.current?.focus({ preventScroll: true });
-            break;
-          case 'select-focused-channel': {
-            const focused = (e.target as HTMLElement | null)?.closest<HTMLElement>('[data-channel-index]');
-            const index = focused ? Number(focused.dataset.channelIndex) : channelListFocusIndex;
-            const selected = liveChannels?.[index];
-            if (selected) onSelectLiveChannel?.(selected);
-            setChannelListOpen(false);
-            containerRef.current?.focus({ preventScroll: true });
-            break;
-          }
-          case 'toggle-play-and-show-controls':
-            showControlsTemporarily();
-            togglePlay();
-            break;
-          case 'show-controls':
-            showControlsTemporarily();
-            break;
-          case 'hide-controls':
-            setControlsVisible(false);
-            setControlsFocused(false);
-            containerRef.current?.focus({ preventScroll: true });
-            break;
-          case 'focus-controls':
-            focusWebOsControl(0);
-            break;
-          case 'blur-controls':
-            setControlsFocused(false);
-            containerRef.current?.focus({ preventScroll: true });
-            showControlsTemporarily();
-            break;
-          case 'move-control-focus': {
-            const errorPanel = containerRef.current?.querySelector<HTMLElement>('[data-tv-layer="player-error"]');
-            const buttons = errorPanel
-              ? Array.from(errorPanel.querySelectorAll<HTMLElement>('button:not([disabled])'))
-              : getWebOsControlButtons();
-            if (!buttons.length) break;
-            const currentIndex = buttons.indexOf(document.activeElement as HTMLElement);
-            const step = action.direction === 'next' ? 1 : -1;
-            const nextIndex = Math.max(0, Math.min(buttons.length - 1, currentIndex < 0 ? 0 : currentIndex + step));
-            buttons[nextIndex].focus({ preventScroll: true });
-            buttons[nextIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
-            if (!errorPanel) setControlsFocused(true);
-            break;
-          }
-          case 'activate-control': {
-            const active = document.activeElement as HTMLElement | null;
-            const panel = active?.closest<HTMLElement>('[data-tv-layer="player-error"]');
-            const buttons = panel
-              ? Array.from(panel.querySelectorAll<HTMLElement>('button:not([disabled])'))
-              : getWebOsControlButtons();
-            (buttons.includes(active as HTMLElement) ? active : buttons[0])?.click();
-            break;
-          }
-          case 'seek':
-            queueTvSeek(action.direction, action.repeat);
-            break;
-          case 'pause':
-            if (desiredPlayingRef.current) togglePlay();
-            break;
-          case 'close-player':
-            onClose();
-            break;
-        }
-        return;
-      }
-
       if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return;
+
       if (e.code === 'Space') {
         e.preventDefault();
         togglePlay();
       } else if (e.code === 'ArrowRight' || e.code === 'KeyN' || e.code === 'PageDown') {
         e.preventDefault();
-        if (media?.type === 'live' && onNext) onNext();
-        else handleSkip(10);
+        if (media?.type === 'live' && onNext) {
+          onNext();
+        } else {
+          handleSkip(10);
+        }
       } else if (e.code === 'ArrowLeft' || e.code === 'KeyP' || e.code === 'PageUp') {
         e.preventDefault();
-        if (media?.type === 'live' && onPrevious) onPrevious();
-        else handleSkip(-10);
+        if (media?.type === 'live' && onPrevious) {
+          onPrevious();
+        } else {
+          handleSkip(-10);
+        }
       } else if (e.code === 'ArrowUp') {
         e.preventDefault();
         setVolume((v) => {
@@ -943,18 +694,15 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
         if (isWindowFullscreen) {
           setIsWindowFullscreen(false);
           setIsFullscreen(false);
-        } else onClose();
+        } else {
+          onClose();
+        }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [
-    playbackTarget, media?.type, media?.id, channelBannerOpen, channelListOpen,
-    channelListFocusIndex, controlsVisible, controlsFocused, errorMessage,
-    onClose, onNext, onPrevious, onSelectLiveChannel, liveChannels,
-    isWindowFullscreen, showControlsTemporarily,
-  ]);
+  }, [isPlaying, duration, isMuted, onClose, isWindowFullscreen]);
 
   const formatTime = (secs: number) => {
     if (isNaN(secs) || secs <= 0) return '00:00';
@@ -968,23 +716,26 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   };
 
   if (!media) return null;
-  const selectedLiveChannel = media.type === 'live'
-    ? liveChannels?.find((channel) => String(channel.stream_id) === media.id.replace(/^live_/, ''))
-    : undefined;
-  const liveChannelPosition = media.type === 'live'
-    ? liveChannels?.findIndex((channel) => String(channel.stream_id) === media.id.replace(/^live_/, '')) ?? -1
-    : -1;
-  const displayChannelNumber = selectedLiveChannel?.num ?? (liveChannelPosition >= 0 ? liveChannelPosition + 1 : '—');
+  if (needsExternalPlayer) {
+    return (
+      <AppleUnsupportedFormatPanel
+        key={`${media.type}-${media.id}`}
+        streamUrl={media.streamUrl}
+        title={media.title}
+        containerExtension={media.containerExtension}
+        onClose={onClose}
+      />
+    );
+  }
 
   return (
     <div
       ref={containerRef}
       data-media-player="true"
-      tabIndex={-1}
       onMouseMove={showControlsTemporarily}
       className={`transition-all duration-300 ${
         isWindowFullscreen
-          ? 'fixed inset-0 z-[99999] w-screen h-screen bg-black flex items-center justify-center select-none overflow-hidden'
+          ? 'fixed inset-0 z-[99999] w-screen h-screen bg-black flex items-center justify-center select-none overflow-hidden safe-area-screen'
           : 'relative w-full bg-black select-none overflow-hidden rounded-3xl shadow-2xl border border-separator aspect-video max-h-[72vh] flex items-center justify-center group mx-auto'
       }`}
     >
@@ -992,6 +743,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       <video
         ref={videoRef}
         playsInline
+        x-webkit-airplay="allow"
         preload="metadata"
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
@@ -1004,28 +756,26 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
         onPlaying={handlePlaybackReady}
         onError={() => {
           clearPlaybackWatchdogs();
-          if (videoRef.current && (videoRef.current.currentTime > 1 || videoRef.current.readyState >= 3 || videoRef.current.videoWidth > 0)) {
+          if (!appleMobile && videoRef.current && (videoRef.current.currentTime > 1 || videoRef.current.readyState >= 3 || videoRef.current.videoWidth > 0)) {
             console.warn('HTML5 video onError ignored because video is actively playing');
             return;
           }
-          // The fallback exists only on web: in direct mode (Capacitor,
-          // webOS) there is no Express proxy to fall back to.
-          if (!isDirect && !useProxy) {
+          // Static/native builds have no Express proxy; on Apple mobile keep
+          // the error visible instead of switching sources automatically.
+          if (!staticDeploy && !isNative && !appleMobile && !useProxy) {
             console.log('Video error on direct stream, auto-switching to proxy...');
             setUseProxy(true);
             return;
           }
-          const streamErrorMessage =
-            'Errore di caricamento del flusso video. Verifica se il canale o server IPTV è attivo, oppure prova a cambiare formato (.ts / .m3u8).';
-          // Su webOS l'errore del <video> nativo è il segnale normale di un
-          // .ts non servito dal canale: prima dell'errore vale il tentativo
-          // automatico con l'altro formato.
-          if (playbackTarget === 'webos' && media?.type === 'live') {
-            handleLiveStartFailure(streamErrorMessage);
-            return;
+          if (appleMobile && videoRef.current) {
+            videoRef.current.pause();
+            setIsPlaying(false);
           }
           setIsLoading(false);
-          setErrorMessage(streamErrorMessage);
+          setErrorMessage(appleMobile
+            ? 'Errore di caricamento del flusso video. Verifica la connessione e riprova.'
+            : 'Errore di caricamento del flusso video. Verifica se il canale o server IPTV è attivo, oppure prova a cambiare formato (.ts / .m3u8).'
+          );
         }}
         onClick={togglePlay}
         style={{
@@ -1049,67 +799,6 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
             : 'w-full h-full max-w-full max-h-full object-contain'
         }`}
       />
-
-      {playbackTarget === 'webos' && media.type === 'live' && channelBannerOpen && (
-        <div data-live-channel-banner role="status" className="absolute left-6 right-6 top-6 z-30 flex items-center gap-6 rounded-2xl border border-white/20 bg-black/85 p-5 text-white shadow-2xl" aria-live="polite">
-          <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white/10 p-2">
-            {selectedLiveChannel?.stream_icon ? (
-              <RemoteImage src={getSecureImageUrl(selectedLiveChannel.stream_icon)} alt="" className="h-full w-full object-contain" />
-            ) : <Tv className="h-10 w-10 text-accent-strong" />}
-          </div>
-          <div className="min-w-0 flex-1">
-            <div data-live-channel-number className="text-sm font-bold uppercase tracking-widest text-accent-strong">Canale {displayChannelNumber}</div>
-            <div data-live-channel-name className="truncate text-2xl font-black">{media.title}</div>
-            <div data-live-channel-category className="mt-1 truncate text-base text-white/70">{media.categoryName || 'Canali Live'}</div>
-          </div>
-        </div>
-      )}
-
-      {playbackTarget === 'webos' && media.type !== 'live' && pendingSeek && (
-        <div data-seek-feedback className={`absolute top-1/2 z-30 -translate-y-1/2 rounded-2xl border border-white/20 bg-black/85 px-8 py-5 text-3xl font-black text-white shadow-2xl ${pendingSeek.direction === 'forward' ? 'right-10' : 'left-10'}`} aria-live="polite">
-          {pendingSeek.direction === 'forward' ? '+' : '−'}{pendingSeek.totalSeconds} s
-        </div>
-      )}
-
-      {playbackTarget === 'webos' && media.type === 'live' && channelListOpen && (
-        <div data-tv-layer="channel-list" role="dialog" aria-modal="true" aria-label="Lista canali" className="absolute inset-4 z-40 flex items-center justify-start bg-black/50 p-5">
-          <div className="flex h-full w-[min(680px,75%)] flex-col overflow-hidden rounded-2xl border border-white/20 bg-surface-0/95 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-white/15 px-6 py-4 text-white">
-              <div>
-                <h3 className="text-xl font-black">Canali</h3>
-                <p className="text-sm text-white/60">{media.categoryName || 'Canali Live'}</p>
-              </div>
-              <span className="text-sm text-white/60">OK seleziona · Indietro/Destra chiude</span>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto p-3">
-              {(liveChannels || []).map((channel, index) => {
-                const active = String(channel.stream_id) === media.id.replace(/^live_/, '');
-                return (
-                  <button
-                    key={channel.stream_id}
-                    type="button"
-                    data-channel-index={index}
-                    tabIndex={0}
-                    onFocus={() => setChannelListFocusIndex(index)}
-                    onClick={() => {
-                      onSelectLiveChannel?.(channel);
-                      setChannelListOpen(false);
-                    }}
-                    className={`mb-2 flex w-full items-center gap-4 rounded-xl border px-4 py-3 text-left text-white transition ${active ? 'border-accent-strong bg-accent/20' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}
-                  >
-                    <span className="w-12 shrink-0 text-right text-lg font-black text-accent-strong">{channel.num ?? index + 1}</span>
-                    <span className="flex h-12 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white/10 p-1">
-                      {channel.stream_icon ? <RemoteImage src={getSecureImageUrl(channel.stream_icon)} alt="" className="h-full w-full object-contain" /> : <Tv className="h-6 w-6 text-white/50" />}
-                    </span>
-                    <span className="min-w-0 flex-1 truncate text-lg font-bold">{channel.name}</span>
-                    {active && <span className="shrink-0 rounded-full bg-accent px-3 py-1 text-xs font-black uppercase">In onda</span>}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Loading Spinner */}
       {(playback.status === 'loading' || showBufferingIndicator) && !errorMessage && (
@@ -1159,7 +848,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
             message={errorMessage}
             canSwitchFormat={canSwitchLiveFormat}
             formatLabel={`Passa a formato ${liveFormat === 'm3u8' ? 'MPEG-TS (.ts)' : 'HLS (.m3u8)'}`}
-            showProxyOption={!isDirect && !isSafeMode}
+            showProxyOption={!staticDeploy && !isNative && !isSafeMode}
             proxyLabel={useProxy ? '⚡ Passa a Stream Diretto' : '🛡️ Attiva Proxy HTTPS'}
             proxyFilled={!useProxy}
             onRetry={() => dispatchPlayback({ type: 'RETRY' })}
@@ -1176,14 +865,13 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
             }}
           />
         ) : (
-          <div data-tv-layer="player-error" role="dialog" aria-modal="true" aria-label="Errore di riproduzione" className="absolute inset-0 flex flex-col items-center justify-center bg-surface-0/95 p-6 text-center z-30">
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-surface-0/95 p-6 text-center z-30">
             <AlertCircle className="w-14 h-14 text-danger mb-3 animate-pulse" />
             <h3 className="text-lg sm:text-xl font-bold text-label mb-2">Impossibile riprodurre lo stream</h3>
             <p className="text-sm sm:text-base text-label-secondary max-w-md mb-6 leading-relaxed">{errorMessage}</p>
 
             <div className="flex flex-wrap items-center justify-center gap-3">
               <button
-                data-tv-initial-focus
                 onClick={() => {
                   dispatchPlayback({ type: 'RETRY' });
                 }}
@@ -1210,7 +898,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
                 </button>
               )}
 
-              {!isDirect && !isSafeMode && (
+              {!staticDeploy && !isNative && !isSafeMode && (
                 <button
                   onClick={() => {
                     const nextVal = !useProxy;
@@ -1236,7 +924,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
         ))}
 
       {/* Side floating channel zapping buttons for Live TV (not on mobile) */}
-      {playbackTarget !== 'webos' && !isMobile && media.type === 'live' && onPrevious && (
+      {!isMobile && media.type === 'live' && onPrevious && (
         <button
           type="button"
           onClick={(e) => {
@@ -1252,7 +940,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
         </button>
       )}
 
-      {playbackTarget !== 'webos' && !isMobile && media.type === 'live' && onNext && (
+      {!isMobile && media.type === 'live' && onNext && (
         <button
           type="button"
           onClick={(e) => {
@@ -1272,7 +960,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       <div
         className={`absolute top-0 left-0 right-0 p-4 sm:p-6 bg-linear-to-b from-black/95 via-black/60 to-transparent transition-opacity duration-300 z-20 flex items-center justify-between ${isMobile ? 'gap-2' : ''} ${
           controlsVisible || !isPlaying ? 'opacity-100' : 'opacity-0 pointer-events-none'
-        } ${playbackTarget === 'webos' && media.type === 'live' ? 'hidden' : ''}`}
+        }`}
       >
         <div className={`flex items-center gap-3 min-w-0 ${isMobile ? 'flex-1' : ''}`}>
           <div className="p-2 sm:p-2.5 rounded-2xl bg-accent/20 text-accent-strong border border-accent/30 shrink-0">
@@ -1287,7 +975,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
               <h2 className="min-w-0 text-label font-bold text-base sm:text-xl truncate whitespace-nowrap drop-shadow-md">
                 {media.title}
               </h2>
-              {media.type === 'live' && playbackTarget !== 'webos' && (
+              {media.type === 'live' && (
                 <div className="flex items-center gap-1.5 shrink-0 ml-1">
                   {onPrevious && (
                     <button
@@ -1328,7 +1016,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          {canOfferDownloads() && !isTv && media.type !== 'live' && isDirectFileDownload(media.containerExtension) && (
+          {!staticDeploy && !isTv && media.type !== 'live' && isDirectFileDownload(media.containerExtension) && (
             <button
               type="button"
               onClick={(e) => {
@@ -1374,12 +1062,9 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
 
       {/* Bottom Controls Bar */}
       <div
-        data-controls-bar
-        aria-hidden={playbackTarget === 'webos' && !controlsVisible}
-        inert={playbackTarget === 'webos' && !controlsVisible}
         className={`absolute bottom-0 left-0 right-0 bg-linear-to-t from-black/95 via-black/75 to-transparent transition-opacity duration-300 z-20 ${
           isMobile ? 'px-2 py-3' : 'p-4 sm:p-6'
-        } ${controlsVisible || !isPlaying ? 'opacity-100' : 'opacity-0 pointer-events-none'} ${playbackTarget === 'webos' && media.type === 'live' ? 'hidden' : ''}`}
+        } ${controlsVisible || !isPlaying ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
       >
         {/* Timeline Scrub Bar */}
         {media.type !== 'live' && duration > 0 && (
@@ -1414,7 +1099,6 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
         >
           <div className={`flex items-center ${isMobile ? 'gap-1' : 'gap-2 sm:gap-3'}`}>
             <button
-              data-webos-control="play"
               onClick={togglePlay}
               className={`flex items-center justify-center text-label hover:text-accent-strong hover:bg-white/10 rounded-2xl transition cursor-pointer ${
                 isMobile ? 'w-10 h-10 p-0' : 'p-2 sm:p-2.5'
@@ -1451,7 +1135,6 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
             {media.type !== 'live' && (
               <>
                 <button
-                  data-webos-control="seek-back"
                   onClick={() => handleSkip(-10)}
                   className={`flex items-center justify-center text-label-secondary hover:text-label hover:bg-white/10 rounded-2xl transition cursor-pointer ${
                     isMobile ? 'w-10 h-10 p-0' : 'p-2'
@@ -1461,7 +1144,6 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
                   <RotateCcw className="w-5 h-5 sm:w-6 sm:h-6" />
                 </button>
                 <button
-                  data-webos-control="seek-forward"
                   onClick={() => handleSkip(10)}
                   className={`flex items-center justify-center text-label-secondary hover:text-label hover:bg-white/10 rounded-2xl transition cursor-pointer ${
                     isMobile ? 'w-10 h-10 p-0' : 'p-2'
@@ -1476,7 +1158,6 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
             {/* Volume Control: iOS cannot set video volume from JS, so mobile keeps only mute */}
             <div className={`flex items-center group/vol ${isMobile ? 'gap-0' : 'gap-1.5 ml-1 sm:ml-2'}`}>
               <button
-                data-webos-control="mute"
                 onClick={toggleMute}
                 className={`flex items-center justify-center text-label-secondary hover:text-label hover:bg-white/10 rounded-2xl transition cursor-pointer ${
                   isMobile ? 'w-10 h-10 p-0' : 'p-2'
@@ -1513,7 +1194,6 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
           <div className={`flex items-center ${isMobile ? 'gap-1' : 'gap-2'}`}>
             {/* Aspect Ratio Toggle (icon only on mobile, label kept for screen readers) */}
             <button
-              data-webos-control="aspect"
               onClick={cycleAspectRatio}
               aria-label={`Formato video: ${getAspectLabel()}`}
               className={`text-xs sm:text-sm font-bold text-label hover:text-label bg-surface-1 hover:bg-surface-2 rounded-xl border border-separator-strong transition cursor-pointer flex items-center justify-center shadow-md ${
@@ -1529,7 +1209,6 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
             {!isMobile && media.type !== 'live' && (
               <div className="relative">
                 <button
-                  data-webos-control="speed"
                   onClick={() => setShowSettings(!showSettings)}
                   className="px-3 py-2 text-xs sm:text-sm font-bold text-label-secondary hover:text-label hover:bg-white/10 rounded-xl border border-separator-strong transition cursor-pointer"
                   title="Velocità di riproduzione"
@@ -1541,7 +1220,6 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
                     {[0.5, 0.75, 1, 1.25, 1.5, 2].map((s) => (
                       <button
                         key={s}
-                        data-webos-control="speed-option"
                         onClick={() => handleSpeedChange(s)}
                         className={`px-3 py-1.5 text-xs sm:text-sm text-left rounded-lg hover:bg-surface-1 transition cursor-pointer ${
                           playbackSpeed === s ? 'text-accent-strong font-bold' : 'text-label-secondary font-medium'
@@ -1555,17 +1233,19 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
               </div>
             )}
 
-            {playbackTarget !== 'webos' && <>
-            {/* PiP Button */}
-            <button
-              onClick={togglePiP}
-              className={`flex items-center justify-center text-label-secondary hover:text-label hover:bg-white/10 rounded-2xl transition cursor-pointer ${
-                isMobile ? 'w-10 h-10 p-0' : 'p-2 sm:p-2.5'
-              }`}
-              title="Picture in Picture (Finestra fluttuante)"
-            >
-              <Cast className="w-5 h-5 sm:w-6 sm:h-6" />
-            </button>
+            {/* PiP Button: on Apple mobile only when the video element can
+                actually enter Picture-in-Picture. */}
+            {showPipButton && (
+              <button
+                onClick={togglePiP}
+                className={`flex items-center justify-center text-label-secondary hover:text-label hover:bg-white/10 rounded-2xl transition cursor-pointer ${
+                  isMobile ? 'w-10 h-10 p-0' : 'p-2 sm:p-2.5'
+                }`}
+                title="Picture in Picture (Finestra fluttuante)"
+              >
+                <PictureInPicture2 className="w-5 h-5 sm:w-6 sm:h-6" />
+              </button>
+            )}
 
             {/* Fullscreen Button */}
             <button
@@ -1581,7 +1261,6 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
                 <Maximize2 className="w-5 h-5 sm:w-6 sm:h-6" />
               )}
             </button>
-            </>}
           </div>
         </div>
       </div>

@@ -1,0 +1,63 @@
+name: Pairing relay CI
+
+on:
+  pull_request:
+    paths:
+      - "services/pairing-relay/**"
+      - "shared/**"
+  push:
+    branches:
+      - main
+    paths:
+      - "services/pairing-relay/**"
+      - "shared/**"
+  # Pubblicazione manuale del relay da main (Actions → Pairing relay CI → Run workflow).
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-26.04
+    defaults:
+      run:
+        working-directory: services/pairing-relay
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: services/pairing-relay/package-lock.json
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+
+  # Pubblica il relay su Cloudflare solo da main e solo se i test sono passati.
+  deploy:
+    needs: verify
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-26.04
+    concurrency:
+      group: pairing-relay-deploy
+      cancel-in-progress: false
+    defaults:
+      run:
+        working-directory: services/pairing-relay
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: services/pairing-relay/package-lock.json
+
+      - run: npm ci
+      - run: npx wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

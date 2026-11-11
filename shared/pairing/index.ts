@@ -11,6 +11,23 @@ export const MAX_RUBRICA_REQUESTS_PER_MINUTE = 20;
 
 export const PIN_LENGTH = 6;
 export const POLL_TOKEN_BYTES = 32;
+export const VPN_KEY_BYTES = 32;
+export const VPN_IV_BYTES = 12;
+export const VPN_MAX_PLAINTEXT_BYTES = 8192;
+export const VPN_MAX_CIPHERTEXT_BYTES = VPN_MAX_PLAINTEXT_BYTES + 16;
+export const VPN_MIN_CIPHERTEXT_BYTES = 17;
+export const VPN_AAD_PREFIX = 'felixvp-vpn-v1:';
+export const BACKUP_KEY_BYTES = 32;
+export const BACKUP_IV_BYTES = 12;
+/**
+ * Testo in chiaro massimo del file di backup trasportato (256 KiB): copre
+ * preferiti, canali, nascosti, avanzamenti e configurazione VPN anche per gli
+ * account più pieni, restando nei limiti del piano gratuito di Cloudflare.
+ */
+export const BACKUP_MAX_PLAINTEXT_BYTES = 262_144;
+export const BACKUP_MAX_CIPHERTEXT_BYTES = BACKUP_MAX_PLAINTEXT_BYTES + 16;
+export const BACKUP_MIN_CIPHERTEXT_BYTES = 17;
+export const BACKUP_AAD_PREFIX = 'felixvp-backup-v1:';
 export const MAX_SERVER_LENGTH = 2048;
 export const MAX_USERNAME_LENGTH = 512;
 export const MAX_PASSWORD_LENGTH = 512;
@@ -29,6 +46,7 @@ export interface VersionedCredentialsPayload {
   server: string;
   username: string;
   password: string;
+  serverCode?: string;
 }
 
 export interface RubricaEntry {
@@ -73,6 +91,35 @@ export function encodeBase64Url(bytes: Uint8Array): string {
     binary += String.fromCharCode(bytes[i]);
   }
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+/**
+ * Decodes an unpadded base64url string. Characters outside the base64url
+ * alphabet and impossible encoded lengths are rejected instead of tolerated.
+ */
+export function decodeBase64Url(value: string): Uint8Array {
+  if (
+    typeof value !== 'string' ||
+    !/^[A-Za-z0-9_-]*$/.test(value) ||
+    value.length % 4 === 1
+  ) {
+    throw new Error('Invalid base64url');
+  }
+
+  const base64 = value.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+  let binary: string;
+  try {
+    binary = atob(padded);
+  } catch {
+    throw new Error('Invalid base64url');
+  }
+
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
 }
 
 /**
@@ -257,13 +304,14 @@ export function readCredentials(body: unknown): Credentials | null {
 }
 
 export function createVersionedPayload(
-  credentials: Pick<Credentials, 'server' | 'username' | 'password'>,
+  credentials: Pick<Credentials, 'server' | 'username' | 'password'> & { serverCode?: string },
 ): VersionedCredentialsPayload {
   return {
     v: CREDENTIALS_PAYLOAD_VERSION,
     server: credentials.server,
     username: credentials.username,
     password: credentials.password,
+    ...(credentials.serverCode === undefined ? {} : { serverCode: credentials.serverCode }),
   };
 }
 

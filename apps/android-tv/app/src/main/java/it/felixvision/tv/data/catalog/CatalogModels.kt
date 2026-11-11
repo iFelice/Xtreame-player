@@ -169,10 +169,15 @@ data class LiveStream(
     @SerialName("stream_icon") val streamIcon: String? = null,
     @Serializable(with = NullableFlexibleStringSerializer::class)
     @SerialName("category_id") val categoryId: String? = null,
+    // Elenco completo delle categorie del contenuto: alcuni pannelli (XUI e
+    // simili) lo mandano accanto a `category_id`, che resta la principale.
+    @Serializable(with = FlexibleStringListSerializer::class)
+    @SerialName("category_ids") val categoryIds: List<String> = emptyList(),
     @Serializable(with = NullableFlexibleStringSerializer::class)
     @SerialName("epg_channel_id") val epgChannelId: String? = null,
     @Serializable(with = NullableFlexibleStringSerializer::class) val added: String? = null,
     @Serializable(with = NullableFlexibleIntSerializer::class) @SerialName("tv_archive") val tvArchive: Int? = null,
+    @Serializable(with = NullableFlexibleIntSerializer::class) @SerialName("tv_archive_duration") val tvArchiveDuration: Int? = null,
 )
 
 @Serializable
@@ -190,6 +195,9 @@ data class VodStream(
     @Serializable(with = NullableFlexibleStringSerializer::class) val added: String? = null,
     @Serializable(with = NullableFlexibleStringSerializer::class)
     @SerialName("category_id") val categoryId: String? = null,
+    // Elenco completo delle categorie del contenuto (vedi LiveStream).
+    @Serializable(with = FlexibleStringListSerializer::class)
+    @SerialName("category_ids") val categoryIds: List<String> = emptyList(),
     @Serializable(with = NullableFlexibleStringSerializer::class)
     @SerialName("container_extension") val containerExtension: String? = null,
     @Serializable(with = NullableFlexibleStringSerializer::class) val year: String? = null,
@@ -216,6 +224,9 @@ data class SeriesItem(
     val rating: String? = null,
     @Serializable(with = NullableFlexibleStringSerializer::class)
     @SerialName("category_id") val categoryId: String? = null,
+    // Elenco completo delle categorie del contenuto (vedi LiveStream).
+    @Serializable(with = FlexibleStringListSerializer::class)
+    @SerialName("category_ids") val categoryIds: List<String> = emptyList(),
     @Serializable(with = NullableFlexibleStringSerializer::class) val added: String? = null,
 )
 
@@ -291,7 +302,9 @@ data class EpisodeInfo(
 )
 
 /**
- * Catalogo completo come restituito dalle sei chiamate sequenziali.
+ * Catalogo completo come restituito dalle sei chiamate del catalogo: tre
+ * sezioni in parallelo, ognuna con categorie prima dell'elenco. Contenuto e
+ * ordine degli elenchi restano identici al vecchio caricamento sequenziale.
  */
 @Serializable
 data class Catalog(

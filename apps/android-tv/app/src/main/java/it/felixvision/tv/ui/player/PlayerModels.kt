@@ -4,9 +4,16 @@ package it.felixvision.tv.ui.player
 
 import androidx.annotation.OptIn
 import androidx.media3.common.TrackGroup
+import it.felixvision.tv.data.epg.EpgProgram
+import it.felixvision.tv.data.catalog.Category
 import it.felixvision.tv.data.catalog.LiveStream
 import it.felixvision.tv.data.catalog.VodStream
+import it.felixvision.tv.data.playback.ChannelNumberOverlay
+import it.felixvision.tv.data.playback.ChannelNumbering
+import it.felixvision.tv.data.playback.LiveStreamFormat
 import it.felixvision.tv.data.playback.SeriesPlayback
+import it.felixvision.tv.data.playback.VideoFormat
+import it.felixvision.tv.data.volume.PlayerVolume
 
 /** Contenuto scelto nella scheda di origine. Non contiene credenziali. */
 sealed interface PlaybackSource {
@@ -16,6 +23,12 @@ sealed interface PlaybackSource {
         val startIndex: Int,
         val categoryId: String?,
         val categoryName: String?,
+        val allChannels: List<LiveStream> = channels,
+        val categories: List<Category> = emptyList(),
+        /** Numerazione dei tasti numerici: personale quando si arriva da "I miei canali". */
+        val numbering: ChannelNumbering = ChannelNumbering.PROVIDER,
+        /** Ritorno alla Guida e ripristino del punto selezionato dopo il fullscreen. */
+        val returnToGuide: Boolean = false,
     ) : PlaybackSource
 
     data class Movie(
@@ -40,6 +53,9 @@ data class PlayerSession(
     val password: String,
     val allowedOutputFormats: List<String>,
     val source: PlaybackSource,
+    /** Formato Live scelto nelle Impostazioni (`Automatico` se assente). */
+    val liveFormat: LiveStreamFormat = LiveStreamFormat.DEFAULT,
+    val serverTimezone: String? = null,
     /**
      * Vero quando il contenuto arriva da "Continua a guardare": la posizione
      * salvata riparte subito, senza la finestra "Riprendi".
@@ -78,14 +94,14 @@ data class ChannelBanner(
 )
 
 /**
- * Proposta del prossimo episodio. `countdownSeconds` è `null` finché il
- * riquadro è solo una proposta (3 minuti prima della fine); dopo "Posticipa"
- * arriva il conto alla rovescia degli ultimi 15 secondi.
+ * Proposta del prossimo episodio. `countdownSeconds` resta `null` finché
+ * non inizia il conto alla rovescia degli ultimi due minuti.
  */
 data class NextEpisodePrompt(
     val title: String,
     val countdownSeconds: Int? = null,
     val canPostpone: Boolean = true,
+    val minimized: Boolean = false,
 )
 
 data class PlayerUiState(
@@ -111,6 +127,29 @@ data class PlayerUiState(
     val currentTitle: String = "",
     val currentChannelIndex: Int = 0,
     val totalChannels: Int = 0,
+    val liveChannels: List<LiveStream> = emptyList(),
+    val liveCategoryName: String? = null,
+    /** Indicatore numerico in alto a destra nel Live (cifre o non trovato). */
+    val channelNumberOverlay: ChannelNumberOverlay? = null,
+    /** Livello del volume del player (0–15), non quello del televisore. */
+    val volumeLevel: Int = PlayerVolume.DEFAULT_LEVEL,
+    /** Vero mentre è aperto il pannello del volume. */
+    val volumePanelVisible: Boolean = false,
+    val epgVisible: Boolean = false,
+    val epgLoading: Boolean = false,
+    val epgPrograms: List<EpgProgram> = emptyList(),
+    val epgUnavailable: Boolean = false,
+    val epgExpanded: Long? = null,
+    val isReplay: Boolean = false,
+    /** Formato dello schermo in vigore: nel Live è quello del canale in onda. */
+    val videoFormat: VideoFormat = VideoFormat.FIT,
+    /** Vero mentre è aperto il pannello del formato dello schermo. */
+    val formatPanelVisible: Boolean = false,
+    /**
+     * Avviso "Stai ancora guardando?" con il numero di episodi automatici
+     * visti di fila (0 per Live, film e singolo episodio).
+     */
+    val stillWatchingEpisodes: Int? = null,
 ) {
     val progressFraction: Float
         get() = if (durationMillis <= 0L) {
@@ -121,8 +160,11 @@ data class PlayerUiState(
 
     val hasModalOverlay: Boolean
         get() = trackPanel != null ||
+            formatPanelVisible ||
             channelListVisible ||
+            epgVisible ||
+            stillWatchingEpisodes != null ||
             errorMessage != null ||
             resumePositionMillis != null ||
-            nextEpisode != null
+            (nextEpisode != null && !nextEpisode.minimized)
 }

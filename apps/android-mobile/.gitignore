@@ -1,0 +1,8 @@
+# Artefatti della build locale del progetto Android mobile.
+.gradle/
+build/
+app/build/
+local.properties
+.idea/
+.kotlin/
+**/*.apk

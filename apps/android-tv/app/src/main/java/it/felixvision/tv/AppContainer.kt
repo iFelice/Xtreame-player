@@ -1,6 +1,7 @@
 package it.felixvision.tv
 
 import android.content.Context
+import com.wireguard.android.backend.GoBackend
 import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.emptyPreferences
@@ -8,20 +9,46 @@ import it.felixvision.tv.core.Clock
 import it.felixvision.tv.core.FvpJson
 import it.felixvision.tv.core.HttpClientFactory
 import it.felixvision.tv.core.SystemClock
+import it.felixvision.tv.data.backup.BackupRelayClient
+import it.felixvision.tv.data.backup.BackupRepository
 import it.felixvision.tv.data.catalog.CatalogCache
+import it.felixvision.tv.data.channels.MyChannelsStore
 import it.felixvision.tv.data.catalog.CatalogClient
 import it.felixvision.tv.data.continuewatching.ContinueWatchingStore
 import it.felixvision.tv.data.favorites.FavoritesStore
+import it.felixvision.tv.data.epg.ChannelEpgClient
+import it.felixvision.tv.data.epg.ChannelScheduleLoader
+import it.felixvision.tv.data.epg.GuideEpgRepository
+import it.felixvision.tv.data.epg.XmlTvClient
+import it.felixvision.tv.data.images.CacheCleanup
 import it.felixvision.tv.data.images.FvpImageLoader
 import it.felixvision.tv.data.pairing.PairingClient
 import it.felixvision.tv.data.pairing.PairingCoordinator
+import it.felixvision.tv.data.protection.ProtectedContentStore
+import it.felixvision.tv.data.protection.ProtectedPageAccess
+import it.felixvision.tv.data.protection.ProtectedSession
+import it.felixvision.tv.data.playback.ChannelVideoFormatStore
 import it.felixvision.tv.data.playback.PlaybackActivityTracker
 import it.felixvision.tv.data.progress.ProgressStore
 import it.felixvision.tv.data.store.CredentialStore
 import it.felixvision.tv.data.store.DataStoreSecurePreferences
 import it.felixvision.tv.data.store.EncryptedCredentialStore
 import it.felixvision.tv.data.store.KeystoreCredentialCipher
+import it.felixvision.tv.data.update.AndroidUpdateInstaller
+import it.felixvision.tv.data.update.GithubUpdateClient
+import it.felixvision.tv.data.update.UpdateChecker
+import it.felixvision.tv.data.update.UpdateClient
+import it.felixvision.tv.data.update.UpdateInstaller
+import it.felixvision.tv.data.update.isDebugVersion
+import it.felixvision.tv.data.volume.VolumeStore
 import it.felixvision.tv.data.xtream.XtreamClient
+import it.felixvision.tv.player.PlayerPreferences
+import it.felixvision.tv.ui.catalog.CategorySortStore
+import it.felixvision.tv.ui.settings.InterfaceSizeStore
+import it.felixvision.tv.vpn.KeystoreVpnConfigCipher
+import it.felixvision.tv.vpn.VpnController
+import it.felixvision.tv.vpn.VpnRelayClient
+import it.felixvision.tv.vpn.VpnStore
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -33,7 +60,13 @@ import okhttp3.OkHttpClient
  * Costruzione manuale delle dipendenze: niente framework di dependency
  * injection. Un'unica istanza per processo, creata da [FvpApplication].
  */
-class AppContainer(private val context: Context) {
+class AppContainer(
+    private val context: Context,
+    credentialStoreOverride: CredentialStore? = null,
+    updateClientOverride: UpdateClient? = null,
+    updateInstallerOverride: UpdateInstaller? = null,
+    playerPreferencesOverride: PlayerPreferences? = null,
+) {
 
     val json = FvpJson
     val clock: Clock = SystemClock
@@ -52,8 +85,33 @@ class AppContainer(private val context: Context) {
 
     val imageLoader by lazy { FvpImageLoader.create(context) }
 
+    /**
+     * Cartella della cache su disco delle immagini (`cacheDir/fvp_images`): la
+     * pagina Catalogo delle Impostazioni ne mostra lo spazio occupato e la
+     * svuota (vedi [CacheCleanup]).
+     */
+    val imageCacheDir: File get() = CacheCleanup.imageCacheDir(context.cacheDir)
+
     val xtreamClient: XtreamClient by lazy {
         XtreamClient(http = httpClient, json = json, clock = clock)
+    }
+
+    val channelEpgClient: ChannelEpgClient by lazy { ChannelEpgClient(http = httpClient, clock = clock) }
+
+    /** Guida "in onda / a seguire": solo i canali richiesti, al massimo 4 richieste insieme. */
+    val channelScheduleLoader: ChannelScheduleLoader by lazy {
+        ChannelScheduleLoader(client = channelEpgClient)
+    }
+
+    /** XMLTV persistente e fallback seriale per la pagina Guida TV. */
+    val guideEpgRepository: GuideEpgRepository by lazy {
+        GuideEpgRepository(
+            cache = catalogCache,
+            xmlTvClient = XmlTvClient(http = httpClient, clock = clock),
+            channelEpgClient = channelEpgClient,
+            applicationScope = applicationScope,
+            clock = clock,
+        )
     }
 
     val catalogClient: CatalogClient by lazy {
@@ -68,8 +126,72 @@ class AppContainer(private val context: Context) {
         FavoritesStore(context = context, json = json, clock = clock)
     }
 
+    /** "I miei canali": lista personale numerata, una per server+utente. */
+    val myChannelsStore: MyChannelsStore by lazy {
+        MyChannelsStore(context = context, json = json, clock = clock)
+    }
+
     val progressStore: ProgressStore by lazy {
         ProgressStore(context = context, json = json, clock = clock)
+    }
+
+    /** Contenuti per adulti: PIN (solo hash) ed elenchi nascosti, per server+utente. */
+    val protectedContentStore: ProtectedContentStore by lazy {
+        ProtectedContentStore(context = context)
+    }
+
+    /**
+     * Visibilità dei contenuti protetti: solo in memoria, spenta a ogni avvio.
+     * In questa fase comanda soltanto la pagina "Contenuti protetti".
+     */
+    val protectedSession: ProtectedSession by lazy {
+        ProtectedSession(clock = clock)
+    }
+
+    /**
+     * Autorizzazione alla pagina di gestione dei contenuti protetti: accanto a
+     * [protectedSession], solo in memoria e falsa a ogni avvio. Concessa dal
+     * PIN verificato per la visita corrente, revocata uscendo dalla pagina e
+     * dagli stessi eventi (ON_STOP, ACTION_SCREEN_OFF) che ribloccano la
+     * sessione. `lock()` dell'interruttore non la revoca.
+     */
+    val protectedPageAccess: ProtectedPageAccess by lazy {
+        ProtectedPageAccess()
+    }
+
+    /** Livello del volume del player (0-15), ripristinato a ogni avvio. */
+    val volumeStore: VolumeStore by lazy {
+        VolumeStore(context = context)
+    }
+
+    /**
+     * Dimensione dell'interfaccia scelta nelle Impostazioni (predefinita
+     * "Compatta"). Letta in modo sincrono all'avvio, così il primo fotogramma
+     * ha già la misura giusta.
+     */
+    val interfaceSizeStore: InterfaceSizeStore by lazy {
+        InterfaceSizeStore(context)
+    }
+
+    /**
+     * Ordinamento scelto per ogni categoria di Film e Serie (`fvp_sort`): dato
+     * non sensibile, letto in modo sincrono quando la griglia si compone.
+     */
+    val categorySortStore: CategorySortStore by lazy {
+        CategorySortStore(context)
+    }
+
+    /** Formato dello schermo scelto per ogni canale Live, per server+utente. */
+    val channelVideoFormatStore: ChannelVideoFormatStore by lazy {
+        ChannelVideoFormatStore(context = context)
+    }
+
+    /**
+     * Preferenze del player TV (`fvp_player`): per ora l'intervallo dello
+     * zapping automatico. Pacchetto solo TV, mai `data/` o `core/`.
+     */
+    val playerPreferences: PlayerPreferences by lazy {
+        playerPreferencesOverride ?: PlayerPreferences(context = context)
     }
 
     /** Archivio "Continua a guardare": una voce per film e una per serie. */
@@ -86,8 +208,80 @@ class AppContainer(private val context: Context) {
         )
     }
 
+    /** Trasferimento del file di backup con il telefono, sul canale cifrato del relay. */
+    val backupRelayClient: BackupRelayClient by lazy {
+        BackupRelayClient(
+            http = httpClient,
+            baseUrl = BuildConfig.PAIRING_RELAY_URL,
+            json = json,
+        )
+    }
+
+    /** Raccolta, cifratura e applicazione del backup (vedi BackupRepository). */
+    val backupRepository: BackupRepository by lazy {
+        BackupRepository(
+            favorites = favoritesStore,
+            myChannels = myChannelsStore,
+            progress = progressStore,
+            protectedContent = protectedContentStore,
+        )
+    }
+
+    /** Trasferimento della configurazione VPN dal telefono, sul canale cifrato del relay. */
+    val vpnRelayClient: VpnRelayClient by lazy {
+        VpnRelayClient(
+            http = httpClient,
+            baseUrl = BuildConfig.PAIRING_RELAY_URL,
+            json = json,
+        )
+    }
+
+    /**
+     * VPN WireGuard di FelixVP: un solo controller per processo, creato al
+     * primo uso. Il backend WireGuard (libreria nativa) nasce solo al primo
+     * avvio del tunnel, mai alla costruzione.
+     */
+    val vpnController: VpnController by lazy {
+        VpnController(
+            context = context,
+            store = VpnStore(context = context, cipher = KeystoreVpnConfigCipher()),
+            httpClient = httpClient,
+            imageHttpClient = imageHttpClient,
+            scope = applicationScope,
+            clock = clock,
+            backendFactory = { GoBackend(context.applicationContext) },
+            relayBaseUrl = BuildConfig.PAIRING_RELAY_URL,
+        )
+    }
+
+    val updateClient: UpdateClient by lazy {
+        updateClientOverride ?: GithubUpdateClient(
+            http = httpClient,
+            json = json,
+        )
+    }
+
+    val updateInstaller: UpdateInstaller by lazy {
+        updateInstallerOverride ?: AndroidUpdateInstaller(context = context)
+    }
+
+    /**
+     * Controllo unico degli aggiornamenti, a livello di app: un solo flusso di
+     * stato osservato sia dal menu laterale sia dalle Impostazioni, così non ci
+     * sono richieste duplicate. Vive nello scope di applicazione.
+     */
+    val updateChecker: UpdateChecker by lazy {
+        UpdateChecker(
+            client = updateClient,
+            currentVersion = BuildConfig.VERSION_NAME,
+            scope = applicationScope,
+            isDebugBuild = BuildConfig.DEBUG || isDebugVersion(BuildConfig.VERSION_NAME),
+            clock = clock,
+        )
+    }
+
     val credentialStore: CredentialStore by lazy {
-        EncryptedCredentialStore(
+        credentialStoreOverride ?: EncryptedCredentialStore(
             preferences = DataStoreSecurePreferences(credentialPreferences),
             cipher = KeystoreCredentialCipher(),
             json = json,
@@ -114,5 +308,10 @@ class AppContainer(private val context: Context) {
      */
     fun checkPairingServiceHealth(scope: CoroutineScope) {
         scope.launch { pairingClient.healthCheck() }
+    }
+
+    /** Elimina eventuali APK scaricati rimasti da un aggiornamento precedente. */
+    fun cleanupDownloadedUpdates(scope: CoroutineScope) {
+        scope.launch { updateInstaller.cleanupDownloadedFiles() }
     }
 }

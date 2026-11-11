@@ -13,6 +13,7 @@ import { XtreamCategory, XtreamLiveStream, PlayableMediaItem } from '../types/xt
 import { buildStreamUrl } from '../utils/parseXtreamUrl';
 import { storage } from '../services/storage';
 import { isTvEnvironment } from '../utils/downloadHelper';
+import { buildSearchIndex, filterRankedEntries, hasMinQueryLength } from '../utils/catalogSearch';
 import { ListPositionIndicator } from './ListPositionIndicator';
 import { CollapsibleCategoryPanel } from './CollapsibleCategoryPanel';
 import { ChannelLogo, LiveChannelListRow } from './LiveChannelRow';
@@ -90,15 +91,30 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
     return categories.find((c) => String(c.category_id) === String(selectedCategory));
   }, [categories, selectedCategory]);
 
-  // Filter streams strictly for the selected category + search inside that category
+  // I nomi normalizzati si calcolano una volta sola per catalogo.
+  const searchIndex = useMemo(() => buildSearchIndex(streams, (stream) => stream.name), [streams]);
+
+  /**
+   * Da 2 caratteri in su si cercano i canali di TUTTE le categorie, con le
+   * stesse regole della ricerca dell'app Android TV. In modalità TV la
+   * navigazione a telecomando resta quella di sempre, categoria per categoria.
+   */
+  const allCategoriesMatches = useMemo(() => {
+    if (isTv) return null;
+    if (!hasMinQueryLength(searchQuery)) return null;
+    return filterRankedEntries(searchIndex, searchQuery);
+  }, [isTv, searchQuery, searchIndex]);
+
+  // Filter streams: tutte le categorie, oppure solo la categoria selezionata
   const filteredStreams = useMemo(() => {
+    if (allCategoriesMatches) return allCategoriesMatches;
     if (!selectedCategory) return [];
     return streams.filter((stream) => {
       if (String(stream.category_id) !== String(selectedCategory)) return false;
       if (!searchQuery.trim()) return true;
       return stream.name.toLowerCase().includes(searchQuery.toLowerCase());
     });
-  }, [streams, selectedCategory, searchQuery]);
+  }, [allCategoriesMatches, streams, selectedCategory, searchQuery]);
 
   // Natural list order preserved (all channels visible, scrollable naturally)
   const visibleStreams = filteredStreams;
@@ -219,6 +235,11 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
                 <Tv className="w-7 h-7 text-live shrink-0" />
                 <span className="truncate">{currentCategory?.category_name || 'Canali'}</span>
               </h2>
+              {allCategoriesMatches && (
+                <p data-search-scope="all-categories" className="text-xs font-bold text-live mt-1">
+                  Risultati in tutte le categorie
+                </p>
+              )}
               <ListPositionIndicator
                 scrollRef={channelsListRef}
                 total={filteredStreams.length}
@@ -236,7 +257,7 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Cerca canale in questa categoria..."
+                  placeholder="Cerca canale in tutte le categorie..."
                   className="w-full pl-12 pr-4 py-3 bg-surface-0 border border-separator-strong/80 rounded-2xl text-sm sm:text-base text-label placeholder-label-tertiary focus:outline-hidden focus:border-live transition shadow-inner font-medium"
                 />
               </div>
@@ -304,7 +325,9 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
             ) : filteredStreams.length === 0 ? (
               <div className="py-24 text-center text-label-secondary bg-surface-0/40 rounded-3xl border border-dashed border-separator">
                 <Tv className="w-16 h-16 mx-auto text-label-tertiary mb-3" />
-                <p className="text-lg font-bold text-label-secondary">Nessun canale trovato in questa categoria</p>
+                <p className="text-lg font-bold text-label-secondary">
+                  {allCategoriesMatches ? 'Nessun canale trovato' : 'Nessun canale trovato in questa categoria'}
+                </p>
                 <p className="text-sm text-label-tertiary mt-1">
                   {searchQuery ? 'Prova a cercare un altro nome' : 'Scegli un\'altra categoria dalla colonna a sinistra'}
                 </p>

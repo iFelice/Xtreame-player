@@ -1,0 +1,320 @@
+name: Android Mobile CI
+
+on:
+  push:
+    paths:
+      - "apps/android-mobile/**"
+      - "apps/android-tv/app/src/main/java/it/felixvision/tv/data/**"
+      - "apps/android-tv/app/src/main/java/it/felixvision/tv/core/**"
+      - "apps/android-tv/gradle/libs.versions.toml"
+      - ".github/workflows/android-mobile-ci.yml"
+      - ".github/scripts/**"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "apps/android-mobile/**"
+      - "apps/android-tv/app/src/main/java/it/felixvision/tv/data/**"
+      - "apps/android-tv/app/src/main/java/it/felixvision/tv/core/**"
+      - "apps/android-tv/gradle/libs.versions.toml"
+      - ".github/workflows/android-mobile-ci.yml"
+      - ".github/scripts/**"
+  workflow_dispatch:
+
+concurrency:
+  group: android-mobile-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# La firma di debug fissa usa un secret opzionale; test e build funzionano anche senza.
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Imposta JDK 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+          cache-dependency-path: |
+            apps/android-mobile/**/*.gradle*
+            apps/android-mobile/**/*.toml
+            apps/android-tv/gradle/libs.versions.toml
+
+      - name: Accetta le licenze Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+
+      - name: Prepara la chiave di debug fissa
+        shell: bash
+        env:
+          FVP_DEBUG_KEYSTORE_BASE64: ${{ secrets.FVP_DEBUG_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$FVP_DEBUG_KEYSTORE_BASE64" ]]; then
+            key="$RUNNER_TEMP/fvp-debug.keystore"
+            if ! printf '%s' "$FVP_DEBUG_KEYSTORE_BASE64" | base64 --decode > "$key"; then
+              rm -f "$key"
+              echo "::error::Base64 non valido"
+              exit 1
+            fi
+            if ! keytool -list -keystore "$key" -storepass android -alias androiddebugkey > /dev/null; then
+              rm -f "$key"
+              echo "::error::keystore non leggibile con alias androiddebugkey/password android"
+              exit 1
+            fi
+            chmod 600 "$key"
+            keystore_sha256=$(sha256sum "$key" | awk '{print $1}')
+            echo "::notice::SHA-256 keystore debug decodificato: $keystore_sha256"
+            echo "FVP_DEBUG_KEYSTORE_PATH=$key" >> "$GITHUB_ENV"
+          else
+            echo "::warning::Chiave di debug fissa assente: l'APK avrà una firma diversa a ogni run"
+          fi
+
+      - name: Versione riconoscibile dell'APK di debug
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha="$(git rev-parse HEAD)"
+          echo "FVP_VERSION_NAME=0.1.0-${sha:0:7}" >> "$GITHUB_ENV"
+          echo "FVP_VERSION_CODE=${{ github.run_number }}" >> "$GITHUB_ENV"
+
+      - name: Test, assembleDebug e lint
+        working-directory: apps/android-mobile
+        run: |
+          set -o pipefail
+          ./gradlew testDebugUnitTest assembleDebug lintDebug --console=plain --stacktrace 2>&1 | tee /tmp/fvp-mobile-build.log
+
+      - name: Notifica la versione dell'APK di debug
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::notice::APK debug: versione ${FVP_VERSION_NAME} (${FVP_VERSION_CODE})"
+
+      - name: Impronta certificato APK debug
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk="apps/android-mobile/app/build/outputs/apk/debug/app-debug.apk"
+          apksigner=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
+          if [[ ! -f "$apk" ]]; then
+            echo "::error::APK debug non trovato nel percorso atteso"
+            exit 1
+          fi
+          if [[ -z "$apksigner" || ! -x "$apksigner" ]]; then
+            echo "::error::apksigner non trovato nell'Android SDK"
+            exit 1
+          fi
+          cert_output="$RUNNER_TEMP/fvp-apk-certificates.txt"
+          if ! "$apksigner" verify --print-certs "$apk" > "$cert_output" 2>&1; then
+            cat "$cert_output"
+            echo "::error::Verifica della firma APK debug fallita"
+            exit 1
+          fi
+          cat "$cert_output"
+          fingerprint=$(awk -F': ' '/certificate SHA-256 digest:/ {print $NF; exit}' "$cert_output")
+          if [[ -z "$fingerprint" ]]; then
+            echo "::error::Impronta SHA-256 certificato assente dall'output apksigner"
+            exit 1
+          fi
+          echo "Certificato SHA-256 APK debug: $fingerprint"
+          echo "::notice::Certificato SHA-256 APK debug: $fingerprint"
+
+      # GitHub mostra al massimo 10 annotazioni per tipo per passo e 50 per job:
+      # gli errori principali devono comparire per primi — prima il compilatore,
+      # poi i test, infine il lint. I log di blob non sono raggiungibili da
+      # tutte le reti: le annotazioni restano leggibili dalla pagina del run,
+      # dalla PR e via API.
+      - name: Annota errori di compilazione, test e lint
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          # 1) errori del compilatore Kotlin ("e: file://...:riga:colonna ...")
+          sed -n -E "s|^e: file://$GITHUB_WORKSPACE/([^:]+):([0-9]+):([0-9]+) (.*)$|::error file=\1,line=\2,col=\3::\4|p" /tmp/fvp-mobile-build.log | head -10
+          # 2) test falliti: classe, nome del test, prime righe e primo frame
+          #    interno dei test (pattern generico "(NomeTest.kt:N)")
+          python3 - <<'PY'
+          import glob, re, xml.etree.ElementTree as ET
+          tot = fail = err = 0
+          for path in glob.glob('apps/android-mobile/app/build/test-results/**/*.xml', recursive=True):
+              try:
+                  root = ET.parse(path).getroot()
+              except Exception:
+                  continue
+              tot += int(root.get('tests') or 0)
+              fail += int(root.get('failures') or 0)
+              err += int(root.get('errors') or 0)
+              for case in root.iter('testcase'):
+                  cid = (case.get('classname') or '').replace('.', '/') + '.kt'
+                  for f in list(case):
+                      if f.tag in ('failure', 'error'):
+                          body = f.text or f.get('message') or ''
+                          lines = [re.sub(r'\s+', ' ', ln).strip()[:180]
+                                   for ln in body.split('\n') if ln.strip()][:10]
+                          for ln in body.split('\n'):
+                              m = re.search(r'\((\w+Test\.kt:\d+)\)', ln)
+                              if m:
+                                  lines.append(f"__AT__ {m.group(1)}")
+                                  break
+                          text = ' || '.join(lines)[:1500]
+                          print(f"::error file={cid},line=1::test «{case.get('name','?')}»: {text}")
+          if tot:
+              name = f"apps/android-mobile/app/src/test/java/it/felixvision/mobile/ui/main/HomeScreenTest.kt"
+              print(f"::notice file={name},line=1::test eseguiti: {tot}, falliti: {fail}, errori: {err}, superati: {tot - fail - err}")
+          PY
+          # 3) errori di lint
+          if [ -f apps/android-mobile/app/build/reports/lint-results-debug.txt ]; then
+            sed -n -E "s|^$GITHUB_WORKSPACE/([^:]+):([0-9]+) Error: (.*)$|::error file=\1,line=\2::lint: \3|p" apps/android-mobile/app/build/reports/lint-results-debug.txt | head -10
+          fi
+
+      - name: Carica l'APK di debug
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: FelixVP-mobile-debug
+          path: apps/android-mobile/app/build/outputs/apk/debug/*.apk
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Carica i report di test e lint
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-mobile-ci-reports
+          path: |
+            apps/android-mobile/app/build/reports/tests
+            apps/android-mobile/app/build/reports/lint-results*
+          if-no-files-found: ignore
+
+      - name: Rimuovi la chiave di debug temporanea
+        if: always()
+        shell: bash
+        run: rm -f "$RUNNER_TEMP/fvp-debug.keystore"
+
+  # Test strumentati end-to-end dell'app tablet su un emulatore API 35 con
+  # profilo pixel_tablet: percorso completo (login demo/demo contro il mock
+  # server Xtream su 127.0.0.1:3333, sezioni, player Live e Film con gesti in
+  # entrambi gli orientamenti, aggiornamento catalogo) con iniezione di eventi
+  # reali e screenshot di ogni schermata/orientamento.
+  #
+  # Gira SOLO su lancio manuale (workflow_dispatch): su push e pull_request
+  # viene saltato e il job verify non è bloccato da un emulatore.
+  emulatore:
+    needs: verify
+    if: github.event_name == 'workflow_dispatch'
+    # ubuntu-24.04 esplicita: l'immagine su cui l'emulatore con KVM è
+    # consolidata (ubuntu-latest migra a Ubuntu 26 da ottobre 2026).
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Imposta JDK 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+          cache-dependency-path: |
+            apps/android-mobile/**/*.gradle*
+            apps/android-mobile/**/*.toml
+            apps/android-tv/gradle/libs.versions.toml
+
+      - name: Accetta le licenze Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+
+      # Regola udev consigliata da reactivecircus/android-emulator-runner per
+      # rendere /dev/kvm accessibile sul runner (vedi README dell'azione).
+      - name: Abilita l'accesso a KVM
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules > /dev/null
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Verifica l'accelerazione hardware dell'emulatore
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -e /dev/kvm ]; then
+            echo "::error::KVM non disponibile su questo runner: l'emulazione software renderebbe il job inaffidabile."
+            exit 1
+          fi
+          if [ ! -w /dev/kvm ]; then
+            echo "::error::/dev/kvm presente ma non accessibile in scrittura: KVM non usabile."
+            exit 1
+          fi
+          ls -l /dev/kvm
+
+      # L'immagine del runner parte con poco disco libero e l'emulatore lo
+      # esaurisce: rimuove componenti preinstallati non necessari (NDK, .NET,
+      # Haskell) prima di creare l'AVD.
+      - name: Libera spazio disco per l'emulatore
+        shell: bash
+        run: |
+          set -uo pipefail
+          df -h / | tail -1
+          sudo rm -rf /usr/local/lib/android/sdk/ndk /usr/share/dotnet /usr/local/.ghcup /opt/ghc /usr/local/share/boost /usr/local/lib/node_modules/nodemon 2>/dev/null || true
+          sudo apt-get clean || true
+          docker image prune -af > /dev/null 2>&1 || true
+          df -h / | tail -1
+
+      # Il mock server deve restare in ascolto anche nei gradini successivi.
+      # Gli script npm (mock:xtream:visual) vivono nel package.json della radice.
+      - name: Avvia il server di prova Xtream (mock visual)
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          nohup npm run mock:xtream:visual > /tmp/fvp-mock-server.log 2>&1 &
+          timeout 90 bash -c 'until curl -sf http://127.0.0.1:3333/health > /dev/null; do sleep 1; done'
+          curl -s http://127.0.0.1:3333/health
+          echo "Mock server in ascolto su 127.0.0.1:3333 (raggiunto dall'app come 10.0.2.2)."
+
+      # Nota: l'action esegue lo script UNA RIGA PER VOLTA con /bin/sh (dash):
+      # nessun blocco multilinea. Tutta la logica vive in
+      # .github/scripts/run-emulator-tests.sh, richiamato con una riga sola.
+      - name: Test strumentati del tablet su emulatore (API 35)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_tablet
+          cores: 4
+          disable-animations: true
+          force-avd-creation: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none
+          emulator-boot-timeout: 1200
+          script: bash .github/scripts/run-emulator-tests.sh
+
+      - name: Carica report e screenshot dei test su emulatore
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-mobile-emulator
+          retention-days: 7
+          path: |
+            apps/android-mobile/app/build/outputs/androidTest-results/connected
+            apps/android-mobile/app/build/reports/androidTests/connected
+            emulator-artifacts
+          if-no-files-found: ignore

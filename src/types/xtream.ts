@@ -128,7 +128,9 @@ export interface XtreamSeriesInfo {
     director?: string;
     genre?: string;
     releaseDate?: string;
-    rating?: string;
+    release_date?: string;
+    rating?: string | number;
+    episode_run_time?: string | number;
     backdrop_path?: string[];
   };
   episodes?: Record<string, XtreamEpisode[]>;

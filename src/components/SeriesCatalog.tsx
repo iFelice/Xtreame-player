@@ -25,12 +25,19 @@ import { buildStreamUrl, formatDuration } from '../utils/parseXtreamUrl';
 import { xtreamClient } from '../services/xtreamClient';
 import { storage } from '../services/storage';
 import { sortSeriesList } from '../utils/recentSorting';
+import { buildSearchIndex, filterRankedEntries, hasMinQueryLength } from '../utils/catalogSearch';
 import { getSecureImageUrl } from '../utils/imageUrl';
 import { VirtualizedMediaGrid } from './VirtualizedMediaGrid';
 import { ListPositionIndicator } from './ListPositionIndicator';
-import { canOfferDownloads, triggerMediaDownload, isTvEnvironment } from '../utils/downloadHelper';
+import { triggerMediaDownload, isTvEnvironment } from '../utils/downloadHelper';
+import { AppleDownloadLink } from './AppleDownloadLink';
+import { useTouchCardMode } from '../utils/useTouchCardMode';
+import { showsHoverVeil } from '../utils/touchDevice';
 import { CollapsibleCategoryPanel } from './CollapsibleCategoryPanel';
-import { registerTvOverlay } from '../platform/tvOverlays';
+import { STATIC_DEPLOY } from '../utils/deployTarget';
+import { presentText } from '../utils/seriesInfo';
+import { SeriesInfoBlock } from './SeriesInfoBlock';
+import { ExpandablePlot } from './ExpandablePlot';
 
 interface SeriesCatalogProps {
   categories: XtreamCategory[];
@@ -62,6 +69,19 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
   const [, refreshFavorites] = useState(0);
   const seriesListRef = useRef<HTMLDivElement | null>(null);
   const isTv = isTvEnvironment();
+  const [bodyTvMode, setBodyTvMode] = useState(() => typeof document !== 'undefined' && !!document.body?.classList?.contains('tv-mode'));
+  useEffect(() => {
+    const body = document.body;
+    if (!body || typeof MutationObserver === 'undefined') return;
+    const update = () => setBodyTvMode(body.classList.contains('tv-mode'));
+    update();
+    const observer = new MutationObserver(update);
+    observer.observe(body, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+  // Touch cards (TV excluded) open the series on a tap and must not render the
+  // hover veil: it is invisible there but would still receive the taps.
+  const touchCardMode = useTouchCardMode(isTv);
 
   // Always default to the first category to avoid freezing with 4,000+ series
   const [selectedCategory, setSelectedCategory] = useState<string>(() => {
@@ -76,14 +96,6 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
     isLoading: boolean;
     selectedSeason: string;
   } | null>(null);
-
-  useEffect(() => {
-    if (!activeSeriesDetail) return;
-    return registerTvOverlay('series-modal', () => {
-      setActiveSeriesDetail(null);
-      onClearSelectedSeries?.();
-    });
-  }, [Boolean(activeSeriesDetail), onClearSelectedSeries]);
 
   // Sync first category if categories arrive asynchronously
   useEffect(() => {
@@ -125,8 +137,23 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
     return categories.find((c) => String(c.category_id) === String(selectedCategory));
   }, [categories, selectedCategory]);
 
-  // Filtered and sorted series for selected category only
+  // I nomi normalizzati si calcolano una volta sola per catalogo.
+  const searchIndex = useMemo(() => buildSearchIndex(seriesList, (item) => item.name), [seriesList]);
+
+  /**
+   * Da 2 caratteri in su la ricerca guarda TUTTE le categorie della sezione,
+   * con le stesse regole della ricerca dell'app Android TV. In modalità TV la
+   * navigazione a telecomando resta quella di sempre, categoria per categoria.
+   */
+  const allCategoriesMatches = useMemo(() => {
+    if (isTv) return null;
+    if (!hasMinQueryLength(searchQuery)) return null;
+    return filterRankedEntries(searchIndex, searchQuery);
+  }, [isTv, searchQuery, searchIndex]);
+
+  // Filtered and sorted series: tutte le categorie, oppure la categoria scelta
   const filteredSeries = useMemo(() => {
+    if (allCategoriesMatches) return allCategoriesMatches;
     if (!selectedCategory) return [];
     const matched = seriesList.filter((item) => {
       if (String(item.category_id) !== String(selectedCategory)) return false;
@@ -135,7 +162,7 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
     });
 
     return sortSeriesList(matched, sortBy);
-  }, [seriesList, selectedCategory, searchQuery, sortBy]);
+  }, [allCategoriesMatches, seriesList, selectedCategory, searchQuery, sortBy]);
 
   // Natural list order preserved (all series visible and naturally scrollable)
   const visibleSeries = filteredSeries;
@@ -228,6 +255,11 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                 <Tv className="w-7 h-7 text-series shrink-0" />
                 <span className="truncate">{currentCategory?.category_name || 'Serie TV'}</span>
               </h2>
+              {allCategoriesMatches && (
+                <p data-search-scope="all-categories" className="text-xs font-bold text-series mt-1">
+                  Risultati in tutte le categorie
+                </p>
+              )}
               <ListPositionIndicator
                 scrollRef={seriesListRef}
                 total={filteredSeries.length}
@@ -239,19 +271,23 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
 
             {/* Controls: Sort, Search & Scroll Arrows */}
             <div className="flex flex-wrap items-center gap-3 shrink-0">
-              <div className="flex items-center gap-2 bg-surface-0 border border-separator rounded-2xl px-3 py-2 text-xs sm:text-sm font-semibold">
-                <ArrowDownUp className="w-4 h-4 text-label-secondary shrink-0" />
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as any)}
-                  className="bg-transparent text-label text-xs sm:text-sm font-bold focus:outline-hidden cursor-pointer"
-                >
-                  <option value="recent">🕒 Più Recenti</option>
-                  <option value="rating">⭐ Valutazione</option>
-                  <option value="name">🔤 Titolo (A-Z)</option>
-                  <option value="id">🔢 ID</option>
-                </select>
-              </div>
+              {/* Ordinamento della categoria: con la ricerca su tutte le
+                  categorie vale l'ordine della ricerca (prefisso → contiene). */}
+              {!allCategoriesMatches && (
+                <div className="flex items-center gap-2 bg-surface-0 border border-separator rounded-2xl px-3 py-2 text-xs sm:text-sm font-semibold">
+                  <ArrowDownUp className="w-4 h-4 text-label-secondary shrink-0" />
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as any)}
+                    className="bg-transparent text-label text-xs sm:text-sm font-bold focus:outline-hidden cursor-pointer"
+                  >
+                    <option value="recent">🕒 Più Recenti</option>
+                    <option value="rating">⭐ Valutazione</option>
+                    <option value="name">🔤 Titolo (A-Z)</option>
+                    <option value="id">🔢 ID</option>
+                  </select>
+                </div>
+              )}
 
               <div className="relative flex-1 sm:w-72">
                 <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-label-secondary" />
@@ -259,7 +295,7 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Cerca serie TV in questa categoria..."
+                  placeholder="Cerca serie TV in tutte le categorie..."
                   className="w-full pl-12 pr-4 py-2.5 bg-surface-0 border border-separator-strong/80 rounded-2xl text-xs sm:text-base text-label placeholder-label-tertiary focus:outline-hidden focus:border-series transition shadow-inner font-medium"
                 />
               </div>
@@ -297,7 +333,9 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
             ) : filteredSeries.length === 0 ? (
               <div className="py-20 text-center text-label-secondary bg-surface-0/30 rounded-2xl border border-dashed border-separator">
                 <Tv className="w-14 h-14 mx-auto text-label-tertiary mb-3" />
-                <p className="text-base font-semibold text-label-secondary">Nessuna serie TV trovata in questa categoria</p>
+                <p className="text-base font-semibold text-label-secondary">
+                  {allCategoriesMatches ? 'Nessuna serie TV trovata' : 'Nessuna serie TV trovata in questa categoria'}
+                </p>
                 <p className="text-xs text-label-tertiary mt-1">
                   {searchQuery ? 'Prova a modificare i termini di ricerca' : 'Seleziona un\'altra categoria a sinistra'}
                 </p>
@@ -377,13 +415,15 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                         <Star className={`w-4 h-4 ${isFav ? 'fill-favorite text-favorite' : ''}`} />
                       </button>
 
-                      {/* Hover Overlay */}
+                      {/* Hover Overlay (desktop/TV only) */}
+                      {showsHoverVeil(touchCardMode) && (
                       <div className="absolute inset-0 bg-surface-1/75 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col items-center justify-center p-3 gap-2">
                         <span className="px-4 py-2 rounded-xl bg-series hover:brightness-110 text-on-accent text-xs font-bold flex items-center gap-1.5 shadow-lg transform transition hover:scale-105">
                           <Play className="w-4 h-4 fill-white" />
                           Sfoglia Episodi
                         </span>
                       </div>
+                      )}
                     </div>
 
                     {/* Card Title & Info */}
@@ -410,7 +450,7 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
 
       {/* Episode Selection Modal */}
       {activeSeriesDetail && (
-        <div data-tv-layer="series-detail" role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/50 animate-in fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center safe-area-overlay bg-black/50 animate-in fade-in">
           <div className="glass border border-glass-edge rounded-3xl max-w-4xl w-full overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
             {/* Modal Header */}
             <div className="p-4 sm:p-5 border-b border-separator flex items-center justify-between">
@@ -444,65 +484,84 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                   <div className="w-12 h-12 border-4 border-series/20 border-t-series rounded-full animate-spin mb-3"></div>
                   <span className="text-sm font-medium">Caricamento stagioni ed episodi...</span>
                 </div>
-              ) : activeSeriesDetail.info?.episodes && Object.keys(activeSeriesDetail.info.episodes).length > 0 ? (
+              ) : (
                 <>
-                  {/* Season Selection Pills */}
-                  <div>
-                    <h4 className="text-xs sm:text-sm font-bold text-label-secondary mb-3 uppercase tracking-wider">
-                      Stagioni
-                    </h4>
-                    <div className="flex flex-wrap gap-2">
-                      {Object.keys(activeSeriesDetail.info.episodes).map((seasonNum) => (
-                        <button
-                          key={seasonNum}
-                          onClick={() =>
-                            setActiveSeriesDetail((prev) =>
-                              prev ? { ...prev, selectedSeason: seasonNum } : null
-                            )
-                          }
-                          className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition cursor-pointer ${
-                            activeSeriesDetail.selectedSeason === seasonNum
-                              ? 'bg-series text-on-accent shadow-md'
-                              : 'bg-surface-0 hover:bg-surface-1 text-label-secondary border border-separator'
-                          }`}
-                        >
-                          Stagione {seasonNum}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                  {!isTv && !bodyTvMode && activeSeriesDetail.info && (
+                    <SeriesInfoBlock key={activeSeriesDetail.series.series_id} info={activeSeriesDetail.info} series={activeSeriesDetail.series} />
+                  )}
+                  {activeSeriesDetail.info?.episodes && Object.keys(activeSeriesDetail.info.episodes).length > 0 ? (
+                    <>
+                      {/* Season Selection Pills */}
+                      <div>
+                        <h4 className="text-xs sm:text-sm font-bold text-label-secondary mb-3 uppercase tracking-wider">
+                          Stagioni
+                        </h4>
+                        <div className="flex flex-wrap gap-2">
+                          {Object.keys(activeSeriesDetail.info.episodes).map((seasonNum) => (
+                            <button
+                              key={seasonNum}
+                              onClick={() =>
+                                setActiveSeriesDetail((prev) =>
+                                  prev ? { ...prev, selectedSeason: seasonNum } : null
+                                )
+                              }
+                              className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition cursor-pointer ${
+                                activeSeriesDetail.selectedSeason === seasonNum
+                                  ? 'bg-series text-on-accent shadow-md'
+                                  : 'bg-surface-0 hover:bg-surface-1 text-label-secondary border border-separator'
+                              }`}
+                            >
+                              Stagione {seasonNum}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
 
-                  {/* Episodes List for Selected Season */}
-                  <div>
-                    <h4 className="text-xs sm:text-sm font-bold text-label-secondary mb-3 uppercase tracking-wider">
-                      Episodi (Stagione {activeSeriesDetail.selectedSeason})
-                    </h4>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {(
-                        activeSeriesDetail.info.episodes[activeSeriesDetail.selectedSeason] || []
-                      ).map((ep) => (
-                        <div
-                          key={ep.id}
-                          className="flex items-center justify-between p-3.5 rounded-2xl bg-surface-0 border border-separator/80 hover:border-series/40 transition gap-3 shadow-sm"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="text-xs sm:text-sm  font-bold text-series shrink-0">
-                                E{ep.episode_num}
-                              </span>
-                              <h5 className="text-xs sm:text-sm font-bold text-label truncate" title={ep.title}>
-                                {ep.title || `Episodio ${ep.episode_num}`}
-                              </h5>
-                            </div>
-                            {ep.info?.duration_secs && (
-                              <p className="text-xs text-label-secondary ">
-                                {formatDuration(ep.info.duration_secs)}
-                              </p>
-                            )}
-                          </div>
+                      {/* Episodes List for Selected Season */}
+                      <div>
+                        <h4 className="text-xs sm:text-sm font-bold text-label-secondary mb-3 uppercase tracking-wider">
+                          Episodi (Stagione {activeSeriesDetail.selectedSeason})
+                        </h4>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {(
+                            activeSeriesDetail.info.episodes[activeSeriesDetail.selectedSeason] || []
+                          ).map((ep) => {
+                            // TV keeps the horizontal actions so the focus order
+                            // does not change; everywhere else they are stacked
+                            // under the "Guarda" button and right aligned, to
+                            // leave the plot the whole remaining width.
+                            const tvLayout = isTv || bodyTvMode;
 
-                          <div className="flex items-center gap-2 shrink-0">
-                            {canOfferDownloads() && !isTv && (
+                            const playButton = (
+                              <button
+                                onClick={() =>
+                                  handlePlayEpisode(ep, activeSeriesDetail.selectedSeason)
+                                }
+                                className="px-3.5 py-1.5 rounded-xl bg-series hover:brightness-110 text-on-accent text-xs sm:text-sm font-bold flex items-center gap-1.5 transition shrink-0 cursor-pointer shadow-md"
+                              >
+                                <Play className="w-3.5 h-3.5 fill-white" />
+                                Guarda
+                              </button>
+                            );
+
+                            const appleDownload = (
+                              /* Static Apple build: long-press on the direct file link. */
+                              <AppleDownloadLink
+                                streamUrl={buildStreamUrl(
+                                  serverUrl,
+                                  username,
+                                  password,
+                                  'series',
+                                  ep.id,
+                                  ep.container_extension || 'mp4',
+                                  false
+                                )}
+                                containerExtension={ep.container_extension}
+                                variant={tvLayout ? 'compact' : 'stacked'}
+                              />
+                            );
+
+                            const downloadButton = !STATIC_DEPLOY && !isTv && (
                               <button
                                 type="button"
                                 onClick={(e) => {
@@ -534,27 +593,68 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                               >
                                 <Download className="w-4 h-4" />
                               </button>
-                            )}
+                            );
 
-                            <button
-                              onClick={() =>
-                                handlePlayEpisode(ep, activeSeriesDetail.selectedSeason)
-                              }
-                              className="px-3.5 py-1.5 rounded-xl bg-series hover:brightness-110 text-on-accent text-xs sm:text-sm font-bold flex items-center gap-1.5 transition shrink-0 cursor-pointer shadow-md"
-                            >
-                              <Play className="w-3.5 h-3.5 fill-white" />
-                              Guarda
-                            </button>
-                          </div>
+                            return (
+                              <div
+                                key={ep.id}
+                                className={`flex ${
+                                  tvLayout ? 'items-center' : 'items-start'
+                                } justify-between p-3.5 rounded-2xl bg-surface-0 border border-separator/80 hover:border-series/40 transition gap-3 shadow-sm`}
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <span className="text-xs sm:text-sm  font-bold text-series shrink-0">
+                                      E{ep.episode_num}
+                                    </span>
+                                    <h5 className="text-xs sm:text-sm font-bold text-label truncate" title={ep.title}>
+                                      {ep.title || `Episodio ${ep.episode_num}`}
+                                    </h5>
+                                  </div>
+                                  {!isTv && !bodyTvMode && presentText(ep.info?.plot) && (
+                                    <ExpandablePlot text={presentText(ep.info?.plot)!} lines={2} />
+                                  )}
+                                  {ep.info?.duration_secs && (
+                                    <p className="text-xs text-label-secondary ">
+                                      {formatDuration(ep.info.duration_secs)}
+                                    </p>
+                                  )}
+                                </div>
+
+                                <div
+                                  data-episode-actions={tvLayout ? 'inline' : 'stacked'}
+                                  className={
+                                    tvLayout
+                                      ? 'flex items-center gap-2 shrink-0'
+                                      : 'flex flex-col items-end gap-1.5 shrink-0'
+                                  }
+                                >
+                                  {tvLayout ? (
+                                    <>
+                                      {downloadButton}
+                                      {appleDownload}
+                                      {playButton}
+                                    </>
+                                  ) : (
+                                    <>
+                                      {playButton}
+                                      {appleDownload}
+                                      {downloadButton}
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
-                      ))}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="py-12 text-center text-label-secondary text-sm">
+                      Nessun episodio disponibile per questa serie.
                     </div>
-                  </div>
+                  )}
                 </>
-              ) : (
-                <div className="py-12 text-center text-label-secondary text-sm">
-                  Nessun episodio disponibile per questa serie.
-                </div>
               )}
             </div>
           </div>

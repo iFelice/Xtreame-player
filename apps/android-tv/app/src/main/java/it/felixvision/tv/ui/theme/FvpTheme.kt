@@ -17,6 +17,41 @@ object FvpColors {
     val GreenFocus = Color(0xFF34D399)
     val Error = Color(0xFFFF453A)
 
+    /**
+     * Arancione della palette (come il pallino di aggiornamento e la voce Live
+     * del menu laterale): icona della card App quando c'è un aggiornamento
+     * disponibile, in scaricamento o in installazione.
+     */
+    val Orange = Color(0xFFFF9F0A)
+
+    /**
+     * Contenitori "a vetro" senza sfocatura (per esempio la lista canali Live):
+     * riempimento bianco al 4% e bordo bianco al 10% sullo sfondo dell'area.
+     */
+    val GlassFill = Color.White.copy(alpha = 0.04f)
+    val GlassBorder = Color.White.copy(alpha = 0.10f)
+
+    /**
+     * Unico fondo degli elementi del player sopra il video (pannello del volume,
+     * banner del canale, lista canali, barra comandi, pannello tracce, prossimo
+     * episodio, Riprendi, etichetta dei salti, errori): [Surface] al 60%.
+     *
+     * Il valore nasce dal pannello del volume preso come riferimento (0,85),
+     * ridotto di 0,25: 0,85 − 0,25 = 0,60. Resta un fondo leggibile ma lascia
+     * passare il video molto più di prima (era 0,78): sulle TV da 50" in su i
+     * riquadri non coprono più l'inquadratura. Sta qui una volta sola, così ogni
+     * elemento sopra il video ha esattamente lo stesso fondo.
+     */
+    val PlayerOverlay = Surface.copy(alpha = 0.60f)
+
+    /**
+     * Pallino di notifica "aggiornamento disponibile" (menu laterale e riga
+     * della versione nelle Impostazioni): arancio pieno su un bordo sottile del
+     * colore di fondo, che lo stacca dall'icona su cui è appoggiato.
+     */
+    val UpdateBadge = Color(0xFFFF9F0A)
+    val UpdateBadgeBorder = Color(0xFF1C1C1E)
+
     // Colori specifici per le voci del menu laterale (PR2)
     val LiveActive = Color(0xFFFF9F0A)
     val FilmActive = Color(0xFF10B981)

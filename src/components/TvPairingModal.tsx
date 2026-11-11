@@ -18,8 +18,7 @@ import {
 } from 'lucide-react';
 import { storage } from '../services/storage';
 import { parseXtreamUrl } from '../utils/parseXtreamUrl';
-import { isDirectMode } from '../platform/runtime';
-import { registerTvOverlay } from '../platform/tvOverlays';
+import { Capacitor } from '@capacitor/core';
 import { isTvEnvironment } from '../utils/downloadHelper';
 import {
   buildPairingCreateRequest,
@@ -28,7 +27,9 @@ import {
   buildPairingWebUrl,
   formatShortServiceUrl,
   getPairingRelayUrl,
+  PAIRING_RELAY_REQUIRED_MESSAGE,
 } from '../services/pairingRequests';
+import { isStaticDeploy } from '../utils/deployTarget';
 
 const DEFAULT_PAIRING_SERVER = 'https://login-extream-neyt.onrender.com';
 
@@ -41,11 +42,9 @@ function nativePairingServer(): string {
 function pairingWebUrl(code?: string): string {
   const relayUrl = getPairingRelayUrl();
   return buildPairingWebUrl(code, {
-    native: isDirectMode(),
+    native: Capacitor.isNativePlatform(),
     nativeServer: nativePairingServer(),
-    // In modalità diretta l'origine della pagina (file:// sul TV) non è un
-    // indirizzo raggiungibile dal telefono: conta solo il relay.
-    origin: isDirectMode() ? '' : typeof window !== 'undefined' ? window.location.origin : '',
+    origin: typeof window !== 'undefined' ? window.location.origin : '',
     relayUrl,
   });
 }
@@ -88,32 +87,13 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
   const [sendErrorMessage, setSendErrorMessage] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
 
-  // Su webOS (e in ogni build in modalità diretta) l'unica origine di
-  // abbinamento è il relay VITE_PAIRING_RELAY_URL: /api/session/* non esiste
-  // dentro il pacchetto .ipk, quindi senza relay la funzione è spenta.
-  const pairingUnavailableReason = (): 'disabled' | 'missing-relay' | null => {
-    if (getPairingRelayUrl()) return null;
-    if (!isDirectMode()) return pairingEnabled ? null : 'disabled';
-    // Diretta (webOS, Capacitor): senza relay non c'è alcun /api/session/* da
-    // raggiungere, quindi l'abbinamento resta spento e lo diciamo in UI.
-    return 'missing-relay';
-  };
-
-  const pairingAvailable = () => pairingUnavailableReason() === null;
-
   const pollIntervalRef = useRef<any>(null);
   const timerIntervalRef = useRef<any>(null);
   const expiresAtRef = useRef<number>(0);
   const creationStartedRef = useRef<boolean>(false);
   const savedAccounts = storage.getAccounts();
   const isTv = isTvEnvironment();
-
-  // Il tasto Indietro del telecomando deve poter chiudere questo modale: si
-  // registra nel registro degli overlay TV finché è aperto.
-  useEffect(() => {
-    if (!isOpen) return;
-    return registerTvOverlay('tv-pairing', onClose);
-  }, [isOpen, onClose]);
+  const relayMissing = (isStaticDeploy() || import.meta.env.VITE_TARGET === 'webos') && !getPairingRelayUrl();
 
   // If initialCode changes, set remotePin and switch mode
   useEffect(() => {
@@ -127,12 +107,10 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
   const generateNewSession = async () => {
     const relayUrl = getPairingRelayUrl();
     const useRelay = Boolean(relayUrl);
-    const native = isDirectMode();
-    if (!pairingAvailable()) {
-      if (pairingUnavailableReason() === 'missing-relay') {
-        setPollError('Relay di abbinamento non configurato in questa build (VITE_PAIRING_RELAY_URL).');
-        setIsWaitingForPhone(false);
-      }
+    const native = Capacitor.isNativePlatform();
+    if (relayMissing) {
+      setPollError(PAIRING_RELAY_REQUIRED_MESSAGE);
+      setIsWaitingForPhone(false);
       return;
     }
     if (!useRelay && !native && !pairingEnabled) return;
@@ -221,7 +199,7 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
       try {
         const relayUrl = getPairingRelayUrl();
         const useRelay = Boolean(relayUrl);
-        const native = isDirectMode();
+        const native = Capacitor.isNativePlatform();
         const request = buildPairingStatusRequest(pinCode, {
           native,
           nativeServer: nativePairingServer(),
@@ -280,16 +258,12 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
       return;
     }
     const relayUrl = getPairingRelayUrl();
-    const native = isDirectMode();
-    if (mode !== 'tv' || pinCode || creationStartedRef.current) return;
-    // 'disabled' (web senza relay e senza pairing) resta silenzioso; il caso
-    // 'missing-relay' deve invece passare da generateNewSession, che mostra il
-    // motivo in interfaccia senza emettere alcuna richiesta.
-    if (pairingUnavailableReason() === 'disabled') return;
+    const native = Capacitor.isNativePlatform();
+    if (mode !== 'tv' || pinCode || creationStartedRef.current || relayMissing) return;
     if (!relayUrl && !native && !pairingEnabled) return;
     creationStartedRef.current = true;
     void generateNewSession();
-  }, [isOpen, mode, pinCode, pairingEnabled]);
+  }, [isOpen, mode, pinCode, pairingEnabled, relayMissing]);
 
   // Handle remote form paste link
   const handlePastedLinkChange = (value: string) => {
@@ -326,7 +300,7 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
     try {
       setIsSending(true);
       const submitReq = buildPairingSubmitRequest({
-        native: isDirectMode(),
+        native: Capacitor.isNativePlatform(),
         nativeServer: nativePairingServer(),
         relayUrl: getPairingRelayUrl(),
       });
@@ -373,7 +347,7 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
   const qrSizeClasses = isTv ? 'w-52 h-52' : 'w-44 h-44 sm:w-52 sm:h-52';
 
   return (
-    <div data-tv-layer="pairing" role="dialog" aria-modal="true" className="tv-pairing-modal fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
+    <div className="tv-pairing-modal fixed inset-0 z-50 flex items-center justify-center bg-black/50 safe-area-overlay overflow-y-auto animate-in fade-in duration-200">
       <div className="tv-pairing-panel glass border border-glass-edge rounded-3xl max-w-2xl w-full shadow-2xl overflow-hidden relative my-auto">
         {/* Header Tabs */}
         <div className="flex items-center justify-between border-b border-separator p-4 sm:p-5">
@@ -410,8 +384,14 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
           </div>
         </div>
 
+        {relayMissing && (
+          <div role="alert" className="m-5 rounded-xl border border-danger/40 bg-danger/15 p-4 text-sm font-semibold text-label">
+            {import.meta.env.VITE_TARGET === 'webos' ? 'Relay di abbinamento non configurato' : PAIRING_RELAY_REQUIRED_MESSAGE}
+          </div>
+        )}
+
         {/* MODAL CONTENT: TV MODE (SHOW QR & PIN) */}
-        {mode === 'tv' && (
+        {!relayMissing && mode === 'tv' && (
           <div className="p-5 sm:p-7 space-y-6">
             {receivedSuccess ? (
               <div className="p-8 text-center space-y-4 animate-in zoom-in-95 duration-300">
@@ -539,7 +519,7 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
         )}
 
         {/* MODAL CONTENT: REMOTE SENDER MODE (FROM SMARTPHONE) */}
-        {mode === 'remote' && (
+        {!relayMissing && mode === 'remote' && (
           <div className="p-5 sm:p-7 space-y-5">
             {sendSuccessMessage ? (
               <div className="p-6 text-center space-y-4 bg-accent/15 border border-accent/40 rounded-2xl animate-in zoom-in-95 text-label">

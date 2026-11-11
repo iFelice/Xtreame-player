@@ -56,6 +56,69 @@ body.tv-mode .glass {
   backdrop-filter: none;
 }
 
+/*
+ * Safe areas for the Home Screen web app. index.html uses viewport-fit=cover
+ * with a translucent status bar, so a standalone app draws behind it. env()
+ * resolves to 0px in a Safari tab, on desktop, TV and Android, which keeps
+ * these utilities inert outside the iOS/iPadOS standalone app.
+ */
+
+/* Fixed header: the glass background stays behind the status bar, the content
+   moves below and beside the notch. */
+@utility safe-area-header {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+/* Thin full-width banner that sits above the header (safe mode label). */
+@utility safe-area-banner {
+  padding-top: calc(0.375rem + env(safe-area-inset-top, 0px));
+  padding-right: calc(0.75rem + env(safe-area-inset-right, 0px));
+  padding-bottom: 0.375rem;
+  padding-left: calc(0.75rem + env(safe-area-inset-left, 0px));
+}
+
+/* Modal backdrop: same 0.75rem/1rem padding as p-3 sm:p-4, but never less than
+   the safe area inset. */
+@utility safe-area-overlay {
+  padding-top: max(0.75rem, env(safe-area-inset-top, 0px));
+  padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+  padding-left: max(0.75rem, env(safe-area-inset-left, 0px));
+
+  @media (min-width: 40rem) {
+    padding-top: max(1rem, env(safe-area-inset-top, 0px));
+    padding-right: max(1rem, env(safe-area-inset-right, 0px));
+    padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+    padding-left: max(1rem, env(safe-area-inset-left, 0px));
+  }
+}
+
+/* Modal backdrop that used a flat 1rem padding (p-4). */
+@utility safe-area-overlay-lg {
+  padding-top: max(1rem, env(safe-area-inset-top, 0px));
+  padding-right: max(1rem, env(safe-area-inset-right, 0px));
+  padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+  padding-left: max(1rem, env(safe-area-inset-left, 0px));
+}
+
+/* In-page view under the sticky header (Cerca): only the sides, because the
+   top inset belongs to the header and the bottom one to the section bar. */
+@utility safe-area-page {
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+/* Full-window surfaces (full screen player): keep content inside the notch and
+   the home indicator without changing anything when env() is 0. */
+@utility safe-area-screen {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+}
+
 @media (max-width: 767.98px) {
   html {
     scroll-padding-top: 72px;

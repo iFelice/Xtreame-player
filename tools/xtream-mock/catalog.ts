@@ -107,6 +107,8 @@ export function buildGeneratedSeriesInfo(seriesId: string, base: string) {
       name: `Serie visuale ${seriesId}`,
       cover: `${base}/assets/poster/${numericId}.svg`,
       plot: 'Serie generata per verificare stagioni, episodi, testi e scorrimento.',
+      cast: 'Anna Demo, Luca Esempio',
+      director: 'Giulia Demo',
       genre: 'Test visuale',
       releaseDate: '2026-10-01',
       rating: '8.5',

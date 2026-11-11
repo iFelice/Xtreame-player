@@ -13,11 +13,11 @@ class DrawerSectionsOrderTest {
         assertEquals(
             listOf(
                 DrawerSection.Novita,
-                DrawerSection.ContinuaAGuardare,
+                DrawerSection.Preferiti,
                 DrawerSection.Live,
                 DrawerSection.Film,
                 DrawerSection.Serie,
-                DrawerSection.Preferiti,
+                DrawerSection.GuidaTv,
                 DrawerSection.Cerca,
                 DrawerSection.Impostazioni,
             ),
@@ -27,7 +27,7 @@ class DrawerSectionsOrderTest {
 
     @Test
     fun `etichette delle nuove voci`() {
-        assertEquals("Continua a guardare", DrawerSection.ContinuaAGuardare.label)
+        assertEquals("Guida TV", DrawerSection.GuidaTv.label)
         assertEquals("Cerca", DrawerSection.Cerca.label)
     }
 

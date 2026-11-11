@@ -154,6 +154,23 @@ class ProgressStore(
         }
     }
 
+    /**
+     * Scrive in blocco le voci già unite dal chiamante (vedi
+     * `BackupMerge.mergeProgress`): UNA sola scrittura e una sola revisione.
+     * A differenza di [save] non applica la soglia dei 30 s, perché le voci
+     * arrivano da un backup già valido e non da una visione in corso.
+     */
+    suspend fun putAll(
+        server: String,
+        username: String,
+        entries: Map<String, WatchProgress>,
+    ) = mutex.withLock {
+        withContext(io) {
+            persist(keyFor(server, username), entries)
+            _revision.value = _revision.value + 1L
+        }
+    }
+
     suspend fun clearForAccount(server: String, username: String) {
         mutex.withLock {
             withContext(io) {

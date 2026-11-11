@@ -2,10 +2,11 @@ package it.felixvision.tv.ui.navigation
 
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -15,6 +16,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Border
+import androidx.tv.material3.DenseListItem
 import androidx.tv.material3.DrawerState
 import androidx.tv.material3.DrawerValue
 import androidx.tv.material3.ExperimentalTvMaterial3Api
@@ -44,7 +47,18 @@ import androidx.tv.material3.Text
 import androidx.tv.material3.rememberDrawerState
 import it.felixvision.tv.R
 import it.felixvision.tv.ui.components.UiScale
+import it.felixvision.tv.ui.components.UpdateBadge
 import it.felixvision.tv.ui.theme.FvpColors
+import it.felixvision.tv.ui.theme.drawerClockTop
+import it.felixvision.tv.ui.theme.drawerItemHeight
+import it.felixvision.tv.ui.theme.drawerVerticalPadding
+import kotlinx.coroutines.flow.first
+
+/** Tag di test del pallino di aggiornamento sull'icona Impostazioni. */
+const val DRAWER_UPDATE_BADGE_ICON_TAG = "drawer_update_badge_icon"
+
+/** Fotogrammi di attesa del contenuto quando il drawer sta chiudendo. */
+private const val CONTENT_FOCUS_REQUEST_ATTEMPTS = 10
 
 enum class DrawerSection(
     val label: String,
@@ -52,11 +66,11 @@ enum class DrawerSection(
     val activeColor: Color,
 ) {
     Novita("Novità", R.drawable.ic_nav_sparkles, FvpColors.NovitaActive),
-    ContinuaAGuardare("Continua a guardare", R.drawable.ic_nav_history, FvpColors.ContinuaActive),
+    Preferiti("Preferiti", R.drawable.ic_nav_star, FvpColors.PreferitiActive),
     Live("Live", R.drawable.ic_nav_tv, FvpColors.LiveActive),
     Film("Film", R.drawable.ic_nav_film, FvpColors.FilmActive),
     Serie("Serie", R.drawable.ic_nav_library, FvpColors.SerieActive),
-    Preferiti("Preferiti", R.drawable.ic_nav_star, FvpColors.PreferitiActive),
+    GuidaTv("Guida TV", R.drawable.ic_nav_tv_guide, FvpColors.ContinuaActive),
     Cerca("Cerca", R.drawable.ic_nav_search, FvpColors.CercaActive),
     Impostazioni("Impostazioni", R.drawable.ic_nav_settings, FvpColors.ImpostazioniActive),
 }
@@ -75,6 +89,7 @@ fun FvpNavigationDrawer(
     drawerState: DrawerState = rememberDrawerState(initialValue = DrawerValue.Closed),
     contentFocusRequester: FocusRequester = remember { FocusRequester() },
     drawerFocusHandle: DrawerFocusHandle? = null,
+    updateAvailable: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val itemFocusRequesters = remember { DrawerSection.entries.associateWith { FocusRequester() } }
@@ -121,8 +136,21 @@ fun FvpNavigationDrawer(
 
     LaunchedEffect(selected, pendingContentFocus) {
         if (pendingContentFocus) {
-            withFrameNanos { }
-            contentFocusRequester.requestFocus()
+            // Attendi che l'animazione abbia chiuso davvero il drawer: una
+            // singola richiesta anticipata può lasciare il focus sulla voce Live.
+            snapshotFlow { drawerState.currentValue }
+                .first { value -> value == DrawerValue.Closed }
+
+            // Le liste lazy possono comporre la prima riga nel fotogramma
+            // successivo alla chiusura; riprova finché il requester è pronto.
+            var focused = false
+            var attempt = 0
+            while (!focused && attempt < CONTENT_FOCUS_REQUEST_ATTEMPTS) {
+                withFrameNanos { }
+                focused = runCatching { contentFocusRequester.requestFocus() }
+                    .getOrDefault(false)
+                attempt++
+            }
             pendingContentFocus = false
         }
     }
@@ -135,13 +163,21 @@ fun FvpNavigationDrawer(
             Column(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .padding(vertical = scale.dp(12f), horizontal = scale.dp(8f))
+                    // Fondo pieno #1C1C1E: il menu non lascia trasparire gli aloni
+                    // dello sfondo dei contenuti, né chiuso né aperto.
+                    .background(FvpColors.Background)
+                    .padding(vertical = scale.drawerVerticalPadding, horizontal = scale.dp(8f))
             ) {
                 DrawerSection.entries.forEach { section ->
                     val isSelected = section == selected
+                    // Pallino di aggiornamento disponibile solo su Impostazioni:
+                    // è disegno puro, non è focalizzabile e sta dentro la voce,
+                    // quindi non cambia la larghezza calcolata del menu.
+                    val showUpdateBadge = updateAvailable && section == DrawerSection.Impostazioni
                     // NavigationDrawerItem forces its own width internally. Keep its ListItem
                     // primitive (and closed dimensions), but let the open width fit the labels.
-                    ListItem(
+                    // Voce compatta: altezza ridotta dal ListItem denso.
+                    DenseListItem(
                         selected = isSelected,
                         onClick = {
                             onSelect(section)
@@ -150,8 +186,8 @@ fun FvpNavigationDrawer(
                         },
                         leadingContent = {
                             // L'icona va centrata nel riquadro della voce: a menu
-                            // chiuso il riquadro è IconSize × ContainerHeightOneLine,
-                            // a menu aperto lo slot cresce con la scala.
+                            // chiuso il riquadro è IconSize per l'altezza della voce
+                            // densa, a menu aperto lo slot cresce con la scala.
                             Box(
                                 modifier = if (expanded) {
                                     Modifier.padding(start = extraInset, end = openGap - 8.dp)
@@ -167,10 +203,21 @@ fun FvpNavigationDrawer(
                                     tint = if (isSelected) section.activeColor else FvpColors.Inactive,
                                     modifier = Modifier.size(scale.dp(20f))
                                 )
+                                if (showUpdateBadge) {
+                                    // In alto a destra dell'icona, a menu chiuso
+                                    // come a menu aperto.
+                                    UpdateBadge(
+                                        scale = scale,
+                                        tag = DRAWER_UPDATE_BADGE_ICON_TAG,
+                                        modifier = Modifier.align(Alignment.TopEnd),
+                                    )
+                                }
                             }
                         },
                         headlineContent = {
                             if (expanded) {
+                                // Il pallino di aggiornamento sta solo sull'icona:
+                                // l'etichetta resta il solo testo della voce.
                                 Text(
                                     text = section.label,
                                     style = labelStyle,
@@ -184,7 +231,7 @@ fun FvpNavigationDrawer(
                         },
                         modifier = Modifier
                             .width(if (expanded) expandedItemWidth else NavigationDrawerItemDefaults.CollapsedDrawerItemWidth)
-                            .height(NavigationDrawerItemDefaults.ContainerHeightOneLine)
+                            .heightIn(min = scale.drawerItemHeight)
                             .focusRequester(itemFocusRequesters.getValue(section))
                             .onKeyEvent { event ->
                                 if (event.key == Key.DirectionRight) {
@@ -208,6 +255,22 @@ fun FvpNavigationDrawer(
                         ),
                         scale = ListItemDefaults.scale(focusedScale = 1.04f),
                         shape = ListItemDefaults.shape(shape = androidx.compose.foundation.shape.RoundedCornerShape(scale.dp(10f))),
+                    )
+                }
+
+                // Ora sotto l'ultima voce (Impostazioni), e data breve a menu
+                // aperto. A menu chiuso resta centrata sotto l'icona: la
+                // larghezza è quella della voce, il testo non è focalizzabile.
+                Box(
+                    modifier = Modifier.width(
+                        if (expanded) expandedItemWidth else NavigationDrawerItemDefaults.CollapsedDrawerItemWidth
+                    ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    DrawerClock(
+                        scale = scale,
+                        expanded = expanded,
+                        modifier = Modifier.padding(top = scale.drawerClockTop),
                     )
                 }
             }

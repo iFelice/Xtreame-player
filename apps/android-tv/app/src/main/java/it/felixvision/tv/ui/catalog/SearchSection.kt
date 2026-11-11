@@ -26,12 +26,13 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -67,6 +68,8 @@ import it.felixvision.tv.data.search.CatalogSearch
 import it.felixvision.tv.ui.components.CatalogPosterImage
 import it.felixvision.tv.ui.components.ChannelLogoImage
 import it.felixvision.tv.ui.components.FocusMarqueeText
+import it.felixvision.tv.ui.components.ListPosition
+import it.felixvision.tv.ui.components.PositionIndicator
 import it.felixvision.tv.ui.components.FvpTextField
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.components.WatchProgressLine
@@ -77,6 +80,8 @@ import it.felixvision.tv.ui.components.rememberRowsBringIntoViewer
 import it.felixvision.tv.ui.detail.FilmDetailOverlay
 import it.felixvision.tv.ui.detail.SeriesDetailOverlay
 import it.felixvision.tv.ui.theme.FvpColors
+import it.felixvision.tv.ui.theme.searchCardPadding
+import it.felixvision.tv.ui.theme.searchLogo
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -106,6 +111,10 @@ fun SearchSection(
     onPlayFilm: (VodStream) -> Unit = {},
     onPlayEpisode: (Episode, SeriesPlayback) -> Unit = { _, _ -> },
     onToggleFavorite: (FavoriteItem) -> Unit = {},
+    /** Pressione lunga su un canale Live: finestra di "I miei canali". */
+    onLongPressLive: (LiveStream) -> Unit = {},
+    /** Canali già in "I miei canali": mostrano la stella. */
+    myChannelIds: Set<String> = emptySet(),
     onSetEpisodeWatched: (Episode, Boolean, Long) -> Unit = { _, _, _ -> },
     onToggleWatched: (VodStream, Boolean, Long) -> Unit = { _, _, _ -> },
     refocusTick: Int = 0,
@@ -128,6 +137,9 @@ fun SearchSection(
 
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
+    // Posizione dell'elemento con il focus dentro la sua riga di risultati.
+    var focusedIndexInRow by remember { mutableStateOf<Int?>(null) }
+    var focusedRowTotal by remember { mutableIntStateOf(0) }
     // Tre righe: quella che riceve il focus viene portata interamente in vista.
     val rowsBringIntoView = rememberRowsBringIntoViewer()
 
@@ -236,179 +248,195 @@ fun SearchSection(
 
     // Il margine del focus sta nel contentPadding delle righe: il contenitore
     // tiene solo i 4dp che completano i 16 di prima.
-    Column(modifier = modifier.fillMaxSize().padding(horizontal = scale.dp(4f))) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .onPreviewKeyEvent { event ->
-                    if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionDown) {
-                        focusFirstResult()
-                        true
-                    } else {
-                        false
+    Box(modifier = modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize().padding(horizontal = scale.dp(4f))) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onPreviewKeyEvent { event ->
+                        if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionDown) {
+                            focusFirstResult()
+                            true
+                        } else {
+                            false
+                        }
+                    },
+            ) {
+                FvpTextField(
+                    label = "Cerca nel catalogo",
+                    state = queryState,
+                    placeholder = "Canale, film o serie",
+                    scale = scale,
+                    focusRequester = contentFocusRequester,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    modifier = Modifier.fillMaxWidth().testTag("search_field"),
+                )
+            }
+
+            Spacer(Modifier.height(scale.dp(12f)))
+
+            if (debouncedQuery.trim().length < CatalogSearch.MIN_QUERY_LENGTH) {
+                Text(
+                    text = "Digita almeno 2 lettere per cercare tra canali, film e serie.",
+                    color = FvpColors.TextSecondary,
+                    fontSize = scale.sp(15f),
+                    modifier = Modifier.padding(top = scale.dp(8f)).testTag("search_hint"),
+                )
+                return@Column
+            }
+
+            if (results.isEmpty) {
+                Text(
+                    text = "Nessun risultato per «$debouncedQuery»",
+                    color = FvpColors.TextPrimary,
+                    fontSize = scale.sp(17f),
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(top = scale.dp(8f)).testTag("search_no_results"),
+                )
+                return@Column
+            }
+
+            LazyColumn(
+                state = listState,
+                verticalArrangement = Arrangement.spacedBy(scale.dp(14f)),
+                // Le righe hanno già il proprio margine orizzontale: qui serve solo
+                // quello verticale del primo e dell'ultimo risultato.
+                contentPadding = PaddingValues(vertical = scale.focusSafePadding),
+                modifier = Modifier.weight(1f).fillMaxWidth().testTag("search_results"),
+            ) {
+                if (results.live.isNotEmpty()) {
+                    item(key = "row_live") {
+                        SearchRow(
+                            title = "Live",
+                            count = results.live.size,
+                            scale = scale,
+                            rowTestTag = "search_live_row",
+                            modifier = rowsBringIntoView.rowModifier(ROW_LIVE),
+                        ) {
+                            itemsIndexed(results.live, key = { _, channel -> "live_${channel.streamId}" }) { index, channel ->
+                                LiveResultCard(
+                                    channel = channel,
+                                    scale = scale,
+                                    isFavorite = channel.streamId in myChannelIds,
+                                    focusRequester = itemFocusRequesters["live_${channel.streamId}"],
+                                    onUpToField = { if (index == 0) runCatching { contentFocusRequester.requestFocus() } },
+                                    onRowFocused = {
+                                        rowsBringIntoView.onRowFocused(ROW_LIVE)
+                                        focusedIndexInRow = index
+                                        focusedRowTotal = results.live.size
+                                    },
+                                    onClick = { onPlayLive(channel) },
+                                    onLongPress = { onLongPressLive(channel) },
+                                )
+                            }
+                        }
                     }
-                },
-        ) {
-            FvpTextField(
-                label = "Cerca nel catalogo",
-                state = queryState,
-                placeholder = "Canale, film o serie",
-                scale = scale,
-                focusRequester = contentFocusRequester,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                modifier = Modifier.fillMaxWidth().testTag("search_field"),
-            )
-        }
-
-        Spacer(Modifier.height(scale.dp(12f)))
-
-        if (debouncedQuery.trim().length < CatalogSearch.MIN_QUERY_LENGTH) {
-            Text(
-                text = "Digita almeno 2 lettere per cercare tra canali, film e serie.",
-                color = FvpColors.TextSecondary,
-                fontSize = scale.sp(15f),
-                modifier = Modifier.padding(top = scale.dp(8f)).testTag("search_hint"),
-            )
-            return@Column
-        }
-
-        if (results.isEmpty) {
-            Text(
-                text = "Nessun risultato per «$debouncedQuery»",
-                color = FvpColors.TextPrimary,
-                fontSize = scale.sp(17f),
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.padding(top = scale.dp(8f)).testTag("search_no_results"),
-            )
-            return@Column
-        }
-
-        LazyColumn(
-            state = listState,
-            verticalArrangement = Arrangement.spacedBy(scale.dp(14f)),
-            // Le righe hanno già il proprio margine orizzontale: qui serve solo
-            // quello verticale del primo e dell'ultimo risultato.
-            contentPadding = PaddingValues(vertical = scale.focusSafePadding),
-            modifier = Modifier.weight(1f).fillMaxWidth().testTag("search_results"),
-        ) {
-            if (results.live.isNotEmpty()) {
-                item(key = "row_live") {
-                    SearchRow(
-                        title = "Live",
-                        count = results.live.size,
-                        scale = scale,
-                        rowTestTag = "search_live_row",
-                        modifier = rowsBringIntoView.rowModifier(ROW_LIVE),
-                    ) {
-                        itemsIndexed(results.live, key = { _, channel -> "live_${channel.streamId}" }) { index, channel ->
-                            LiveResultCard(
-                                channel = channel,
-                                scale = scale,
-                                isFavorite = favorites.any { it.id == "live_${channel.streamId}" },
-                                focusRequester = itemFocusRequesters["live_${channel.streamId}"],
-                                onUpToField = { if (index == 0) runCatching { contentFocusRequester.requestFocus() } },
-                                onRowFocused = { rowsBringIntoView.onRowFocused(ROW_LIVE) },
-                                onClick = { onPlayLive(channel) },
-                                onLongPress = {
-                                    onToggleFavorite(
-                                        FavoriteItem(
-                                            id = "live_${channel.streamId}",
-                                            type = "live",
-                                            title = channel.name,
-                                            poster = channel.streamIcon,
-                                            categoryId = channel.categoryId,
-                                        ),
-                                    )
-                                },
-                            )
+                }
+                if (results.vod.isNotEmpty()) {
+                    item(key = "row_vod") {
+                        SearchRow(
+                            title = "Film",
+                            count = results.vod.size,
+                            scale = scale,
+                            rowTestTag = "search_vod_row",
+                            modifier = rowsBringIntoView.rowModifier(ROW_VOD),
+                        ) {
+                            itemsIndexed(results.vod, key = { _, film -> "vod_${film.streamId}" }) { index, film ->
+                                val filmProgress = progress[ProgressKeys.movie(film.streamId)]
+                                PosterResultCard(
+                                    title = film.name,
+                                    poster = film.streamIcon,
+                                    scale = scale,
+                                    isFavorite = favorites.any { it.id == "vod_${film.streamId}" },
+                                    progress = filmProgress,
+                                    progressKeyPrefix = "search_vod_${film.streamId}",
+                                    focusRequester = itemFocusRequesters["vod_${film.streamId}"],
+                                    onUpToField = { if (index == 0) runCatching { contentFocusRequester.requestFocus() } },
+                                    onRowFocused = {
+                                        rowsBringIntoView.onRowFocused(ROW_VOD)
+                                        focusedIndexInRow = index
+                                        focusedRowTotal = results.vod.size
+                                    },
+                                    onClick = {
+                                        pendingResultKey = "vod_${film.streamId}"
+                                        detailFilm = film
+                                    },
+                                    onLongPress = {
+                                        onToggleFavorite(
+                                            FavoriteItem(
+                                                id = "vod_${film.streamId}",
+                                                type = "vod",
+                                                title = film.name,
+                                                poster = film.streamIcon,
+                                                categoryId = film.categoryId,
+                                            ),
+                                        )
+                                    },
+                                    testTag = "search_vod_${film.streamId}",
+                                )
+                            }
+                        }
+                    }
+                }
+                if (results.series.isNotEmpty()) {
+                    item(key = "row_series") {
+                        SearchRow(
+                            title = "Serie",
+                            count = results.series.size,
+                            scale = scale,
+                            rowTestTag = "search_series_row",
+                            modifier = rowsBringIntoView.rowModifier(ROW_SERIES),
+                        ) {
+                            itemsIndexed(results.series, key = { _, serie -> "series_${serie.seriesId}" }) { index, serie ->
+                                PosterResultCard(
+                                    title = serie.name,
+                                    poster = serie.cover,
+                                    scale = scale,
+                                    isFavorite = favorites.any { it.id == "series_${serie.seriesId}" },
+                                    progress = null,
+                                    progressKeyPrefix = "search_series_${serie.seriesId}",
+                                    focusRequester = itemFocusRequesters["series_${serie.seriesId}"],
+                                    onUpToField = { if (index == 0) runCatching { contentFocusRequester.requestFocus() } },
+                                    onRowFocused = {
+                                        rowsBringIntoView.onRowFocused(ROW_SERIES)
+                                        focusedIndexInRow = index
+                                        focusedRowTotal = results.series.size
+                                    },
+                                    onClick = {
+                                        pendingResultKey = "series_${serie.seriesId}"
+                                        detailSerie = serie
+                                    },
+                                    onLongPress = {
+                                        onToggleFavorite(
+                                            FavoriteItem(
+                                                id = "series_${serie.seriesId}",
+                                                type = "series",
+                                                title = serie.name,
+                                                poster = serie.cover,
+                                                categoryId = serie.categoryId,
+                                            ),
+                                        )
+                                    },
+                                    testTag = "search_series_${serie.seriesId}",
+                                )
+                            }
                         }
                     }
                 }
             }
-            if (results.vod.isNotEmpty()) {
-                item(key = "row_vod") {
-                    SearchRow(
-                        title = "Film",
-                        count = results.vod.size,
-                        scale = scale,
-                        rowTestTag = "search_vod_row",
-                        modifier = rowsBringIntoView.rowModifier(ROW_VOD),
-                    ) {
-                        itemsIndexed(results.vod, key = { _, film -> "vod_${film.streamId}" }) { index, film ->
-                            val filmProgress = progress[ProgressKeys.movie(film.streamId)]
-                            PosterResultCard(
-                                title = film.name,
-                                poster = film.streamIcon,
-                                scale = scale,
-                                isFavorite = favorites.any { it.id == "vod_${film.streamId}" },
-                                progress = filmProgress,
-                                progressKeyPrefix = "search_vod_${film.streamId}",
-                                focusRequester = itemFocusRequesters["vod_${film.streamId}"],
-                                onUpToField = { if (index == 0) runCatching { contentFocusRequester.requestFocus() } },
-                                onRowFocused = { rowsBringIntoView.onRowFocused(ROW_VOD) },
-                                onClick = {
-                                    pendingResultKey = "vod_${film.streamId}"
-                                    detailFilm = film
-                                },
-                                onLongPress = {
-                                    onToggleFavorite(
-                                        FavoriteItem(
-                                            id = "vod_${film.streamId}",
-                                            type = "vod",
-                                            title = film.name,
-                                            poster = film.streamIcon,
-                                            categoryId = film.categoryId,
-                                        ),
-                                    )
-                                },
-                                testTag = "search_vod_${film.streamId}",
-                            )
-                        }
-                    }
-                }
-            }
-            if (results.series.isNotEmpty()) {
-                item(key = "row_series") {
-                    SearchRow(
-                        title = "Serie",
-                        count = results.series.size,
-                        scale = scale,
-                        rowTestTag = "search_series_row",
-                        modifier = rowsBringIntoView.rowModifier(ROW_SERIES),
-                    ) {
-                        itemsIndexed(results.series, key = { _, serie -> "series_${serie.seriesId}" }) { index, serie ->
-                            PosterResultCard(
-                                title = serie.name,
-                                poster = serie.cover,
-                                scale = scale,
-                                isFavorite = favorites.any { it.id == "series_${serie.seriesId}" },
-                                progress = null,
-                                progressKeyPrefix = "search_series_${serie.seriesId}",
-                                focusRequester = itemFocusRequesters["series_${serie.seriesId}"],
-                                onUpToField = { if (index == 0) runCatching { contentFocusRequester.requestFocus() } },
-                                onRowFocused = { rowsBringIntoView.onRowFocused(ROW_SERIES) },
-                                onClick = {
-                                    pendingResultKey = "series_${serie.seriesId}"
-                                    detailSerie = serie
-                                },
-                                onLongPress = {
-                                    onToggleFavorite(
-                                        FavoriteItem(
-                                            id = "series_${serie.seriesId}",
-                                            type = "series",
-                                            title = serie.name,
-                                            poster = serie.cover,
-                                            categoryId = serie.categoryId,
-                                        ),
-                                    )
-                                },
-                                testTag = "search_series_${serie.seriesId}",
-                            )
-                        }
-                    }
-                }
-            }
         }
+
+        // Contatore "N / Totale" dell'elemento con il focus nella sua riga e
+        // barra di scorrimento dell'elenco dei risultati.
+        PositionIndicator(
+            position = ListPosition(
+                focusedIndex = focusedIndexInRow,
+                totalItems = focusedRowTotal,
+                firstVisibleIndex = listState.firstVisibleItemIndex,
+                visibleItems = listState.layoutInfo.visibleItemsInfo.size,
+            ),
+            scale = scale,
+        )
     }
 
     detailFilm?.let { film ->
@@ -558,14 +586,14 @@ private fun LiveResultCard(
         shape = CardDefaults.shape(shape = RoundedCornerShape(scale.dp(10f))),
     ) {
         Row(
-            modifier = Modifier.padding(scale.dp(6f)),
+            modifier = Modifier.padding(scale.searchCardPadding),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             ChannelLogoImage(
                 imageUrl = channel.streamIcon,
                 name = channel.name,
                 scale = scale,
-                modifier = Modifier.size(scale.dp(40f)),
+                modifier = Modifier.size(scale.searchLogo),
             )
             FocusMarqueeText(
                 text = channel.name,

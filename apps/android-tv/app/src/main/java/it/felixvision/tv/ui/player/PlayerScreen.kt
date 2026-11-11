@@ -4,20 +4,26 @@ package it.felixvision.tv.ui.player
 
 import androidx.annotation.OptIn
 import android.os.SystemClock
+import android.view.KeyEvent as AndroidKeyEvent
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -41,12 +47,27 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.ui.PlayerView
 import androidx.tv.material3.Text
 import it.felixvision.tv.AppContainer
+import it.felixvision.tv.data.channels.MyChannel
+import it.felixvision.tv.data.channels.MyChannelPlayback
+import it.felixvision.tv.data.channels.MyChannels
+import it.felixvision.tv.data.playback.ChannelNumbering
 import it.felixvision.tv.data.playback.SeekAcceleration
 import it.felixvision.tv.data.playback.SeekAccumulator
 import it.felixvision.tv.data.playback.SeekFeedback
+import it.felixvision.tv.player.ZappingChannelStatus
+import it.felixvision.tv.player.ZappingController
+import it.felixvision.tv.ui.catalog.MyChannelDialog
+import it.felixvision.tv.ui.components.ChannelNumberIndicator
+import it.felixvision.tv.ui.components.fvpLongPress
+import it.felixvision.tv.ui.components.rememberChannelSchedulePrograms
+import it.felixvision.tv.ui.components.rememberMinuteNow
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.theme.FvpColors
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+
+/** Ogni quanto il player fa avanzare il conto dello zapping automatico. */
+private const val ZAPPING_TICK_MILLIS = 500L
 
 /**
  * Schermata player a tutto schermo, in una finestra Dialog sopra la scheda di
@@ -77,12 +98,133 @@ fun PlayerScreen(
     val state = engine.state
     val rootFocus = remember { FocusRequester() }
     val audioFocus = remember { FocusRequester() }
+    val progressFocus = remember { FocusRequester() }
     var rootFocused by remember { mutableStateOf(false) }
     var keyTick by remember { mutableStateOf(0) }
     var seekDirection by remember { mutableStateOf(0) }
     var seekStartedAt by remember { mutableStateOf(0L) }
     var lastSeekAt by remember { mutableStateOf(0L) }
     var seekFeedback by remember { mutableStateOf<SeekFeedback?>(null) }
+    val playerScope = rememberCoroutineScope()
+
+    // Zapping automatico del Live: pulsante nella barra info, indicatore dei
+    // secondi e domanda di fine lista. Il controller è puro e usa l'orologio
+    // dell'app, così i test possono simulare il tempo.
+    val zapping = remember(session.id) {
+        PlayerZapping(
+            controller = ZappingController(clock = container.clock),
+            onSwitchChannel = { index -> engine.selectChannel(index) },
+        )
+    }
+    val zappingFocus = remember { FocusRequester() }
+    var zappingButtonFocused by remember { mutableStateOf(false) }
+    val zappingState = zapping.state
+
+    /**
+     * Avvia lo zapping dal canale in onda, con l'intervallo salvato in
+     * [it.felixvision.tv.player.PlayerPreferences]. La barra info si chiude
+     * subito: il primo cambio arriva dopo l'intervallo scelto.
+     */
+    fun startZapping() {
+        if (session.source !is PlaybackSource.Live || state.isReplay) return
+        val size = state.liveChannels.size
+        if (size <= 0) return
+        engine.hideBanner()
+        zapping.start(
+            seconds = container.playerPreferences.zappingSeconds,
+            index = state.currentChannelIndex,
+            size = size,
+        )
+        rootFocus.requestFocus()
+    }
+
+    /**
+     * Stato del canale in onda per lo zapping: un errore o il caricamento
+     * iniziale (posizione ancora a zero, non un buffering a metà visione)
+     * fanno saltare subito il canale dopo i primi 5 secondi.
+     */
+    fun zappingChannelStatus(current: PlayerUiState): ZappingChannelStatus = when {
+        current.errorMessage != null -> ZappingChannelStatus.ERROR
+        current.isPlaying || current.positionMillis > 0L -> ZappingChannelStatus.PLAYING
+        else -> ZappingChannelStatus.LOADING
+    }
+
+    // "I miei canali" dal player Live: pressione lunga sul canale in onda.
+    val myChannelsRevision by container.myChannelsStore.revision.collectAsState()
+    val myChannels by produceState<List<MyChannel>>(
+        initialValue = emptyList(),
+        myChannelsRevision,
+        session.server,
+        session.username,
+    ) {
+        value = container.myChannelsStore.getChannels(session.server, session.username)
+    }
+    var myChannelEdit by remember(session.id) { mutableStateOf<MyChannel?>(null) }
+    // Menu della pressione lunga sul canale in onda (guida o "I miei canali").
+    var longPressMenuOpen by remember(session.id) { mutableStateOf(false) }
+
+    // Player aperto da "I miei canali": la lista personale può cambiare mentre
+    // si guarda (aggiunta, spostamento o rimozione dal menu del player). Lo
+    // zapping e la numerazione seguono il nuovo ordine, il canale in onda resta
+    // lo stesso; nel player aperto da Live non succede nulla.
+    val liveSource = session.source as? PlaybackSource.Live
+    val personalNumbering = liveSource?.numbering == ChannelNumbering.PERSONAL
+    val liveChannelMetadata = remember(session.id) {
+        liveSource
+            ?.let { live -> (live.allChannels + live.channels).associateBy { it.streamId } }
+            .orEmpty()
+    }
+    LaunchedEffect(personalNumbering, myChannels) {
+        if (!personalNumbering) return@LaunchedEffect
+        // Solo i canali che la schermata principale ha passato come visibili:
+        // la lista salvata può contenere canali nascosti (contenuti protetti),
+        // che non devono rientrare nello zapping né nella numerazione.
+        val visibleIds = liveSource?.channels?.map { it.streamId }?.toSet().orEmpty()
+        val current = if (visibleIds.isEmpty()) myChannels else myChannels.filter { it.streamId in visibleIds }
+        val ordered = MyChannelPlayback.streams(current, liveChannelMetadata.values.toList())
+        if (ordered.isEmpty()) return@LaunchedEffect
+        engine.updatePersonalChannels(ordered)
+    }
+
+    fun confirmMyChannelPosition(channel: MyChannel, position: Int) {
+        playerScope.launch {
+            val current = container.myChannelsStore.getChannels(session.server, session.username)
+            if (MyChannels.contains(current, channel.streamId)) {
+                container.myChannelsStore.moveTo(session.server, session.username, channel.streamId, position)
+            } else {
+                container.myChannelsStore.insertAt(session.server, session.username, channel, position)
+            }
+            myChannelEdit = null
+        }
+    }
+
+    fun moveMyChannel(channel: MyChannel, up: Boolean) {
+        playerScope.launch {
+            if (up) {
+                container.myChannelsStore.moveUp(session.server, session.username, channel.streamId)
+            } else {
+                container.myChannelsStore.moveDown(session.server, session.username, channel.streamId)
+            }
+        }
+    }
+
+    fun removeMyChannel(channel: MyChannel) {
+        playerScope.launch {
+            container.myChannelsStore.remove(session.server, session.username, channel.streamId)
+            myChannelEdit = null
+        }
+    }
+
+    // Canale davvero in onda: resta valido anche se tolto da "I miei canali".
+    val currentLiveChannel = engine.onAirChannel
+    val bannerSchedulePrograms = rememberChannelSchedulePrograms(
+        streamIds = listOfNotNull(currentLiveChannel?.streamId),
+        loader = container.channelScheduleLoader,
+        server = session.server,
+        username = session.username,
+        password = session.password,
+    )
+    val bannerScheduleNow = rememberMinuteNow(container.clock)
 
     LaunchedEffect(engine) { engine.start() }
 
@@ -90,6 +232,27 @@ fun PlayerScreen(
         while (true) {
             delay(500L)
             engine.refreshPosition()
+        }
+    }
+
+    // Zapping automatico (solo Live): la logica sta in [ZappingController], qui
+    // si applicano i comandi al player. Ogni schermata ha il suo stato: alla
+    // riapertura del player lo zapping non riparte da solo.
+    LaunchedEffect(engine, zapping) {
+        while (true) {
+            delay(ZAPPING_TICK_MILLIS)
+            // Stato letto a ogni giro: la lambda del ciclo non può usare la
+            // fotografia della composizione iniziale.
+            // In HLS l'avvio è più lento (segmenti da scaricare): la finestra
+            // per saltare un canale che non parte è più larga.
+            zapping.tick(
+                status = zappingChannelStatus(engine.state),
+                startGraceMillis = if (engine.isLiveHlsInAir()) {
+                    ZappingController.START_GRACE_MILLIS_HLS
+                } else {
+                    ZappingController.START_GRACE_MILLIS
+                },
+            )
         }
     }
 
@@ -105,7 +268,12 @@ fun PlayerScreen(
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_START -> engine.onHostStart()
-                Lifecycle.Event.ON_STOP -> engine.onHostStop()
+                Lifecycle.Event.ON_STOP -> {
+                    // Uscita dal player: lo zapping automatico si ferma e non
+                    // riparte da solo alla riapertura.
+                    zapping.stop()
+                    engine.onHostStop()
+                }
                 else -> Unit
             }
         }
@@ -128,14 +296,14 @@ fun PlayerScreen(
 
     fun handleSeek(direction: Int) {
         // I salti riguardano film ed episodi: nel Live Sinistra/Destra non toccano nulla.
-        if (session.source is PlaybackSource.Live) return
+        if (session.source is PlaybackSource.Live && !state.isReplay) return
         val now = SystemClock.elapsedRealtime()
         if (seekDirection != direction || now - lastSeekAt > 700L) {
             seekDirection = direction
             seekStartedAt = now
         }
         lastSeekAt = now
-        val step = SeekAcceleration.secondsForHold(now - seekStartedAt)
+        val step = if (state.isReplay) { if (now - seekStartedAt >= 600L) 300 else 60 } else SeekAcceleration.secondsForHold(now - seekStartedAt)
         engine.seekBySeconds(direction * step)
         // Etichetta sul lato del tasto: le pressioni ravvicinate si sommano.
         seekFeedback = SeekAccumulator.next(seekFeedback, direction, step, now)
@@ -151,7 +319,35 @@ fun PlayerScreen(
     }
 
     fun handleBack() {
+        if (engine.cancelNumberInput()) {
+            rootFocus.requestFocus()
+            return
+        }
+        if (state.isReplay) {
+            engine.returnToLive()
+            rootFocus.requestFocus()
+            return
+        }
+        if (state.epgVisible) {
+            if (state.epgExpanded != null) {
+                engine.toggleEpgDescription(state.epgExpanded!!)
+            } else {
+                engine.closeEpg()
+                rootFocus.requestFocus()
+            }
+            return
+        }
+        if (state.volumePanelVisible) {
+            // Indietro chiude il pannello del volume e lascia il player com'è.
+            engine.closeVolumePanel()
+            rootFocus.requestFocus()
+            return
+        }
         when {
+            state.formatPanelVisible -> {
+                engine.closeFormatPanel()
+                rootFocus.requestFocus()
+            }
             state.trackPanel != null -> {
                 engine.closeTrackPanel()
                 rootFocus.requestFocus()
@@ -164,8 +360,11 @@ fun PlayerScreen(
                 engine.startFromBeginning()
                 rootFocus.requestFocus()
             }
-            state.nextEpisode != null -> engine.cancelNextEpisode()
-            state.errorMessage != null -> engine.requestExit()
+            state.nextEpisode != null && !state.nextEpisode.minimized -> {
+                engine.minimizeNextEpisode()
+                rootFocus.requestFocus()
+            }
+            state.errorMessage != null -> if (state.isReplay) engine.returnToLive() else engine.requestExit()
             state.controlsVisible -> {
                 engine.hideControls()
                 rootFocus.requestFocus()
@@ -182,6 +381,7 @@ fun PlayerScreen(
             decorFitsSystemWindows = false,
         ),
     ) {
+        BackHandler { handleBack() }
         val dialogView = LocalView.current
         DisposableEffect(dialogView) {
             dialogView.keepScreenOn = true
@@ -191,10 +391,80 @@ fun PlayerScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black)
+                .fvpLongPress {
+                    // Menu sopra il player: guida del canale oppure "I miei
+                    // canali". La riproduzione continua.
+                    if (session.source is PlaybackSource.Live && !state.isReplay) {
+                        if (engine.onAirChannel != null) longPressMenuOpen = true
+                    }
+                }
+                // Qualsiasi tasto ferma lo zapping e viene consumato; sta prima
+                // di ogni altro gestore, così il tasto non fa altro.
+                .playerZappingKeys(zapping)
                 .onPreviewKeyEvent { event ->
+                    // Con il focus su "Zapping", Su/Giù cambiano canale senza
+                    // spostarlo; OK resta al pulsante che avvia lo zapping.
+                    // Gli altri tasti non OK tornano al player come prima.
+                    if (zappingButtonFocused) {
+                        if (event.type == KeyEventType.KeyDown) {
+                            when (event.key) {
+                                Key.DirectionUp -> {
+                                    if (session.source is PlaybackSource.Live && !state.isReplay) {
+                                        engine.onUp()
+                                    }
+                                    return@onPreviewKeyEvent true
+                                }
+                                Key.DirectionDown -> {
+                                    if (session.source is PlaybackSource.Live && !state.isReplay) {
+                                        engine.onDown()
+                                    }
+                                    return@onPreviewKeyEvent true
+                                }
+                                Key.DirectionCenter, Key.Enter -> return@onPreviewKeyEvent false
+                                else -> {
+                                    zappingButtonFocused = false
+                                    rootFocus.requestFocus()
+                                    return@onPreviewKeyEvent true
+                                }
+                            }
+                        }
+                        return@onPreviewKeyEvent false
+                    }
+                    val native = event.nativeKeyEvent
+                    if (session.source is PlaybackSource.Live && !state.isReplay && !state.hasModalOverlay) {
+                        if (engine.onChannelNumberKey(
+                                keyCode = native.keyCode,
+                                action = native.action,
+                                repeatCount = native.repeatCount,
+                            )
+                        ) {
+                            if (event.type == KeyEventType.KeyDown) {
+                                keyTick++
+                                if (state.volumePanelVisible) engine.keepVolumePanelAlive()
+                            }
+                            return@onPreviewKeyEvent true
+                        }
+                    }
+                    if (event.type == KeyEventType.KeyDown && session.source is PlaybackSource.Live && !state.isReplay) {
+                        when (native.keyCode) {
+                            AndroidKeyEvent.KEYCODE_GUIDE, AndroidKeyEvent.KEYCODE_INFO, AndroidKeyEvent.KEYCODE_TV_DATA_SERVICE -> { engine.toggleEpg(); return@onPreviewKeyEvent true }
+                        }
+                        if (state.epgVisible) {
+                            when (event.key) {
+                                Key.DirectionUp, Key.DirectionDown -> return@onPreviewKeyEvent false
+                                Key.DirectionCenter, Key.Enter -> return@onPreviewKeyEvent false
+                                else -> Unit
+                            }
+                        }
+                    }
                     when (event.type) {
                         KeyEventType.KeyDown -> {
                             keyTick++
+                            // Un tasto di conferma è un utente presente: il conto
+                            // di "Stai ancora guardando?" riparte da zero.
+                            engine.noteUserInput()
+                            // Qualsiasi tasto rimanda la chiusura del pannello volume.
+                            if (state.volumePanelVisible) engine.keepVolumePanelAlive()
                             if (state.channelListVisible && event.key == Key.DirectionRight) {
                                 engine.closeChannelList()
                                 rootFocus.requestFocus()
@@ -202,6 +472,21 @@ fun PlayerScreen(
                             }
                             if (state.hasModalOverlay) {
                                 return@onPreviewKeyEvent false
+                            }
+                            // Pannello del volume aperto: Su/Giù cambiano il livello
+                            // anche con il focus ancora sulla barra comandi.
+                            if (state.volumePanelVisible) {
+                                when (event.key) {
+                                    Key.DirectionUp -> {
+                                        engine.changeVolume(1)
+                                        return@onPreviewKeyEvent true
+                                    }
+                                    Key.DirectionDown -> {
+                                        engine.changeVolume(-1)
+                                        return@onPreviewKeyEvent true
+                                    }
+                                    else -> Unit
+                                }
                             }
                             // Focus dentro la barra comandi: le frecce servono ai pulsanti.
                             if (state.controlsVisible && !rootFocused) {
@@ -213,24 +498,36 @@ fun PlayerScreen(
                                     true
                                 }
                                 Key.DirectionUp -> {
-                                    if (session.source is PlaybackSource.Live) {
-                                        engine.onUp()
-                                    } else {
-                                        // La barra appare senza mettere in pausa.
-                                        engine.showControls()
+                                    when {
+                                        // Con il pannello aperto Su/Giù cambiano il
+                                        // livello, non il canale.
+                                        state.volumePanelVisible -> engine.changeVolume(1)
+                                        session.source is PlaybackSource.Live && !state.isReplay -> engine.onUp()
+                                        // La barra appare senza mettere in pausa; il focus
+                                        // entra sulla barra di avanzamento dopo il frame.
+                                        else -> {
+                                            engine.showControls()
+                                            playerScope.launch {
+                                                withFrameNanos { }
+                                                runCatching { progressFocus.requestFocus() }
+                                            }
+                                        }
                                     }
                                     true
                                 }
                                 Key.DirectionDown -> {
-                                    if (state.controlsVisible && session.source !is PlaybackSource.Live) {
-                                        audioFocus.requestFocus()
-                                    } else {
-                                        engine.onDown()
+                                    when {
+                                        state.volumePanelVisible -> engine.changeVolume(-1)
+                                        state.controlsVisible && session.source !is PlaybackSource.Live ->
+                                            audioFocus.requestFocus()
+                                        session.source is PlaybackSource.Live && !state.isReplay -> engine.onDown()
+                                        // Film ed episodi: barra chiusa, Giù apre il volume.
+                                        else -> engine.openVolumePanel()
                                     }
                                     true
                                 }
                                 Key.DirectionLeft -> {
-                                    if (session.source is PlaybackSource.Live) {
+                                    if (session.source is PlaybackSource.Live && !state.isReplay) {
                                         engine.openChannelList()
                                     } else {
                                         handleSeek(-1)
@@ -238,7 +535,22 @@ fun PlayerScreen(
                                     true
                                 }
                                 Key.DirectionRight -> {
-                                    handleSeek(1)
+                                    if (session.source is PlaybackSource.Live && !state.isReplay) {
+                                        if (state.banner != null) {
+                                            // Barra info aperta: Destra porta al
+                                            // pulsante "Zapping".
+                                            runCatching { zappingFocus.requestFocus() }
+                                        } else if (!state.channelListVisible &&
+                                            !state.volumePanelVisible
+                                        ) {
+                                            // Live: Destra apre il volume, solo con
+                                            // lista canali e banner chiusi.
+                                            engine.openVolumePanel()
+                                        }
+                                    } else {
+                                        // Film ed episodi: Destra resta +10 s.
+                                        handleSeek(1)
+                                    }
                                     true
                                 }
                                 else -> false
@@ -262,49 +574,132 @@ fun PlayerScreen(
                 withFrameNanos { }
                 rootFocus.requestFocus()
             }
-
-            // Dopo il riquadro del prossimo episodio (anche a fine countdown)
-            // il focus torna alla radice, così i tasti tornano al player.
-            LaunchedEffect(state.nextEpisode != null) {
-                if (state.nextEpisode == null && !state.hasModalOverlay) {
+            LaunchedEffect(state.isReplay) {
+                if (state.isReplay) {
                     withFrameNanos { }
                     rootFocus.requestFocus()
                 }
             }
 
+            // Alla chiusura o riduzione del riquadro il focus torna al player.
+            val nextEpisodePromptVisible = state.nextEpisode != null && !state.nextEpisode.minimized
+            LaunchedEffect(nextEpisodePromptVisible) {
+                if (!nextEpisodePromptVisible && !state.hasModalOverlay) {
+                    withFrameNanos { }
+                    rootFocus.requestFocus()
+                }
+            }
+
+            // Chiuso il menu della pressione lunga (o la finestra di "I miei
+            // canali") il focus torna al player: i tasti continuano a
+            // funzionare anche con la guida appena aperta.
+            // La barra info sparisce da sola dopo 4 secondi: se il focus era
+            // sul pulsante "Zapping", torna al player, che altrimenti resterebbe
+            // senza tasti.
+            LaunchedEffect(state.banner) {
+                if (state.banner == null && zappingButtonFocused) {
+                    withFrameNanos { }
+                    runCatching { rootFocus.requestFocus() }
+                }
+            }
+
+            // All'apertura della barra info con OK nel Live (pulsante "Zapping"
+            // presente) il focus iniziale va su "Zapping": un secondo OK avvia
+            // lo zapping. Film e serie non aprono questa barra e restano
+            // invariati.
+            LaunchedEffect(state.banner) {
+                if (state.banner != null && session.source is PlaybackSource.Live && !state.isReplay) {
+                    withFrameNanos { }
+                    runCatching { zappingFocus.requestFocus() }
+                }
+            }
+
+            LaunchedEffect(longPressMenuOpen, myChannelEdit) {
+                if (longPressMenuOpen || myChannelEdit != null) return@LaunchedEffect
+                // Con un pannello aperto (per esempio il formato, scelto dal
+                // menu appena chiuso) il focus resta dove sta: toccarlo
+                // chiuderebbe il pannello al primo tasto.
+                if (state.hasModalOverlay) return@LaunchedEffect
+                withFrameNanos { }
+                runCatching { rootFocus.requestFocus() }
+            }
+
             val currentPlayer = engine.exoPlayer
-            if (currentPlayer != null) {
-                AndroidView(
-                    factory = { ctx ->
-                        PlayerView(ctx).apply {
-                            // Nessun controller Media3: i comandi sono in Compose.
-                            useController = false
-                            keepScreenOn = true
-                        }
-                    },
-                    update = { view -> view.player = currentPlayer },
-                    onRelease = { view -> view.player = null },
-                    modifier = Modifier.fillMaxSize(),
-                )
+            // Un solo AndroidView in questo punto della composizione, sempre lo
+            // stesso: cambiare ramo ricreerebbe la superficie del video. Il
+            // riquadro cambia solo per grandezza, con "16:9" e "4:3" che
+            // impongono il rapporto e con gli altri due modi che occupano tutto.
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (currentPlayer != null) {
+                    val aspectRatio = VideoFormatLayout.aspectRatioFor(state.videoFormat)
+                    AndroidView(
+                        factory = { ctx ->
+                            PlayerView(ctx).apply {
+                                // Nessun controller Media3: i comandi sono in Compose.
+                                useController = false
+                                keepScreenOn = true
+                            }
+                        },
+                        update = { view ->
+                            view.player = currentPlayer
+                            view.resizeMode = VideoFormatLayout.resizeModeFor(state.videoFormat)
+                        },
+                        onRelease = { view -> view.player = null },
+                        modifier = if (aspectRatio == null) {
+                            Modifier.fillMaxSize()
+                        } else {
+                            Modifier.aspectRatio(aspectRatio)
+                        },
+                    )
+                }
             }
 
-            if (state.isBuffering && state.errorMessage == null && !state.hasModalOverlay) {
+            if (state.isReplay && !state.hasModalOverlay) {
                 Text(
-                    text = "Caricamento…",
-                    color = FvpColors.TextSecondary,
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .testTag("player_buffering"),
+                    text = "REPLAY · ${state.currentTitle}",
+                    color = FvpColors.TextPrimary,
+                    modifier = Modifier.align(Alignment.TopStart).padding(scale.dp(28f)).playerOverlay(scale).padding(horizontal = scale.dp(14f), vertical = scale.dp(8f)),
                 )
             }
 
-            if (state.controlsVisible && !state.hasModalOverlay && session.source !is PlaybackSource.Live) {
+            // Indicatore di caricamento: appare solo se il buffering dura più
+            // di SHOW_DELAY_MILLIS, così un avvio rapido non mostra nulla.
+            val bufferingRequested = PlayerBufferingIndicatorDefaults.isRequested(
+                isBuffering = state.isBuffering,
+                hasError = state.errorMessage != null,
+                hasModalOverlay = state.hasModalOverlay,
+            )
+            var showBuffering by remember { mutableStateOf(false) }
+            LaunchedEffect(bufferingRequested) {
+                if (bufferingRequested) {
+                    delay(PlayerBufferingIndicatorDefaults.SHOW_DELAY_MILLIS)
+                    showBuffering = true
+                } else {
+                    showBuffering = false
+                }
+            }
+            if (bufferingRequested && showBuffering) {
+                PlayerBufferingIndicator(
+                    scale = scale,
+                    modifier = Modifier.align(Alignment.Center),
+                )
+            }
+
+            if (state.controlsVisible && !state.hasModalOverlay && (session.source !is PlaybackSource.Live || state.isReplay)) {
                 PlayerControlsBar(
                     state = state,
                     scale = scale,
                     audioFocusRequester = audioFocus,
+                    progressFocusRequester = progressFocus,
+                    onTogglePlay = { engine.togglePlayPause() },
+                    onSeek = { direction -> handleSeek(direction) },
                     onAudio = { engine.openTrackPanel(TrackPanelType.AUDIO) },
                     onSubtitles = { engine.openTrackPanel(TrackPanelType.SUBTITLES) },
+                    onVolume = { engine.openVolumePanel() },
+                    onFormat = { engine.openFormatPanel() },
                     modifier = Modifier.align(Alignment.BottomCenter),
                     audioFormatLabel = state.audioFormatLabel,
                     ffmpegActive = state.ffmpegActive,
@@ -321,6 +716,18 @@ fun PlayerScreen(
                             .padding(scale.dp(28f)),
                         audioFormatLabel = state.audioFormatLabel,
                         ffmpegActive = state.ffmpegActive,
+                        schedulePrograms = currentLiveChannel?.let { bannerSchedulePrograms[it.streamId] },
+                        scheduleNowMillis = bannerScheduleNow,
+                        // "Zapping" solo nel Live: film e serie non hanno questo
+                        // banner (e con la replica del Live resta spento).
+                        onZapping = if (session.source is PlaybackSource.Live && !state.isReplay) {
+                            { startZapping() }
+                        } else {
+                            null
+                        },
+                        zappingModifier = Modifier
+                            .focusRequester(zappingFocus)
+                            .onFocusChanged { zappingButtonFocused = it.isFocused },
                     )
                 }
             }
@@ -340,15 +747,92 @@ fun PlayerScreen(
                 }
             }
 
+            // "Stai ancora guardando?": ultimo pannello, sopra tutto il resto.
+            state.stillWatchingEpisodes?.let { episodes ->
+                PlayerStillWatchingPrompt(
+                    autoEpisodes = episodes,
+                    scale = scale,
+                    onContinue = { engine.confirmStillWatching() },
+                    onExit = { engine.exitForStillWatching() },
+                )
+            }
+
+            if (state.epgVisible && session.source is PlaybackSource.Live) {
+                PlayerEpgOverlay(channelName = state.currentTitle, programs = state.epgPrograms, loading = state.epgLoading, unavailable = state.epgUnavailable, expanded = state.epgExpanded, scale = scale, clock = container.clock, onDescription = engine::toggleEpgDescription, channel = currentLiveChannel, onReplay = engine::startReplay, modifier = Modifier.align(Alignment.CenterEnd))
+            }
+
             if (state.channelListVisible) {
                 PlayerChannelListOverlay(
-                    channels = (session.source as? PlaybackSource.Live)?.channels.orEmpty(),
+                    channels = state.liveChannels,
                     currentIndex = state.currentChannelIndex,
-                    categoryName = (session.source as? PlaybackSource.Live)?.categoryName,
+                    categoryName = state.liveCategoryName,
                     scale = scale,
                     onSelect = { index ->
                         engine.selectChannel(index)
                         rootFocus.requestFocus()
+                    },
+                    epgClient = container.channelScheduleLoader,
+                    epgServer = session.server,
+                    epgUsername = session.username,
+                    epgPassword = session.password,
+                    clock = container.clock,
+                    myChannelIds = myChannels.map { it.streamId }.toSet(),
+                )
+            }
+
+            if (session.source is PlaybackSource.Live && !state.isReplay && !state.hasModalOverlay) {
+                ChannelNumberIndicator(
+                    overlay = state.channelNumberOverlay,
+                    scale = scale,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(scale.dp(28f)),
+                )
+            }
+
+            // Indicatore dello zapping automatico, in alto a destra sopra il
+            // video: sparisce appena lo zapping si ferma.
+            if (zappingState != null && !zappingState.awaitingEndOfList && !state.hasModalOverlay) {
+                PlayerZappingIndicator(
+                    remainingSeconds = zappingState.remainingSeconds,
+                    scale = scale,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(scale.dp(28f)),
+                )
+            }
+
+            // Fine della lista: invece di riproporre il primo canale, chiede.
+            if (zappingState?.awaitingEndOfList == true) {
+                PlayerZappingEndDialog(
+                    scale = scale,
+                    onYes = {
+                        zapping.answer(restart = true)
+                        runCatching { rootFocus.requestFocus() }
+                    },
+                    onNo = {
+                        zapping.answer(restart = false)
+                        runCatching { rootFocus.requestFocus() }
+                    },
+                )
+            }
+
+            if (state.volumePanelVisible && !state.hasModalOverlay) {
+                PlayerVolumePanel(
+                    level = state.volumeLevel,
+                    scale = scale,
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = scale.dp(28f)),
+                )
+            }
+
+            if (state.formatPanelVisible) {
+                PlayerFormatPanel(
+                    current = state.videoFormat,
+                    scale = scale,
+                    onSelect = { format ->
+                        engine.selectVideoFormat(format)
                     },
                 )
             }
@@ -379,7 +863,13 @@ fun PlayerScreen(
                         engine.retry()
                         rootFocus.requestFocus()
                     },
-                    onBack = { engine.requestExit() },
+                    onBack = {
+                        if (state.isReplay) {
+                            engine.returnToLive()
+                            rootFocus.requestFocus()
+                        } else engine.requestExit()
+                    },
+                    showRetry = !state.isReplay,
                 )
             }
 
@@ -399,18 +889,72 @@ fun PlayerScreen(
             }
 
             state.nextEpisode?.let { prompt ->
-                PlayerNextEpisodePrompt(
-                    prompt = prompt,
-                    scale = scale,
-                    onWatchNow = {
-                        engine.playNextEpisode()
-                        rootFocus.requestFocus()
-                    },
-                    onPostpone = { engine.postponeNextEpisode() },
-                    onCancel = { engine.cancelNextEpisode() },
-                )
+                if (prompt.minimized) {
+                    if (!state.hasModalOverlay) PlayerNextEpisodeLabel(prompt = prompt, scale = scale)
+                } else {
+                    PlayerNextEpisodePrompt(
+                        prompt = prompt,
+                        scale = scale,
+                        onWatchNow = {
+                            engine.playNextEpisode()
+                            rootFocus.requestFocus()
+                        },
+                        onPostpone = {
+                            engine.postponeNextEpisode()
+                            rootFocus.requestFocus()
+                        },
+                        onCancel = {
+                            engine.cancelNextEpisode()
+                            rootFocus.requestFocus()
+                        },
+                    )
+                }
             }
         }
     }
 
+    // Pressione lunga sul canale in onda: due voci, la guida del canale (come
+    // GUIDE/INFO) e "I miei canali" (aggiunta o modifica).
+    if (longPressMenuOpen) {
+        val channel = engine.onAirChannel
+        PlayerLongPressMenu(
+            channelName = channel?.name ?: state.currentTitle,
+            inMyChannels = channel != null && myChannels.any { it.streamId == channel.streamId },
+            scale = scale,
+            onGuide = {
+                longPressMenuOpen = false
+                engine.toggleEpg()
+            },
+            onFormat = {
+                longPressMenuOpen = false
+                engine.openFormatPanel()
+            },
+            onMyChannels = {
+                longPressMenuOpen = false
+                channel?.let {
+                    myChannelEdit = MyChannel(
+                        streamId = it.streamId,
+                        name = it.name,
+                        logo = it.streamIcon,
+                    )
+                }
+            },
+            onDismiss = { longPressMenuOpen = false },
+        )
+    }
+
+    // Aggiunta o menu di modifica di "I miei canali", in una finestra sopra il
+    // player.
+    myChannelEdit?.let { channel ->
+        MyChannelDialog(
+            channel = channel,
+            channels = myChannels,
+            scale = scale,
+            onInsertAt = { position -> confirmMyChannelPosition(channel, position) },
+            onMoveUp = { moveMyChannel(channel, up = true) },
+            onMoveDown = { moveMyChannel(channel, up = false) },
+            onRemove = { removeMyChannel(channel) },
+            onDismiss = { myChannelEdit = null },
+        )
+    }
 }

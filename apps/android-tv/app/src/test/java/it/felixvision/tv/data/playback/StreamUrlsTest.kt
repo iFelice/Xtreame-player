@@ -13,24 +13,108 @@ class StreamUrlsTest {
     private val base = ServerAddress.normalize(server) ?: error("server di test non valido")
 
     @Test
-    fun `live predefinito in ts`() {
+    fun `live senza formati dichiarati resta in ts`() {
         val url = StreamUrls.build(server, "demo", "demo", StreamTarget.Live("001", emptyList()))
         assertEquals("$base/live/demo/demo/001.ts", url)
     }
 
+    /**
+     * Regola del pannello di riferimento: con "Automatico" vale il formato che
+     * il pannello dichiara, cioè `.ts` quando è ammesso. Un `.ts` si apre con
+     * una richiesta e parte in 2-3 s; un HLS deve scaricare prima i segmenti
+     * dell'avvio (in Media3 a `3 × TARGETDURATION` dal bordo) e impiega 5-12 s.
+     */
     @Test
-    fun `live resta ts quando l'account ammette sia ts sia m3u8`() {
-        val url = StreamUrls.build(server, "demo", "demo", StreamTarget.Live("001", listOf("ts", "m3u8")))
-        assertEquals("$base/live/demo/demo/001.ts", url)
+    fun `live automatico segue il formato dichiarato dal pannello`() {
+        val both = StreamUrls.build(server, "demo", "demo", StreamTarget.Live("001", listOf("ts", "m3u8")))
+        assertEquals("$base/live/demo/demo/001.ts", both)
+
+        val hlsFirst = StreamUrls.build(server, "demo", "demo", StreamTarget.Live("001", listOf("m3u8", "ts")))
+        assertEquals("$base/live/demo/demo/001.ts", hlsFirst)
     }
 
     @Test
-    fun `live passa a m3u8 solo se manca ts ed esiste m3u8`() {
+    fun `live passa a m3u8 se esiste, altrimenti resta ts`() {
         val hls = StreamUrls.build(server, "demo", "demo", StreamTarget.Live("001", listOf("M3U8")))
         assertEquals("$base/live/demo/demo/001.m3u8", hls)
 
+        val onlyTs = StreamUrls.build(server, "demo", "demo", StreamTarget.Live("001", listOf("ts")))
+        assertEquals("$base/live/demo/demo/001.ts", onlyTs)
+
         val neither = StreamUrls.build(server, "demo", "demo", StreamTarget.Live("001", listOf("mp4")))
         assertEquals("$base/live/demo/demo/001.ts", neither)
+    }
+
+    @Test
+    fun `la preferenza hls sceglie m3u8 solo se l'account lo ammette`() {
+        val both = StreamUrls.build(
+            server, "demo", "demo",
+            StreamTarget.Live("001", listOf("ts", "m3u8"), preferredFormat = LiveStreamFormat.HLS),
+        )
+        assertEquals("$base/live/demo/demo/001.m3u8", both)
+
+        // Canale solo in ts: la preferenza non inventa un formato che non c'è.
+        val onlyTs = StreamUrls.build(
+            server, "demo", "demo",
+            StreamTarget.Live("001", listOf("ts"), preferredFormat = LiveStreamFormat.HLS),
+        )
+        assertEquals("$base/live/demo/demo/001.ts", onlyTs)
+    }
+
+    @Test
+    fun `la preferenza ts vale solo se l'account ammette ts`() {
+        // Account solo HLS: resta m3u8, come con "Automatico".
+        val onlyHls = StreamUrls.build(
+            server, "demo", "demo",
+            StreamTarget.Live("001", listOf("m3u8"), preferredFormat = LiveStreamFormat.TS),
+        )
+        assertEquals("$base/live/demo/demo/001.m3u8", onlyHls)
+    }
+
+    @Test
+    fun `automatico usa ts se ammesso e m3u8 solo se ts manca`() {
+        val both = StreamUrls.build(
+            server, "demo", "demo",
+            StreamTarget.Live("001", listOf("ts", "m3u8"), preferredFormat = LiveStreamFormat.AUTO),
+        )
+        assertEquals("$base/live/demo/demo/001.ts", both)
+
+        val onlyTs = StreamUrls.build(
+            server, "demo", "demo",
+            StreamTarget.Live("001", listOf("ts"), preferredFormat = LiveStreamFormat.AUTO),
+        )
+        assertEquals("$base/live/demo/demo/001.ts", onlyTs)
+
+        val onlyHls = StreamUrls.build(
+            server, "demo", "demo",
+            StreamTarget.Live("001", listOf("m3u8"), preferredFormat = LiveStreamFormat.AUTO),
+        )
+        assertEquals("$base/live/demo/demo/001.m3u8", onlyHls)
+    }
+
+    @Test
+    fun `la preferenza ts impone il flusso diretto`() {
+        val forced = StreamUrls.build(
+            server, "demo", "demo",
+            StreamTarget.Live("001", listOf("ts", "m3u8"), preferredFormat = LiveStreamFormat.TS),
+        )
+        assertEquals("$base/live/demo/demo/001.ts", forced)
+    }
+
+    @Test
+    fun `il formato alternativo esiste solo se l'account lo ammette`() {
+        assertEquals(
+            LiveStreamFormat.HLS,
+            StreamUrls.alternateLiveFormat(LiveStreamFormat.TS, listOf("ts", "m3u8")),
+        )
+        assertEquals(
+            LiveStreamFormat.TS,
+            StreamUrls.alternateLiveFormat(LiveStreamFormat.HLS, listOf("ts", "m3u8")),
+        )
+        assertNull(StreamUrls.alternateLiveFormat(LiveStreamFormat.HLS, listOf("m3u8")))
+        assertNull(StreamUrls.alternateLiveFormat(LiveStreamFormat.TS, listOf("ts")))
+        // Con "Automatico" non c'è niente da scambiare: decide l'account.
+        assertNull(StreamUrls.alternateLiveFormat(LiveStreamFormat.AUTO, listOf("ts", "m3u8")))
     }
 
     @Test
@@ -94,18 +178,37 @@ class StreamUrlsTest {
         val live = "$base/live/demo/segreta/001.ts"
         val movie = "$base/movie/demo/segreta/201.mp4"
         val series = "$base/series/demo/segreta/301.mkv"
+        val replay = "$base/timeshift/demo/segreta/60/2024-04-01:10-00/001.ts"
 
         val redactedLive = StreamUrls.redactStreamUrl(live)
         val redactedMovie = StreamUrls.redactStreamUrl(movie)
         val redactedSeries = StreamUrls.redactStreamUrl(series)
+        val redactedReplay = StreamUrls.redactStreamUrl(replay)
 
         assertTrue(redactedLive.contains("/live/***/***/001.ts"))
         assertTrue(redactedMovie.contains("/movie/***/***/201.mp4"))
         assertTrue(redactedSeries.contains("/series/***/***/301.mkv"))
-        listOf(redactedLive, redactedMovie, redactedSeries).forEach { redacted ->
+        assertTrue(redactedReplay.contains("/timeshift/***/***/60/2024-04-01:10-00/001.ts"))
+        listOf(redactedLive, redactedMovie, redactedSeries, redactedReplay).forEach { redacted ->
             assertFalse(redacted.contains("demo"))
             assertFalse(redacted.contains("segreta"))
         }
+    }
+
+    @Test
+    fun `timeshift usa il fuso del server e arrotonda la durata per eccesso`() {
+        val epoch = java.time.Instant.parse("2024-03-31T01:30:00Z").epochSecond
+        val rome = StreamUrls.buildCatchup(server, "demo", "demo", "001", epoch, 3_601L, "Europe/Rome", java.time.ZoneId.of("UTC"))
+        val deviceUtc = StreamUrls.buildCatchup(server, "demo", "demo", "001", epoch, 3_601L, null, java.time.ZoneId.of("UTC"))
+        assertEquals("$base/timeshift/demo/demo/61/2024-03-31:03-30/001.ts", rome)
+        assertEquals("$base/timeshift/demo/demo/61/2024-03-31:01-30/001.ts", deviceUtc)
+    }
+
+    @Test
+    fun `timeshift spostato arrotonda al minuto e usa la durata residua`() {
+        val epoch = java.time.Instant.parse("2024-04-01T10:00:00Z").epochSecond
+        val url = StreamUrls.buildShiftedCatchup(server, "demo", "demo", "001", epoch, 7_200L, 3_670L, "UTC", java.time.ZoneId.of("Europe/Rome"))
+        assertEquals("$base/timeshift/demo/demo/59/2024-04-01:11-01/001.ts", url)
     }
 
     @Test

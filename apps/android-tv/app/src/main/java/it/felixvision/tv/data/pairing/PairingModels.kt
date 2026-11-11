@@ -25,6 +25,7 @@ data class RemoteCredentials(
     val server: String,
     val username: String,
     val password: String,
+    val serverCode: String? = null,
 )
 
 /** Risposta di `GET /api/rubrica/:code`. */

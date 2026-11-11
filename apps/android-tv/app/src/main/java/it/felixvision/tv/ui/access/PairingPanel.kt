@@ -33,8 +33,23 @@ import it.felixvision.tv.ui.theme.FvpColors
 import kotlinx.coroutines.delay
 
 /**
+ * Lato del QR, in unità di progetto: circa il 60% dei 196 dp di prima. Con il
+ * contenuto attuale (indirizzo del servizio e codice, correzione M) restano
+ * alcuni millimetri per modulo sullo schermo del televisore, quindi il codice
+ * si legge ancora da un telefono a due metri.
+ */
+const val PAIRING_QR_BASE = 118f
+
+/** Distanza minima del QR dai bordi del pannello, per non toccare il bordo bianco. */
+const val PAIRING_QR_INSET_BASE = 10f
+
+/**
  * Pannello di abbinamento remoto: QR, PIN, indirizzo breve del servizio e tempo
  * residuo. Non gestisce rete né stato: riceve [state] dal ViewModel.
+ *
+ * Versione compatta: QR al 60% e spaziature ridotte, così il riquadro
+ * "Configura da remoto" occupa meno altezza. Contenuto e funzionamento sono
+ * gli stessi.
  */
 @Composable
 fun PairingPanel(
@@ -47,31 +62,32 @@ fun PairingPanel(
         modifier = modifier
             .clip(RoundedCornerShape(scale.dp(20f)))
             .background(FvpColors.Surface)
-            .padding(horizontal = scale.dp(22f), vertical = scale.dp(22f)),
+            .padding(horizontal = scale.dp(14f), vertical = scale.dp(12f)),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
             text = "Abbinamento da telefono",
             color = FvpColors.TextPrimary,
-            fontSize = scale.sp(19f),
+            fontSize = scale.sp(17f),
             fontWeight = FontWeight.SemiBold,
         )
-        Spacer(Modifier.height(scale.dp(8f)))
+        Spacer(Modifier.height(scale.dp(4f)))
+        // Testo esplicativo più breve (stesso significato): occupa meno righe.
         Text(
-            text = "Inquadra il QR con il telefono, inserisci i dati del tuo Xtream e la TV si collega da sola.",
+            text = "Inquadra il QR col telefono, inserisci i dati Xtream: la TV si collega da sola.",
             color = FvpColors.TextSecondary,
             fontSize = scale.sp(13f),
-            lineHeight = scale.sp(18f),
+            lineHeight = scale.sp(17f),
             textAlign = TextAlign.Center,
         )
-        Spacer(Modifier.height(scale.dp(16f)))
+        Spacer(Modifier.height(scale.dp(8f)))
 
         val payload = state.qrPayload
         if (state.isExpired) {
             Box(
                 modifier = Modifier
-                    .size(scale.dp(196f))
-                    .clip(RoundedCornerShape(scale.dp(12f)))
+                    .size(scale.dp(PAIRING_QR_BASE))
+                    .clip(RoundedCornerShape(scale.dp(10f)))
                     .background(FvpColors.SurfaceElevated),
                 contentAlignment = Alignment.Center,
             ) {
@@ -89,7 +105,7 @@ fun PairingPanel(
             QrCodeImage(payload = payload, scale = scale)
         }
 
-        Spacer(Modifier.height(scale.dp(14f)))
+        Spacer(Modifier.height(scale.dp(8f)))
 
         val code = state.code
         if (state.isExpired) {
@@ -100,17 +116,17 @@ fun PairingPanel(
                 fontWeight = FontWeight.Bold,
             )
             if (onRenewCode != null) {
-                Spacer(Modifier.height(scale.dp(10f)))
+                Spacer(Modifier.height(scale.dp(6f)))
                 FvpSecondaryButton(text = "Mostra un nuovo codice", onClick = onRenewCode, scale = scale)
             }
         } else {
             Text(
                 text = code?.let(::formatPin) ?: "– – – – – –",
                 color = FvpColors.Green,
-                fontSize = scale.sp(30f),
+                fontSize = scale.sp(26f),
                 fontWeight = FontWeight.Bold,
             )
-            Spacer(Modifier.height(scale.dp(6f)))
+            Spacer(Modifier.height(scale.dp(4f)))
             Text(
                 text = shortRelayAddress(BuildConfig.PAIRING_RELAY_URL),
                 color = FvpColors.TextSecondary,
@@ -119,7 +135,7 @@ fun PairingPanel(
 
             val remaining = rememberRemainingSeconds(state.expiresAtMillis)
             if (remaining != null) {
-                Spacer(Modifier.height(scale.dp(10f)))
+                Spacer(Modifier.height(scale.dp(6f)))
                 Text(
                     text = "Tempo residuo ${formatCountdown(remaining)}",
                     color = FvpColors.TextSecondary,
@@ -129,7 +145,7 @@ fun PairingPanel(
 
             val failure = state.failureMessage
             if (failure != null) {
-                Spacer(Modifier.height(scale.dp(10f)))
+                Spacer(Modifier.height(scale.dp(6f)))
                 Text(
                     text = state.retryInSeconds?.let { "$failure Riprovo tra $it s." } ?: failure,
                     color = FvpColors.Error,
@@ -145,7 +161,8 @@ fun PairingPanel(
 @Composable
 private fun QrCodeImage(payload: String, scale: UiScale) {
     val density = LocalDensity.current
-    val side = scale.dp(196f)
+    val side = scale.dp(PAIRING_QR_BASE)
+    // Arrotondato ai pixel reali: i moduli restano quadrati e il QR leggibile.
     val sidePx = with(density) { side.roundToPx() }
     val bitmap = remember(payload, sidePx) { QrBitmap.render(payload, sidePx) }
 
@@ -168,15 +185,15 @@ private fun PairingPlaceholder(state: PairingPanelState, scale: UiScale) {
     }
     Box(
         modifier = Modifier
-            .size(scale.dp(196f))
-            .clip(RoundedCornerShape(scale.dp(12f)))
+            .size(scale.dp(PAIRING_QR_BASE))
+            .clip(RoundedCornerShape(scale.dp(10f)))
             .background(FvpColors.SurfaceElevated),
         contentAlignment = Alignment.Center,
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
-            modifier = Modifier.padding(horizontal = scale.dp(16f)),
+            modifier = Modifier.padding(horizontal = scale.dp(PAIRING_QR_INSET_BASE)),
         ) {
             Text(
                 text = message,

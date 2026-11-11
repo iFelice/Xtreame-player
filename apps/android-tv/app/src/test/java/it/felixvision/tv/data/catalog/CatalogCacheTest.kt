@@ -1,6 +1,9 @@
 package it.felixvision.tv.data.catalog
 
 import it.felixvision.tv.core.FvpJson
+import it.felixvision.tv.data.epg.CachedGuideEpg
+import it.felixvision.tv.data.epg.CachedGuidePrograms
+import it.felixvision.tv.data.epg.EpgProgram
 import java.io.File
 import kotlin.io.path.createTempDirectory
 import kotlinx.coroutines.runBlocking
@@ -88,6 +91,30 @@ class CatalogCacheTest {
         assertNotNull(cache.load("http://server.esempio:8080", "demo"))
         cache.clear("http://server.esempio:8080", "demo")
         assertNull(cache.load("http://server.esempio:8080", "demo"))
+    }
+
+    @Test
+    fun `cache guida persistente e pulizia non cancella il catalogo`() = runBlocking {
+        val catalog = Catalog(liveStreams = listOf(LiveStream(streamId = "001", name = "Canale")))
+        cache.save("http://server.esempio:8080", "demo", catalog)
+        val program = EpgProgram("Notizie", "Descrizione", 100L, 200L, false)
+        cache.saveGuide(
+            "http://server.esempio:8080",
+            "demo",
+            CachedGuideEpg(
+                xmlTvPrograms = mapOf("news.xml" to listOf(program)),
+                xmlTvUpdatedAtMillis = 123L,
+                shortEpgPrograms = mapOf("fallback.xml" to CachedGuidePrograms(listOf(program), 456L)),
+            ),
+        )
+
+        val loaded = cache.loadGuide("http://server.esempio:8080", "demo")
+        assertEquals(listOf(program), loaded?.xmlTvPrograms?.get("news.xml"))
+        assertEquals(456L, loaded?.shortEpgPrograms?.get("fallback.xml")?.savedAtMillis)
+        assertTrue(cache.guideCacheBytes() > 0L)
+        assertTrue(cache.clearGuideCaches() > 0L)
+        assertNull(cache.loadGuide("http://server.esempio:8080", "demo"))
+        assertNotNull(cache.load("http://server.esempio:8080", "demo"))
     }
 
     @Test

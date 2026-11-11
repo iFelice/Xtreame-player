@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Logo FelixVP ricavato da public/brand/fvp-icon-small.svg (nessuna bitmap).
+  Restano le forme e i colori pieni della variante "small": la piastra
+  arrotondata con il fondo dell'icona e le due lettere F e P con il play
+  centrale. I filtri SVG (rilievo, alone, maschere sfumate) non hanno
+  equivalente nei VectorDrawable e sono volutamente omessi: il marchio resta
+  leggibile a distanza sul fondo scuro.
+  Il gruppo delle lettere è centrato otticamente: nell'SVG il segno sta a
+  sinistra del centro (x 140..765 su 1024), qui è traslato di 59.5 unità.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp"
+    android:height="96dp"
+    android:viewportWidth="1024"
+    android:viewportHeight="1024">
+
+    <!-- Piastra arrotondata: il fondo dell'icona, con il raggio che riprende
+         l'arrotondamento applicato dal sistema alle icone. -->
+    <path
+        android:fillColor="#2C2C2E"
+        android:pathData="M220,0 H804 A220 220 0 0 1 1024,220 V804 A220 220 0 0 1 804,1024 H220 A220 220 0 0 1 0,804 V220 A220 220 0 0 1 220,0 Z" />
+
+    <group android:translateX="59.5">
+        <!-- Lettera F -->
+        <path
+            android:fillColor="#0E8F63"
+            android:pathData="M140,333 H374 V421 H228 V478 H350 V562 H228 V688 H140 Z" />
+        <!-- Lettera P -->
+        <path
+            android:fillColor="#0E8F63"
+            android:fillType="evenOdd"
+            android:pathData="M640,333 H765 A133.5 133.5 0 0 1 765,600 H728 V688 H640 V562 L688,512 L640,462 Z M728,421 H765 A45.5 45.5 0 0 1 765,512 H728 Z" />
+        <!-- Play centrale -->
+        <path
+            android:fillColor="#34D399"
+            android:pathData="M404,330 L658,512 L404,694 L404,586 L468,512 L404,438 Z" />
+    </group>
+</vector>

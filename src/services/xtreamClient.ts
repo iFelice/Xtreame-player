@@ -1,5 +1,6 @@
+import { Capacitor } from '@capacitor/core';
 import { fetchJson } from './httpClient';
-import { isDirectMode } from '../platform/runtime';
+import { STATIC_DEPLOY } from '../utils/deployTarget';
 import {
   XtreamAuthResponse,
   XtreamCategory,
@@ -11,11 +12,10 @@ import {
 } from '../types/xtream';
 
 async function fetchFromXtream<T>(url: string): Promise<T> {
-  // Il desktop passa dal proxy locale per CORS. Le build native (Capacitor) e
-  // il pacchetto webOS, aperto da file:// senza alcun Express dietro,
-  // contattano direttamente il server IPTV: lì la richiesta diretta è stata
-  // verificata funzionare sul TV (vedi docs/WEBOS.md).
-  const requestUrl = isDirectMode() ? url : `/api/proxy/api?url=${encodeURIComponent(url)}`;
+  const isNative = Capacitor.isNativePlatform();
+  // La build statica e le app native non hanno un server Express: il provider
+  // deve consentire CORS per le richieste dirette dal browser.
+  const requestUrl = isNative || STATIC_DEPLOY ? url : `/api/proxy/api?url=${encodeURIComponent(url)}`;
   return fetchJson<T>(requestUrl);
 }
 

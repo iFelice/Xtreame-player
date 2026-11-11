@@ -13,6 +13,7 @@ import {
 import { SavedAccount, storage } from '../services/storage';
 import { getPairingRelayUrl, resolveRubricaServerUrl } from '../services/pairingRequests';
 import { isTvEnvironment } from '../utils/downloadHelper';
+import { isStaticDeploy } from '../utils/deployTarget';
 import { TvPairingModal } from './TvPairingModal';
 
 interface LoginFormProps {
@@ -48,7 +49,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
     setServerCodeError(null);
 
     const relayUrl = getPairingRelayUrl();
-    if (relayUrl && !rawServer.includes('://')) {
+    if ((relayUrl || isStaticDeploy()) && !rawServer.includes('://')) {
       setIsResolvingCode(true);
       try {
         const resolved = await resolveRubricaServerUrl(rawServer, relayUrl);
@@ -153,7 +154,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
                   }
                 }}
                 onBlur={() => isTv && setEditingField(null)}
-                placeholder="http://server.iptv.com:8080"
+                placeholder="http://server.esempio:8080"
                 required
                 className="w-full pl-11 pr-4 py-3 sm:py-3.5 bg-surface-0 border border-separator-strong/90 rounded-2xl text-label placeholder-label-tertiary text-sm sm:text-base  focus:outline-hidden focus:border-accent transition shadow-inner"
               />

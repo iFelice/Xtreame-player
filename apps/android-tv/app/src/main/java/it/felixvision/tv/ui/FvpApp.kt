@@ -1,29 +1,37 @@
 package it.felixvision.tv.ui
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import androidx.tv.material3.Text
 import it.felixvision.tv.AppContainer
 import it.felixvision.tv.ui.access.AccessViewModel
 import it.felixvision.tv.ui.access.LoginScreen
 import it.felixvision.tv.ui.access.Screen
 import it.felixvision.tv.ui.access.statusLabel
+import it.felixvision.tv.ui.components.BrandBackdrop
 import it.felixvision.tv.ui.components.FvpScreen
+import it.felixvision.tv.ui.components.LoadingState
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.main.FvpMainScreen
-import it.felixvision.tv.ui.theme.FvpColors
+
+/**
+ * Contatore monotono delle sessioni di accesso in [FvpApp]: incrementato ogni
+ * volta che si entra nella schermata principale dopo login manuale, abbinamento
+ * remoto o accesso automatico.
+ */
+class SessionCounter(initial: Long = 0L) {
+    var current: Long = initial
+        private set
+
+    fun next(): Long {
+        current += 1L
+        return current
+    }
+}
 
 @Composable
 fun FvpApp(container: AppContainer) {
@@ -34,8 +42,12 @@ fun FvpApp(container: AppContainer) {
     }
     val viewModel: AccessViewModel = viewModel(factory = factory)
     val state by viewModel.ui.collectAsStateWithLifecycle()
+    val sessionCounter = remember { SessionCounter() }
+    // Dimensione dell'interfaccia (Compatta/Media/Grande): letta già al primo
+    // fotogramma dallo store sincrono, poi aggiornata dalle Impostazioni.
+    val interfaceSize by container.interfaceSizeStore.size.collectAsStateWithLifecycle()
 
-    FvpScreen { scale ->
+    FvpScreen(sizeFactor = interfaceSize.factor) { scale ->
         when (val screen = state.screen) {
             Screen.Booting -> BootingScreen(scale = scale)
 
@@ -55,6 +67,9 @@ fun FvpApp(container: AppContainer) {
             is Screen.Account -> {
                 val creds = viewModel.getCurrentCredentials()
                 if (creds != null) {
+                    val sessionId = remember(screen.sessionId) {
+                        sessionCounter.next()
+                    }
                     FvpMainScreen(
                         container = container,
                         server = creds.server,
@@ -66,9 +81,12 @@ fun FvpApp(container: AppContainer) {
                         maxConnections = screen.summary.maxConnections,
                         activeConnections = screen.summary.activeConnections,
                         allowedOutputFormats = screen.summary.allowedOutputFormats,
+                        serverTimezone = screen.summary.serverTimezone,
                         scale = scale,
                         accessViewModel = viewModel,
                         onSignOut = viewModel::signOut,
+                        sessionId = sessionId,
+                        categorySortStore = container.categorySortStore,
                     )
                 } else {
                     LoginScreen(
@@ -89,33 +107,13 @@ fun FvpApp(container: AppContainer) {
     }
 }
 
-/** Schermata di avvio: verifica delle credenziali salvate. */
+/**
+ * Schermata di avvio: verifica delle credenziali salvate, sullo stesso sfondo a
+ * marchio usato per ogni attesa a schermo intero.
+ */
 @Composable
 private fun BootingScreen(scale: UiScale) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(scale.dp(38f)),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(
-            text = "FelixVision",
-            color = FvpColors.TextPrimary,
-            fontSize = scale.sp(34f),
-            fontWeight = FontWeight.Bold,
-        )
-        Text(
-            text = "Player",
-            color = FvpColors.Green,
-            fontSize = scale.sp(34f),
-            fontWeight = FontWeight.Bold,
-        )
-        Text(
-            text = "Verifica delle credenziali salvate…",
-            color = FvpColors.TextSecondary,
-            fontSize = scale.sp(16f),
-            modifier = Modifier.padding(top = scale.dp(18f)),
-        )
+    BrandBackdrop(scale = scale) {
+        LoadingState(message = "Verifica delle credenziali salvate…", scale = scale)
     }
 }

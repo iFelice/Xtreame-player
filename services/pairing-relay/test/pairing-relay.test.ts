@@ -1,13 +1,26 @@
 import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
 import {
+  BACKUP_AAD_PREFIX,
+  BACKUP_IV_BYTES,
+  BACKUP_KEY_BYTES,
+  BACKUP_MAX_CIPHERTEXT_BYTES,
+  BACKUP_MIN_CIPHERTEXT_BYTES,
   buildRubricaIndex,
+  decodeBase64Url,
+  encodeBase64Url,
+  MAX_FAILED_SUBMITS,
+  MAX_SESSIONS,
+  MAX_SESSIONS_PER_IP,
   REMOTE_SESSION_TTL_MS,
   SUBMIT_BLOCK_MS,
+  VPN_AAD_PREFIX,
+  VPN_IV_BYTES,
+  VPN_KEY_BYTES,
+  VPN_MAX_CIPHERTEXT_BYTES,
+  VPN_MIN_CIPHERTEXT_BYTES,
 } from '../../../shared/pairing/index.ts';
-import rubricaJson from '../rubrica.json';
 import worker, {
-  DEFAULT_RUBRICA_ENTRIES,
   PairingHub,
   type DurableObjectIdLike,
   type DurableObjectStateLike,
@@ -16,8 +29,6 @@ import worker, {
   type SqlCursorLike,
   type SqlStorageLike,
 } from '../src/index.ts';
-
-const expectedServerFor001 = (rubricaJson as Array<{ server: string }>)[0]?.server ?? '';
 
 function createSqliteStorageAdapter(db = new DatabaseSync(':memory:')) {
   let scheduledAlarm: number | null = null;
@@ -173,9 +184,9 @@ describe('services/pairing-relay', () => {
         },
         body: JSON.stringify({
           code: '123456',
-          server: 'https://iptv.esempio.it:8080/',
-          username: 'utente1',
-          password: 'password1',
+          server: 'http://server.esempio:8080/',
+          username: 'demo',
+          password: 'demo',
         }),
       }),
     );
@@ -192,9 +203,9 @@ describe('services/pairing-relay', () => {
         },
         body: JSON.stringify({
           code: '123456',
-          server: 'https://iptv.esempio.it:8080',
-          username: 'utente1',
-          password: 'password1',
+          server: 'http://server.esempio:8080',
+          username: 'demo',
+          password: 'demo',
         }),
       }),
     );
@@ -211,9 +222,9 @@ describe('services/pairing-relay', () => {
       status: 'ready',
       credentials: {
         v: 1,
-        server: 'https://iptv.esempio.it:8080',
-        username: 'utente1',
-        password: 'password1',
+        server: 'http://server.esempio:8080',
+        username: 'demo',
+        password: 'demo',
       },
     });
 
@@ -224,6 +235,385 @@ describe('services/pairing-relay', () => {
       }),
     );
     expect(secondReadRes.status).toBe(404);
+  });
+
+  it('creates a VPN session, waits for ciphertext, delivers it once, and rejects a second submit', async () => {
+    const { fetch, instanceNames } = createTestHarness({ createPin: () => '123456' });
+    const createRes = await fetch(
+      new Request('https://relay.example.workers.dev/api/vpn/create', {
+        method: 'POST',
+        headers: { 'CF-Connecting-IP': '192.168.1.10' },
+      }),
+    );
+    expect(createRes.status).toBe(200);
+    const created = (await createRes.json()) as {
+      code: string;
+      pollToken: string;
+      expiresInSeconds: number;
+    };
+    expect(created).toMatchObject({ code: '123456', expiresInSeconds: 600 });
+    expect(instanceNames).toContain('global');
+
+    const statusUrl = 'https://relay.example.workers.dev/api/vpn/status/123456';
+    const waitingRes = await fetch(
+      new Request(statusUrl, {
+        headers: { Authorization: `Bearer ${created.pollToken}` },
+      }),
+    );
+    expect(waitingRes.status).toBe(200);
+    expect(await waitingRes.json()).toEqual({ status: 'waiting' });
+
+    const iv = encodeBase64Url(new Uint8Array(VPN_IV_BYTES).fill(23));
+    const ciphertext = encodeBase64Url(
+      Uint8Array.from({ length: VPN_MIN_CIPHERTEXT_BYTES }, (_, index) => index),
+    );
+    const submitRequest = () =>
+      new Request('https://relay.example.workers.dev/api/vpn/submit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'CF-Connecting-IP': '192.168.1.20',
+        },
+        body: JSON.stringify({ code: created.code, iv, ciphertext }),
+      });
+
+    const submitRes = await fetch(submitRequest());
+    expect(submitRes.status).toBe(200);
+    expect(await submitRes.json()).toEqual({ ok: true });
+
+    const duplicateRes = await fetch(submitRequest());
+    expect(duplicateRes.status).toBe(409);
+
+    const readyRes = await fetch(
+      new Request(statusUrl, {
+        headers: { Authorization: `Bearer ${created.pollToken}` },
+      }),
+    );
+    expect(readyRes.status).toBe(200);
+    expect(await readyRes.json()).toEqual({ status: 'ready', iv, ciphertext });
+
+    const secondStatusRes = await fetch(
+      new Request(statusUrl, {
+        headers: { Authorization: `Bearer ${created.pollToken}` },
+      }),
+    );
+    expect(secondStatusRes.status).toBe(404);
+    expect(await secondStatusRes.json()).toEqual({ error: 'SESSION_NOT_FOUND' });
+  });
+
+  it('returns 404 for an incorrect VPN poll token', async () => {
+    const { fetch } = createTestHarness({ createPin: () => '654321' });
+    const createRes = await fetch(
+      new Request('https://relay.example.workers.dev/api/vpn/create', { method: 'POST' }),
+    );
+    const created = (await createRes.json()) as { code: string; pollToken: string };
+
+    const wrongTokenRes = await fetch(
+      new Request(`https://relay.example.workers.dev/api/vpn/status/${created.code}`, {
+        headers: { Authorization: 'Bearer token-sbagliato' },
+      }),
+    );
+    expect(wrongTokenRes.status).toBe(404);
+    expect(await wrongTokenRes.json()).toEqual({ error: 'SESSION_NOT_FOUND' });
+
+    const validTokenRes = await fetch(
+      new Request(`https://relay.example.workers.dev/api/vpn/status/${created.code}`, {
+        headers: { Authorization: `Bearer ${created.pollToken}` },
+      }),
+    );
+    expect(validTokenRes.status).toBe(200);
+    expect(await validTokenRes.json()).toEqual({ status: 'waiting' });
+  });
+
+  it('rejects malformed VPN IVs and ciphertext sizes and caps request bodies at 32 KiB', async () => {
+    const { fetch } = createTestHarness({ createPin: () => '789012' });
+    const createRes = await fetch(
+      new Request('https://relay.example.workers.dev/api/vpn/create', { method: 'POST' }),
+    );
+    const created = (await createRes.json()) as { code: string };
+    const validIv = encodeBase64Url(new Uint8Array(VPN_IV_BYTES).fill(4));
+    const validCiphertext = encodeBase64Url(
+      new Uint8Array(VPN_MIN_CIPHERTEXT_BYTES).fill(5),
+    );
+    const invalidPayloads = [
+      { iv: encodeBase64Url(new Uint8Array(VPN_IV_BYTES - 1)), ciphertext: validCiphertext },
+      { iv: validIv, ciphertext: encodeBase64Url(new Uint8Array(16)) },
+      {
+        iv: validIv,
+        ciphertext: encodeBase64Url(new Uint8Array(VPN_MAX_CIPHERTEXT_BYTES + 1)),
+      },
+      { iv: 'invalid!base64url', ciphertext: validCiphertext },
+    ];
+
+    for (const payload of invalidPayloads) {
+      const invalidRes = await fetch(
+        new Request('https://relay.example.workers.dev/api/vpn/submit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: created.code, ...payload }),
+        }),
+      );
+      expect(invalidRes.status).toBe(400);
+    }
+
+    const oversizedRes = await fetch(
+      new Request('https://relay.example.workers.dev/api/vpn/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: created.code,
+          iv: validIv,
+          ciphertext: 'A'.repeat(33 * 1024),
+        }),
+      }),
+    );
+    expect(oversizedRes.status).toBe(413);
+  });
+
+  it('serves /vpn with restrictive security headers and does not interpolate query codes into HTML', async () => {
+    const { fetch } = createTestHarness();
+    const response = await fetch(
+      new Request('https://relay.example.workers.dev/vpn?code=482910'),
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Content-Type')).toBe('text/html; charset=utf-8');
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    expect(response.headers.get('Referrer-Policy')).toBe('no-referrer');
+    expect(response.headers.get('Content-Security-Policy')).toBe(
+      "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'",
+    );
+    const html = await response.text();
+    expect(html).toContain('<title>VPN per FelixVP</title>');
+    expect(html).toContain('Incolla il contenuto del file .conf WireGuard');
+    // Nessun filtro per tipo: su iPhone `accept=".conf,text/plain"` rendeva il
+    // file .conf grigio e non selezionabile. L'input resta un campo file.
+    expect(html).toContain('type="file"');
+    expect(html).toContain('id="vpn-file"');
+    expect(html).not.toContain('accept=');
+    expect(html).toContain("Su iPhone il file si trova nell'app File, di solito in Download");
+    expect(html).toContain(String.raw`if (text.indexOf('\uFFFD') !== -1) return false;`);
+    expect(html).not.toContain('console.log');
+    expect(html).not.toContain('482910');
+    expect(html).toContain("replace(/\\+/g, '-').replace(/\\//g, '_')");
+    expect(html).toContain('if (!/^\\d{6}$/.test(code))');
+    const script = html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
+    expect(script).toBeDefined();
+    expect(() => new Function(script as string)).not.toThrow();
+  });
+
+  it('encrypts and relays a WireGuard sample with AES-GCM and authenticates the six-digit code as AAD', async () => {
+    const { fetch } = createTestHarness({ createPin: () => '135790' });
+    const createdResponse = await fetch(
+      new Request('https://relay.example.workers.dev/api/vpn/create', { method: 'POST' }),
+    );
+    const created = (await createdResponse.json()) as { code: string; pollToken: string };
+
+    const keyBytes = new Uint8Array(VPN_KEY_BYTES);
+    const cryptoKey = await crypto.subtle.importKey(
+      'raw',
+      keyBytes,
+      'AES-GCM',
+      false,
+      ['encrypt', 'decrypt'],
+    );
+    const ivBytes = new Uint8Array(VPN_IV_BYTES).fill(7);
+    const zeroWireGuardKey = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
+    const plaintext = [
+      '[Interface]',
+      `PrivateKey = ${zeroWireGuardKey}`,
+      'Address = 192.168.1.10/32',
+      '',
+      '[Peer]',
+      `PublicKey = ${zeroWireGuardKey}`,
+      'Endpoint = 192.168.1.20:51820',
+      'AllowedIPs = 0.0.0.0/0',
+    ].join('\n');
+    const aad = new TextEncoder().encode(`${VPN_AAD_PREFIX}${created.code}`);
+    const encryptedBytes = new Uint8Array(
+      await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv: ivBytes, additionalData: aad },
+        cryptoKey,
+        new TextEncoder().encode(plaintext),
+      ),
+    );
+    const iv = encodeBase64Url(ivBytes);
+    const ciphertext = encodeBase64Url(encryptedBytes);
+
+    const submitResponse = await fetch(
+      new Request('https://relay.example.workers.dev/api/vpn/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: created.code, iv, ciphertext }),
+      }),
+    );
+    expect(submitResponse.status).toBe(200);
+
+    const statusResponse = await fetch(
+      new Request(`https://relay.example.workers.dev/api/vpn/status/${created.code}`, {
+        headers: { Authorization: `Bearer ${created.pollToken}` },
+      }),
+    );
+    const received = (await statusResponse.json()) as {
+      status: string;
+      iv?: string;
+      ciphertext?: string;
+    };
+    expect(received).toEqual({ status: 'ready', iv, ciphertext });
+
+    const receivedIvBytes = decodeBase64Url(received.iv as string);
+    const receivedCiphertextBytes = decodeBase64Url(received.ciphertext as string);
+    const receivedIv = new Uint8Array(receivedIvBytes.byteLength);
+    const receivedCiphertext = new Uint8Array(receivedCiphertextBytes.byteLength);
+    receivedIv.set(receivedIvBytes);
+    receivedCiphertext.set(receivedCiphertextBytes);
+    const decrypted = await crypto.subtle.decrypt(
+      {
+        name: 'AES-GCM',
+        iv: receivedIv,
+        additionalData: new TextEncoder().encode(`${VPN_AAD_PREFIX}${created.code}`),
+      },
+      cryptoKey,
+      receivedCiphertext,
+    );
+    expect(new TextDecoder().decode(decrypted)).toBe(plaintext);
+
+    await expect(
+      crypto.subtle.decrypt(
+        {
+          name: 'AES-GCM',
+          iv: receivedIv,
+          additionalData: new TextEncoder().encode(`${VPN_AAD_PREFIX}999999`),
+        },
+        cryptoKey,
+        receivedCiphertext,
+      ),
+    ).rejects.toThrow();
+  });
+
+  it('blocks VPN submitters by IP with the same shared limit used by pair submit', async () => {
+    let now = 50_000;
+    const { fetch } = createTestHarness({ now: () => now });
+    const ip = '192.168.1.55';
+    const iv = encodeBase64Url(new Uint8Array(VPN_IV_BYTES).fill(9));
+    const ciphertext = encodeBase64Url(new Uint8Array(VPN_MIN_CIPHERTEXT_BYTES).fill(8));
+
+    for (let attempt = 0; attempt < MAX_FAILED_SUBMITS; attempt += 1) {
+      const response = await fetch(
+        new Request('https://relay.example.workers.dev/api/vpn/submit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': ip },
+          body: JSON.stringify({ code: '999999', iv, ciphertext }),
+        }),
+      );
+      expect(response.status).toBe(404);
+    }
+
+    const blockedVpnResponse = await fetch(
+      new Request('https://relay.example.workers.dev/api/vpn/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': ip },
+        body: JSON.stringify({ code: '999999', iv, ciphertext }),
+      }),
+    );
+    expect(blockedVpnResponse.status).toBe(429);
+
+    const blockedPairResponse = await fetch(
+      new Request('https://relay.example.workers.dev/api/pair/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': ip },
+        body: JSON.stringify({
+          code: '999999',
+          server: 'http://server.esempio:8080',
+          username: 'demo',
+          password: 'demo',
+        }),
+      }),
+    );
+    expect(blockedPairResponse.status).toBe(429);
+
+    now += SUBMIT_BLOCK_MS + 1;
+    const afterBlockResponse = await fetch(
+      new Request('https://relay.example.workers.dev/api/vpn/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': ip },
+        body: JSON.stringify({ code: '999999', iv, ciphertext }),
+      }),
+    );
+    expect(afterBlockResponse.status).toBe(404);
+  });
+
+  it('enforces VPN session limits independently from pairing sessions', async () => {
+    let nextCode = 100_000;
+    const { fetch } = createTestHarness({ createPin: () => String(nextCode++) });
+    const sharedIp = '192.168.1.1';
+
+    for (let index = 0; index < MAX_SESSIONS_PER_IP; index += 1) {
+      const pairRes = await fetch(
+        new Request('https://relay.example.workers.dev/api/pair/create', {
+          method: 'POST',
+          headers: { 'CF-Connecting-IP': sharedIp },
+        }),
+      );
+      expect(pairRes.status).toBe(200);
+    }
+    for (let index = 0; index < MAX_SESSIONS_PER_IP; index += 1) {
+      const vpnRes = await fetch(
+        new Request('https://relay.example.workers.dev/api/vpn/create', {
+          method: 'POST',
+          headers: { 'CF-Connecting-IP': sharedIp },
+        }),
+      );
+      expect(vpnRes.status).toBe(200);
+    }
+
+    const sixthPair = await fetch(
+      new Request('https://relay.example.workers.dev/api/pair/create', {
+        method: 'POST',
+        headers: { 'CF-Connecting-IP': sharedIp },
+      }),
+    );
+    const sixthVpn = await fetch(
+      new Request('https://relay.example.workers.dev/api/vpn/create', {
+        method: 'POST',
+        headers: { 'CF-Connecting-IP': sharedIp },
+      }),
+    );
+    expect(sixthPair.status).toBe(429);
+    expect(sixthVpn.status).toBe(429);
+
+    for (let index = 0; index < MAX_SESSIONS - MAX_SESSIONS_PER_IP; index += 1) {
+      const pairRes = await fetch(
+        new Request('https://relay.example.workers.dev/api/pair/create', {
+          method: 'POST',
+          headers: { 'CF-Connecting-IP': `192.168.1.${index + 2}` },
+        }),
+      );
+      expect(pairRes.status).toBe(200);
+    }
+    const firstVpnBeyondPairLimit = await fetch(
+      new Request('https://relay.example.workers.dev/api/vpn/create', {
+        method: 'POST',
+        headers: { 'CF-Connecting-IP': '192.168.1.250' },
+      }),
+    );
+    expect(firstVpnBeyondPairLimit.status).toBe(200);
+
+    for (let index = 0; index < MAX_SESSIONS - MAX_SESSIONS_PER_IP - 1; index += 1) {
+      const vpnRes = await fetch(
+        new Request('https://relay.example.workers.dev/api/vpn/create', {
+          method: 'POST',
+          headers: { 'CF-Connecting-IP': `192.168.1.${index + 100}` },
+        }),
+      );
+      expect(vpnRes.status).toBe(200);
+    }
+    const hundredFirstVpn = await fetch(
+      new Request('https://relay.example.workers.dev/api/vpn/create', {
+        method: 'POST',
+        headers: { 'CF-Connecting-IP': '192.168.1.251' },
+      }),
+    );
+    expect(hundredFirstVpn.status).toBe(429);
   });
 
   it('expires sessions after 10 minutes of simulated time and via alarm', async () => {
@@ -261,6 +651,13 @@ describe('services/pairing-relay', () => {
       }),
     );
     const session2 = (await createRes2.json()) as { code: string; pollToken: string };
+    const vpnCreateRes = await fetch(
+      new Request('https://relay.example.workers.dev/api/vpn/create', {
+        method: 'POST',
+        headers: { 'CF-Connecting-IP': '192.168.1.3' },
+      }),
+    );
+    const vpnSession = (await vpnCreateRes.json()) as { code: string; pollToken: string };
     now += REMOTE_SESSION_TTL_MS;
     await runAlarm();
 
@@ -268,6 +665,10 @@ describe('services/pairing-relay', () => {
       .exec<{ pin: string }>('SELECT pin FROM sessions WHERE pin = ?', session2.code)
       .toArray();
     expect(rows).toHaveLength(0);
+    const vpnRows = adapter.state.storage.sql
+      .exec<{ code: string }>('SELECT code FROM vpn_sessions WHERE code = ?', vpnSession.code)
+      .toArray();
+    expect(vpnRows).toHaveLength(0);
   });
 
   it('returns 404 when poll token is missing or incorrect', async () => {
@@ -392,7 +793,10 @@ describe('services/pairing-relay', () => {
   });
 
   it('resolves rubrica code "001" in submit and returns 400 UNKNOWN_SERVER_CODE for unknown codes without counting as PIN failure', async () => {
-    const { fetch } = createTestHarness({ createPin: () => '777888' });
+    const { fetch } = createTestHarness({
+      createPin: () => '777888',
+      rubricaIndex: new Map([['001', 'http://server.esempio:8080']]),
+    });
     const createRes = await fetch(
       new Request('https://relay.example.workers.dev/api/pair/create', {
         method: 'POST',
@@ -409,8 +813,8 @@ describe('services/pairing-relay', () => {
           body: JSON.stringify({
             code: '777888',
             server: '999',
-            username: 'mario',
-            password: 'pwd',
+            username: 'demo',
+            password: 'demo',
           }),
         }),
       );
@@ -426,8 +830,8 @@ describe('services/pairing-relay', () => {
         body: JSON.stringify({
           code: '777888',
           server: ' 001 ',
-          username: 'mario',
-          password: 'pwd',
+          username: 'demo',
+          password: 'demo',
         }),
       }),
     );
@@ -444,9 +848,10 @@ describe('services/pairing-relay', () => {
       status: 'ready',
       credentials: {
         v: 1,
-        server: expectedServerFor001,
-        username: 'mario',
-        password: 'pwd',
+        server: 'http://server.esempio:8080',
+        username: 'demo',
+        password: 'demo',
+        serverCode: '001',
       },
     });
   });
@@ -488,7 +893,10 @@ describe('services/pairing-relay', () => {
 
   it('resolves codes on GET /api/rubrica/:code and limits to 20 requests per minute per IP', async () => {
     const now = 100_000;
-    const { fetch } = createTestHarness({ now: () => now });
+    const { fetch } = createTestHarness({
+      now: () => now,
+      rubricaIndex: new Map([['001', 'http://server.esempio:8080']]),
+    });
     const ip = '198.51.100.77';
 
     const foundRes = await fetch(
@@ -497,7 +905,7 @@ describe('services/pairing-relay', () => {
       }),
     );
     expect(foundRes.status).toBe(200);
-    expect(await foundRes.json()).toEqual({ server: expectedServerFor001 });
+    expect(await foundRes.json()).toEqual({ server: 'http://server.esempio:8080' });
 
     const missingRes = await fetch(
       new Request('https://relay.example.workers.dev/api/rubrica/999', {
@@ -588,5 +996,379 @@ describe('services/pairing-relay', () => {
     const prefilledHtml = await prefilledPage.text();
     expect(prefilledHtml).toContain('value="482910"');
     expect(prefilledHtml).toContain('readonly');
+  });
+
+  it('rejects backup creation without a valid direction', async () => {
+    const { fetch } = createTestHarness();
+    for (const body of ['{}', '{"direction":"sideways"}', 'not-json']) {
+      const res = await fetch(
+        new Request('https://relay.example.workers.dev/api/backup/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body,
+        }),
+      );
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ error: 'INVALID_DIRECTION' });
+    }
+  });
+
+  it('uploads a backup from the TV and delivers the download once to the phone', async () => {
+    const { fetch } = createTestHarness({ createPin: () => '246802' });
+    const createRes = await fetch(
+      new Request('https://relay.example.workers.dev/api/backup/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'CF-Connecting-IP': '192.168.1.10',
+        },
+        body: JSON.stringify({ direction: 'export' }),
+      }),
+    );
+    expect(createRes.status).toBe(200);
+    const created = (await createRes.json()) as {
+      code: string;
+      pollToken: string;
+      expiresInSeconds: number;
+    };
+    expect(created).toMatchObject({ code: '246802', expiresInSeconds: 600 });
+
+    const downloadUrl = 'https://relay.example.workers.dev/api/backup/download/246802';
+    const waitingRes = await fetch(
+      new Request(downloadUrl, { headers: { 'CF-Connecting-IP': '192.168.1.20' } }),
+    );
+    expect(waitingRes.status).toBe(200);
+    expect(await waitingRes.json()).toEqual({ status: 'waiting' });
+
+    const iv = encodeBase64Url(new Uint8Array(BACKUP_IV_BYTES).fill(11));
+    const ciphertext = encodeBase64Url(
+      Uint8Array.from({ length: BACKUP_MIN_CIPHERTEXT_BYTES }, (_, index) => index),
+    );
+    const uploadBody = JSON.stringify({ code: created.code, iv, ciphertext });
+
+    const wrongTokenRes = await fetch(
+      new Request('https://relay.example.workers.dev/api/backup/upload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer token-sbagliato',
+        },
+        body: uploadBody,
+      }),
+    );
+    expect(wrongTokenRes.status).toBe(404);
+
+    const uploadRes = await fetch(
+      new Request('https://relay.example.workers.dev/api/backup/upload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${created.pollToken}`,
+        },
+        body: uploadBody,
+      }),
+    );
+    expect(uploadRes.status).toBe(200);
+    expect(await uploadRes.json()).toEqual({ ok: true });
+
+    const secondUploadRes = await fetch(
+      new Request('https://relay.example.workers.dev/api/backup/upload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${created.pollToken}`,
+        },
+        body: uploadBody,
+      }),
+    );
+    expect(secondUploadRes.status).toBe(409);
+
+    const readyRes = await fetch(
+      new Request(downloadUrl, { headers: { 'CF-Connecting-IP': '192.168.1.20' } }),
+    );
+    expect(readyRes.status).toBe(200);
+    expect(await readyRes.json()).toEqual({ status: 'ready', iv, ciphertext });
+
+    const secondDownloadRes = await fetch(
+      new Request(downloadUrl, { headers: { 'CF-Connecting-IP': '192.168.1.20' } }),
+    );
+    expect(secondDownloadRes.status).toBe(404);
+    expect(await secondDownloadRes.json()).toEqual({ error: 'SESSION_NOT_FOUND' });
+  });
+
+  it('receives a backup from the phone and delivers it once to the TV', async () => {
+    const { fetch } = createTestHarness({ createPin: () => '135791' });
+    const createRes = await fetch(
+      new Request('https://relay.example.workers.dev/api/backup/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ direction: 'import' }),
+      }),
+    );
+    expect(createRes.status).toBe(200);
+    const created = (await createRes.json()) as { code: string; pollToken: string };
+
+    const statusUrl = 'https://relay.example.workers.dev/api/backup/status/135791';
+    const waitingRes = await fetch(
+      new Request(statusUrl, {
+        headers: { Authorization: `Bearer ${created.pollToken}` },
+      }),
+    );
+    expect(waitingRes.status).toBe(200);
+    expect(await waitingRes.json()).toEqual({ status: 'waiting' });
+
+    const iv = encodeBase64Url(new Uint8Array(BACKUP_IV_BYTES).fill(9));
+    const ciphertext = encodeBase64Url(
+      Uint8Array.from({ length: BACKUP_MIN_CIPHERTEXT_BYTES }, (_, index) => 255 - index),
+    );
+    const submitRequest = () =>
+      new Request('https://relay.example.workers.dev/api/backup/submit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'CF-Connecting-IP': '192.168.1.30',
+        },
+        body: JSON.stringify({ code: created.code, iv, ciphertext }),
+      });
+
+    const submitRes = await fetch(submitRequest());
+    expect(submitRes.status).toBe(200);
+    expect(await submitRes.json()).toEqual({ ok: true });
+
+    const duplicateRes = await fetch(submitRequest());
+    expect(duplicateRes.status).toBe(409);
+
+    const readyRes = await fetch(
+      new Request(statusUrl, {
+        headers: { Authorization: `Bearer ${created.pollToken}` },
+      }),
+    );
+    expect(readyRes.status).toBe(200);
+    expect(await readyRes.json()).toEqual({ status: 'ready', iv, ciphertext });
+
+    const secondStatusRes = await fetch(
+      new Request(statusUrl, {
+        headers: { Authorization: `Bearer ${created.pollToken}` },
+      }),
+    );
+    expect(secondStatusRes.status).toBe(404);
+    expect(await secondStatusRes.json()).toEqual({ error: 'SESSION_NOT_FOUND' });
+  });
+
+  it('keeps export and import backup sessions on their own routes', async () => {
+    const codes = ['111111', '222222'];
+    let next = 0;
+    const { fetch } = createTestHarness({ createPin: () => codes[next++] });
+    const iv = encodeBase64Url(new Uint8Array(BACKUP_IV_BYTES).fill(3));
+    const ciphertext = encodeBase64Url(
+      Uint8Array.from({ length: BACKUP_MIN_CIPHERTEXT_BYTES }, () => 1),
+    );
+
+    const exportRes = await fetch(
+      new Request('https://relay.example.workers.dev/api/backup/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ direction: 'export' }),
+      }),
+    );
+    const exported = (await exportRes.json()) as { code: string; pollToken: string };
+    const importRes = await fetch(
+      new Request('https://relay.example.workers.dev/api/backup/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ direction: 'import' }),
+      }),
+    );
+    const imported = (await importRes.json()) as { code: string; pollToken: string };
+
+    // Submit (phone upload) against an export session.
+    const wrongSubmit = await fetch(
+      new Request('https://relay.example.workers.dev/api/backup/submit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'CF-Connecting-IP': '192.168.1.40',
+        },
+        body: JSON.stringify({ code: exported.code, iv, ciphertext }),
+      }),
+    );
+    expect(wrongSubmit.status).toBe(404);
+
+    // Upload (TV deposit) against an import session.
+    const wrongUpload = await fetch(
+      new Request('https://relay.example.workers.dev/api/backup/upload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${imported.pollToken}`,
+        },
+        body: JSON.stringify({ code: imported.code, iv, ciphertext }),
+      }),
+    );
+    expect(wrongUpload.status).toBe(404);
+
+    // Download against an import session.
+    const wrongDownload = await fetch(
+      new Request(`https://relay.example.workers.dev/api/backup/download/${imported.code}`),
+    );
+    expect(wrongDownload.status).toBe(404);
+
+    // Authenticated status against an export session.
+    const wrongStatus = await fetch(
+      new Request(`https://relay.example.workers.dev/api/backup/status/${exported.code}`, {
+        headers: { Authorization: `Bearer ${exported.pollToken}` },
+      }),
+    );
+    expect(wrongStatus.status).toBe(404);
+  });
+
+  it('rejects malformed backup envelopes and caps submit bodies at 768 KiB', async () => {
+    const { fetch } = createTestHarness({ createPin: () => '975310' });
+    const createRes = await fetch(
+      new Request('https://relay.example.workers.dev/api/backup/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ direction: 'import' }),
+      }),
+    );
+    const created = (await createRes.json()) as { code: string };
+    const validIv = encodeBase64Url(new Uint8Array(BACKUP_IV_BYTES).fill(4));
+    const validCiphertext = encodeBase64Url(
+      Uint8Array.from({ length: BACKUP_MIN_CIPHERTEXT_BYTES }, () => 8),
+    );
+    const submit = (iv: string, ciphertext: string, extraHeaders: Record<string, string> = {}) =>
+      fetch(
+        new Request('https://relay.example.workers.dev/api/backup/submit', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'CF-Connecting-IP': '192.168.1.50',
+            ...extraHeaders,
+          },
+          body: JSON.stringify({ code: created.code, iv, ciphertext }),
+        }),
+      );
+
+    const shortIv = await submit(
+      encodeBase64Url(new Uint8Array(BACKUP_IV_BYTES - 1).fill(4)),
+      validCiphertext,
+    );
+    expect(shortIv.status).toBe(400);
+
+    const oversizedCiphertext = encodeBase64Url(
+      new Uint8Array(BACKUP_MAX_CIPHERTEXT_BYTES + 1).fill(8),
+    );
+    const tooLarge = await submit(validIv, oversizedCiphertext);
+    expect(tooLarge.status).toBe(400);
+
+    const hugeBody = 'x'.repeat(768 * 1024 + 1);
+    const capped = await fetch(
+      new Request('https://relay.example.workers.dev/api/backup/submit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'CF-Connecting-IP': '192.168.1.51',
+        },
+        body: hugeBody,
+      }),
+    );
+    expect(capped.status).toBe(413);
+  });
+
+  it('encrypts and relays a backup file with AES-GCM and authenticates the six-digit code as AAD', async () => {
+    const { fetch } = createTestHarness({ createPin: () => '864208' });
+    const createdResponse = await fetch(
+      new Request('https://relay.example.workers.dev/api/backup/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ direction: 'import' }),
+      }),
+    );
+    const created = (await createdResponse.json()) as { code: string; pollToken: string };
+
+    const keyBytes = new Uint8Array(BACKUP_KEY_BYTES).fill(5);
+    const cryptoKey = await crypto.subtle.importKey(
+      'raw',
+      keyBytes,
+      'AES-GCM',
+      false,
+      ['encrypt', 'decrypt'],
+    );
+    const ivBytes = new Uint8Array(BACKUP_IV_BYTES).fill(7);
+    const plaintext = '{"formatVersion":1,"favorites":[]}';
+    const aad = new TextEncoder().encode(`${BACKUP_AAD_PREFIX}${created.code}`);
+    const encryptedBytes = new Uint8Array(
+      await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv: ivBytes, additionalData: aad },
+        cryptoKey,
+        new TextEncoder().encode(plaintext),
+      ),
+    );
+    const iv = encodeBase64Url(ivBytes);
+    const ciphertext = encodeBase64Url(encryptedBytes);
+
+    const submitResponse = await fetch(
+      new Request('https://relay.example.workers.dev/api/backup/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: created.code, iv, ciphertext }),
+      }),
+    );
+    expect(submitResponse.status).toBe(200);
+
+    const statusResponse = await fetch(
+      new Request(`https://relay.example.workers.dev/api/backup/status/${created.code}`, {
+        headers: { Authorization: `Bearer ${created.pollToken}` },
+      }),
+    );
+    const received = (await statusResponse.json()) as {
+      status: string;
+      iv?: string;
+      ciphertext?: string;
+    };
+    expect(received).toEqual({ status: 'ready', iv, ciphertext });
+
+    const receivedIv = new Uint8Array(decodeBase64Url(received.iv as string));
+    const receivedCiphertext = new Uint8Array(decodeBase64Url(received.ciphertext as string));
+    const decrypted = await crypto.subtle.decrypt(
+      {
+        name: 'AES-GCM',
+        iv: receivedIv,
+        additionalData: new TextEncoder().encode(`${BACKUP_AAD_PREFIX}${created.code}`),
+      },
+      cryptoKey,
+      receivedCiphertext,
+    );
+    expect(new TextDecoder().decode(decrypted)).toBe(plaintext);
+
+    await expect(
+      crypto.subtle.decrypt(
+        {
+          name: 'AES-GCM',
+          iv: receivedIv,
+          additionalData: new TextEncoder().encode(`${BACKUP_AAD_PREFIX}999999`),
+        },
+        cryptoKey,
+        receivedCiphertext,
+      ),
+    ).rejects.toThrow();
+  });
+
+  it('serves /backup with restrictive security headers, a file picker, and a download link', async () => {
+    const { fetch } = createTestHarness();
+    const page = await fetch(new Request('https://relay.example.workers.dev/backup'));
+    expect(page.status).toBe(200);
+    expect(page.headers.get('Content-Type')).toContain('text/html');
+    expect(page.headers.get('Cache-Control')).toBe('no-store');
+    expect(page.headers.get('Referrer-Policy')).toBe('no-referrer');
+    expect(page.headers.get('Content-Security-Policy')).toContain("connect-src 'self'");
+    const html = await page.text();
+    expect(html).toContain('Backup per');
+    expect(html).toContain('type="file"');
+    expect(html).toContain('.fvpbackup');
+    expect(html).toContain('Scarica il backup');
+    expect(html).toContain('/api/backup/submit');
+    expect(html).toContain('/api/backup/download/');
+    expect(html).toContain('history.replaceState');
   });
 });

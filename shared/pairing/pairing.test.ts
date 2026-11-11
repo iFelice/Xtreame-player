@@ -3,6 +3,8 @@ import {
   buildRubricaIndex,
   constantTimeEqual,
   createVersionedPayload,
+  decodeBase64Url,
+  encodeBase64Url,
   generatePin,
   generatePollToken,
   hashToken,
@@ -17,6 +19,12 @@ import {
   PIN_REJECTION_LIMIT,
   readCredentials,
   resolveRubricaCode,
+  VPN_AAD_PREFIX,
+  VPN_IV_BYTES,
+  VPN_KEY_BYTES,
+  VPN_MAX_CIPHERTEXT_BYTES,
+  VPN_MAX_PLAINTEXT_BYTES,
+  VPN_MIN_CIPHERTEXT_BYTES,
 } from './index';
 
 describe('shared/pairing', () => {
@@ -192,6 +200,27 @@ describe('shared/pairing', () => {
     });
   });
 
+  describe('VPN transfer constants and base64url', () => {
+    it('exposes the expected AES-GCM envelope sizes and AAD namespace', () => {
+      expect(VPN_KEY_BYTES).toBe(32);
+      expect(VPN_IV_BYTES).toBe(12);
+      expect(VPN_MAX_PLAINTEXT_BYTES).toBe(8192);
+      expect(VPN_MAX_CIPHERTEXT_BYTES).toBe(VPN_MAX_PLAINTEXT_BYTES + 16);
+      expect(VPN_MIN_CIPHERTEXT_BYTES).toBe(17);
+      expect(VPN_AAD_PREFIX).toBe('felixvp-vpn-v1:');
+    });
+
+    it('round trips bytes through base64url and rejects invalid alphabet and lengths', () => {
+      const values = [new Uint8Array(), new Uint8Array([0, 1, 2, 253, 254, 255])];
+      for (const value of values) {
+        expect(decodeBase64Url(encodeBase64Url(value))).toEqual(value);
+      }
+      expect(() => decodeBase64Url('abc=')).toThrow(/base64url/i);
+      expect(() => decodeBase64Url('a+b/')).toThrow(/base64url/i);
+      expect(() => decodeBase64Url('a')).toThrow(/base64url/i);
+    });
+  });
+
   describe('rubrica code normalization and indexing', () => {
     it('normalizes codes with trim and lowercase', () => {
       expect(normalizeRubricaCode('  001 ')).toBe('001');
@@ -217,18 +246,33 @@ describe('shared/pairing', () => {
       ).toThrow(/duplicato/i);
     });
 
-    it('creates a versioned credentials payload (v: 1)', () => {
+    it('creates a versioned credentials payload with optional normalized serverCode', () => {
       expect(
         createVersionedPayload({
           server: 'http://server.esempio:8080',
-          username: 'utente',
-          password: 'segreta',
+          username: 'demo',
+          password: 'demo',
         }),
       ).toEqual({
         v: 1,
         server: 'http://server.esempio:8080',
-        username: 'utente',
-        password: 'segreta',
+        username: 'demo',
+        password: 'demo',
+      });
+
+      expect(
+        createVersionedPayload({
+          server: 'http://server.esempio:8080',
+          username: 'demo',
+          password: 'demo',
+          serverCode: normalizeRubricaCode(' 001 '),
+        }),
+      ).toEqual({
+        v: 1,
+        server: 'http://server.esempio:8080',
+        username: 'demo',
+        password: 'demo',
+        serverCode: '001',
       });
     });
   });

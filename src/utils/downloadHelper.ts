@@ -1,6 +1,7 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { Directory, Filesystem } from '@capacitor/filesystem';
-import { isWebOsBuild } from '../platform/runtime';
+import { STATIC_DEPLOY } from './deployTarget';
+import { getDirectStreamUrl } from './streamUrl';
 
 interface DocumentExporterPlugin {
   exportFile(options: { path: string }): Promise<{ path: string }>;
@@ -13,9 +14,6 @@ const DocumentExporter = registerPlugin<DocumentExporterPlugin>('DocumentExporte
  * where direct file downloading should be disabled.
  */
 export function isTvEnvironment(): boolean {
-  // Il target webOS è una modalità TV esplicita di build: non dipendere
-  // dall'user-agent (che può cambiare tra versioni del firmware).
-  if (isWebOsBuild()) return true;
   if (typeof window === 'undefined') return false;
   const ua = (navigator.userAgent || '').toLowerCase();
 
@@ -44,14 +42,7 @@ export function isTvEnvironment(): boolean {
 }
 
 export function unwrapProxyUrl(streamUrl: string): string {
-  if (!streamUrl.includes('/api/proxy/stream?url=')) return streamUrl;
-
-  try {
-    const query = streamUrl.split('?')[1] || '';
-    return new URLSearchParams(query).get('url') || streamUrl;
-  } catch {
-    return streamUrl;
-  }
+  return getDirectStreamUrl(streamUrl) || streamUrl;
 }
 
 export type NativeDownloadStatus = 'started' | 'exporting' | 'finished' | 'cancelled' | 'error';
@@ -88,19 +79,6 @@ export async function cleanupLegacyNativeDownloads(): Promise<void> {
   );
 }
 
-/**
- * Whether the current client can offer media downloads at all.
- *
- * The webOS package has no local Express server (the web download route
- * `/api/proxy/stream?...&download=1` does not exist there) and no writable
- * app folder the user could reach, so every download affordance must stay
- * hidden — independently of `isTvEnvironment()`, which is a best-effort
- * user-agent guess.
- */
-export function canOfferDownloads(tvEnvironment: boolean = isTvEnvironment()): boolean {
-  return !tvEnvironment && !isWebOsBuild();
-}
-
 export function safeFilename(title: string, extension: string): string {
   // Also remove control characters: they are invalid or problematic in native paths.
   const cleanTitle = (title || 'video')
@@ -125,11 +103,7 @@ export async function triggerMediaDownload(
   containerExtension: string = 'mp4',
   accountKey?: string
 ): Promise<boolean> {
-  // Doppia protezione: le schermate webOS non mostrano alcun pulsante di
-  // download, e anche una chiamata diretta da codice futuro non deve tentare
-  // un `/api/proxy/stream?...&download=1` che nel pacchetto TV non esiste.
-  if (!canOfferDownloads()) return false;
-  if (typeof window === 'undefined') return false;
+  if (typeof window === 'undefined' || STATIC_DEPLOY) return false;
 
   const rawUrl = unwrapProxyUrl(streamUrl);
   const filename = safeFilename(title, containerExtension);
@@ -168,7 +142,8 @@ export async function triggerMediaDownload(
         notifyDownloadStatus('cancelled', title);
         return false;
       }
-      console.error('Native media download failed:', error);
+      // Plugin errors may contain the stream URL and credentials.
+      console.error('Native media download failed.');
       notifyDownloadStatus('error', title);
       window.alert(`Download non riuscito: ${message}`);
       return false;
@@ -209,8 +184,9 @@ export async function triggerMediaDownload(
     a.click();
     setTimeout(() => a.remove(), 1500);
     return true;
-  } catch (error) {
-    console.warn('Could not trigger browser download:', error);
+  } catch {
+    // The failed anchor may contain a provider URL with credentials.
+    console.warn('Could not trigger browser download.');
     return false;
   }
 }
