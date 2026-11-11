@@ -429,6 +429,17 @@ server Xtream raggiunti con indirizzo privato non risponderebbero.
   **Indietro** torna all'elenco delle categorie con il focus sulla categoria da cui si è
   usciti (il secondo Indietro chiude la pagina): la selezione resta, e si vede subito il
   conteggio aggiornato sulla riga della categoria.
+- **Canali già in I miei canali (aggiunta)**: non spariscono più dalla pagina. In fondo alla
+  categoria compaiono in grigio, con il **simbolo della TV** e la scritta "Già in I miei
+  canali"; la riga della categoria mostra anche quanti sono ("· 3 📺"), così si vede a colpo
+  d'occhio dove sono finiti e non si aggiunge due volte lo stesso canale. Quelle righe non
+  prendono il focus e non rispondono a OK: non c'è niente da scegliere, restano solo da
+  leggere. In rimozione non compaiono (lì i canali sono già tutti tuoi).
+- **Indietro a due livelli**: **Indietro del telecomando** dentro una categoria torna
+  all'elenco delle categorie (non chiude più la pagina) con il focus **sulla categoria da cui
+  si è usciti**, anche se è fuori schermo: la lista scorre fino a lì e poi prende il focus.
+  Dall'elenco, Indietro chiude la pagina. Vale sia per il tasto del telecomando sia per il
+  pulsante in alto.
 - **Conferma unica**: il tasto in fondo c'è in entrambi i livelli, solo con almeno una
   scelta, e dice quanti canali muoverà ("Aggiungi (12)", "Rimuovi (3)"); una sola finestra di
   conferma per tutta la selezione, con il focus iniziale su "No" e Indietro che non modifica
@@ -451,8 +462,10 @@ server Xtream raggiunti con indirizzo privato non risponderebbero.
   dell'orologio del menu laterale (stesso formato italiano, stesso font Sora,
   cifre a larghezza fissa, aggiornamento allo scatto del minuto). Nel **Live**
   sta dentro il banner del canale, sopra `#numero · nome`; in **film e serie**
-  sta nella barra comandi, a destra del titolo, così non copre il minutaggio
-  della riproduzione e resta invisibile quando la barra è chiusa.
+  sta **in basso a destra** della barra comandi, sulla riga dei pulsanti
+  Audio/Sottotitoli/Volume/Formato: separata dalla durata (che sta sulla barra di
+  avanzamento, sopra) così non si confonde con il minutaggio, e invisibile quando
+  la barra è chiusa.
 - **Volume unico dell'app**: il livello 0–15 è uno solo per Live, film, serie e
   mini-player della **Guida TV**, salvato in `fvp_player_volume.preferences_pb`.
   Il mini-player parte dal livello salvato (mai più a palla dopo che è stato

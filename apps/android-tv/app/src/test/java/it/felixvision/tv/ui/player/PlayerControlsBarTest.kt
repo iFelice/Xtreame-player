@@ -19,6 +19,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.theme.FvpTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -60,6 +61,13 @@ class PlayerControlsBarTest {
             }
         }
         rule.waitForIdle()
+
+        // L'ora sta in basso a destra, non accanto al titolo: così non si
+        // confonde con il minutaggio della riproduzione.
+        val bar = rule.onNodeWithTag("player_controls_bar").fetchSemanticsNode().boundsInRoot
+        val clock = rule.onNodeWithTag("player_controls_clock").fetchSemanticsNode().boundsInRoot
+        assertTrue("l'ora deve stare a destra", clock.left > bar.left + bar.width / 2f)
+        assertTrue("l'ora deve stare in basso", clock.top > bar.top + bar.height / 2f)
 
         val progress = rule.onNodeWithTag("player_progress")
         progress.assertIsFocused()

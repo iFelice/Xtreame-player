@@ -1223,12 +1223,14 @@ fun FvpMainScreen(
         // ogni ricomposizione e il focus tornerebbe sulla prima categoria.
         val groups = remember(adding, catalogNow, visibleMyChannels) {
             if (adding) {
-                // In aggiunta i canali già presenti non si mostrano: sono già
-                // dentro, e il numero sul tasto deve dire quanti ne entrano.
+                // In aggiunta i canali già presenti restano visibili in fondo
+                // alla categoria, in grigio con il simbolo della TV: non si
+                // possono scegliere (il numero sul tasto conta solo quelli che
+                // entrano davvero), ma si vede subito cosa è già dentro.
                 myChannelPickerGroups(
                     categories = catalogNow?.liveCategories.orEmpty(),
-                    streams = catalogNow?.liveStreams.orEmpty()
-                        .filterNot { it.streamId in visibleMyChannelIds },
+                    streams = catalogNow?.liveStreams.orEmpty(),
+                    mine = visibleMyChannelIds,
                 )
             } else {
                 myChannelRemovalGroups(
@@ -1241,7 +1243,13 @@ fun FvpMainScreen(
         val allIds = groups.flatMap { it.streamIds }
         Dialog(
             onDismissRequest = { closeMyChannelPicker() },
-            properties = DialogProperties(usePlatformDefaultWidth = false),
+            // La pagina ha due livelli: Indietro deve prima uscire dalla
+            // categoria, e il gesto lo gestisce la pagina. Con il valore
+            // predefinito la finestra chiuderebbe tutto al primo Indietro.
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                dismissOnBackPress = false,
+            ),
         ) {
             BackHandler { closeMyChannelPicker() }
             Box(

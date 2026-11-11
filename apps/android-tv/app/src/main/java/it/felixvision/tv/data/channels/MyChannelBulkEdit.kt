@@ -157,11 +157,33 @@ data class MyChannelPickerGroup(
     val categoryId: String?,
     val name: String,
     val streams: List<LiveStream>,
+    /**
+     * Canali di questa categoria che sono **già** in "I miei canali".
+     *
+     * Nell'aggiunta restano visibili, ma non si possono scegliere: sparire era
+     * il modo più rapido per aggiungere due volte lo stesso canale senza
+     * accorgersene. La pagina li mostra in fondo al gruppo, in grigio, con il
+     * simbolo della TV. Nella rimozione è sempre vuota.
+     */
+    val alreadyMine: List<LiveStream> = emptyList(),
 ) {
     val total: Int get() = streams.size
 
+    /** Canali già in "I miei canali" in questa categoria. */
+    val alreadyMineIds: List<String> get() = alreadyMine.map { it.streamId }
+
+    /** Canali del catalogo più quelli già miei: è il totale della riga. */
+    val visibleTotal: Int get() = total + alreadyMine.size
+
+    /** Canali che si possono ancora scegliere (quelli già miei esclusi). */
+    val selectableTotal: Int get() = total
+
     /** Canali del gruppo nell'ordine del catalogo (o personale, in rimozione). */
     val streamIds: List<String> get() = streams.map { it.streamId }
+
+    /** Vero se il canale è già in "I miei canali" (solo in aggiunta). */
+    fun isAlreadyMine(streamId: String): Boolean =
+        alreadyMine.any { it.streamId == streamId }
 
     /** Quanti canali del gruppo sono nella [selected]. */
     fun checkedCount(selected: Collection<String>): Int =
@@ -190,31 +212,43 @@ data class MyChannelPickerGroup(
 fun myChannelPickerGroups(
     categories: List<Category>,
     streams: List<LiveStream>,
+    /**
+     * Canali già in "I miei canali": restano nei gruppi come [MyChannelPickerGroup.alreadyMine],
+     * così si vedono (con il simbolo della TV) invece di sparire dalla pagina.
+     */
+    mine: Set<String> = emptySet(),
 ): List<MyChannelPickerGroup> {
     val known = categories.map { it.categoryId }.toSet()
     val groups = mutableListOf<MyChannelPickerGroup>()
     val used = mutableSetOf<String>()
+    // I già miei si tolgono dai selezionabili: una categoria che ha solo canali
+    // già presenti resta visibile (tutta con la TV), altrimenti l'utente non
+    // capirebbe dove sono finiti.
+    fun groupOf(categoryId: String?, name: String, all: List<LiveStream>): MyChannelPickerGroup? {
+        if (all.isEmpty()) return null
+        val selectable = all.filterNot { it.streamId in mine }
+        val already = all.filter { it.streamId in mine }
+        if (selectable.isEmpty() && already.isEmpty()) return null
+        return MyChannelPickerGroup(
+            categoryId = categoryId,
+            name = name,
+            streams = selectable,
+            alreadyMine = already,
+        )
+    }
     categories.forEach { category ->
         val id = category.categoryId
         // Un `category_id` ripetuto dal provider resterebbe una chiave
         // duplicata nella lista e la farebbe crashare: vale la prima.
         if (!used.add(id)) return@forEach
-        val inCategory = liveStreamsOfCategory(streams, id)
-        if (inCategory.isEmpty()) return@forEach
-        groups += MyChannelPickerGroup(
+        groupOf(
             categoryId = id,
             name = category.categoryName?.takeIf { it.isNotBlank() } ?: MY_CHANNEL_UNNAMED_CATEGORY,
-            streams = inCategory,
-        )
+            all = liveStreamsOfCategory(streams, id),
+        )?.let { groups += it }
     }
     val orphans = streams.filter { it.categoryId == null || it.categoryId !in known }
-    if (orphans.isNotEmpty()) {
-        groups += MyChannelPickerGroup(
-            categoryId = null,
-            name = MY_CHANNEL_NO_CATEGORY,
-            streams = orphans,
-        )
-    }
+    groupOf(categoryId = null, name = MY_CHANNEL_NO_CATEGORY, all = orphans)?.let { groups += it }
     return groups
 }
 

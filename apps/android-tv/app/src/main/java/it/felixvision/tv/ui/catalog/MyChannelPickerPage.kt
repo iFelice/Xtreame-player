@@ -2,12 +2,16 @@ package it.felixvision.tv.ui.catalog
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -21,16 +25,25 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Border
 import androidx.tv.material3.DenseListItem
+import androidx.tv.material3.Icon
 import androidx.tv.material3.ListItemDefaults
 import androidx.tv.material3.Text
+import it.felixvision.tv.R
 import it.felixvision.tv.data.catalog.LiveStream
 import it.felixvision.tv.data.channels.MyChannelPickerGroup
 import it.felixvision.tv.ui.components.FvpCompactButton
@@ -38,6 +51,7 @@ import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.components.focusSafePadding
 import it.felixvision.tv.ui.components.fvpLongPress
 import it.felixvision.tv.ui.theme.FvpColors
+import it.felixvision.tv.ui.theme.glassBorder
 import it.felixvision.tv.ui.theme.rowSpacing
 import it.felixvision.tv.ui.theme.rowText
 import it.felixvision.tv.ui.theme.settingsRowText
@@ -50,6 +64,8 @@ object MyChannelPickerTexts {
     const val EMPTY = "Nessun canale disponibile"
     const val ALL_CHANNELS = "Tutti i canali"
     const val ALL_CATEGORY = "Tutta la categoria"
+    const val ALREADY_MINE = "Già in I miei canali"
+    const val ALREADY_ALL = "Tutti i canali sono già in I miei canali"
     const val CHECK = "✓ "
     const val PARTIAL = "• "
 
@@ -68,6 +84,7 @@ const val MY_CHANNEL_PICKER_CONFIRM_TAG = "my_channel_picker_confirm"
 const val MY_CHANNEL_PICKER_EMPTY_TAG = "my_channel_picker_empty"
 const val MY_CHANNEL_PICKER_BACK_TAG = "my_channel_picker_back"
 const val MY_CHANNEL_PICKER_ALL_TAG = "my_channel_picker_all"
+const val MY_CHANNEL_PICKER_MINE_BADGE_TAG = "my_channel_picker_mine_badge"
 
 private const val PICKER_ALL_KEY = "all"
 private const val NO_CATEGORY_KEY = "others"
@@ -80,6 +97,10 @@ fun myChannelPickerCategoryTag(categoryId: String?): String =
 
 fun myChannelPickerStreamTag(streamId: String): String =
     "my_channel_picker_stream_$streamId"
+
+/** Riga di un canale che è già in "I miei canali": simbolo della TV. */
+fun myChannelPickerAlreadyMineTag(streamId: String): String =
+    "my_channel_picker_mine_$streamId"
 
 /** Riga "Tutta la categoria" dentro la categoria aperta. */
 fun myChannelPickerWholeCategoryTag(categoryId: String?): String =
@@ -133,6 +154,38 @@ fun MyChannelPickerPage(
     // torna all'elenco invece di restare su una pagina vuota.
     val openGroup = groups.firstOrNull { it.key == openKey }
 
+    /**
+     * Torna all'elenco ricordando la categoria da cui si esce. Da qui Indietro
+     * deve **uscire dalla categoria**, non chiudere la pagina: per questo la
+     * gestione del tasto sta sotto, non nel chiamante.
+     */
+    fun backToCategories() {
+        openGroup?.let { focusOnReturn = it.key }
+        openKey = null
+    }
+
+    // Indietro: dentro una categoria torna all'elenco, dall'elenco chiude la
+    // pagina. `onPreviewKeyEvent` (non solo `BackHandler`) perché il Dialog che
+    // ospita la pagina intercetta il tasto prima della gerarchia di focus: si
+    // consuma KeyDown e si agisce al rilascio, come nelle altre finestre
+    // dell'app, senza doppi effetti. Il BackHandler resta come riserva per
+    // quando il focus è uscito dalla pagina.
+    val backHandler = {
+        if (openGroup != null) backToCategories() else onBack()
+    }
+    BackHandler { backHandler() }
+    val backKeys = Modifier.onPreviewKeyEvent { event ->
+        if (event.key != Key.Back) return@onPreviewKeyEvent false
+        when (event.type) {
+            KeyEventType.KeyDown -> true
+            KeyEventType.KeyUp -> {
+                backHandler()
+                true
+            }
+            else -> false
+        }
+    }
+
     if (openGroup == null) {
         PickerCategoriesLevel(
             adding = adding,
@@ -147,14 +200,9 @@ fun MyChannelPickerPage(
             onConfirm = onConfirm,
             onBack = onBack,
             scale = scale,
-            modifier = modifier,
+            modifier = modifier.then(backKeys),
         )
     } else {
-        // Indietro dentro una categoria non chiude la pagina: torna all'elenco.
-        // `BackHandler` è annidato dentro quello della finestra che ospita la
-        // pagina, quindi questo vince: il primo Indietro esce dalla categoria,
-        // il secondo chiude la pagina (gestito dal chiamante).
-        BackHandler { focusOnReturn = openGroup.key; openKey = null }
         PickerChannelsLevel(
             adding = adding,
             group = openGroup,
@@ -163,9 +211,9 @@ fun MyChannelPickerPage(
             onToggleStream = onToggleStream,
             onToggleGroup = { onToggleGroup(openGroup) },
             onConfirm = onConfirm,
-            onBack = { focusOnReturn = openGroup.key; openKey = null },
+            onBack = { backToCategories() },
             scale = scale,
-            modifier = modifier,
+            modifier = modifier.then(backKeys),
         )
     }
 }
@@ -193,18 +241,34 @@ private fun PickerCategoriesLevel(
     }
     val allStreamIds = remember(groups) { groups.flatMap { it.streamIds } }
     val totalChannels = remember(groups) { groups.sumOf { it.total } }
+    val totalAlreadyMine = remember(groups) { groups.sumOf { it.alreadyMine.size } }
     // "Tutti i canali" solo con più di un gruppo: con uno solo coinciderebbe
-    // con l'unica categoria presente.
-    val allRowVisible = groups.size > 1
+    // con l'unica categoria presente. Con tutto già scelto non serve a niente.
+    val allRowVisible = groups.size > 1 && allStreamIds.isNotEmpty()
 
+    // Il focus iniziale si chiede una volta sola: senza questo, azzerando
+    // `focusOnReturn` dopo il ritorno l'effetto ripartirebbe e riporterebbe il
+    // focus sulla **prima** categoria, annullando il ripristino.
+    var initialFocusDone by remember { mutableStateOf(false) }
     LaunchedEffect(groups, focusOnReturn) {
-        withFrameNanos { }
-        // Si torna da una categoria: il focus va lì. All'apertura, sulla prima.
-        val target = focusOnReturn ?: groups.firstOrNull()?.key
-        if (target != null) {
-            runCatching { focusRequesters[target]?.requestFocus() }
-            if (focusOnReturn != null) onFocusRestored()
+        val returning = focusOnReturn != null
+        if (!returning && initialFocusDone) return@LaunchedEffect
+        val target = focusOnReturn ?: groups.firstOrNull()?.key ?: return@LaunchedEffect
+        if (returning) {
+            // Tornando da una categoria la sua riga può essere fuori schermo:
+            // una LazyColumn compone solo ciò che si vede, quindi senza lo
+            // scroll il suo FocusRequester non esisterebbe e il focus
+            // tornerebbe sulla prima categoria. Si scorre prima, si chiede il
+            // focus al frame dopo, quando la riga è composta.
+            val index = groups.indexOfFirst { it.key == target }
+            if (index >= 0) {
+                runCatching { listState.scrollToItem(index + (if (allRowVisible) 1 else 0)) }
+            }
         }
+        withFrameNanos { }
+        runCatching { focusRequesters[target]?.requestFocus() }
+        initialFocusDone = true
+        if (returning) onFocusRestored()
     }
 
     Column(
@@ -213,7 +277,12 @@ private fun PickerCategoriesLevel(
     ) {
         PickerHeader(
             title = if (adding) MyChannelPickerTexts.ADD_TITLE else MyChannelPickerTexts.REMOVE_TITLE,
-            subtitle = if (totalChannels > 0) "$totalChannels canali in ${groups.size} categorie" else null,
+            subtitle = when {
+                totalChannels == 0 && totalAlreadyMine > 0 -> MyChannelPickerTexts.ALREADY_ALL
+                totalChannels == 0 -> null
+                totalAlreadyMine > 0 -> "$totalChannels canali in ${groups.size} categorie · $totalAlreadyMine già tuoi"
+                else -> "$totalChannels canali in ${groups.size} categorie"
+            },
             onBack = onBack,
             scale = scale,
         )
@@ -247,6 +316,7 @@ private fun PickerCategoriesLevel(
             }
             items(groups, key = { "cat_${it.key}" }) { group ->
                 val checkedInGroup = group.checkedCount(selected)
+                val alreadyInGroup = group.alreadyMine.size
                 val prefix = when {
                     group.allChecked(selected) -> MyChannelPickerTexts.CHECK
                     group.someChecked(selected) -> MyChannelPickerTexts.PARTIAL
@@ -255,8 +325,14 @@ private fun PickerCategoriesLevel(
                 PickerRow(
                     headline = prefix + group.name,
                     // Conteggio sempre visibile: dice quanto è già scelto senza
-                    // dover entrare.
-                    trailing = if (checkedInGroup > 0) "$checkedInGroup/${group.total}" else "${group.total}",
+                    // dover entrare. `· n 📺` sono i canali già miei.
+                    trailing = buildString {
+                        append(
+                            if (checkedInGroup > 0) "$checkedInGroup/${group.total}"
+                            else "${group.total}"
+                        )
+                        if (alreadyInGroup > 0) append(" · $alreadyInGroup 📺")
+                    },
                     scale = scale,
                     modifier = Modifier
                         .focusRequester(focusRequesters.getValue(group.key))
@@ -358,6 +434,19 @@ private fun PickerChannelsLevel(
                     onClick = { onToggleStream(stream.streamId) },
                 )
             }
+            // In fondo, i canali già in "I miei canali": restano visibili con il
+            // simbolo della TV così non li si cerca invano e non si aggiungono
+            // due volte, ma non prendono il focus (non c'è niente da scegliere).
+            items(group.alreadyMine, key = { "mine_${it.streamId}" }) { stream ->
+                PickerRow(
+                    headline = stream.name,
+                    scale = scale,
+                    trailing = MyChannelPickerTexts.ALREADY_MINE,
+                    selectable = false,
+                    modifier = Modifier.testTag(myChannelPickerAlreadyMineTag(stream.streamId)),
+                    onClick = {},
+                )
+            }
         }
         PickerConfirmButton(
             adding = adding,
@@ -451,7 +540,43 @@ private fun PickerRow(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
     trailing: String? = null,
+    // Riga informativa (canale già in "I miei canali"): si legge e basta, non
+    // prende il focus e non risponde a OK.
+    selectable: Boolean = true,
 ) {
+    if (!selectable) {
+        // Niente DenseListItem: è un elemento interattivo per costruzione, si
+        // prenderebbe il focus e lascerebbe credere che OK faccia qualcosa.
+        Row(
+            modifier = modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(scale.dp(8f)))
+                .background(FvpColors.SurfaceElevated.copy(alpha = 0.55f))
+                .border(scale.glassBorder, FvpColors.GlassBorder, RoundedCornerShape(scale.dp(8f)))
+                .padding(horizontal = scale.dp(16f), vertical = scale.dp(10f)),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(scale.dp(10f)),
+        ) {
+            MyChannelTvBadge(scale = scale)
+            Text(
+                text = headline,
+                color = FvpColors.TextSecondary,
+                fontSize = scale.rowText,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            if (trailing != null) {
+                Text(
+                    text = trailing,
+                    color = FvpColors.TextSecondary.copy(alpha = 0.7f),
+                    fontSize = scale.settingsRowText,
+                    maxLines = 1,
+                )
+            }
+        }
+        return
+    }
     DenseListItem(
         selected = false,
         onClick = onClick,
@@ -486,5 +611,22 @@ private fun PickerRow(
             focusedBorder = Border(BorderStroke(2.dp, FvpColors.GreenFocus)),
         ),
         shape = ListItemDefaults.shape(shape = RoundedCornerShape(scale.dp(8f))),
+    )
+}
+
+/**
+ * Piccolo simbolo della TV: dice che il canale è **già** in "I miei canali".
+ * Stessa idea della stella dei preferiti, ma per la lista personale: la TV è
+ * l'icona del menu Live, quindi si legge subito.
+ */
+@Composable
+private fun MyChannelTvBadge(scale: UiScale) {
+    Icon(
+        painter = painterResource(id = R.drawable.ic_nav_tv),
+        contentDescription = MyChannelPickerTexts.ALREADY_MINE,
+        tint = FvpColors.Inactive,
+        modifier = Modifier
+            .size(scale.dp(16f))
+            .testTag(MY_CHANNEL_PICKER_MINE_BADGE_TAG),
     )
 }

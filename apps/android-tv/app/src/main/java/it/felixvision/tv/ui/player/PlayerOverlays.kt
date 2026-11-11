@@ -84,6 +84,7 @@ import it.felixvision.tv.ui.components.ChannelLogoImage
 import it.felixvision.tv.ui.components.ChannelScheduleInfo
 import it.felixvision.tv.ui.components.MinuteClockText
 import it.felixvision.tv.ui.components.PLAYER_BANNER_CLOCK_TAG
+import it.felixvision.tv.ui.components.PLAYER_CONTROLS_CLOCK_TAG
 import it.felixvision.tv.ui.components.FocusMarqueeText
 import it.felixvision.tv.ui.components.FvpCompactButton
 import it.felixvision.tv.ui.components.FvpPrimaryButton
@@ -472,13 +473,6 @@ fun PlayerControlsBar(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
-            // Ora corrente anche in film e serie: sta nella barra comandi, dove
-            // c'è già il titolo, e non copre il minutaggio della riproduzione.
-            MinuteClockText(
-                scale = scale,
-                fontSize = scale.sp(15f),
-                color = FvpColors.TextSecondary,
-            )
         }
         Row(
             modifier = Modifier
@@ -560,12 +554,15 @@ fun PlayerControlsBar(
             modifier = Modifier.testTag("player_audio_format"),
         )
         Row(
-            modifier = Modifier.onPreviewKeyEvent { event ->
-                if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionUp) {
-                    progressFocusRequester.requestFocus()
-                    true
-                } else false
-            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .onPreviewKeyEvent { event ->
+                    if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionUp) {
+                        progressFocusRequester.requestFocus()
+                        true
+                    } else false
+                },
+            verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(scale.dp(12f)),
         ) {
             FvpCompactButton(
@@ -596,6 +593,18 @@ fun PlayerControlsBar(
                 scale = scale,
                 modifier = Modifier.testTag("player_format_button"),
             )
+            // Ora corrente in film e serie: angolo in basso a destra del
+            // pannello, sulla riga dei pulsanti. Qui è separata dalla durata
+            // (che sta sopra, sulla barra di avanzamento) invece di finirle
+            // accanto e sembrare un pezzo del minutaggio.
+            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
+                MinuteClockText(
+                    scale = scale,
+                    fontSize = scale.sp(15f),
+                    color = FvpColors.TextSecondary,
+                    modifier = Modifier.testTag(PLAYER_CONTROLS_CLOCK_TAG),
+                )
+            }
         }
     }
 }
