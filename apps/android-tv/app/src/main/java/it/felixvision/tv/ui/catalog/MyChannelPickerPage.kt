@@ -246,24 +246,29 @@ private fun PickerCategoriesLevel(
     // con l'unica categoria presente. Con tutto già scelto non serve a niente.
     val allRowVisible = groups.size > 1 && allStreamIds.isNotEmpty()
 
+    // Il focus iniziale si chiede una volta sola: senza questo, azzerando
+    // `focusOnReturn` dopo il ritorno l'effetto ripartirebbe e riporterebbe il
+    // focus sulla **prima** categoria, annullando il ripristino.
+    var initialFocusDone by remember { mutableStateOf(false) }
     LaunchedEffect(groups, focusOnReturn) {
-        withFrameNanos { }
-        val target = focusOnReturn ?: groups.firstOrNull()?.key
-        if (target != null) {
+        val returning = focusOnReturn != null
+        if (!returning && initialFocusDone) return@LaunchedEffect
+        val target = focusOnReturn ?: groups.firstOrNull()?.key ?: return@LaunchedEffect
+        if (returning) {
             // Tornando da una categoria la sua riga può essere fuori schermo:
             // una LazyColumn compone solo ciò che si vede, quindi senza lo
             // scroll il suo FocusRequester non esisterebbe e il focus
             // tornerebbe sulla prima categoria. Si scorre prima, si chiede il
             // focus al frame dopo, quando la riga è composta.
             val index = groups.indexOfFirst { it.key == target }
-            if (focusOnReturn != null && index >= 0) {
-                val listIndex = index + (if (allRowVisible) 1 else 0)
-                runCatching { listState.scrollToItem(listIndex) }
+            if (index >= 0) {
+                runCatching { listState.scrollToItem(index + (if (allRowVisible) 1 else 0)) }
             }
-            withFrameNanos { }
-            runCatching { focusRequesters[target]?.requestFocus() }
-            if (focusOnReturn != null) onFocusRestored()
         }
+        withFrameNanos { }
+        runCatching { focusRequesters[target]?.requestFocus() }
+        initialFocusDone = true
+        if (returning) onFocusRestored()
     }
 
     Column(
