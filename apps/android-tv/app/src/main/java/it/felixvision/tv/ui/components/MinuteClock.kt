@@ -72,3 +72,6 @@ const val PLAYER_CLOCK_TAG = "player_clock"
 
 /** Tag di test dell'ora dentro il banner del canale (Live). */
 const val PLAYER_BANNER_CLOCK_TAG = "player_banner_clock"
+
+/** Ora nella barra comandi del player (film e serie), in basso a destra. */
+const val PLAYER_CONTROLS_CLOCK_TAG = "player_controls_clock"

@@ -122,6 +122,32 @@ class MyChannelBulkEditTest {
     }
 
     @Test
+    fun `i canali già miei restano nel gruppo ma non sono selezionabili`() {
+        val categories = listOf(category("1", "Serie A"), category("2", "Sport"))
+        val streams = listOf(stream("a", "1"), stream("b", "1"), stream("s", "2"))
+        val groups = myChannelPickerGroups(categories, streams, mine = setOf("b", "s"))
+        // Tutti i canali del catalogo restano visibili: nessuno sparisce.
+        assertEquals(listOf("a"), groups[0].streamIds)
+        assertEquals(listOf("b"), groups[0].alreadyMineIds)
+        assertEquals(2, groups[0].visibleTotal)
+        // La categoria con soli canali già miei resta, così si vede dove sono.
+        assertEquals(emptyList<String>(), groups[1].streamIds)
+        assertEquals(listOf("s"), groups[1].alreadyMineIds)
+        assertTrue(groups[0].isAlreadyMine("b"))
+        assertFalse(groups[0].isAlreadyMine("a"))
+    }
+
+    @Test
+    fun `senza canali già miei i gruppi sono come prima`() {
+        val categories = listOf(category("1", "Serie A"))
+        val streams = listOf(stream("a", "1"), stream("b", "1"))
+        val groups = myChannelPickerGroups(categories, streams)
+        assertEquals(listOf("a", "b"), groups[0].streamIds)
+        assertTrue(groups[0].alreadyMine.isEmpty())
+        assertEquals(2, groups[0].visibleTotal)
+    }
+
+    @Test
     fun `i canali senza categoria finiscono in Altri canali`() {
         val categories = listOf(category("1", "Serie A"))
         val streams = listOf(stream("a", "1"), stream("x", null), stream("y", "sconosciuta"))
