@@ -679,6 +679,7 @@ export default function App() {
               onSelectLiveChannel={isWebOs ? handleSelectLiveChannel : undefined}
               onFullscreenChange={setIsPlayerFullscreen}
               accountKey={currentAccountKey}
+              allowedLiveFormats={authData?.user_info?.allowed_output_formats}
             />
           </section>
         )}

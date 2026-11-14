@@ -1,19 +1,25 @@
 import { describe, expect, it } from 'vitest';
 import {
+  WEBOS_LIVE_INTERRUPTION_WINDOW_MS,
+  WEBOS_LIVE_LEARN_STABILITY_MS,
+  allowedLiveStreamFormats,
   canFallbackToMpegTs,
+  decideWebOsLiveInterruption,
   defaultLiveStreamFormat,
   isPublicMockStream,
   liveFormatForChannel,
   nextLiveFormatAfterFailure,
   normalizeLiveStreamUrl,
+  selectWebOsInitialLiveFormat,
+  shouldLearnWebOsLiveFormat,
 } from './streamFormat';
 
 describe('live stream format', () => {
   it('switches regular Xtream URLs without losing query parameters', () => {
-    expect(normalizeLiveStreamUrl('http://localhost/live/demo/demo/12.ts?token=x', 'm3u8'))
-      .toBe('http://localhost/live/demo/demo/12.m3u8?token=x');
-    expect(normalizeLiveStreamUrl('http://localhost/live/demo/demo/12.m3u8', 'ts'))
-      .toBe('http://localhost/live/demo/demo/12.ts');
+    expect(normalizeLiveStreamUrl('http://server.esempio:8080/live/demo/demo/12.ts?token=x', 'm3u8'))
+      .toBe('http://server.esempio:8080/live/demo/demo/12.m3u8?token=x');
+    expect(normalizeLiveStreamUrl('http://server.esempio:8080/live/demo/demo/12.m3u8', 'ts'))
+      .toBe('http://server.esempio:8080/live/demo/demo/12.ts');
   });
 
   it('keeps public mock streams on HLS even when MPEG-TS is requested', () => {
@@ -33,18 +39,59 @@ describe('live stream format', () => {
     expect(isPublicMockStream('https://example.test/live/public_news.ts')).toBe(false);
   });
 
-  it('starts webOS Live with TS and gives every channel one TS to HLS retry', () => {
-    expect(defaultLiveStreamFormat('webos')).toBe('ts');
+  it('keeps browser HLS-to-TS fallback while webOS defaults to HLS after the native TS measurement', () => {
+    expect(defaultLiveStreamFormat('webos')).toBe('m3u8');
     expect(defaultLiveStreamFormat('web')).toBe('m3u8');
-    expect(liveFormatForChannel('webos', 'live_1', 'live_2', 'm3u8')).toBe('ts');
+    expect(liveFormatForChannel('webos', 'live_1', 'live_2', 'ts')).toBe('m3u8');
     expect(nextLiveFormatAfterFailure({
-      target: 'webos', currentFormat: 'ts', fallbackAlreadyTried: false, canSwitchFormat: true,
-    })).toEqual({ kind: 'retry', format: 'm3u8' });
-    expect(nextLiveFormatAfterFailure({
-      target: 'webos', currentFormat: 'm3u8', fallbackAlreadyTried: false, canSwitchFormat: true,
-    })).toEqual({ kind: 'fail' });
-    expect(nextLiveFormatAfterFailure({
-      target: 'webos', currentFormat: 'ts', fallbackAlreadyTried: true, canSwitchFormat: true,
-    })).toEqual({ kind: 'fail' });
+      target: 'web', currentFormat: 'm3u8', fallbackAlreadyTried: false, canSwitchFormat: true,
+    })).toEqual({ kind: 'retry', format: 'ts' });
+  });
+
+  it('uses allowed live formats and the documented webOS start priority', () => {
+    expect(allowedLiveStreamFormats()).toEqual(['m3u8', 'ts']);
+    expect(allowedLiveStreamFormats([])).toEqual(['m3u8', 'ts']);
+    expect(allowedLiveStreamFormats(['ts'])).toEqual(['ts']);
+    expect(allowedLiveStreamFormats(['m3u8'])).toEqual(['m3u8']);
+    expect(allowedLiveStreamFormats(['TS', 'm3u8', 'mp4'])).toEqual(['m3u8', 'ts']);
+
+    expect(selectWebOsInitialLiveFormat({ allowedFormats: ['ts'] })).toBe('ts');
+    expect(selectWebOsInitialLiveFormat({ allowedFormats: ['m3u8'] })).toBe('m3u8');
+    expect(selectWebOsInitialLiveFormat({ allowedFormats: ['ts', 'm3u8'] })).toBe('m3u8');
+    expect(selectWebOsInitialLiveFormat({ allowedFormats: ['ts', 'm3u8'], learnedFormat: 'ts' })).toBe('ts');
+    expect(selectWebOsInitialLiveFormat({
+      allowedFormats: ['ts', 'm3u8'], manualFormat: 'm3u8', learnedFormat: 'ts',
+    })).toBe('m3u8');
+  });
+
+  it('does not recover a user pause and restarts sparse versus clustered interruptions correctly', () => {
+    expect(decideWebOsLiveInterruption({
+      desiredPlaying: false, now: 5_000, lastRecoveryAt: 0, interruptionCount: 2,
+      automaticFormatSwitchUsed: false, currentFormat: 'm3u8', allowedFormats: ['m3u8', 'ts'],
+    })).toEqual({ kind: 'ignore', interruptionCount: 2 });
+
+    expect(decideWebOsLiveInterruption({
+      desiredPlaying: true, now: WEBOS_LIVE_INTERRUPTION_WINDOW_MS + 1, lastRecoveryAt: 0, interruptionCount: 2,
+      automaticFormatSwitchUsed: false, currentFormat: 'm3u8', allowedFormats: ['m3u8', 'ts'],
+    })).toEqual({ kind: 'restart', interruptionCount: 1 });
+    expect(decideWebOsLiveInterruption({
+      desiredPlaying: true, now: WEBOS_LIVE_INTERRUPTION_WINDOW_MS + 1, lastRecoveryAt: 0, interruptionCount: 3,
+      automaticFormatSwitchUsed: true, currentFormat: 'ts', allowedFormats: ['m3u8', 'ts'],
+    })).toEqual({ kind: 'restart', interruptionCount: 1 });
+
+    expect(decideWebOsLiveInterruption({
+      desiredPlaying: true, now: 2_000, lastRecoveryAt: 1_000, interruptionCount: 2,
+      automaticFormatSwitchUsed: false, currentFormat: 'm3u8', allowedFormats: ['m3u8', 'ts'],
+    })).toEqual({ kind: 'switch-format', interruptionCount: 3, format: 'ts' });
+    expect(decideWebOsLiveInterruption({
+      desiredPlaying: true, now: 3_000, lastRecoveryAt: 2_000, interruptionCount: 3,
+      automaticFormatSwitchUsed: true, currentFormat: 'ts', allowedFormats: ['m3u8', 'ts'],
+    })).toEqual({ kind: 'error', interruptionCount: 4 });
+  });
+
+  it('learns only a format that survived a full automatic-switch stability window', () => {
+    expect(shouldLearnWebOsLiveFormat({ automaticallySwitched: false, stableForMs: WEBOS_LIVE_LEARN_STABILITY_MS })).toBe(false);
+    expect(shouldLearnWebOsLiveFormat({ automaticallySwitched: true, stableForMs: WEBOS_LIVE_LEARN_STABILITY_MS - 1 })).toBe(false);
+    expect(shouldLearnWebOsLiveFormat({ automaticallySwitched: true, stableForMs: WEBOS_LIVE_LEARN_STABILITY_MS })).toBe(true);
   });
 });

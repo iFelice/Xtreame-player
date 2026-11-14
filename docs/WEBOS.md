@@ -41,6 +41,45 @@ Developer Mode è [LG_DEVMODE_RENEW.md](LG_DEVMODE_RENEW.md).
   **"Vuoi uscire?"**. Il focus resta nella finestra; solo **Esci** chiama
   `window.close()`.
 
+## Live nativo: formati e recupero
+
+Le misure su un TV LG con l'elemento video nativo hanno mostrato che un Live
+`.ts` può avviarsi e terminare dopo circa otto secondi (`pause` e `ended`, con
+`readyState` 4 e senza errore), mentre lo stesso canale in `.m3u8` continua a
+riprodurre. Per questo la build `VITE_TARGET=webos` non considera più `.ts` il
+formato predefinito: prova prima HLS (`.m3u8`). Questa logica è isolata dalla
+build webOS; browser, build statica, Apple e Capacitor mantengono il loro
+comportamento precedente.
+
+- I soli formati Live considerati sono `m3u8` e `ts`, letti da
+  `user_info.allowed_output_formats`. Se l'elenco non c'è, è vuoto o non
+  contiene un formato utilizzabile, entrambi restano tentabili.
+- Per ogni canale la priorità è: scelta manuale locale, formato imparato sul
+  dispositivo, `m3u8` se ammesso, poi `ts` se HLS non è ammesso. La scelta
+  manuale vale solo per quel canale e non viene salvata.
+- Un `ended` non richiesto è un'interruzione. Dopo una riproduzione già avviata,
+  anche `waiting`/`stalled` continui per 10 secondi sono uno stallo; una pausa
+  scelta con Play/Pausa o OK non avvia alcun recupero.
+- Le prime due interruzioni entro 60 secondi dall'ultimo recupero rilasciano
+  completamente il video e riavviano lo stesso formato dopo 1 secondo. Alla
+  terza viene provato una sola volta l'altro formato ammesso. Se fallisce anche
+  quello, compare il pannello con **Riprova** e **Passa a formato**. Una
+  interruzione oltre la finestra di 60 secondi riporta il conteggio a uno.
+- Ogni riavvio e cambio formato esegue prima la sequenza di rilascio della
+  connessione precedente, evitando due stream nativi contemporanei.
+- Quando un formato scelto automaticamente resta stabile per 30 secondi viene
+  salvato, se disponibile, in `localStorage` con la chiave
+  `fvp.webos.liveFormat`; i canali successivi lo useranno come preferenza.
+  Lettura e scrittura sono protette, quindi l'assenza di storage non blocca la
+  riproduzione.
+
+Le costanti in `src/player/streamFormat.ts` sono:
+`WEBOS_LIVE_RESTART_DELAY_MS = 1000`,
+`WEBOS_LIVE_STALL_TIMEOUT_MS = 10000`,
+`WEBOS_LIVE_INTERRUPTION_WINDOW_MS = 60000`,
+`WEBOS_LIVE_AUTOMATIC_RESTART_LIMIT = 2` e
+`WEBOS_LIVE_LEARN_STABILITY_MS = 30000`.
+
 ## Smoke test
 
 ```bash

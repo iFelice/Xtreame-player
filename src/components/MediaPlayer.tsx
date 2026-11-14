@@ -1,5 +1,5 @@
 import { RemoteImage } from './RemoteImage';
-import React, { useEffect, useRef, useState, useCallback, useReducer } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo, useReducer } from 'react';
 import {
   Play,
   Pause,
@@ -33,11 +33,19 @@ import { initialPlaybackState, isPlaybackLoading, playbackReducer } from '../pla
 import { destroyMediaEngines, releaseVideoElement, selectMediaEngine } from '../player/mediaEngine';
 import { HLS_CONFIG, MPEGTS_CONFIG } from '../player/engineConfig';
 import {
+  WEBOS_LIVE_LEARN_STABILITY_MS,
+  WEBOS_LIVE_RESTART_DELAY_MS,
+  WEBOS_LIVE_STALL_TIMEOUT_MS,
+  allowedLiveStreamFormats,
+  alternateAllowedLiveFormat,
   canFallbackToMpegTs,
+  decideWebOsLiveInterruption,
   defaultLiveStreamFormat,
   isPublicMockStream,
-  liveFormatForChannel,
   nextLiveFormatAfterFailure,
+  selectWebOsInitialLiveFormat,
+  shouldLearnWebOsLiveFormat,
+  type LiveStreamFormat,
   type PlaybackTarget,
 } from '../player/streamFormat';
 import { isDirectMode, isWebOsBuild } from '../platform/runtime';
@@ -62,6 +70,36 @@ interface MediaPlayerProps {
   onSelectLiveChannel?: (channel: PlayableMediaItem) => void;
   onFullscreenChange?: (isFullscreen: boolean) => void;
   accountKey?: string;
+  /** Formats declared by Xtream user_info; only webOS Live consumes this. */
+  allowedLiveFormats?: string[];
+}
+
+const WEBOS_LIVE_FORMAT_STORAGE_KEY = 'fvp.webos.liveFormat';
+const WEBOS_LIVE_INTERRUPTION_ERROR = 'La riproduzione live si è interrotta ripetutamente. Riprova o cambia formato.';
+
+type WebOsLiveRecovery = {
+  channelId: string | null;
+  interruptionCount: number;
+  lastRecoveryAt: number | null;
+  automaticFormatSwitchUsed: boolean;
+  learningFormat: LiveStreamFormat | null;
+};
+
+function readLearnedWebOsLiveFormat(): LiveStreamFormat | null {
+  try {
+    const value = localStorage.getItem(WEBOS_LIVE_FORMAT_STORAGE_KEY);
+    return value === 'm3u8' || value === 'ts' ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveLearnedWebOsLiveFormat(format: LiveStreamFormat): void {
+  try {
+    localStorage.setItem(WEBOS_LIVE_FORMAT_STORAGE_KEY, format);
+  } catch {
+    // Storage is optional on older webOS firmware and private sessions.
+  }
 }
 
 export const MediaPlayer: React.FC<MediaPlayerProps> = ({
@@ -73,6 +111,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   onSelectLiveChannel,
   onFullscreenChange,
   accountKey,
+  allowedLiveFormats,
 }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -116,7 +155,6 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   const isDirect = isDirectMode() || (typeof window !== 'undefined' && window.location.protocol === 'capacitor:');
   const playbackTarget: PlaybackTarget = isWebOs ? 'webos' : 'web';
   const isSafeMode = typeof window !== 'undefined' && !staticDeploy && !isNative && sessionStorage.getItem('xtream_safe_mode') === '1';
-  const canSwitchLiveFormat = Boolean(!appleMobile && media?.type === 'live' && !isPublicMockStream(media.streamUrl));
   const [aspectRatio, setAspectRatio] = useState<'contain' | '16_9' | '4_3' | 'cover' | 'fill'>('contain');
   const [showSettings, setShowSettings] = useState<boolean>(false);
   // WebKit reports PiP availability per video element, and only after the
@@ -137,16 +175,72 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       return true;
     }
   });
-  const [liveFormatState, setLiveFormatState] = useState<'m3u8' | 'ts'>(() => defaultLiveStreamFormat(playbackTarget));
+  const allowedLiveFormatsKey = (allowedLiveFormats || []).join('|');
+  const webOsAllowedFormats = useMemo(
+    () => allowedLiveStreamFormats(allowedLiveFormats),
+    [allowedLiveFormatsKey],
+  );
+  const [liveFormatState, setLiveFormatState] = useState<LiveStreamFormat>(() => {
+    if (isWebOs && media?.type === 'live') {
+      return selectWebOsInitialLiveFormat({
+        allowedFormats: allowedLiveFormats,
+        learnedFormat: readLearnedWebOsLiveFormat(),
+      });
+    }
+    return defaultLiveStreamFormat(playbackTarget);
+  });
   const liveFormatChannelRef = useRef<string | null>(null);
   const liveFallbackChannelRef = useRef<string | null>(null);
-  const liveFormat = media?.type === 'live'
-    ? liveFormatForChannel(playbackTarget, liveFormatChannelRef.current, media.id, liveFormatState)
-    : liveFormatState;
-  const requestLiveFormat = useCallback((format: 'm3u8' | 'ts') => {
-    if (media?.type === 'live') liveFormatChannelRef.current = media.id;
+  const manualLiveFormatRef = useRef<{ channelId: string; format: LiveStreamFormat } | null>(null);
+  const webOsRecoveryRef = useRef<WebOsLiveRecovery>({
+    channelId: null,
+    interruptionCount: 0,
+    lastRecoveryAt: null,
+    automaticFormatSwitchUsed: false,
+    learningFormat: null,
+  });
+  const webOsRestartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const webOsStallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const webOsLearningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const manualLiveFormat = manualLiveFormatRef.current;
+  const currentManualLiveFormat = isWebOs && manualLiveFormat && manualLiveFormat.channelId === media?.id
+    ? manualLiveFormat.format
+    : null;
+  const liveFormat = currentManualLiveFormat || (isWebOs && media?.type === 'live' && liveFormatChannelRef.current !== media.id
+    ? selectWebOsInitialLiveFormat({
+        allowedFormats: allowedLiveFormats,
+        learnedFormat: readLearnedWebOsLiveFormat(),
+      })
+    : liveFormatState);
+  const manualAlternateLiveFormat = isWebOs
+    ? alternateAllowedLiveFormat(liveFormat, webOsAllowedFormats)
+    : (liveFormat === 'm3u8' ? 'ts' : 'm3u8');
+  const canSwitchLiveFormat = Boolean(
+    !appleMobile
+    && media?.type === 'live'
+    && !isPublicMockStream(media.streamUrl)
+    && manualAlternateLiveFormat,
+  );
+  const requestLiveFormat = useCallback((format: LiveStreamFormat, source: 'manual' | 'automatic' = 'automatic') => {
+    if (media?.type === 'live') {
+      liveFormatChannelRef.current = media.id;
+      if (isWebOs && source === 'manual') {
+        if (webOsLearningTimerRef.current) clearTimeout(webOsLearningTimerRef.current);
+        webOsLearningTimerRef.current = null;
+        manualLiveFormatRef.current = { channelId: media.id, format };
+        webOsRecoveryRef.current = {
+          channelId: media.id,
+          interruptionCount: 0,
+          lastRecoveryAt: null,
+          automaticFormatSwitchUsed: false,
+          learningFormat: null,
+        };
+      } else if (isWebOs) {
+        manualLiveFormatRef.current = null;
+      }
+    }
     setLiveFormatState(format);
-  }, [media?.id, media?.type]);
+  }, [media?.id, media?.type, isWebOs]);
   const [controlsFocused, setControlsFocused] = useState(false);
   const [channelListOpen, setChannelListOpen] = useState(false);
   const [channelListFocusIndex, setChannelListFocusIndex] = useState(0);
@@ -169,14 +263,53 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     if (media?.type !== 'live') {
       liveFormatChannelRef.current = null;
       liveFallbackChannelRef.current = null;
+      manualLiveFormatRef.current = null;
+      if (webOsRestartTimerRef.current) clearTimeout(webOsRestartTimerRef.current);
+      if (webOsStallTimerRef.current) clearTimeout(webOsStallTimerRef.current);
+      if (webOsLearningTimerRef.current) clearTimeout(webOsLearningTimerRef.current);
+      webOsRestartTimerRef.current = null;
+      webOsStallTimerRef.current = null;
+      webOsLearningTimerRef.current = null;
       return;
     }
-    if (playbackTarget === 'webos' && liveFormatChannelRef.current !== media.id) {
+    if (isWebOs && liveFormatChannelRef.current !== media.id) {
+      if (webOsRestartTimerRef.current) clearTimeout(webOsRestartTimerRef.current);
+      if (webOsStallTimerRef.current) clearTimeout(webOsStallTimerRef.current);
+      if (webOsLearningTimerRef.current) clearTimeout(webOsLearningTimerRef.current);
+      webOsRestartTimerRef.current = null;
+      webOsStallTimerRef.current = null;
+      webOsLearningTimerRef.current = null;
       liveFormatChannelRef.current = media.id;
       liveFallbackChannelRef.current = null;
-      setLiveFormatState(defaultLiveStreamFormat('webos'));
+      manualLiveFormatRef.current = null;
+      webOsRecoveryRef.current = {
+        channelId: media.id,
+        interruptionCount: 0,
+        lastRecoveryAt: null,
+        automaticFormatSwitchUsed: false,
+        learningFormat: null,
+      };
+      setLiveFormatState(selectWebOsInitialLiveFormat({
+        allowedFormats: allowedLiveFormats,
+        learnedFormat: readLearnedWebOsLiveFormat(),
+      }));
     }
-  }, [media?.id, media?.type, playbackTarget]);
+  }, [media?.id, media?.type, isWebOs, allowedLiveFormats]);
+
+  const clearWebOsLiveTimers = useCallback(() => {
+    if (webOsRestartTimerRef.current) clearTimeout(webOsRestartTimerRef.current);
+    if (webOsStallTimerRef.current) clearTimeout(webOsStallTimerRef.current);
+    if (webOsLearningTimerRef.current) clearTimeout(webOsLearningTimerRef.current);
+    webOsRestartTimerRef.current = null;
+    webOsStallTimerRef.current = null;
+    webOsLearningTimerRef.current = null;
+  }, []);
+
+  const releaseCurrentLiveConnection = useCallback(() => {
+    const video = videoRef.current;
+    destroyEngines();
+    if (video) releaseVideoElement(video);
+  }, [destroyEngines]);
 
   const clearPlaybackWatchdogs = useCallback(() => {
     if (startupTimeoutRef.current) clearTimeout(startupTimeoutRef.current);
@@ -191,7 +324,9 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       setErrorMessage(message);
       return;
     }
-    const canSwitch = Boolean(!appleMobile && canFallbackToMpegTs(media.type, media.streamUrl));
+    const canSwitch = isWebOs
+      ? Boolean(alternateAllowedLiveFormat(liveFormat, webOsAllowedFormats))
+      : Boolean(!appleMobile && canFallbackToMpegTs(media.type, media.streamUrl));
     // Keep the browser's established HLS-to-TS retry path unchanged. The
     // strict one-shot state machine is only a webOS connection guarantee.
     if (!isWebOs) {
@@ -211,12 +346,69 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     });
     if (decision.kind === 'retry') {
       liveFallbackChannelRef.current = media.id;
-      requestLiveFormat(decision.format);
+      // Startup fallback is also an automatic format change, so a stable
+      // replacement can be learned without treating it as a stall switch.
+      webOsRecoveryRef.current.learningFormat = decision.format;
+      requestLiveFormat(decision.format, 'automatic');
       return;
     }
     setIsLoading(false);
     setErrorMessage(message);
-  }, [media, isWebOs, playbackTarget, liveFormat, appleMobile, requestLiveFormat, setIsLoading, setErrorMessage]);
+  }, [media, isWebOs, playbackTarget, liveFormat, webOsAllowedFormats, appleMobile, requestLiveFormat, setIsLoading, setErrorMessage]);
+
+  const recoverWebOsLiveInterruption = useCallback(() => {
+    if (!isWebOs || media?.type !== 'live' || webOsRestartTimerRef.current) return;
+    const recovery = webOsRecoveryRef.current;
+    const decision = decideWebOsLiveInterruption({
+      desiredPlaying: desiredPlayingRef.current,
+      now: Date.now(),
+      lastRecoveryAt: recovery.lastRecoveryAt,
+      interruptionCount: recovery.interruptionCount,
+      automaticFormatSwitchUsed: recovery.automaticFormatSwitchUsed,
+      currentFormat: liveFormat,
+      allowedFormats: webOsAllowedFormats,
+    });
+    if (decision.kind === 'ignore') return;
+
+    recovery.interruptionCount = decision.interruptionCount;
+    recovery.lastRecoveryAt = Date.now();
+    if (decision.kind === 'restart' && decision.interruptionCount === 1) {
+      recovery.automaticFormatSwitchUsed = false;
+    }
+    if (webOsStallTimerRef.current) clearTimeout(webOsStallTimerRef.current);
+    webOsStallTimerRef.current = null;
+    if (webOsLearningTimerRef.current) clearTimeout(webOsLearningTimerRef.current);
+    webOsLearningTimerRef.current = null;
+    recovery.learningFormat = null;
+
+    if (decision.kind === 'error') {
+      releaseCurrentLiveConnection();
+      setIsPlaying(false);
+      setIsLoading(false);
+      setErrorMessage(WEBOS_LIVE_INTERRUPTION_ERROR);
+      return;
+    }
+
+    // Close the native connection before waiting/rebuilding it. This prevents
+    // webOS from retaining an old progressive connection alongside the retry.
+    releaseCurrentLiveConnection();
+    setIsPlaying(false);
+    setIsLoading(true);
+    webOsRestartTimerRef.current = setTimeout(() => {
+      webOsRestartTimerRef.current = null;
+      if (decision.kind === 'switch-format') {
+        recovery.automaticFormatSwitchUsed = true;
+        recovery.learningFormat = decision.format;
+        requestLiveFormat(decision.format, 'automatic');
+      } else {
+        dispatchPlayback({ type: 'RETRY' });
+      }
+    }, WEBOS_LIVE_RESTART_DELAY_MS);
+  }, [isWebOs, media?.id, media?.type, liveFormat, webOsAllowedFormats, releaseCurrentLiveConnection, requestLiveFormat, setIsLoading, setIsPlaying, setErrorMessage]);
+
+  useEffect(() => () => {
+    clearWebOsLiveTimers();
+  }, [clearWebOsLiveTimers]);
 
   useEffect(() => () => {
     if (hideControlsTimerRef.current) clearTimeout(hideControlsTimerRef.current);
@@ -527,14 +719,38 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     if (bufferingTimeoutRef.current) clearTimeout(bufferingTimeoutRef.current);
     startupTimeoutRef.current = null;
     bufferingTimeoutRef.current = null;
+    if (webOsStallTimerRef.current) clearTimeout(webOsStallTimerRef.current);
+    webOsStallTimerRef.current = null;
     if (bufferingUiDelayRef.current) clearTimeout(bufferingUiDelayRef.current);
     bufferingUiDelayRef.current = null;
     setShowBufferingIndicator(false);
     setIsLoading(false);
+
+    const recovery = webOsRecoveryRef.current;
+    if (isWebOs && media?.type === 'live' && recovery.learningFormat === liveFormat && !webOsLearningTimerRef.current) {
+      webOsLearningTimerRef.current = setTimeout(() => {
+        webOsLearningTimerRef.current = null;
+        if (recovery.learningFormat !== liveFormat || !shouldLearnWebOsLiveFormat({
+          automaticallySwitched: true,
+          stableForMs: WEBOS_LIVE_LEARN_STABILITY_MS,
+        })) return;
+        saveLearnedWebOsLiveFormat(liveFormat);
+        recovery.learningFormat = null;
+      }, WEBOS_LIVE_LEARN_STABILITY_MS);
+    }
   };
 
   const handleWaiting = () => {
     setIsLoading(true);
+    if (isWebOs && media?.type === 'live') {
+      if (hasStartedPlaybackRef.current && desiredPlayingRef.current && !webOsStallTimerRef.current) {
+        webOsStallTimerRef.current = setTimeout(() => {
+          webOsStallTimerRef.current = null;
+          recoverWebOsLiveInterruption();
+        }, WEBOS_LIVE_STALL_TIMEOUT_MS);
+      }
+      return;
+    }
     if (hasStartedPlaybackRef.current && !bufferingUiDelayRef.current) {
       bufferingUiDelayRef.current = setTimeout(() => {
         bufferingUiDelayRef.current = null;
@@ -748,12 +964,6 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     }
     setShowSettings(false);
   };
-
-  const releaseCurrentLiveConnection = useCallback(() => {
-    const video = videoRef.current;
-    destroyEngines();
-    if (video) releaseVideoElement(video);
-  }, [destroyEngines]);
 
   const showLiveBanner = useCallback(() => {
     setChannelBannerOpen(true);
@@ -991,8 +1201,12 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
         onCanPlay={handlePlaybackReady}
         onPlay={handleVideoPlay}
         onPause={() => setIsPlaying(false)}
+        onEnded={() => {
+          if (isWebOs && media.type === 'live') recoverWebOsLiveInterruption();
+        }}
         onSeeked={handleSeeked}
         onWaiting={handleWaiting}
+        onStalled={handleWaiting}
         onPlaying={handlePlaybackReady}
         onError={() => {
           clearPlaybackWatchdogs();
@@ -1096,7 +1310,9 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
             proxyFilled={!useProxy}
             onRetry={() => dispatchPlayback({ type: 'RETRY' })}
             onClose={onClose}
-            onToggleFormat={() => requestLiveFormat(liveFormat === 'm3u8' ? 'ts' : 'm3u8')}
+            onToggleFormat={() => {
+              if (manualAlternateLiveFormat) requestLiveFormat(manualAlternateLiveFormat, 'manual');
+            }}
             onToggleProxy={() => {
               const nextVal = !useProxy;
               setUseProxy(nextVal);
@@ -1135,7 +1351,9 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
 
               {canSwitchLiveFormat && (
                 <button
-                  onClick={() => requestLiveFormat(liveFormat === 'm3u8' ? 'ts' : 'm3u8')}
+                  onClick={() => {
+                    if (manualAlternateLiveFormat) requestLiveFormat(manualAlternateLiveFormat, 'manual');
+                  }}
                   className="px-5 py-3 bg-live hover:brightness-110 text-on-accent rounded-xl text-sm sm:text-base font-bold flex items-center gap-2 transition cursor-pointer shadow-lg"
                 >
                   Passa a formato {liveFormat === 'm3u8' ? 'MPEG-TS (.ts)' : 'HLS (.m3u8)'}
