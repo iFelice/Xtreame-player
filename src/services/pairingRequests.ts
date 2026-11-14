@@ -1,5 +1,6 @@
 import { isRubricaCode, normalizeRubricaCode } from '../../shared/pairing';
 import { STATIC_DEPLOY } from '../utils/deployTarget';
+import { isWebOsBuild } from '../platform/runtime';
 
 export const PAIRING_RELAY_REQUIRED_MESSAGE =
   'Per l’abbinamento e i codici server configura VITE_PAIRING_RELAY_URL durante la build statica.';
@@ -45,6 +46,9 @@ function pairingUrl(path: string, native: boolean, nativeServer: string): string
 
 export function buildPairingCreateRequest(options: PairingRequestOptions): PairingRequest {
   const relayUrl = getPairingRelayUrl(options.relayUrl);
+  // `file://` webOS has no Express server; callers receive an inert request
+  // and the production modal shows the configuration message instead.
+  if (isWebOsBuild() && !relayUrl) return { url: '' };
   if (relayUrl) {
     return {
       method: 'POST',
@@ -62,6 +66,7 @@ export function buildPairingStatusRequest(
   options: PairingRequestOptions,
 ): PairingRequest {
   const relayUrl = getPairingRelayUrl(options.relayUrl);
+  if (isWebOsBuild() && !relayUrl) return { url: '' };
   if (relayUrl) {
     const request: PairingRequest = {
       url: `${relayUrl}/api/pair/status/${encodeURIComponent(code)}`,
@@ -88,6 +93,7 @@ export function buildPairingStatusRequest(
 
 export function buildPairingSubmitRequest(options: PairingRequestOptions): PairingRequest {
   const relayUrl = getPairingRelayUrl(options.relayUrl);
+  if (isWebOsBuild() && !relayUrl) return { url: '' };
   if (relayUrl) {
     return {
       method: 'POST',
@@ -111,7 +117,7 @@ export function buildPairingWebUrl(
   },
 ): string {
   const relayUrl = getPairingRelayUrl(options?.relayUrl);
-  if (STATIC_DEPLOY && !relayUrl) return '';
+  if ((STATIC_DEPLOY || isWebOsBuild()) && !relayUrl) return '';
   const base = relayUrl
     ? relayUrl
     : options?.native

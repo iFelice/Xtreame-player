@@ -1,4 +1,4 @@
-import { isDirectMode } from '../platform/runtime';
+import { Capacitor } from '@capacitor/core';
 import { XtreamParsedUrl } from '../types/xtream';
 import { STATIC_DEPLOY } from './deployTarget';
 
@@ -163,7 +163,7 @@ export function buildStreamUrl(
 
   if (useProxy) {
     // Né la build statica né le app native hanno il proxy Express.
-    if (isDirectMode()) {
+    if (STATIC_DEPLOY || Capacitor.isNativePlatform()) {
       return streamPath;
     }
     return `/api/proxy/stream?url=${encodeURIComponent(streamPath)}`;

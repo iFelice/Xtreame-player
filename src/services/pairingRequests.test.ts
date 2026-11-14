@@ -161,3 +161,17 @@ describe('static pairing relay', () => {
     expect(fetchMock).toHaveBeenCalledWith('http://server.esempio:8080/relay/api/rubrica/001');
   });
 });
+
+describe('webOS pairing request guard', () => {
+  it('never manufactures an Express session URL when the packaged build has no relay', async () => {
+    vi.stubEnv('VITE_TARGET', 'webos');
+    vi.stubEnv('VITE_PAIRING_RELAY_URL', '');
+    vi.resetModules();
+    const requests = await import('./pairingRequests');
+    const options = { native: false, nativeServer, relayUrl: '' };
+    expect(requests.buildPairingCreateRequest(options)).toEqual({ url: '' });
+    expect(requests.buildPairingStatusRequest('001', options)).toEqual({ url: '' });
+    expect(requests.buildPairingSubmitRequest(options)).toEqual({ url: '' });
+    expect(requests.buildPairingWebUrl('001', { relayUrl: '' })).toBe('');
+  });
+});
