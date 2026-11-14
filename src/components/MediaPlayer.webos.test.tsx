@@ -93,7 +93,7 @@ describe('real MediaPlayer in webOS mode', () => {
     const close = vi.fn();
     let renderer: ReturnType<typeof create>;
     await act(async () => {
-      renderer = create(<MediaPlayer media={live(1)} onClose={close} />, { 
+      renderer = create(<MediaPlayer media={live(1)} onClose={close} />, {
         createNodeMock: (element) => element.type === 'video' ? video : { querySelectorAll: () => [] },
       });
     });
