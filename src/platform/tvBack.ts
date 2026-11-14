@@ -1,6 +1,12 @@
 /** LG webOS remote Back key and app-level exit decisions. */
 export const LG_KEY_BACK = 461;
 
+/**
+ * webOS can dismiss its system keyboard before delivering the physical Back
+ * key to the app. Keep this short window intentionally easy to tune.
+ */
+export const TV_TEXT_FIELD_BACK_GRACE_MS = 400;
+
 /** LG reports Back as keyCode 461, key "GoBack" and an empty `code`. */
 export function isBackKeyCode(keyCode: number | undefined | null): boolean {
   return keyCode === LG_KEY_BACK;
@@ -22,12 +28,17 @@ export interface TvBackState {
   tvPairingOpen: boolean;
   seriesModalOpen: boolean;
   categoryPanelOpen: boolean;
+  /** A text field currently owns the system keyboard. */
+  textFieldActive: boolean;
+  /** The text field blurred just before webOS delivered Back. */
+  textFieldRecentlyBlurred: boolean;
   showTvHome: boolean;
   exitConfirmOpen: boolean;
   canExitApp: boolean;
 }
 
 export type TvBackAction =
+  | { type: 'blur-text-field' }
   | { type: 'close-layer'; layer: TvBackLayer }
   | { type: 'show-tv-home' }
   | { type: 'open-exit-confirm' }
@@ -37,6 +48,11 @@ export type TvBackAction =
 
 /** Pure priority order for one press of the TV Back key. */
 export function resolveTvBackAction(state: TvBackState): TvBackAction {
+  // This must win over every app-level layer: the first Back belongs to the
+  // system keyboard, not to catalog navigation or the exit confirmation.
+  if (state.textFieldActive || state.textFieldRecentlyBlurred) {
+    return { type: 'blur-text-field' };
+  }
   if (state.exitConfirmOpen) return { type: 'close-exit-confirm' };
   if (state.playerOpen) return state.playerHandlesBack ? { type: 'none' } : { type: 'none' };
   if (state.serverInfoOpen) return { type: 'close-layer', layer: 'server-info' };

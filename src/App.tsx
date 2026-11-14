@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useState, useEffect, useCallback } from 'react';
+import React, { lazy, Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import {
   Film,
   Tv,
@@ -35,7 +35,7 @@ import { buildStreamUrl } from './utils/parseXtreamUrl';
 import { STATIC_DEPLOY } from './utils/deployTarget';
 import { cleanupLegacyNativeDownloads, isTvEnvironment } from './utils/downloadHelper';
 import { exitTvApp, isWebOsBuild } from './platform/runtime';
-import { resolveTvBackAction, resolveTvExitConfirmAction, type TvBackAction, type TvBackState } from './platform/tvBack';
+import { TV_TEXT_FIELD_BACK_GRACE_MS, resolveTvBackAction, resolveTvExitConfirmAction, type TvBackAction, type TvBackState } from './platform/tvBack';
 import { closeTvOverlay, isTvOverlayOpen } from './platform/tvOverlays';
 import { isWebOsRemoteBackEvent } from './player/webosRemote';
 import { useTvNavigation } from './utils/tvNavigation';
@@ -48,6 +48,50 @@ const LiveCatalog = lazy(() => import('./components/LiveCatalog').then((module) 
 const SeriesCatalog = lazy(() => import('./components/SeriesCatalog').then((module) => ({ default: module.SeriesCatalog })));
 const FavoritesView = lazy(() => import('./components/FavoritesView').then((module) => ({ default: module.FavoritesView })));
 const SearchPage = lazy(() => import('./components/SearchPage').then((module) => ({ default: module.SearchPage })));
+
+type TextFieldElement = {
+  tagName?: string;
+  type?: string;
+  isContentEditable?: boolean;
+  getAttribute?: (name: string) => string | null;
+  blur?: () => void;
+  focus?: (options?: FocusOptions) => void;
+  closest?: (selectors: string) => TextFieldElement | null;
+  parentElement?: TextFieldElement | null;
+  tabIndex?: number;
+};
+
+function isTextFieldElement(element: unknown): element is TextFieldElement {
+  if (!element || typeof element !== 'object') return false;
+  const candidate = element as TextFieldElement;
+  const tagName = candidate.tagName?.toLowerCase();
+  if (tagName === 'textarea' || candidate.isContentEditable) return true;
+  if (tagName !== 'input') return false;
+  const type = (candidate.type || candidate.getAttribute?.('type') || 'text').toLowerCase();
+  return !['button', 'checkbox', 'file', 'hidden', 'image', 'radio', 'reset', 'submit'].includes(type);
+}
+
+function activeTextField(): TextFieldElement | null {
+  if (typeof document === 'undefined') return null;
+  const active = (document as unknown as { activeElement?: unknown }).activeElement;
+  return isTextFieldElement(active) ? active : null;
+}
+
+/** Return focus to the local search/control container after closing webOS IME. */
+function focusTextFieldReturnTarget(field: TextFieldElement | null): void {
+  if (!field) return;
+  const fallback = field.closest?.('[data-tv-text-field-return], .media-content-panel, [data-tv-layer], [role="dialog"], section, main, form')
+    || field.parentElement;
+  if (!fallback?.focus) return;
+  // Search wrappers are not normally tabbable. They are a stable, same-page
+  // target while the spatial navigator selects the next visible control.
+  fallback.tabIndex = -1;
+  try {
+    fallback.focus({ preventScroll: true });
+  } catch {
+    fallback.focus();
+  }
+}
 
 export default function App() {
   const isWebOs = isWebOsBuild();
@@ -76,6 +120,9 @@ export default function App() {
   const [showServerInfo, setShowServerInfo] = useState<boolean>(false);
   const [showSettingsSyncModal, setShowSettingsSyncModal] = useState<boolean>(false);
   const [showTvExitConfirm, setShowTvExitConfirm] = useState<boolean>(false);
+  const lastTextFieldRef = useRef<TextFieldElement | null>(null);
+  const lastTextFieldBlurAtRef = useRef<number | null>(null);
+  const textFieldBackHandledRef = useRef(false);
   const [isRemoteLoginPage, setIsRemoteLoginPage] = useState<boolean>(() => {
     if (isWebOs || typeof window === 'undefined') return false;
     const path = window.location.pathname.toLowerCase();
@@ -138,6 +185,33 @@ export default function App() {
     return () => window.removeEventListener('android-tv-back', handleTvBack);
   }, [isTv, activeMedia, showServerInfo, showSettingsSyncModal, selectedSeriesForModal, showTvHome]);
 
+  // Track native keyboard focus separately from keydown: some LG firmware
+  // closes the IME (and blurs the field) just before it forwards Back to us.
+  useEffect(() => {
+    if (!isWebOs || typeof document === 'undefined') return;
+    const trackFocus = (event: FocusEvent) => {
+      if (!isTextFieldElement(event.target)) return;
+      lastTextFieldRef.current = event.target;
+      lastTextFieldBlurAtRef.current = null;
+      textFieldBackHandledRef.current = false;
+    };
+    const trackBlur = (event: FocusEvent) => {
+      if (!isTextFieldElement(event.target)) return;
+      lastTextFieldRef.current = event.target;
+      lastTextFieldBlurAtRef.current = Date.now();
+    };
+    document.addEventListener('focus', trackFocus, true);
+    document.addEventListener('focusin', trackFocus, true);
+    document.addEventListener('blur', trackBlur, true);
+    document.addEventListener('focusout', trackBlur, true);
+    return () => {
+      document.removeEventListener('focus', trackFocus, true);
+      document.removeEventListener('focusin', trackFocus, true);
+      document.removeEventListener('blur', trackBlur, true);
+      document.removeEventListener('focusout', trackBlur, true);
+    };
+  }, [isWebOs]);
+
   const executeTvBackAction = useCallback((action: TvBackAction) => {
     if (action.type === 'close-layer') {
       if (action.layer === 'server-info') setShowServerInfo(false);
@@ -161,6 +235,13 @@ export default function App() {
     if (!isWebOs) return;
     const handleWebOsBack = (event: KeyboardEvent) => {
       if (!isWebOsRemoteBackEvent(event)) return;
+      const focusedTextField = activeTextField();
+      const blurredAt = lastTextFieldBlurAtRef.current;
+      const textFieldRecentlyBlurred = !focusedTextField
+        && !textFieldBackHandledRef.current
+        && blurredAt !== null
+        && Date.now() - blurredAt >= 0
+        && Date.now() - blurredAt < TV_TEXT_FIELD_BACK_GRACE_MS;
       const state: TvBackState = {
         playerOpen: Boolean(activeMedia),
         // PR2 owns the player-specific Back ordering; do not close it here.
@@ -170,6 +251,8 @@ export default function App() {
         tvPairingOpen: isTvOverlayOpen('tv-pairing'),
         seriesModalOpen: isTvOverlayOpen('series-modal'),
         categoryPanelOpen: isTvOverlayOpen('category-panel'),
+        textFieldActive: Boolean(focusedTextField),
+        textFieldRecentlyBlurred,
         showTvHome,
         exitConfirmOpen: showTvExitConfirm,
         canExitApp: true,
@@ -178,6 +261,16 @@ export default function App() {
       if (action.type === 'none') return;
       event.preventDefault();
       event.stopPropagation();
+      event.stopImmediatePropagation?.();
+      if (action.type === 'blur-text-field') {
+        // Mark before calling blur so the following Back press is not swallowed
+        // by the grace window created by this very press.
+        textFieldBackHandledRef.current = true;
+        const field = focusedTextField || lastTextFieldRef.current;
+        focusedTextField?.blur?.();
+        focusTextFieldReturnTarget(field);
+        return;
+      }
       executeTvBackAction(action);
     };
     window.addEventListener('keydown', handleWebOsBack);

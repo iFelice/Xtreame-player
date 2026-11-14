@@ -4,13 +4,20 @@ import { isBackKeyCode, resolveTvBackAction, resolveTvExitConfirmAction, type Tv
 const state: TvBackState = {
   playerOpen: false, playerHandlesBack: false, serverInfoOpen: false,
   settingsSyncOpen: false, tvPairingOpen: false, seriesModalOpen: false,
-  categoryPanelOpen: false, showTvHome: false, exitConfirmOpen: false, canExitApp: true,
+  categoryPanelOpen: false, textFieldActive: false, textFieldRecentlyBlurred: false,
+  showTvHome: false, exitConfirmOpen: false, canExitApp: true,
 };
 
 describe('webOS Back', () => {
   it('uses LG keyCode 461 rather than browser key strings', () => {
     expect(isBackKeyCode(461)).toBe(true);
     expect(isBackKeyCode(27)).toBe(false);
+  });
+
+  it('absorbs Back for an active or just-blurred text field only', () => {
+    expect(resolveTvBackAction({ ...state, textFieldActive: true })).toEqual({ type: 'blur-text-field' });
+    expect(resolveTvBackAction({ ...state, textFieldRecentlyBlurred: true })).toEqual({ type: 'blur-text-field' });
+    expect(resolveTvBackAction(state)).toEqual({ type: 'show-tv-home' });
   });
 
   it('closes overlays before TV home, then asks before exit', () => {
