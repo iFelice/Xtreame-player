@@ -1,4 +1,4 @@
-import { Capacitor } from '@capacitor/core';
+import { isDirectMode } from '../platform/runtime';
 
 /**
  * Utility to make image URLs secure (HTTPS) and avoid Mixed Content blocks in Chrome/Safari,
@@ -16,7 +16,7 @@ export function getSecureImageUrl(rawUrl?: string | null): string {
   }
 
   // Su app mobile nativa (iOS / Android), carichiamo direttamente senza proxy wsrv.nl
-  if (Capacitor.isNativePlatform()) {
+  if (isDirectMode()) {
     return trimmed;
   }
 

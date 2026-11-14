@@ -36,6 +36,7 @@ import { showsHoverVeil } from '../utils/touchDevice';
 import { CollapsibleCategoryPanel } from './CollapsibleCategoryPanel';
 import { STATIC_DEPLOY } from '../utils/deployTarget';
 import { presentText } from '../utils/seriesInfo';
+import { registerTvOverlay } from '../platform/tvOverlays';
 import { SeriesInfoBlock } from './SeriesInfoBlock';
 import { ExpandablePlot } from './ExpandablePlot';
 
@@ -96,6 +97,14 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
     isLoading: boolean;
     selectedSeason: string;
   } | null>(null);
+
+  useEffect(() => {
+    if (!activeSeriesDetail) return;
+    return registerTvOverlay('series-modal', () => {
+      setActiveSeriesDetail(null);
+      onClearSelectedSeries?.();
+    });
+  }, [Boolean(activeSeriesDetail), onClearSelectedSeries]);
 
   // Sync first category if categories arrive asynchronously
   useEffect(() => {
@@ -355,7 +364,11 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
                     <div
                       key={series.series_id}
                       data-media-index={index + 1}
+                      role={isTv ? 'button' : undefined}
                       tabIndex={0}
+                      onKeyDown={(event) => {
+                        if (isTv && event.key === 'Enter') handleOpenSeries(series);
+                      }}
                       onClick={() => handleOpenSeries(series)}
                       className={`group relative rounded-2xl overflow-hidden shadow-lg transition-all duration-300 flex flex-col cursor-pointer ${
                         isPlayingThis
@@ -450,7 +463,7 @@ export const SeriesCatalog: React.FC<SeriesCatalogProps> = ({
 
       {/* Episode Selection Modal */}
       {activeSeriesDetail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center safe-area-overlay bg-black/50 animate-in fade-in">
+        <div data-tv-layer="series-detail" role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center safe-area-overlay bg-black/50 animate-in fade-in">
           <div className="glass border border-glass-edge rounded-3xl max-w-4xl w-full overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
             {/* Modal Header */}
             <div className="p-4 sm:p-5 border-b border-separator flex items-center justify-between">

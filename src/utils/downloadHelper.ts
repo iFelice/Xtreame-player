@@ -2,6 +2,7 @@ import { Capacitor, registerPlugin } from '@capacitor/core';
 import { Directory, Filesystem } from '@capacitor/filesystem';
 import { STATIC_DEPLOY } from './deployTarget';
 import { getDirectStreamUrl } from './streamUrl';
+import { isWebOsBuild } from '../platform/runtime';
 
 interface DocumentExporterPlugin {
   exportFile(options: { path: string }): Promise<{ path: string }>;
@@ -14,6 +15,7 @@ const DocumentExporter = registerPlugin<DocumentExporterPlugin>('DocumentExporte
  * where direct file downloading should be disabled.
  */
 export function isTvEnvironment(): boolean {
+  if (isWebOsBuild()) return true;
   if (typeof window === 'undefined') return false;
   const ua = (navigator.userAgent || '').toLowerCase();
 

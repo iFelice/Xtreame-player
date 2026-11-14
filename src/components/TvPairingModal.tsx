@@ -18,7 +18,8 @@ import {
 } from 'lucide-react';
 import { storage } from '../services/storage';
 import { parseXtreamUrl } from '../utils/parseXtreamUrl';
-import { Capacitor } from '@capacitor/core';
+import { isDirectMode, isWebOsBuild } from '../platform/runtime';
+import { registerTvOverlay } from '../platform/tvOverlays';
 import { isTvEnvironment } from '../utils/downloadHelper';
 import {
   buildPairingCreateRequest,
@@ -42,9 +43,9 @@ function nativePairingServer(): string {
 function pairingWebUrl(code?: string): string {
   const relayUrl = getPairingRelayUrl();
   return buildPairingWebUrl(code, {
-    native: Capacitor.isNativePlatform(),
+    native: isDirectMode(),
     nativeServer: nativePairingServer(),
-    origin: typeof window !== 'undefined' ? window.location.origin : '',
+    origin: isDirectMode() ? '' : typeof window !== 'undefined' ? window.location.origin : '',
     relayUrl,
   });
 }
@@ -93,7 +94,13 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
   const creationStartedRef = useRef<boolean>(false);
   const savedAccounts = storage.getAccounts();
   const isTv = isTvEnvironment();
-  const relayMissing = isStaticDeploy() && !getPairingRelayUrl();
+  // The packaged file:// app has no Express /api/session routes.
+  const relayMissing = (isStaticDeploy() || isWebOsBuild()) && !getPairingRelayUrl();
+
+  useEffect(() => {
+    if (!isOpen) return;
+    return registerTvOverlay('tv-pairing', onClose);
+  }, [isOpen, onClose]);
 
   // If initialCode changes, set remotePin and switch mode
   useEffect(() => {
@@ -107,7 +114,7 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
   const generateNewSession = async () => {
     const relayUrl = getPairingRelayUrl();
     const useRelay = Boolean(relayUrl);
-    const native = Capacitor.isNativePlatform();
+    const native = isDirectMode();
     if (relayMissing) {
       setPollError(PAIRING_RELAY_REQUIRED_MESSAGE);
       setIsWaitingForPhone(false);
@@ -152,7 +159,7 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
 
       // Create QR Code containing direct pairing URL (<VITE_PAIRING_RELAY_URL>/?code=<PIN> when relay is configured)
       const pairUrl = pairingWebUrl(code);
-      const qrPixelSize = isTvEnvironment() ? 240 : 200;
+      const qrPixelSize = isTv ? 240 : 200;
 
       const qrUrl = await QRCode.toDataURL(pairUrl, {
         errorCorrectionLevel: 'M',
@@ -199,7 +206,7 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
       try {
         const relayUrl = getPairingRelayUrl();
         const useRelay = Boolean(relayUrl);
-        const native = Capacitor.isNativePlatform();
+        const native = isDirectMode();
         const request = buildPairingStatusRequest(pinCode, {
           native,
           nativeServer: nativePairingServer(),
@@ -258,7 +265,7 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
       return;
     }
     const relayUrl = getPairingRelayUrl();
-    const native = Capacitor.isNativePlatform();
+    const native = isDirectMode();
     if (mode !== 'tv' || pinCode || creationStartedRef.current || relayMissing) return;
     if (!relayUrl && !native && !pairingEnabled) return;
     creationStartedRef.current = true;
@@ -300,7 +307,7 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
     try {
       setIsSending(true);
       const submitReq = buildPairingSubmitRequest({
-        native: Capacitor.isNativePlatform(),
+        native: isDirectMode(),
         nativeServer: nativePairingServer(),
         relayUrl: getPairingRelayUrl(),
       });
@@ -347,7 +354,7 @@ export const TvPairingModal: React.FC<TvPairingModalProps> = ({
   const qrSizeClasses = isTv ? 'w-52 h-52' : 'w-44 h-44 sm:w-52 sm:h-52';
 
   return (
-    <div className="tv-pairing-modal fixed inset-0 z-50 flex items-center justify-center bg-black/50 safe-area-overlay overflow-y-auto animate-in fade-in duration-200">
+    <div data-tv-layer="pairing" role="dialog" aria-modal="true" className="tv-pairing-modal fixed inset-0 z-50 flex items-center justify-center bg-black/50 safe-area-overlay overflow-y-auto animate-in fade-in duration-200">
       <div className="tv-pairing-panel glass border border-glass-edge rounded-3xl max-w-2xl w-full shadow-2xl overflow-hidden relative my-auto">
         {/* Header Tabs */}
         <div className="flex items-center justify-between border-b border-separator p-4 sm:p-5">

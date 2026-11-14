@@ -185,6 +185,11 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({
             {favorites.map((item) => (
               <div
                 key={item.id}
+                role={isTv ? 'button' : undefined}
+                tabIndex={isTv ? 0 : undefined}
+                onKeyDown={(event) => {
+                  if (isTv && event.key === 'Enter') openFavorite(item);
+                }}
                 onClick={() => openFavorite(item)}
                 className="group relative bg-surface-0 border border-separator hover:border-favorite/60 rounded-2xl overflow-hidden shadow-lg transition-all cursor-pointer flex flex-col justify-between hover:-translate-y-1"
               >

@@ -120,3 +120,10 @@ Visita `http://localhost:3000`.
 - **Ricerca unica**: l'icona lente cerca in tutto il catalogo già scaricato (Live, Film, Serie) da 2 caratteri in su, senza accenti; le caselle di Live, Film e Serie cercano in tutte le categorie della sezione. Le regole sono le stesse dell'app Android TV. La navigazione a telecomando in modalità TV resta quella di sempre.
 - **Bypass CORS/HTTP**: streaming fluido senza blocchi del browser.
 - 
+
+### LG webOS
+
+La build per LG webOS viene aperta dal televisore da `file://` e impacchettata
+come `.ipk`; non usa il proxy Express. I comandi sono `npm run build:webos` e
+`npm run package:webos`. Per installazione, pairing QR/PIN e Developer Mode vedi
+[docs/WEBOS.md](docs/WEBOS.md).

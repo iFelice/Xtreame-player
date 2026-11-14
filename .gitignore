@@ -24,3 +24,12 @@ apps/android-tv/local.properties
 apps/android-tv/.idea/
 apps/android-tv/**/*.apk
 apps/android-tv/.kotlin/
+
+# App LG webOS: outputs and per-app tools are generated locally.
+!.env.webos
+apps/webos-tv/build/
+apps/webos-tv/dist/
+apps/webos-tv/node_modules/
+apps/webos-tv/.local/
+apps/webos-tv/**/*.local.*
+*.ipk

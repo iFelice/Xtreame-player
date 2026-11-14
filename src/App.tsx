@@ -34,6 +34,10 @@ import { storage, SavedAccount } from './services/storage';
 import { buildStreamUrl } from './utils/parseXtreamUrl';
 import { STATIC_DEPLOY } from './utils/deployTarget';
 import { cleanupLegacyNativeDownloads, isTvEnvironment } from './utils/downloadHelper';
+import { exitTvApp, isWebOsBuild } from './platform/runtime';
+import { resolveTvBackAction, resolveTvExitConfirmAction, type TvBackAction, type TvBackState } from './platform/tvBack';
+import { closeTvOverlay, isTvOverlayOpen } from './platform/tvOverlays';
+import { isWebOsRemoteBackEvent } from './player/webosRemote';
 import { useTvNavigation } from './utils/tvNavigation';
 import { chooseInitialTab, shouldShowMobileBar } from './utils/navigation';
 import type { SectionTab } from './utils/navigation';
@@ -46,6 +50,7 @@ const FavoritesView = lazy(() => import('./components/FavoritesView').then((modu
 const SearchPage = lazy(() => import('./components/SearchPage').then((module) => ({ default: module.SearchPage })));
 
 export default function App() {
+  const isWebOs = isWebOsBuild();
   const isTv = isTvEnvironment();
   useTvNavigation(isTv);
   const [serverUrl, setServerUrl] = useState<string>('');
@@ -70,8 +75,9 @@ export default function App() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showServerInfo, setShowServerInfo] = useState<boolean>(false);
   const [showSettingsSyncModal, setShowSettingsSyncModal] = useState<boolean>(false);
+  const [showTvExitConfirm, setShowTvExitConfirm] = useState<boolean>(false);
   const [isRemoteLoginPage, setIsRemoteLoginPage] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
+    if (isWebOs || typeof window === 'undefined') return false;
     const path = window.location.pathname.toLowerCase();
     const search = new URLSearchParams(window.location.search);
     return path.includes('remote-login') || search.get('page') === 'remote-login' || search.has('code');
@@ -131,6 +137,52 @@ export default function App() {
     window.addEventListener('android-tv-back', handleTvBack);
     return () => window.removeEventListener('android-tv-back', handleTvBack);
   }, [isTv, activeMedia, showServerInfo, showSettingsSyncModal, selectedSeriesForModal, showTvHome]);
+
+  const executeTvBackAction = useCallback((action: TvBackAction) => {
+    if (action.type === 'close-layer') {
+      if (action.layer === 'server-info') setShowServerInfo(false);
+      else if (action.layer === 'settings-sync') setShowSettingsSyncModal(false);
+      else if (action.layer === 'series-modal') closeTvOverlay('series-modal');
+      else if (action.layer === 'tv-pairing') closeTvOverlay('tv-pairing');
+      else if (action.layer === 'category-panel') closeTvOverlay('category-panel');
+      return;
+    }
+    if (action.type === 'show-tv-home') setShowTvHome(true);
+    if (action.type === 'open-exit-confirm') setShowTvExitConfirm(true);
+    if (action.type === 'close-exit-confirm') setShowTvExitConfirm(false);
+    if (action.type === 'exit-app') exitTvApp();
+  }, []);
+
+  const handleTvExitChoice = useCallback((confirmed: boolean) => {
+    executeTvBackAction(resolveTvExitConfirmAction(confirmed));
+  }, [executeTvBackAction]);
+
+  useEffect(() => {
+    if (!isWebOs) return;
+    const handleWebOsBack = (event: KeyboardEvent) => {
+      if (!isWebOsRemoteBackEvent(event)) return;
+      const state: TvBackState = {
+        playerOpen: Boolean(activeMedia),
+        // PR2 owns the player-specific Back ordering; do not close it here.
+        playerHandlesBack: Boolean(activeMedia),
+        serverInfoOpen: showServerInfo,
+        settingsSyncOpen: showSettingsSyncModal,
+        tvPairingOpen: isTvOverlayOpen('tv-pairing'),
+        seriesModalOpen: isTvOverlayOpen('series-modal'),
+        categoryPanelOpen: isTvOverlayOpen('category-panel'),
+        showTvHome,
+        exitConfirmOpen: showTvExitConfirm,
+        canExitApp: true,
+      };
+      const action = resolveTvBackAction(state);
+      if (action.type === 'none') return;
+      event.preventDefault();
+      event.stopPropagation();
+      executeTvBackAction(action);
+    };
+    window.addEventListener('keydown', handleWebOsBack);
+    return () => window.removeEventListener('keydown', handleWebOsBack);
+  }, [isWebOs, activeMedia, showServerInfo, showSettingsSyncModal, showTvHome, showTvExitConfirm, executeTvBackAction]);
 
   // Catalog data
   const [vodCategories, setVodCategories] = useState<XtreamCategory[]>([]);
@@ -274,7 +326,7 @@ export default function App() {
       try {
         // Static hosting has no /api routes. Restore the account and query
         // parameters as in a normal non-safe deployment, without Express.
-        const runtime: { safeMode?: boolean } = STATIC_DEPLOY
+        const runtime: { safeMode?: boolean } = STATIC_DEPLOY || isWebOs
           ? { safeMode: false }
           : await (await fetch('/api/runtime-config')).json();
         if (cancelled) return;
@@ -314,7 +366,7 @@ export default function App() {
 
     void restoreSession();
     return () => { cancelled = true; };
-  }, [connectToServer, isRemoteLoginPage]);
+  }, [connectToServer, isRemoteLoginPage, isWebOs]);
 
   const handlePlayDirect = (media: PlayableMediaItem) => {
     setActiveMedia(media);
@@ -821,6 +873,19 @@ export default function App() {
           setSavedAccounts(storage.getAccounts());
         }}
       />
+
+      {isWebOs && showTvExitConfirm && (
+        <div data-tv-layer="exit-confirm" role="dialog" aria-modal="true" aria-labelledby="tv-exit-title" className="fixed inset-0 z-[120] flex items-center justify-center bg-black/85 p-6">
+          <div className="w-full max-w-2xl rounded-3xl border-2 border-separator-strong bg-surface-0 p-8 text-center shadow-2xl">
+            <h2 id="tv-exit-title" className="text-3xl font-black text-label">Vuoi uscire?</h2>
+            <p className="mt-3 text-lg text-label-secondary">L'app viene chiusa. Gli account salvati restano sul televisore.</p>
+            <div className="mt-8 flex items-center justify-center gap-4">
+              <button type="button" autoFocus data-tv-exit-choice="cancel" onClick={() => handleTvExitChoice(false)} className="min-w-40 rounded-2xl border-2 border-separator-strong bg-surface-1 px-6 py-3 text-xl font-bold text-label transition hover:bg-surface-2">Annulla</button>
+              <button type="button" data-tv-exit-choice="exit" onClick={() => handleTvExitChoice(true)} className="min-w-40 rounded-2xl border-2 border-separator-strong bg-surface-1 px-6 py-3 text-xl font-bold text-label transition hover:bg-surface-2 focus-visible:border-[#10B981] focus-visible:bg-[#10B981] focus-visible:text-white">Esci</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Footer */}
       <footer className={`w-full border-t border-separator bg-surface-0 py-4 text-center text-xs sm:text-sm text-label-tertiary ${showMobileBar ? 'mb-[calc(56px+env(safe-area-inset-bottom))] md:mb-0' : ''}`}>

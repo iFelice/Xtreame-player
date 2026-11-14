@@ -1,0 +1,16 @@
+{
+  "id": "it.felixvision.player",
+  "title": "FelixVP",
+  "type": "web",
+  "main": "index.html",
+  "icon": "icon.png",
+  "largeIcon": "largeIcon.png",
+  "version": "1.0.0",
+  "vendor": "FelixVision",
+  "description": "FelixVisionPlayer per LG webOS",
+  "author": "FelixVision",
+  "appDescription": "Lettore Xtream Codes per Smart TV: Live TV, Film e Serie con il server del proprio provider.",
+  "disableBackHistoryAPI": true,
+  "resolution": "1920x1080",
+  "requiredACG": []
+}
