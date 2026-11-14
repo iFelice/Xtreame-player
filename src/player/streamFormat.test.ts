@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest';
 import {
   WEBOS_LIVE_INTERRUPTION_WINDOW_MS,
   WEBOS_LIVE_LEARN_STABILITY_MS,
+  WEBOS_LIVE_STALL_TIMEOUT_MS,
   allowedLiveStreamFormats,
   canFallbackToMpegTs,
   decideWebOsLiveInterruption,
   defaultLiveStreamFormat,
   isPublicMockStream,
+  isWebOsLiveStalled,
   liveFormatForChannel,
   nextLiveFormatAfterFailure,
   normalizeLiveStreamUrl,
@@ -93,5 +95,28 @@ describe('live stream format', () => {
     expect(shouldLearnWebOsLiveFormat({ automaticallySwitched: false, stableForMs: WEBOS_LIVE_LEARN_STABILITY_MS })).toBe(false);
     expect(shouldLearnWebOsLiveFormat({ automaticallySwitched: true, stableForMs: WEBOS_LIVE_LEARN_STABILITY_MS - 1 })).toBe(false);
     expect(shouldLearnWebOsLiveFormat({ automaticallySwitched: true, stableForMs: WEBOS_LIVE_LEARN_STABILITY_MS })).toBe(true);
+  });
+
+  it('marks a webOS Live stalled only after continuous missing media progress', () => {
+    expect(isWebOsLiveStalled({
+      now: 20_000, lastProgressAt: 20_000 - WEBOS_LIVE_STALL_TIMEOUT_MS + 1,
+      desiredPlaying: true, paused: false,
+    })).toBe(false);
+    expect(isWebOsLiveStalled({
+      now: 20_000, lastProgressAt: 20_000 - WEBOS_LIVE_STALL_TIMEOUT_MS,
+      desiredPlaying: true, paused: false,
+    })).toBe(true);
+    expect(isWebOsLiveStalled({
+      now: 20_000, lastProgressAt: 0,
+      desiredPlaying: false, paused: false,
+    })).toBe(false);
+    expect(isWebOsLiveStalled({
+      now: 20_000, lastProgressAt: 0,
+      desiredPlaying: true, paused: true,
+    })).toBe(false);
+    expect(isWebOsLiveStalled({
+      now: 20_000, lastProgressAt: null,
+      desiredPlaying: true, paused: false,
+    })).toBe(false);
   });
 });

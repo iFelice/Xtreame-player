@@ -57,9 +57,13 @@ comportamento precedente.
 - Per ogni canale la priorità è: scelta manuale locale, formato imparato sul
   dispositivo, `m3u8` se ammesso, poi `ts` se HLS non è ammesso. La scelta
   manuale vale solo per quel canale e non viene salvata.
-- Un `ended` non richiesto è un'interruzione. Dopo una riproduzione già avviata,
-  anche `waiting`/`stalled` continui per 10 secondi sono uno stallo; una pausa
-  scelta con Play/Pausa o OK non avvia alcun recupero.
+- Un `ended` non richiesto è un'interruzione immediata. Gli eventi
+  `waiting`/`stalled` aggiornano solo l'interfaccia di buffering: HLS su LG può
+  emetterli mentre il video continua. Solo durante una riproduzione richiesta e
+  non in pausa, un controllo ogni secondo considera progresso un avanzamento di
+  almeno 0,3 secondi di `currentTime`; dopo 10 secondi senza tale progresso
+  rileva uno stallo. Una pausa scelta con Play/Pausa o OK non avvia alcun
+  recupero.
 - Le prime due interruzioni entro 60 secondi dall'ultimo recupero rilasciano
   completamente il video e riavviano lo stesso formato dopo 1 secondo. Alla
   terza viene provato una sola volta l'altro formato ammesso. Se fallisce anche
@@ -75,10 +79,17 @@ comportamento precedente.
 
 Le costanti in `src/player/streamFormat.ts` sono:
 `WEBOS_LIVE_RESTART_DELAY_MS = 1000`,
+`WEBOS_LIVE_PROGRESS_POLL_MS = 1000`,
+`WEBOS_LIVE_PROGRESS_DELTA_SECONDS = 0.3`,
 `WEBOS_LIVE_STALL_TIMEOUT_MS = 10000`,
 `WEBOS_LIVE_INTERRUPTION_WINDOW_MS = 60000`,
 `WEBOS_LIVE_AUTOMATIC_RESTART_LIMIT = 2` e
 `WEBOS_LIVE_LEARN_STABILITY_MS = 30000`.
+
+Per gli eventi gestiti, la build webOS scrive diagnostica senza indirizzi o
+credenziali nel formato `[FVP webOS live] evento=... formato=... currentTime=...
+readyState=... conteggio=...`. Gli eventi includono `ended`, stallo rilevato,
+riavvio, cambio automatico di formato ed errore terminale.
 
 ## Smoke test
 

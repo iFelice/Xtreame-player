@@ -74,6 +74,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.stubEnv('VITE_TARGET', 'webos');
   vi.stubEnv('MODE', 'production');
+  vi.spyOn(console, 'info').mockImplementation(() => {});
   vi.resetModules();
 });
 
@@ -148,6 +149,127 @@ describe('real MediaPlayer in webOS mode', () => {
       });
     });
     expect(video.src).toContain('/1.ts');
+    await act(async () => renderer!.unmount());
+  });
+
+  it('does not recover while repeated stalled and waiting events still have qualifying progress for 90 seconds', async () => {
+    installWebOsHarness();
+    const { MediaPlayer } = await import('./MediaPlayer');
+    const video = videoNode();
+    let renderer: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(<MediaPlayer media={live(1)} onClose={() => {}} />, {
+        createNodeMock: (element) => element.type === 'video' ? video : { querySelectorAll: () => [] },
+      });
+    });
+    const player = () => renderer!.root.findByType('video');
+    video.paused = false;
+    await act(async () => { player().props.onPlaying(); });
+
+    for (let second = 1; second <= 90; second += 1) {
+      await act(async () => {
+        video.currentTime = second;
+        player().props.onStalled();
+        player().props.onWaiting();
+        vi.advanceTimersByTime(1_000);
+      });
+    }
+
+    expect(video.removeAttribute).not.toHaveBeenCalled();
+    expect(video.src).toContain('/1.m3u8');
+    await act(async () => renderer!.unmount());
+  });
+
+  it('does not recover when waiting is followed by qualifying progress before ten seconds', async () => {
+    installWebOsHarness();
+    const { MediaPlayer } = await import('./MediaPlayer');
+    const video = videoNode();
+    let renderer: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(<MediaPlayer media={live(1)} onClose={() => {}} />, {
+        createNodeMock: (element) => element.type === 'video' ? video : { querySelectorAll: () => [] },
+      });
+    });
+    const player = () => renderer!.root.findByType('video');
+    video.paused = false;
+    await act(async () => {
+      player().props.onPlaying();
+      player().props.onWaiting();
+      vi.advanceTimersByTime(9_000);
+      video.currentTime = 0.5;
+      vi.advanceTimersByTime(2_000);
+    });
+
+    expect(video.removeAttribute).not.toHaveBeenCalled();
+    await act(async () => renderer!.unmount());
+  });
+
+  it('restarts once after ten seconds of fixed currentTime on the next progress poll', async () => {
+    installWebOsHarness();
+    const { MediaPlayer } = await import('./MediaPlayer');
+    const video = videoNode();
+    let renderer: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(<MediaPlayer media={live(1)} onClose={() => {}} />, {
+        createNodeMock: (element) => element.type === 'video' ? video : { querySelectorAll: () => [] },
+      });
+    });
+    const player = () => renderer!.root.findByType('video');
+    video.paused = false;
+    await act(async () => { player().props.onPlaying(); });
+    await act(async () => { vi.advanceTimersByTime(9_000); });
+    expect(video.removeAttribute).not.toHaveBeenCalled();
+
+    await act(async () => { vi.advanceTimersByTime(1_000); });
+    expect(video.removeAttribute).toHaveBeenCalledTimes(1);
+    expect(console.info).toHaveBeenCalledWith(expect.stringContaining('evento=stallo-rilevato formato=m3u8'));
+    expect(console.info).toHaveBeenCalledWith(expect.stringContaining('evento=riavvio formato=m3u8'));
+    await act(async () => { vi.advanceTimersByTime(1_000); });
+    await act(async () => renderer!.unmount());
+  });
+
+  it('recovers ended Live immediately without waiting for a progress poll', async () => {
+    installWebOsHarness();
+    const { MediaPlayer } = await import('./MediaPlayer');
+    const video = videoNode();
+    let renderer: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(<MediaPlayer media={live(1)} onClose={() => {}} />, {
+        createNodeMock: (element) => element.type === 'video' ? video : { querySelectorAll: () => [] },
+      });
+    });
+    const player = () => renderer!.root.findByType('video');
+    video.paused = false;
+    await act(async () => { player().props.onPlaying(); });
+    await act(async () => { player().props.onEnded(); });
+
+    expect(video.removeAttribute).toHaveBeenCalledTimes(1);
+    expect(console.info).toHaveBeenCalledWith(expect.stringContaining('evento=ended formato=m3u8'));
+    await act(async () => { vi.advanceTimersByTime(1_000); });
+    await act(async () => renderer!.unmount());
+  });
+
+  it('does not recover an intentional paused Live stream with fixed currentTime', async () => {
+    installWebOsHarness();
+    const { MediaPlayer } = await import('./MediaPlayer');
+    const video = videoNode();
+    let renderer: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(<MediaPlayer media={live(1)} onClose={() => {}} />, {
+        createNodeMock: (element) => element.type === 'video' ? video : { querySelectorAll: () => [] },
+      });
+    });
+    const player = () => renderer!.root.findByType('video');
+    video.paused = false;
+    await act(async () => { player().props.onPlaying(); });
+    await act(async () => {
+      player().props.onClick();
+      video.paused = true;
+      player().props.onPause();
+      vi.advanceTimersByTime(30_000);
+    });
+
+    expect(video.removeAttribute).not.toHaveBeenCalled();
     await act(async () => renderer!.unmount());
   });
 

@@ -34,14 +34,16 @@ import { destroyMediaEngines, releaseVideoElement, selectMediaEngine } from '../
 import { HLS_CONFIG, MPEGTS_CONFIG } from '../player/engineConfig';
 import {
   WEBOS_LIVE_LEARN_STABILITY_MS,
+  WEBOS_LIVE_PROGRESS_DELTA_SECONDS,
+  WEBOS_LIVE_PROGRESS_POLL_MS,
   WEBOS_LIVE_RESTART_DELAY_MS,
-  WEBOS_LIVE_STALL_TIMEOUT_MS,
   allowedLiveStreamFormats,
   alternateAllowedLiveFormat,
   canFallbackToMpegTs,
   decideWebOsLiveInterruption,
   defaultLiveStreamFormat,
   isPublicMockStream,
+  isWebOsLiveStalled,
   nextLiveFormatAfterFailure,
   selectWebOsInitialLiveFormat,
   shouldLearnWebOsLiveFormat,
@@ -200,7 +202,10 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     learningFormat: null,
   });
   const webOsRestartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const webOsStallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const webOsProgressWatchdogRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const webOsProgressMonitoringStartedAtRef = useRef<number | null>(null);
+  const webOsLastProgressAtRef = useRef<number | null>(null);
+  const webOsLastProgressTimeRef = useRef<number | null>(null);
   const webOsLearningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const manualLiveFormat = manualLiveFormatRef.current;
   const currentManualLiveFormat = isWebOs && manualLiveFormat && manualLiveFormat.channelId === media?.id
@@ -265,19 +270,25 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       liveFallbackChannelRef.current = null;
       manualLiveFormatRef.current = null;
       if (webOsRestartTimerRef.current) clearTimeout(webOsRestartTimerRef.current);
-      if (webOsStallTimerRef.current) clearTimeout(webOsStallTimerRef.current);
+      if (webOsProgressWatchdogRef.current) clearInterval(webOsProgressWatchdogRef.current);
       if (webOsLearningTimerRef.current) clearTimeout(webOsLearningTimerRef.current);
       webOsRestartTimerRef.current = null;
-      webOsStallTimerRef.current = null;
+      webOsProgressWatchdogRef.current = null;
+      webOsProgressMonitoringStartedAtRef.current = null;
+      webOsLastProgressAtRef.current = null;
+      webOsLastProgressTimeRef.current = null;
       webOsLearningTimerRef.current = null;
       return;
     }
     if (isWebOs && liveFormatChannelRef.current !== media.id) {
       if (webOsRestartTimerRef.current) clearTimeout(webOsRestartTimerRef.current);
-      if (webOsStallTimerRef.current) clearTimeout(webOsStallTimerRef.current);
+      if (webOsProgressWatchdogRef.current) clearInterval(webOsProgressWatchdogRef.current);
       if (webOsLearningTimerRef.current) clearTimeout(webOsLearningTimerRef.current);
       webOsRestartTimerRef.current = null;
-      webOsStallTimerRef.current = null;
+      webOsProgressWatchdogRef.current = null;
+      webOsProgressMonitoringStartedAtRef.current = null;
+      webOsLastProgressAtRef.current = null;
+      webOsLastProgressTimeRef.current = null;
       webOsLearningTimerRef.current = null;
       liveFormatChannelRef.current = media.id;
       liveFallbackChannelRef.current = null;
@@ -298,10 +309,13 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
 
   const clearWebOsLiveTimers = useCallback(() => {
     if (webOsRestartTimerRef.current) clearTimeout(webOsRestartTimerRef.current);
-    if (webOsStallTimerRef.current) clearTimeout(webOsStallTimerRef.current);
+    if (webOsProgressWatchdogRef.current) clearInterval(webOsProgressWatchdogRef.current);
     if (webOsLearningTimerRef.current) clearTimeout(webOsLearningTimerRef.current);
     webOsRestartTimerRef.current = null;
-    webOsStallTimerRef.current = null;
+    webOsProgressWatchdogRef.current = null;
+    webOsProgressMonitoringStartedAtRef.current = null;
+    webOsLastProgressAtRef.current = null;
+    webOsLastProgressTimeRef.current = null;
     webOsLearningTimerRef.current = null;
   }, []);
 
@@ -356,12 +370,28 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     setErrorMessage(message);
   }, [media, isWebOs, playbackTarget, liveFormat, webOsAllowedFormats, appleMobile, requestLiveFormat, setIsLoading, setErrorMessage]);
 
-  const recoverWebOsLiveInterruption = useCallback(() => {
+  const logWebOsLiveDiagnostic = useCallback((
+    event: 'ended' | 'stallo-rilevato' | 'riavvio' | 'cambio-formato-automatico' | 'errore-terminale',
+    interruptionCount: number,
+    format: LiveStreamFormat = liveFormat,
+  ) => {
+    if (!isWebOs || media?.type !== 'live') return;
+    const video = videoRef.current;
+    const currentTime = typeof video?.currentTime === 'number' && Number.isFinite(video.currentTime)
+      ? video.currentTime.toFixed(1)
+      : 'n/d';
+    const readyState = typeof video?.readyState === 'number' ? video.readyState : 'n/d';
+    // Do not include the source URL: it can contain provider credentials.
+    console.info(`[FVP webOS live] evento=${event} formato=${format} currentTime=${currentTime} readyState=${readyState} conteggio=${interruptionCount}`);
+  }, [isWebOs, media?.type, liveFormat]);
+
+  const recoverWebOsLiveInterruption = useCallback((event: 'ended' | 'stall') => {
     if (!isWebOs || media?.type !== 'live' || webOsRestartTimerRef.current) return;
     const recovery = webOsRecoveryRef.current;
+    const now = Date.now();
     const decision = decideWebOsLiveInterruption({
       desiredPlaying: desiredPlayingRef.current,
-      now: Date.now(),
+      now,
       lastRecoveryAt: recovery.lastRecoveryAt,
       interruptionCount: recovery.interruptionCount,
       automaticFormatSwitchUsed: recovery.automaticFormatSwitchUsed,
@@ -370,18 +400,21 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     });
     if (decision.kind === 'ignore') return;
 
+    logWebOsLiveDiagnostic(event === 'ended' ? 'ended' : 'stallo-rilevato', decision.interruptionCount);
     recovery.interruptionCount = decision.interruptionCount;
-    recovery.lastRecoveryAt = Date.now();
+    recovery.lastRecoveryAt = now;
     if (decision.kind === 'restart' && decision.interruptionCount === 1) {
       recovery.automaticFormatSwitchUsed = false;
     }
-    if (webOsStallTimerRef.current) clearTimeout(webOsStallTimerRef.current);
-    webOsStallTimerRef.current = null;
+    webOsProgressMonitoringStartedAtRef.current = null;
+    webOsLastProgressAtRef.current = null;
+    webOsLastProgressTimeRef.current = null;
     if (webOsLearningTimerRef.current) clearTimeout(webOsLearningTimerRef.current);
     webOsLearningTimerRef.current = null;
     recovery.learningFormat = null;
 
     if (decision.kind === 'error') {
+      logWebOsLiveDiagnostic('errore-terminale', decision.interruptionCount);
       releaseCurrentLiveConnection();
       setIsPlaying(false);
       setIsLoading(false);
@@ -389,6 +422,9 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       return;
     }
 
+    if (decision.kind === 'restart') {
+      logWebOsLiveDiagnostic('riavvio', decision.interruptionCount);
+    }
     // Close the native connection before waiting/rebuilding it. This prevents
     // webOS from retaining an old progressive connection alongside the retry.
     releaseCurrentLiveConnection();
@@ -397,6 +433,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     webOsRestartTimerRef.current = setTimeout(() => {
       webOsRestartTimerRef.current = null;
       if (decision.kind === 'switch-format') {
+        logWebOsLiveDiagnostic('cambio-formato-automatico', decision.interruptionCount, decision.format);
         recovery.automaticFormatSwitchUsed = true;
         recovery.learningFormat = decision.format;
         requestLiveFormat(decision.format, 'automatic');
@@ -404,7 +441,45 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
         dispatchPlayback({ type: 'RETRY' });
       }
     }, WEBOS_LIVE_RESTART_DELAY_MS);
-  }, [isWebOs, media?.id, media?.type, liveFormat, webOsAllowedFormats, releaseCurrentLiveConnection, requestLiveFormat, setIsLoading, setIsPlaying, setErrorMessage]);
+  }, [isWebOs, media?.id, media?.type, liveFormat, webOsAllowedFormats, logWebOsLiveDiagnostic, releaseCurrentLiveConnection, requestLiveFormat, setIsLoading, setIsPlaying, setErrorMessage]);
+
+  useEffect(() => {
+    if (!isWebOs || media?.type !== 'live') return;
+
+    const checkProgress = () => {
+      const video = videoRef.current;
+      if (!video || !desiredPlayingRef.current || video.paused) return;
+      const now = Date.now();
+      const current = video.currentTime;
+      if (webOsProgressMonitoringStartedAtRef.current === null) {
+        webOsProgressMonitoringStartedAtRef.current = now;
+      }
+      if (webOsLastProgressTimeRef.current === null) {
+        // This is only the comparison baseline. lastProgressAt is updated
+        // exclusively below after a qualifying 0.3-second advancement.
+        webOsLastProgressTimeRef.current = current;
+      } else if (current - webOsLastProgressTimeRef.current >= WEBOS_LIVE_PROGRESS_DELTA_SECONDS) {
+        webOsLastProgressAtRef.current = now;
+        webOsLastProgressTimeRef.current = current;
+      }
+      if (isWebOsLiveStalled({
+        now,
+        lastProgressAt: webOsLastProgressAtRef.current ?? webOsProgressMonitoringStartedAtRef.current,
+        desiredPlaying: desiredPlayingRef.current,
+        paused: video.paused,
+      })) {
+        recoverWebOsLiveInterruption('stall');
+      }
+    };
+
+    checkProgress();
+    const timer = setInterval(checkProgress, WEBOS_LIVE_PROGRESS_POLL_MS);
+    webOsProgressWatchdogRef.current = timer;
+    return () => {
+      clearInterval(timer);
+      if (webOsProgressWatchdogRef.current === timer) webOsProgressWatchdogRef.current = null;
+    };
+  }, [isWebOs, media?.id, media?.type, liveFormat, recoverWebOsLiveInterruption]);
 
   useEffect(() => () => {
     clearWebOsLiveTimers();
@@ -509,6 +584,11 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     destroyEngines();
 
     const isLive = media.type === 'live';
+    if (isWebOs && isLive) {
+      webOsProgressMonitoringStartedAtRef.current = null;
+      webOsLastProgressAtRef.current = null;
+      webOsLastProgressTimeRef.current = null;
+    }
     const failOrFallback = (message: string) => {
       if (isLive) handleLiveStartFailure(message);
       else {
@@ -713,14 +793,21 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   }, [refreshPipAvailability, media?.id]);
 
   const handlePlaybackReady = () => {
+    const video = videoRef.current;
     hasStartedPlaybackRef.current = true;
     refreshPipAvailability();
     if (startupTimeoutRef.current) clearTimeout(startupTimeoutRef.current);
     if (bufferingTimeoutRef.current) clearTimeout(bufferingTimeoutRef.current);
     startupTimeoutRef.current = null;
     bufferingTimeoutRef.current = null;
-    if (webOsStallTimerRef.current) clearTimeout(webOsStallTimerRef.current);
-    webOsStallTimerRef.current = null;
+    if (isWebOs && media?.type === 'live' && desiredPlayingRef.current && video && !video.paused) {
+      if (webOsProgressMonitoringStartedAtRef.current === null) {
+        webOsProgressMonitoringStartedAtRef.current = Date.now();
+      }
+      if (webOsLastProgressTimeRef.current === null) {
+        webOsLastProgressTimeRef.current = video.currentTime;
+      }
+    }
     if (bufferingUiDelayRef.current) clearTimeout(bufferingUiDelayRef.current);
     bufferingUiDelayRef.current = null;
     setShowBufferingIndicator(false);
@@ -742,15 +829,9 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
 
   const handleWaiting = () => {
     setIsLoading(true);
-    if (isWebOs && media?.type === 'live') {
-      if (hasStartedPlaybackRef.current && desiredPlayingRef.current && !webOsStallTimerRef.current) {
-        webOsStallTimerRef.current = setTimeout(() => {
-          webOsStallTimerRef.current = null;
-          recoverWebOsLiveInterruption();
-        }, WEBOS_LIVE_STALL_TIMEOUT_MS);
-      }
-      return;
-    }
+    // webOS HLS regularly emits waiting/stalled while currentTime keeps moving.
+    // Those events are UI-only; the progress watchdog decides real stalls.
+    if (isWebOs && media?.type === 'live') return;
     if (hasStartedPlaybackRef.current && !bufferingUiDelayRef.current) {
       bufferingUiDelayRef.current = setTimeout(() => {
         bufferingUiDelayRef.current = null;
@@ -793,11 +874,17 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     if (!videoRef.current) return;
     if (desiredPlayingRef.current) {
       desiredPlayingRef.current = false;
+      webOsProgressMonitoringStartedAtRef.current = null;
+      webOsLastProgressAtRef.current = null;
+      webOsLastProgressTimeRef.current = null;
       videoRef.current.pause();
       setIsPlaying(false);
     } else {
       // An explicit Play click supersedes every delayed event from the seek.
       desiredPlayingRef.current = true;
+      webOsProgressMonitoringStartedAtRef.current = null;
+      webOsLastProgressAtRef.current = null;
+      webOsLastProgressTimeRef.current = null;
       seekPlaybackIntentRef.current = null;
       videoRef.current.play().catch(() => {
         desiredPlayingRef.current = false;
@@ -844,14 +931,32 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   };
 
   const handleVideoPlay = () => {
+    const video = videoRef.current;
     // HLS/Chrome may emit play while a paused seek is settling. The visual
     // state follows the user's explicit intent, never that transient event.
     if (!desiredPlayingRef.current) {
-      videoRef.current?.pause();
+      video?.pause();
       setIsPlaying(false);
       return;
     }
+    if (isWebOs && media?.type === 'live' && video && !video.paused) {
+      if (webOsProgressMonitoringStartedAtRef.current === null) {
+        webOsProgressMonitoringStartedAtRef.current = Date.now();
+      }
+      if (webOsLastProgressTimeRef.current === null) {
+        webOsLastProgressTimeRef.current = video.currentTime;
+      }
+    }
     setIsPlaying(true);
+  };
+
+  const handleVideoPause = () => {
+    if (isWebOs && media?.type === 'live') {
+      webOsProgressMonitoringStartedAtRef.current = null;
+      webOsLastProgressAtRef.current = null;
+      webOsLastProgressTimeRef.current = null;
+    }
+    setIsPlaying(false);
   };
 
   const handleSkip = (seconds: number) => {
@@ -1200,9 +1305,9 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
         onLoadedData={handlePlaybackReady}
         onCanPlay={handlePlaybackReady}
         onPlay={handleVideoPlay}
-        onPause={() => setIsPlaying(false)}
+        onPause={handleVideoPause}
         onEnded={() => {
-          if (isWebOs && media.type === 'live') recoverWebOsLiveInterruption();
+          if (isWebOs && media.type === 'live') recoverWebOsLiveInterruption('ended');
         }}
         onSeeked={handleSeeked}
         onWaiting={handleWaiting}

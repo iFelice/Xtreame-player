@@ -5,6 +5,8 @@ export type PlaybackTarget = 'web' | 'webos';
 export const WEBOS_LIVE_RESTART_DELAY_MS = 1_000;
 export const WEBOS_LIVE_INTERRUPTION_WINDOW_MS = 60_000;
 export const WEBOS_LIVE_STALL_TIMEOUT_MS = 10_000;
+export const WEBOS_LIVE_PROGRESS_POLL_MS = 1_000;
+export const WEBOS_LIVE_PROGRESS_DELTA_SECONDS = 0.3;
 export const WEBOS_LIVE_LEARN_STABILITY_MS = 30_000;
 export const WEBOS_LIVE_AUTOMATIC_RESTART_LIMIT = 2;
 
@@ -136,6 +138,23 @@ export function shouldLearnWebOsLiveFormat(options: {
   stableForMs: number;
 }): boolean {
   return options.automaticallySwitched && options.stableForMs >= WEBOS_LIVE_LEARN_STABILITY_MS;
+}
+
+/**
+ * A webOS Live stall is lack of actual media progress, not a noisy buffering
+ * event. The caller samples video.currentTime and passes the last advancing
+ * instant; paused or intentionally paused playback is never a stall.
+ */
+export function isWebOsLiveStalled(options: {
+  now: number;
+  lastProgressAt: number | null;
+  desiredPlaying: boolean;
+  paused: boolean;
+}): boolean {
+  return options.desiredPlaying
+    && !options.paused
+    && options.lastProgressAt !== null
+    && options.now - options.lastProgressAt >= WEBOS_LIVE_STALL_TIMEOUT_MS;
 }
 
 /** Force HLS for Xtream live URLs, including older extensionless saved links. */
