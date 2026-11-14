@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { canFallbackToMpegTs, isPublicMockStream, normalizeLiveStreamUrl } from './streamFormat';
+import {
+  canFallbackToMpegTs,
+  defaultLiveStreamFormat,
+  isPublicMockStream,
+  liveFormatForChannel,
+  nextLiveFormatAfterFailure,
+  normalizeLiveStreamUrl,
+} from './streamFormat';
 
 describe('live stream format', () => {
   it('switches regular Xtream URLs without losing query parameters', () => {
@@ -24,5 +31,20 @@ describe('live stream format', () => {
 
   it('does not mistake ordinary names for public mock stream ids', () => {
     expect(isPublicMockStream('https://example.test/live/public_news.ts')).toBe(false);
+  });
+
+  it('starts webOS Live with TS and gives every channel one TS to HLS retry', () => {
+    expect(defaultLiveStreamFormat('webos')).toBe('ts');
+    expect(defaultLiveStreamFormat('web')).toBe('m3u8');
+    expect(liveFormatForChannel('webos', 'live_1', 'live_2', 'm3u8')).toBe('ts');
+    expect(nextLiveFormatAfterFailure({
+      target: 'webos', currentFormat: 'ts', fallbackAlreadyTried: false, canSwitchFormat: true,
+    })).toEqual({ kind: 'retry', format: 'm3u8' });
+    expect(nextLiveFormatAfterFailure({
+      target: 'webos', currentFormat: 'm3u8', fallbackAlreadyTried: false, canSwitchFormat: true,
+    })).toEqual({ kind: 'fail' });
+    expect(nextLiveFormatAfterFailure({
+      target: 'webos', currentFormat: 'ts', fallbackAlreadyTried: true, canSwitchFormat: true,
+    })).toEqual({ kind: 'fail' });
   });
 });

@@ -38,6 +38,7 @@ import { exitTvApp, isWebOsBuild } from './platform/runtime';
 import { TV_TEXT_FIELD_BACK_GRACE_MS, resolveTvBackAction, resolveTvExitConfirmAction, type TvBackAction, type TvBackState } from './platform/tvBack';
 import { closeTvOverlay, isTvOverlayOpen } from './platform/tvOverlays';
 import { isWebOsRemoteBackEvent } from './player/webosRemote';
+import type { LivePlaybackOrigin } from './player/liveZapping';
 import { useTvNavigation } from './utils/tvNavigation';
 import { chooseInitialTab, shouldShowMobileBar } from './utils/navigation';
 import type { SectionTab } from './utils/navigation';
@@ -107,6 +108,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<SectionTab>('recent');
   const [showTvHome, setShowTvHome] = useState<boolean>(false);
   const [activeMedia, setActiveMedia] = useState<PlayableMediaItem | null>(null);
+  const [activeLiveOrigin, setActiveLiveOrigin] = useState<LivePlaybackOrigin | undefined>();
   const [isPlayerFullscreen, setIsPlayerFullscreen] = useState<boolean>(false);
   const [selectedSeriesForModal, setSelectedSeriesForModal] = useState<string | number | null>(null);
   // Cerca su tutto il catalogo: vista dedicata, mai in modalità TV.
@@ -461,9 +463,36 @@ export default function App() {
     return () => { cancelled = true; };
   }, [connectToServer, isRemoteLoginPage, isWebOs]);
 
-  const handlePlayDirect = (media: PlayableMediaItem) => {
+  const handlePlayDirect = (media: PlayableMediaItem, origin?: LivePlaybackOrigin) => {
     setActiveMedia(media);
+    if (isWebOs && media.type === 'live') {
+      // Search and other entry points have no narrowed origin: webOS may then
+      // zap through the entire catalog. Category/favorites sources stay intact.
+      const allLiveChannels = liveStreams.map((stream) => ({
+        id: `live_${stream.stream_id}`,
+        title: stream.name,
+        type: 'live' as const,
+        streamUrl: stream.direct_source || buildStreamUrl(serverUrl, username, password, 'live', stream.stream_id, 'm3u8', false),
+        poster: stream.stream_icon,
+        categoryName: 'Canale Live TV',
+        containerExtension: 'm3u8',
+      }));
+      setActiveLiveOrigin(origin ?? { channels: allLiveChannels, categoryName: 'Canali Live TV' });
+    } else {
+      setActiveLiveOrigin(undefined);
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleClosePlayer = () => {
+    const focusId = activeLiveOrigin?.focusId;
+    setActiveMedia(null);
+    setActiveLiveOrigin(undefined);
+    if (focusId) requestAnimationFrame(() => document.getElementById(focusId)?.focus({ preventScroll: true }));
+  };
+
+  const handleSelectLiveChannel = (channel: PlayableMediaItem) => {
+    setActiveMedia(channel);
   };
 
   // Qualsiasi cambio di sezione chiude la ricerca: si torna alla vista normale.
@@ -641,9 +670,11 @@ export default function App() {
           <section className="space-y-3 animate-in fade-in slide-in-from-top-4 duration-300">
             <MediaPlayer
               media={activeMedia}
-              onClose={() => setActiveMedia(null)}
-              onNext={activeMedia.type === 'live' && liveStreams.length > 1 ? handleNextChannel : undefined}
-              onPrevious={activeMedia.type === 'live' && liveStreams.length > 1 ? handlePreviousChannel : undefined}
+              onClose={handleClosePlayer}
+              onNext={!isWebOs && activeMedia.type === 'live' && liveStreams.length > 1 ? handleNextChannel : undefined}
+              onPrevious={!isWebOs && activeMedia.type === 'live' && liveStreams.length > 1 ? handlePreviousChannel : undefined}
+              liveChannels={activeLiveOrigin?.channels}
+              onSelectLiveChannel={isWebOs ? handleSelectLiveChannel : undefined}
               onFullscreenChange={setIsPlayerFullscreen}
               accountKey={currentAccountKey}
             />

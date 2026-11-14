@@ -20,6 +20,11 @@ describe('media engine lifecycle', () => {
     expect(selectMediaEngine({ ...desktop, isLive: true, supportsHlsJs: false })).toBe('native-hls');
   });
 
+  it('uses only the native decoder for webOS regardless of the stream container', () => {
+    expect(selectMediaEngine({ ...desktop, isLive: true, liveFormat: 'ts', preferNativeOnly: true })).toBe('native-video');
+    expect(selectMediaEngine({ ...desktop, isLive: true, preferNativeOnly: true })).toBe('native-video');
+  });
+
   it('prefers native HLS on Apple mobile while keeping MP4 native video', () => {
     const apple = { ...desktop, isAppleMobile: true };
     expect(selectMediaEngine({ ...apple, isLive: true })).toBe('native-hls');

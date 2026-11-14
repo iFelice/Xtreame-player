@@ -9,7 +9,7 @@ export interface MediaEngineRefs {
 
 export type MediaEngineKind = 'mpegts' | 'hls-js' | 'native-hls' | 'native-video';
 
-export function selectMediaEngine(options: {
+export interface MediaEngineSelection {
   isLive: boolean;
   liveFormat: 'm3u8' | 'ts';
   mediaExtension?: string;
@@ -17,7 +17,12 @@ export function selectMediaEngine(options: {
   supportsHlsJs: boolean;
   supportsNativeHls: boolean;
   isAppleMobile: boolean;
-}): MediaEngineKind {
+  /** LG webOS must use only the native decoder and one server connection. */
+  preferNativeOnly?: boolean;
+}
+
+export function selectMediaEngine(options: MediaEngineSelection): MediaEngineKind {
+  if (options.preferNativeOnly) return 'native-video';
   const isHls = options.isLive
     ? options.liveFormat === 'm3u8'
     : options.mediaExtension?.toLowerCase() === 'm3u8';

@@ -17,6 +17,7 @@ import { buildSearchIndex, filterRankedEntries, hasMinQueryLength } from '../uti
 import { ListPositionIndicator } from './ListPositionIndicator';
 import { CollapsibleCategoryPanel } from './CollapsibleCategoryPanel';
 import { ChannelLogo, LiveChannelListRow } from './LiveChannelRow';
+import type { LivePlaybackOrigin } from '../player/liveZapping';
 
 interface LiveCatalogProps {
   categories: XtreamCategory[];
@@ -24,7 +25,7 @@ interface LiveCatalogProps {
   serverUrl: string;
   username: string;
   password: string;
-  onPlay: (item: PlayableMediaItem) => void;
+  onPlay: (item: PlayableMediaItem, origin?: LivePlaybackOrigin) => void;
   activeMediaId?: string | null;
   isLoading?: boolean;
   accountKey?: string;
@@ -135,9 +136,29 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
     return () => clearTimeout(timer);
   }, [activeMediaId]);
 
+  const makeLiveMediaItem = (stream: XtreamLiveStream): PlayableMediaItem => ({
+    id: `live_${stream.stream_id}`,
+    title: stream.name,
+    type: 'live',
+    streamUrl: stream.direct_source || buildStreamUrl(
+      serverUrl,
+      username,
+      password,
+      'live',
+      stream.stream_id,
+      'm3u8',
+      false,
+    ),
+    poster: stream.stream_icon,
+    categoryName: currentCategory?.category_name || 'Canale Live TV',
+    containerExtension: 'm3u8',
+  });
+
   const handlePlayLive = (stream: XtreamLiveStream) => {
-    // Scroll selected channel to top of viewport immediately
-    const elem = document.getElementById(`live-channel-${stream.stream_id}`);
+    const focusId = `live-channel-${stream.stream_id}`;
+    // Focus/scroll the origin before opening the player so it can be restored.
+    const elem = document.getElementById(focusId);
+    elem?.focus({ preventScroll: true });
     if (elem && channelsListRef.current) {
       const container = channelsListRef.current;
       const containerTop = container.getBoundingClientRect().top;
@@ -145,28 +166,11 @@ export const LiveCatalog: React.FC<LiveCatalogProps> = ({
       const targetScroll = container.scrollTop + (elemTop - containerTop);
       container.scrollTo({ top: Math.max(0, targetScroll), behavior: 'smooth' });
     }
-
-    const streamUrl = stream.direct_source || buildStreamUrl(
-      serverUrl,
-      username,
-      password,
-      'live',
-      stream.stream_id,
-      'm3u8',
-      false
-    );
-
-    const mediaItem: PlayableMediaItem = {
-      id: `live_${stream.stream_id}`,
-      title: stream.name,
-      type: 'live',
-      streamUrl,
-      poster: stream.stream_icon,
+    onPlay(makeLiveMediaItem(stream), {
+      channels: filteredStreams.map(makeLiveMediaItem),
       categoryName: currentCategory?.category_name || 'Canale Live TV',
-      containerExtension: 'm3u8',
-    };
-
-    onPlay(mediaItem);
+      focusId,
+    });
   };
 
   const toggleFavorite = (stream: XtreamLiveStream) => {

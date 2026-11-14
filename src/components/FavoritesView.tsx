@@ -2,15 +2,17 @@ import { RemoteImage } from './RemoteImage';
 import React, { useState, useEffect } from 'react';
 import { Star, Clock, Play, Trash2, Film, Tv, Radio } from 'lucide-react';
 import { PlayableMediaItem } from '../types/xtream';
+import type { LivePlaybackOrigin } from '../player/liveZapping';
 import { storage, WatchHistoryItem } from '../services/storage';
 import { getSecureImageUrl } from '../utils/imageUrl';
 import { isTvEnvironment } from '../utils/downloadHelper';
+import { isWebOsBuild } from '../platform/runtime';
 import { MovieDetailModal } from './MovieDetailModal';
 import { useTouchCardMode } from '../utils/useTouchCardMode';
 import { showsHoverVeil } from '../utils/touchDevice';
 
 interface FavoritesViewProps {
-  onPlay: (item: PlayableMediaItem) => void;
+  onPlay: (item: PlayableMediaItem, origin?: LivePlaybackOrigin) => void;
   onOpenSeries: (seriesId: string | number) => void;
   accountKey?: string;
   /** Optional Xtream credentials: they add plot and metadata to the movie sheet. */
@@ -31,6 +33,7 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({
   const [history, setHistory] = useState<WatchHistoryItem[]>([]);
   const [activeMovie, setActiveMovie] = useState<PlayableMediaItem | null>(null);
   const isTv = isTvEnvironment();
+  const isWebOs = isWebOsBuild();
   // Touch cards (TV excluded) open the movie sheet instead of playing at once.
   const touchCardMode = useTouchCardMode(isTv);
 
@@ -65,7 +68,16 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({
       setActiveMovie(item);
       return;
     }
-    // Live channels keep starting with a single tap, also on touch.
+    // Only webOS needs a retained favorite-source list for zapping. Keep the
+    // established single-argument play callback unchanged for every other UI.
+    if (isWebOs && item.type === 'live') {
+      onPlay(item, {
+        channels: favorites.filter((favorite) => favorite.type === 'live'),
+        categoryName: 'Preferiti',
+        focusId: `favorite-${item.id}`,
+      });
+      return;
+    }
     onPlay(item);
   };
 
@@ -185,6 +197,7 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({
             {favorites.map((item) => (
               <div
                 key={item.id}
+                id={`favorite-${item.id}`}
                 role={isTv ? 'button' : undefined}
                 tabIndex={isTv ? 0 : undefined}
                 onKeyDown={(event) => {

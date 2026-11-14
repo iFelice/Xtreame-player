@@ -1,5 +1,12 @@
 /** LG webOS remote Back key and app-level exit decisions. */
 export const LG_KEY_BACK = 461;
+export const LG_KEY_CHANNEL_UP = 33;
+export const LG_KEY_CHANNEL_DOWN = 34;
+export const LG_KEY_PLAY = 415;
+export const LG_KEY_PAUSE = 19;
+export const LG_KEY_STOP = 413;
+export const LG_KEY_FAST_FORWARD = 417;
+export const LG_KEY_REWIND = 412;
 
 /**
  * webOS can dismiss its system keyboard before delivering the physical Back
