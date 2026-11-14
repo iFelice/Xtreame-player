@@ -97,7 +97,9 @@ function focusTextFieldReturnTarget(field: TextFieldElement | null): void {
 export default function App() {
   const isWebOs = isWebOsBuild();
   const isTv = isTvEnvironment();
-  useTvNavigation(isTv);
+  // Keep browser/Apple/Capacitor navigation untouched; the catalog's spatial
+  // correction and initial tab target belong exclusively to the webOS build.
+  useTvNavigation(isTv, isWebOs);
   const [serverUrl, setServerUrl] = useState<string>('');
   const [username, setUsername] = useState<string>('');
   const [password, setPassword] = useState<string>('');
@@ -755,6 +757,7 @@ export default function App() {
               )}
               {/* 1. Live TV */}
               <button
+                data-tv-initial-focus={isWebOs && activeTab === 'live' ? 'true' : undefined}
                 onClick={() => handleSelectTab('live')}
                 className={`flex items-center gap-2.5 px-4 sm:px-5 py-2.5 rounded-2xl text-sm sm:text-base font-bold transition cursor-pointer shadow-md ${
                   activeTab === 'live'
@@ -771,6 +774,7 @@ export default function App() {
 
               {/* 2. Film & VOD */}
               <button
+                data-tv-initial-focus={isWebOs && activeTab === 'movies' ? 'true' : undefined}
                 onClick={() => handleSelectTab('movies')}
                 className={`flex items-center gap-2.5 px-4 sm:px-5 py-2.5 rounded-2xl text-sm sm:text-base font-bold transition cursor-pointer shadow-md ${
                   activeTab === 'movies'
@@ -787,6 +791,7 @@ export default function App() {
 
               {/* 3. Serie TV */}
               <button
+                data-tv-initial-focus={isWebOs && activeTab === 'series' ? 'true' : undefined}
                 onClick={() => handleSelectTab('series')}
                 className={`flex items-center gap-2.5 px-4 sm:px-5 py-2.5 rounded-2xl text-sm sm:text-base font-bold transition cursor-pointer shadow-md ${
                   activeTab === 'series'
@@ -803,6 +808,7 @@ export default function App() {
 
               {/* 4. Novità & Recenti */}
               <button
+                data-tv-initial-focus={isWebOs && activeTab === 'recent' ? 'true' : undefined}
                 onClick={() => handleSelectTab('recent')}
                 className={`flex items-center gap-2.5 px-4 sm:px-5 py-2.5 rounded-2xl text-sm sm:text-base font-bold transition cursor-pointer shadow-md ${
                   activeTab === 'recent'
@@ -816,6 +822,7 @@ export default function App() {
 
               {/* 5. Preferiti & Continua a Guardare */}
               <button
+                data-tv-initial-focus={isWebOs && activeTab === 'favorites' ? 'true' : undefined}
                 onClick={() => handleSelectTab('favorites')}
                 className={`flex items-center gap-2.5 px-4 sm:px-5 py-2.5 rounded-2xl text-sm sm:text-base font-bold transition cursor-pointer shadow-md ${
                   activeTab === 'favorites'

@@ -332,7 +332,14 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       video.pause();
       destroyEngines();
       setIsPlaying(false);
-      failOrFallback('Il contenuto non ha risposto entro 20 secondi. Riprova oppure torna al catalogo.');
+      const message = 'Il contenuto non ha risposto entro 20 secondi. Riprova oppure torna al catalogo.';
+      // The web/browser startup timeout has always ended in the retry panel.
+      // Only webOS may use its one-shot stream-format recovery here.
+      if (isWebOs && isLive) failOrFallback(message);
+      else {
+        setIsLoading(false);
+        setErrorMessage(message);
+      }
     }, 20_000);
     const engine = selectMediaEngine({
       isLive,
@@ -374,7 +381,14 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
             return;
           }
           if (!video || video.currentTime === 0) {
-            failOrFallback('Impossibile caricare il flusso live MPEG-TS. Clicca su Riprova o cambia formato.');
+            if (isWebOs) {
+              failOrFallback('Impossibile caricare il flusso live MPEG-TS. Clicca su Riprova o cambia formato.');
+            } else {
+              // Keep the established browser/Apple/static/Capacitor retry text
+              // and behavior exactly as it was before the webOS player path.
+              setErrorMessage('Impossibile caricare il flusso live MPEG-TS. Clicca su Riprova o Proxy.');
+              setIsLoading(false);
+            }
           }
         });
 
@@ -389,8 +403,14 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
             setIsLoading(false);
           });
       } catch {
-        console.error('MPEG-TS init failed.');
-        failOrFallback('Impossibile inizializzare il flusso live MPEG-TS.');
+        if (isWebOs) {
+          console.error('MPEG-TS init failed.');
+          failOrFallback('Impossibile inizializzare il flusso live MPEG-TS.');
+        } else {
+          // Preserve the original non-webOS engine recovery target and text.
+          console.error('MPEG-TS init failed, falling back to HLS.');
+          requestLiveFormat('m3u8');
+        }
       }
     } else if (engine === 'hls-js') {
       // Enhanced HLS.js streaming configuration for smooth and stable playback

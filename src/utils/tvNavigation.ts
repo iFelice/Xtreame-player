@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 
-type Direction = 'up' | 'down' | 'left' | 'right';
+export type Direction = 'up' | 'down' | 'left' | 'right';
 
 const FOCUSABLE_SELECTOR = [
   'button:not([disabled])',
@@ -27,12 +27,33 @@ function candidatesWithin(layer: HTMLElement | null): HTMLElement[] {
   return Array.from(scope.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(isVisible);
 }
 
-function findNextElement(current: HTMLElement, direction: Direction, layer: HTMLElement | null): HTMLElement | null {
+function overlaps(startA: number, endA: number, startB: number, endB: number): boolean {
+  return Math.min(endA, endB) > Math.max(startA, startB);
+}
+
+function edgeDistance(current: DOMRect, candidate: DOMRect, direction: Direction): number {
+  if (direction === 'left') return Math.max(0, current.left - candidate.right);
+  if (direction === 'right') return Math.max(0, candidate.left - current.right);
+  if (direction === 'up') return Math.max(0, current.top - candidate.bottom);
+  return Math.max(0, candidate.top - current.bottom);
+}
+
+/**
+ * Finds the closest spatial candidate. On webOS, controls sharing the same
+ * visual row/column win over a nearby diagonal card: this keeps the catalog
+ * header reachable from its refresh action without changing modal scoping.
+ */
+export function findNextElement(
+  current: HTMLElement,
+  direction: Direction,
+  layer: HTMLElement | null,
+  preferAlignedBand = true,
+): HTMLElement | null {
   const currentRect = current.getBoundingClientRect();
   const currentX = currentRect.left + currentRect.width / 2;
   const currentY = currentRect.top + currentRect.height / 2;
-  let best: HTMLElement | null = null;
-  let bestScore = Number.POSITIVE_INFINITY;
+  const candidates: Array<{ element: HTMLElement; rect: DOMRect; score: number; aligned: boolean }> = [];
+
   for (const candidate of candidatesWithin(layer)) {
     if (candidate === current) continue;
     const rect = candidate.getBoundingClientRect();
@@ -46,13 +67,25 @@ function findNextElement(current: HTMLElement, direction: Direction, layer: HTML
     if (!inDirection) continue;
     const primary = direction === 'left' || direction === 'right' ? Math.abs(dx) : Math.abs(dy);
     const secondary = direction === 'left' || direction === 'right' ? Math.abs(dy) : Math.abs(dx);
-    const score = primary + secondary * 2.5;
-    if (score < bestScore) {
-      best = candidate;
-      bestScore = score;
+    const aligned = direction === 'left' || direction === 'right'
+      ? overlaps(currentRect.top, currentRect.bottom, rect.top, rect.bottom)
+      : overlaps(currentRect.left, currentRect.right, rect.left, rect.right);
+    candidates.push({ element: candidate, rect, score: primary + secondary * 2.5, aligned });
+  }
+
+  if (preferAlignedBand) {
+    const aligned = candidates.filter((candidate) => candidate.aligned);
+    if (aligned.length > 0) {
+      aligned.sort((a, b) => {
+        const distance = edgeDistance(currentRect, a.rect, direction) - edgeDistance(currentRect, b.rect, direction);
+        return distance || a.score - b.score;
+      });
+      return aligned[0].element;
     }
   }
-  return best;
+
+  candidates.sort((a, b) => a.score - b.score);
+  return candidates[0]?.element ?? null;
 }
 
 function focusElement(element: HTMLElement | null | undefined): void {
@@ -61,12 +94,19 @@ function focusElement(element: HTMLElement | null | undefined): void {
   element.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
 }
 
+function isEditableTextField(element: Element | null): boolean {
+  if (!(element instanceof HTMLElement)) return false;
+  if (element instanceof HTMLTextAreaElement || element.isContentEditable) return true;
+  if (!(element instanceof HTMLInputElement)) return false;
+  return !['button', 'checkbox', 'file', 'hidden', 'image', 'radio', 'reset', 'submit'].includes(element.type.toLowerCase());
+}
+
 /**
  * Spatial D-pad navigation for the catalogues plus strict modal focus scope.
- * It intentionally does not assign any key semantics to the media player;
- * those are added in PR2.
+ * `webOsMode` scopes PR2's aligned-header and initial-tab behavior away from
+ * browser, Apple, static and Capacitor builds.
  */
-export function useTvNavigation(enabled: boolean): void {
+export function useTvNavigation(enabled: boolean, webOsMode = false): void {
   useEffect(() => {
     if (!enabled || typeof document === 'undefined' || !document.body) return;
 
@@ -74,6 +114,7 @@ export function useTvNavigation(enabled: boolean): void {
     const originalInert = new Map<HTMLElement, boolean>();
     let activeLayer: HTMLElement | null = null;
     let previousFocus: HTMLElement | null = null;
+    let initialFocusHandled = false;
 
     const resetInert = () => {
       for (const [element, wasInert] of originalInert) element.inert = wasInert;
@@ -121,8 +162,20 @@ export function useTvNavigation(enabled: boolean): void {
       }
     };
 
+    const focusRequestedInitial = () => {
+      if (!webOsMode || activeLayer || initialFocusHandled) return;
+      const requested = document.querySelector<HTMLElement>('[data-tv-initial-focus]');
+      if (!requested || !isVisible(requested)) return;
+      // A login/search IME owns focus until the user finishes with it. Likewise,
+      // do not pull focus out of an open modal handled by refreshLayer above.
+      if (isEditableTextField(document.activeElement)) return;
+      focusElement(requested);
+      initialFocusHandled = true;
+    };
+
     const timer = window.setTimeout(() => {
       refreshLayer();
+      focusRequestedInitial();
       if (!activeLayer && (document.activeElement === document.body || !document.activeElement)) {
         focusElement(candidatesWithin(null)[0]);
       }
@@ -150,13 +203,16 @@ export function useTvNavigation(enabled: boolean): void {
         }
         return;
       }
-      const next = findNextElement(current, direction, layer);
+      const next = findNextElement(current, direction, layer, webOsMode);
       if (!next) return;
       event.preventDefault();
       focusElement(next);
     };
 
-    const observer = typeof MutationObserver === 'undefined' ? null : new MutationObserver(refreshLayer);
+    const observer = typeof MutationObserver === 'undefined' ? null : new MutationObserver(() => {
+      refreshLayer();
+      focusRequestedInitial();
+    });
     observer?.observe(document.body, {
       childList: true,
       subtree: true,
@@ -172,5 +228,5 @@ export function useTvNavigation(enabled: boolean): void {
       resetInert();
       document.body.classList?.remove('tv-mode');
     };
-  }, [enabled]);
+  }, [enabled, webOsMode]);
 }

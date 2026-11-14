@@ -82,10 +82,19 @@ type AppListener = (event: any) => void;
 function installWebOsCatalogHarness() {
   const windowListeners = new Map<string, AppListener>();
   const documentListeners = new Map<string, AppListener>();
+  const scheduledTimers = new Map<number, { callback: () => void; delay: number }>();
+  let timerId = 0;
   let activeElement: unknown = null;
+  let initialFocusTarget: { isConnected: boolean; focus: () => void; scrollIntoView: () => void; getBoundingClientRect: () => DOMRect } | null = null;
   const documentStub = {
+    body: {
+      classList: { add: () => {}, remove: () => {} },
+      children: [],
+    },
     get activeElement() { return activeElement; },
     getElementById: () => null,
+    querySelector: (selector: string) => selector === '[data-tv-initial-focus]' ? initialFocusTarget : null,
+    querySelectorAll: () => [],
     addEventListener: (name: string, listener: AppListener) => documentListeners.set(name, listener),
     removeEventListener: (name: string) => documentListeners.delete(name),
   };
@@ -98,14 +107,48 @@ function installWebOsCatalogHarness() {
     addEventListener: (name: string, listener: AppListener) => windowListeners.set(name, listener),
     removeEventListener: (name: string) => windowListeners.delete(name),
     matchMedia: () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }),
-    setInterval, clearInterval, setTimeout, clearTimeout, scrollTo: () => {}, close: () => {},
+    setInterval, clearInterval,
+    setTimeout: (callback: () => void, delay = 0) => {
+      const id = ++timerId;
+      scheduledTimers.set(id, { callback, delay });
+      return id;
+    },
+    clearTimeout: (id: number) => scheduledTimers.delete(id),
+    getComputedStyle: () => ({ display: 'block', visibility: 'visible' }),
+    scrollTo: () => {}, close: () => {},
   });
+  vi.stubGlobal('HTMLElement', class {});
+  vi.stubGlobal('HTMLInputElement', class {});
+  vi.stubGlobal('HTMLTextAreaElement', class {});
   vi.stubGlobal('document', documentStub);
   return {
     windowListeners,
     documentListeners,
     documentStub,
     setActiveElement: (element: unknown) => { activeElement = element; },
+    createNodeMock: (element: { type: unknown; props: unknown }) => {
+      const props = element.props as Record<string, unknown>;
+      if (element.type === 'button' && props['data-tv-initial-focus'] === 'true') {
+        const target = {
+          isConnected: true,
+          focus: () => { activeElement = target; },
+          scrollIntoView: () => {},
+          getBoundingClientRect: () => ({ left: 0, top: 0, width: 120, height: 48, right: 120, bottom: 48 }) as DOMRect,
+        };
+        initialFocusTarget = target;
+        return target;
+      }
+      return null;
+    },
+    runInitialFocusTimer: () => {
+      for (const [id, timer] of scheduledTimers) {
+        if (timer.delay === 100) {
+          scheduledTimers.delete(id);
+          timer.callback();
+        }
+      }
+    },
+    getInitialFocusTarget: () => initialFocusTarget,
   };
 }
 
@@ -151,7 +194,7 @@ async function mountLoggedInWebOsCatalog() {
   vi.stubGlobal('fetch', fetchMock);
   const { default: App } = await import('./App');
   let renderer: ReturnType<typeof create>;
-  await act(async () => { renderer = create(<App />); });
+  await act(async () => { renderer = create(<App />, { createNodeMock: harness.createNodeMock }); });
   const loginInputs = renderer!.root.findAllByType('input');
   await act(async () => {
     loginInputs[0].props.onChange({ target: { value: 'http://server.esempio:8080' } });
@@ -168,6 +211,21 @@ async function mountLoggedInWebOsCatalog() {
   expect(searchInput).toBeTruthy();
   return { renderer: renderer!, harness, searchInput };
 }
+
+describe('the real App webOS catalog initial focus', () => {
+  it('focuses the active catalog tab after access without relying on a synthetic App', async () => {
+    const { renderer, harness } = await mountLoggedInWebOsCatalog();
+    const activeTab = renderer.root.findAll((node) =>
+      node.type === 'button' && node.props['data-tv-initial-focus'] === 'true',
+    );
+    expect(activeTab).toHaveLength(1);
+    expect(String(activeTab[0].props.className)).toContain('bg-live');
+
+    await act(async () => { harness.runInitialFocusTimer(); });
+    expect(harness.documentStub.activeElement).toBe(harness.getInitialFocusTarget());
+    await act(async () => renderer.unmount());
+  });
+});
 
 describe('the real App webOS catalog Back handling', () => {
   it('blurs a focused catalog search field, stays in the catalog, then returns Home on the second Back', async () => {
