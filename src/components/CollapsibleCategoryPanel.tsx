@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Search,
   Layers,
@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { XtreamCategory } from '../types/xtream';
 import { isTvEnvironment } from '../utils/downloadHelper';
+import { registerTvOverlay } from '../platform/tvOverlays';
 
 export type CategoryAccent = 'live' | 'accent' | 'series';
 
@@ -86,6 +87,7 @@ export const CollapsibleCategoryPanel: React.FC<CollapsibleCategoryPanelProps> =
 }) => {
   const isTv = isTvEnvironment();
   const [isOpen, setIsOpen] = useState<boolean>(false);
+  useEffect(() => isOpen ? registerTvOverlay('category-panel', () => setIsOpen(false)) : undefined, [isOpen]);
   const [categorySearch, setCategorySearch] = useState<string>('');
   const desktopListRef = useRef<HTMLDivElement | null>(null);
   const mobileListRef = useRef<HTMLDivElement | null>(null);

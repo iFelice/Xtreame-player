@@ -14,3 +14,7 @@ Ordine previsto:
 6. `webos-tv` — applicazione LG TV dedicata.
 
 Al momento viene creata soltanto la cartella della prima app.
+
+7. `webos-tv` — build dedicata della web app in modalità TV, impacchettata come
+   `.ipk` per LG Developer Mode. Non contiene una seconda UI React;
+   documentazione: [`docs/WEBOS.md`](../docs/WEBOS.md).

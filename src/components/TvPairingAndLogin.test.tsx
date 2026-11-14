@@ -301,3 +301,26 @@ describe('LoginForm rubrica code resolution', () => {
     });
   });
 });
+
+describe('webOS pairing component', () => {
+  it('uses only the relay from the packaged TV build', async () => {
+    const relayUrl = 'https://pairing-relay.esempio.workers.dev';
+    vi.stubEnv('VITE_TARGET', 'webos');
+    vi.stubEnv('VITE_PAIRING_RELAY_URL', relayUrl);
+    vi.spyOn(downloadHelper, 'isTvEnvironment').mockReturnValue(true);
+    vi.spyOn(QRCode, 'toDataURL').mockResolvedValue('data:image/png;base64,qr' as never);
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
+      code: '001', pollToken: 'test-token', expiresInSeconds: 600,
+    }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    let renderer: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(<TvPairingModal isOpen pairingEnabled onClose={() => {}} onConnectAccount={() => {}} />);
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(`${relayUrl}/api/pair/create`, { method: 'POST' });
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/api/session/'))).toBe(false);
+    await act(async () => renderer!.unmount());
+  });
+});

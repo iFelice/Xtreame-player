@@ -1,0 +1,16 @@
+{
+  "name": "felixvp-webos",
+  "private": true,
+  "version": "1.0.0",
+  "description": "FelixVisionPlayer per LG webOS: build dedicata della web app in modalità TV, impaccettata come .ipk",
+  "type": "module",
+  "scripts": {
+    "install-tv": "ares-install --device lgtv dist/it.felixvision.player_1.0.0_all.ipk",
+    "launch": "ares-launch --device lgtv it.felixvision.player",
+    "list-devices": "ares-setup-device --list",
+    "info": "ares-info --device lgtv"
+  },
+  "devDependencies": {
+    "@webos-tools/cli": "3.2.6"
+  }
+}

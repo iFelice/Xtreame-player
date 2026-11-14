@@ -56,7 +56,7 @@ export const SettingsSyncModal: React.FC<SettingsSyncModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center safe-area-overlay bg-black/50 animate-in fade-in">
+    <div data-tv-layer="settings-sync" role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center safe-area-overlay bg-black/50 animate-in fade-in">
       <div className="glass border border-glass-edge rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col">
         {/* Modal Header */}
         <div className="px-5 py-4 border-b border-separator flex items-center justify-between gap-3">
