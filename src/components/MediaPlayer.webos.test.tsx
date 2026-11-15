@@ -204,6 +204,52 @@ describe('real MediaPlayer in webOS mode', () => {
     await act(async () => renderer!.unmount());
   });
 
+  it('hides the webOS Live loading overlay when waiting is followed by qualified progress without playing again', async () => {
+    installWebOsHarness();
+    const { MediaPlayer } = await import('./MediaPlayer');
+    const video = videoNode();
+    // Keep the initial play promise pending: this test drives canplay/waiting
+    // directly and must not let the synthetic play completion overwrite them.
+    video.play = vi.fn(() => new Promise<void>(() => {}));
+    let renderer: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(<MediaPlayer media={live(1)} onClose={() => {}} />, {
+        createNodeMock: (element) => element.type === 'video' ? video : { querySelectorAll: () => [] },
+      });
+    });
+    const player = () => renderer!.root.findByType('video');
+    video.paused = false;
+    await act(async () => { player().props.onCanPlay(); });
+    await act(async () => { player().props.onWaiting(); });
+    expect(renderer!.root.findAllByProps({ 'data-testid': 'player-loading-overlay' })).toHaveLength(1);
+
+    await act(async () => {
+      video.currentTime = 0.5;
+      vi.advanceTimersByTime(1_000);
+    });
+
+    expect(renderer!.root.findAllByProps({ 'data-testid': 'player-loading-overlay' })).toHaveLength(0);
+    await act(async () => renderer!.unmount());
+  });
+
+  it('does not treat fifteen seconds before first playing or canplay as a Live stall', async () => {
+    installWebOsHarness();
+    const { MediaPlayer } = await import('./MediaPlayer');
+    const video = videoNode();
+    let renderer: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(<MediaPlayer media={live(1)} onClose={() => {}} />, {
+        createNodeMock: (element) => element.type === 'video' ? video : { querySelectorAll: () => [] },
+      });
+    });
+    video.paused = false;
+    await act(async () => { vi.advanceTimersByTime(15_000); });
+
+    expect(video.removeAttribute).not.toHaveBeenCalled();
+    expect(renderer!.root.findAll((node) => node.children.includes('Impossibile riprodurre lo stream'))).toHaveLength(0);
+    await act(async () => renderer!.unmount());
+  });
+
   it('restarts once after ten seconds of fixed currentTime on the next progress poll', async () => {
     installWebOsHarness();
     const { MediaPlayer } = await import('./MediaPlayer');
@@ -315,6 +361,43 @@ describe('real MediaPlayer in webOS mode', () => {
     expect(renderer!.root.findAllByProps({ 'data-testid': 'webos-live-banner' })).toHaveLength(0);
     await act(async () => { listeners.get('keydown')!(remoteEvent('GoBack', 461)); });
     expect(close).toHaveBeenCalledTimes(1);
+    await act(async () => renderer!.unmount());
+  });
+
+  it('keeps manual category zapping available from the terminal Live error panel without a proxy action', async () => {
+    const listeners = installWebOsHarness();
+    const { MediaPlayer } = await import('./MediaPlayer');
+    const video = videoNode();
+    const selected = vi.fn();
+    let renderer: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(
+        <MediaPlayer
+          media={live(1)}
+          onClose={() => {}}
+          allowedLiveFormats={['m3u8']}
+          liveChannels={[live(1), live(2)]}
+          onSelectLiveChannel={selected}
+        />,
+        { createNodeMock: (element) => element.type === 'video' ? video : { querySelectorAll: () => [] } },
+      );
+    });
+    const player = () => renderer!.root.findByType('video');
+    await act(async () => { player().props.onError(); });
+
+    const previous = renderer!.root.findByProps({ 'data-webos-error-zap': 'previous' });
+    const next = renderer!.root.findByProps({ 'data-webos-error-zap': 'next' });
+    expect(previous.children).toContain('Canale precedente');
+    expect(next.children).toContain('Canale successivo');
+    expect(next.props['data-tv-initial-focus']).toBe(true);
+    expect(JSON.stringify(renderer!.toJSON())).not.toContain('Proxy');
+
+    await act(async () => { next.props.onClick(); });
+    expect(selected).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'live_2' }));
+    await act(async () => { listeners.get('keydown')!(remoteEvent('ArrowDown', 40)); });
+    expect(selected).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'live_2' }));
+    await act(async () => { listeners.get('keydown')!(remoteEvent('Unidentified', 33)); });
+    expect(selected).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'live_2' }));
     await act(async () => renderer!.unmount());
   });
 

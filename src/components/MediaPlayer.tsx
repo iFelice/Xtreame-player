@@ -128,7 +128,11 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   const [playback, dispatchPlayback] = useReducer(playbackReducer, initialPlaybackState);
   const isPlaying = playback.status === 'playing';
   const isLoading = isPlaybackLoading(playback);
+  const isLoadingRef = useRef(isLoading);
   const errorMessage = playback.error;
+  useEffect(() => {
+    isLoadingRef.current = isLoading;
+  }, [isLoading]);
   const setIsPlaying = useCallback((playing: boolean) => {
     dispatchPlayback({ type: playing ? 'PLAYING' : 'PAUSE' });
   }, []);
@@ -448,7 +452,10 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
 
     const checkProgress = () => {
       const video = videoRef.current;
-      if (!video || !desiredPlayingRef.current || video.paused) return;
+      // Before the first canplay/playing, the 20-second startup timeout is the
+      // only failure policy. Native webOS video can be unpaused while it still
+      // has not started decoding, so that interval must not count as a stall.
+      if (!video || !hasStartedPlaybackRef.current || !desiredPlayingRef.current || video.paused) return;
       const now = Date.now();
       const current = video.currentTime;
       if (webOsProgressMonitoringStartedAtRef.current === null) {
@@ -461,6 +468,12 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       } else if (current - webOsLastProgressTimeRef.current >= WEBOS_LIVE_PROGRESS_DELTA_SECONDS) {
         webOsLastProgressAtRef.current = now;
         webOsLastProgressTimeRef.current = current;
+        // webOS may emit waiting without a following playing/canplay although
+        // native playback resumes. Real currentTime progress is authoritative.
+        if (isLoadingRef.current) {
+          setIsLoading(false);
+          setShowBufferingIndicator(false);
+        }
       }
       if (isWebOsLiveStalled({
         now,
@@ -713,7 +726,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
               hls.startLoad();
             } else {
               const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
-              if (isHttps && !useProxy && !staticDeploy) {
+              if (isHttps && !useProxy && !staticDeploy && !isWebOs) {
                 setErrorMessage(
                   'Il browser blocca lo stream HTTP diretto. Clicca su "Attiva Proxy HTTPS" sotto.'
                 );
@@ -794,6 +807,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
 
   const handlePlaybackReady = () => {
     const video = videoRef.current;
+    const isFirstPlaybackReady = !hasStartedPlaybackRef.current;
     hasStartedPlaybackRef.current = true;
     refreshPipAvailability();
     if (startupTimeoutRef.current) clearTimeout(startupTimeoutRef.current);
@@ -801,10 +815,12 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     startupTimeoutRef.current = null;
     bufferingTimeoutRef.current = null;
     if (isWebOs && media?.type === 'live' && desiredPlayingRef.current && video && !video.paused) {
-      if (webOsProgressMonitoringStartedAtRef.current === null) {
+      // The baseline starts only when playback has really become available.
+      // A prior canplay can arrive while still paused; the subsequent playing
+      // event then establishes this same first active baseline.
+      if (isFirstPlaybackReady || webOsProgressMonitoringStartedAtRef.current === null) {
         webOsProgressMonitoringStartedAtRef.current = Date.now();
-      }
-      if (webOsLastProgressTimeRef.current === null) {
+        webOsLastProgressAtRef.current = null;
         webOsLastProgressTimeRef.current = video.currentTime;
       }
     }
@@ -939,14 +955,6 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       setIsPlaying(false);
       return;
     }
-    if (isWebOs && media?.type === 'live' && video && !video.paused) {
-      if (webOsProgressMonitoringStartedAtRef.current === null) {
-        webOsProgressMonitoringStartedAtRef.current = Date.now();
-      }
-      if (webOsLastProgressTimeRef.current === null) {
-        webOsLastProgressTimeRef.current = video.currentTime;
-      }
-    }
     setIsPlaying(true);
   };
 
@@ -1078,11 +1086,31 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
 
   const chooseLiveChannel = useCallback((channel: PlayableMediaItem | undefined) => {
     if (!channel || channel.type !== 'live') return;
+    if (isWebOs && channel.id !== media?.id) {
+      // A channel selected from the terminal error panel must never inherit
+      // the exhausted recovery budget of the broken channel.
+      clearWebOsLiveTimers();
+      webOsRecoveryRef.current = {
+        channelId: channel.id,
+        interruptionCount: 0,
+        lastRecoveryAt: null,
+        automaticFormatSwitchUsed: false,
+        learningFormat: null,
+      };
+    }
     releaseCurrentLiveConnection();
     onSelectLiveChannel?.(channel);
     setChannelListOpen(false);
     showLiveBanner();
-  }, [onSelectLiveChannel, releaseCurrentLiveConnection, showLiveBanner]);
+  }, [clearWebOsLiveTimers, isWebOs, media?.id, onSelectLiveChannel, releaseCurrentLiveConnection, showLiveBanner]);
+
+  const zapLiveChannel = useCallback((direction: -1 | 1) => {
+    if (media?.type !== 'live') return;
+    const channels = chooseLiveZapChannels(liveChannels, []);
+    const index = channels.findIndex((channel) => channel.id === media.id);
+    const target = wrapLiveChannelIndex(index < 0 ? 0 : index, direction, channels.length);
+    chooseLiveChannel(channels[target]);
+  }, [chooseLiveChannel, liveChannels, media?.id, media?.type]);
 
   // LG remote handling is deliberately isolated from desktop keyboard controls.
   useEffect(() => {
@@ -1118,10 +1146,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       event.preventDefault();
       event.stopPropagation();
       if (action.type === 'previous-channel' || action.type === 'next-channel') {
-        const channels = chooseLiveZapChannels(liveChannels, []);
-        const index = channels.findIndex((channel) => channel.id === media.id);
-        const next = wrapLiveChannelIndex(index < 0 ? 0 : index, action.type === 'next-channel' ? 1 : -1, channels.length);
-        chooseLiveChannel(channels[next]);
+        zapLiveChannel(action.type === 'next-channel' ? 1 : -1);
         return;
       }
       if (action.type === 'toggle-banner') {
@@ -1171,7 +1196,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isWebOs, media, channelBannerOpen, channelListOpen, controlsVisible, errorMessage, controlsFocused, liveChannels, channelListFocusIndex, onClose, chooseLiveChannel, showLiveBanner, duration]);
+  }, [isWebOs, media, channelBannerOpen, channelListOpen, controlsVisible, errorMessage, controlsFocused, liveChannels, channelListFocusIndex, onClose, chooseLiveChannel, zapLiveChannel, showLiveBanner, duration]);
 
   // Keyboard controls
   useEffect(() => {
@@ -1365,6 +1390,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       {/* Loading Spinner */}
       {(playback.status === 'loading' || showBufferingIndicator) && !errorMessage && (
         <div
+          data-testid={isWebOs ? 'player-loading-overlay' : undefined}
           className={`absolute inset-0 flex flex-col items-center justify-center bg-surface-1/70 pointer-events-none overflow-hidden ${
             isMobile ? 'px-4 py-16' : ''
           }`}
@@ -1410,7 +1436,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
             message={errorMessage}
             canSwitchFormat={canSwitchLiveFormat}
             formatLabel={`Passa a formato ${liveFormat === 'm3u8' ? 'MPEG-TS (.ts)' : 'HLS (.m3u8)'}`}
-            showProxyOption={!staticDeploy && !isNative && !isSafeMode}
+            showProxyOption={!isWebOs && !staticDeploy && !isNative && !isSafeMode}
             proxyLabel={useProxy ? '⚡ Passa a Stream Diretto' : '🛡️ Attiva Proxy HTTPS'}
             proxyFilled={!useProxy}
             onRetry={() => dispatchPlayback({ type: 'RETRY' })}
@@ -1435,8 +1461,30 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
             <p className="text-sm sm:text-base text-label-secondary max-w-md mb-6 leading-relaxed">{errorMessage}</p>
 
             <div className="flex flex-wrap items-center justify-center gap-3">
+              {isWebOs && media.type === 'live' && (
+                <>
+                  <button
+                    type="button"
+                    data-webos-error-zap="previous"
+                    onClick={() => zapLiveChannel(-1)}
+                    className="px-5 py-3 bg-surface-1 hover:bg-surface-2 text-label rounded-xl text-sm sm:text-base font-bold flex items-center gap-2 transition cursor-pointer border border-separator-strong"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                    Canale precedente
+                  </button>
+                  <button
+                    type="button"
+                    data-webos-error-zap="next"
+                    data-tv-initial-focus
+                    onClick={() => zapLiveChannel(1)}
+                    className="px-5 py-3 bg-live hover:brightness-110 text-on-accent rounded-xl text-sm sm:text-base font-bold flex items-center gap-2 transition cursor-pointer shadow-lg"
+                  >
+                    Canale successivo
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </>
+              )}
               <button
-                data-tv-initial-focus={isWebOs || undefined}
                 onClick={() => {
                   dispatchPlayback({ type: 'RETRY' });
                 }}
@@ -1465,7 +1513,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
                 </button>
               )}
 
-              {!staticDeploy && !isNative && !isSafeMode && (
+              {!isWebOs && !staticDeploy && !isNative && !isSafeMode && (
                 <button
                   onClick={() => {
                     const nextVal = !useProxy;

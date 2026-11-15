@@ -20,6 +20,8 @@ describe('webOS remote normalization', () => {
   it('maps LG channel/media keys and keeps seek disabled for Live', () => {
     expect(resolveWebOsPlayerKey(liveState, { key: 'Unidentified', keyCode: 33 })).toEqual({ type: 'next-channel' });
     expect(resolveWebOsPlayerKey(liveState, { key: 'Unidentified', keyCode: 34 })).toEqual({ type: 'previous-channel' });
+    expect(resolveWebOsPlayerKey({ ...liveState, errorPanelOpen: true }, { key: 'ArrowDown' })).toEqual({ type: 'next-channel' });
+    expect(resolveWebOsPlayerKey({ ...liveState, errorPanelOpen: true }, { key: 'ArrowUp' })).toEqual({ type: 'previous-channel' });
     expect(resolveWebOsPlayerKey(liveState, { key: 'MediaFastForward', keyCode: 417 })).toEqual({ type: 'none' });
     expect(resolveWebOsPlayerKey({ ...liveState, mediaType: 'movie' }, { key: 'MediaFastForward', keyCode: 417, repeat: true }))
       .toEqual({ type: 'seek', direction: 'forward', repeat: true });

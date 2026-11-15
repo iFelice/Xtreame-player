@@ -18,6 +18,14 @@ const live: PlayableMediaItem = {
   containerExtension: 'm3u8',
 };
 
+const movie: PlayableMediaItem = {
+  id: 'movie_error',
+  title: 'Film con errore',
+  type: 'movie',
+  streamUrl: 'http://server.esempio:8080/movie/demo/demo/8.mp4',
+  containerExtension: 'mp4',
+};
+
 function installBrowserHarness() {
   vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (X11; Linux x86_64)', platform: 'Linux x86_64', maxTouchPoints: 0 });
   vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => {} });
@@ -72,6 +80,27 @@ describe('MediaPlayer browser startup timeout', () => {
     expect(renderer!.root.findAll((node) => String(node.children.join('')).includes('Passa a formato MPEG-TS (.ts)'))).not.toHaveLength(0);
     expect(decodeURIComponent(video.src)).toContain('.m3u8');
     expect(decodeURIComponent(video.src)).not.toContain('.ts');
+    await act(async () => renderer!.unmount());
+  });
+
+  it('keeps the main browser error panel and its proxy text unchanged', async () => {
+    const { MediaPlayer } = await import('./MediaPlayer');
+    const video = {
+      src: '', currentTime: 0, readyState: 0, videoWidth: 0, paused: true,
+      canPlayType: vi.fn(() => ''), play: vi.fn(async () => {}), pause: vi.fn(), load: vi.fn(),
+      removeAttribute: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    };
+    let renderer: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(<MediaPlayer media={movie} onClose={() => {}} />, {
+        createNodeMock: (element) => element.type === 'video' ? video : null,
+      });
+    });
+    await act(async () => { renderer!.root.findByType('video').props.onError(); });
+
+    const errorText = 'Errore di caricamento del flusso video. Verifica se il canale o server IPTV è attivo, oppure prova a cambiare formato (.ts / .m3u8).';
+    expect(renderer!.root.findAll((node) => node.children.includes(errorText))).not.toHaveLength(0);
+    expect(renderer!.root.findAll((node) => node.children.includes('⚡ Passa a Stream Diretto'))).not.toHaveLength(0);
     await act(async () => renderer!.unmount());
   });
 });

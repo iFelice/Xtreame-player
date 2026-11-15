@@ -66,7 +66,13 @@ export function resolveWebOsPlayerKey(
   if (isLive && code === LG_KEY_CHANNEL_UP) return { type: 'next-channel' };
   if (isLive && code === LG_KEY_CHANNEL_DOWN) return { type: 'previous-channel' };
 
-  if (state.errorPanelOpen) return { type: 'none' };
+  if (state.errorPanelOpen) {
+    // The terminal Live error panel keeps manual zapping available even while
+    // ordinary player controls are intentionally blocked by the modal.
+    if (isLive && input.key === 'ArrowUp') return { type: 'previous-channel' };
+    if (isLive && input.key === 'ArrowDown') return { type: 'next-channel' };
+    return { type: 'none' };
+  }
   if (isLive) {
     if (state.channelListOpen) {
       if (input.key === 'ArrowLeft' || input.key === 'ArrowRight') return { type: 'close-channel-list' };

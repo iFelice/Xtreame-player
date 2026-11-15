@@ -59,16 +59,25 @@ comportamento precedente.
   manuale vale solo per quel canale e non viene salvata.
 - Un `ended` non richiesto è un'interruzione immediata. Gli eventi
   `waiting`/`stalled` aggiornano solo l'interfaccia di buffering: HLS su LG può
-  emetterli mentre il video continua. Solo durante una riproduzione richiesta e
-  non in pausa, un controllo ogni secondo considera progresso un avanzamento di
-  almeno 0,3 secondi di `currentTime`; dopo 10 secondi senza tale progresso
-  rileva uno stallo. Una pausa scelta con Play/Pausa o OK non avvia alcun
-  recupero.
+  emetterli mentre il video continua. Un avanzamento qualificante di
+  `currentTime` spegne l'indicatore di caricamento anche se non arriva un nuovo
+  evento `playing` o `canplay`.
+- Il controllo di progresso parte esclusivamente dal primo `canplay` o
+  `playing` utile, con quel momento come riferimento iniziale. Prima di allora
+  non può dichiarare uno stallo: resta valido soltanto il timeout di avvio di
+  20 secondi. Dopo l'avvio, solo durante una riproduzione richiesta e non in
+  pausa, un controllo ogni secondo considera progresso un avanzamento di almeno
+  0,3 secondi di `currentTime`; dopo 10 secondi senza tale progresso rileva uno
+  stallo. Una pausa scelta con Play/Pausa o OK non avvia alcun recupero.
 - Le prime due interruzioni entro 60 secondi dall'ultimo recupero rilasciano
   completamente il video e riavviano lo stesso formato dopo 1 secondo. Alla
   terza viene provato una sola volta l'altro formato ammesso. Se fallisce anche
-  quello, compare il pannello con **Riprova** e **Passa a formato**. Una
-  interruzione oltre la finestra di 60 secondi riporta il conteggio a uno.
+  quello, il pannello offre **Canale precedente**, **Canale successivo**,
+  **Riprova** e **Passa a formato**. Il focus iniziale è su **Canale
+  successivo**; Su/Giù e CH-/CH+ usano lo stesso zapping ciclico della lista
+  d'origine. Il cambio canale azzera il conteggio di recupero. In webOS non
+  viene mostrata alcuna opzione o messaggio relativo al proxy. Una interruzione
+  oltre la finestra di 60 secondi riporta il conteggio a uno.
 - Ogni riavvio e cambio formato esegue prima la sequenza di rilascio della
   connessione precedente, evitando due stream nativi contemporanei.
 - Quando un formato scelto automaticamente resta stabile per 30 secondi viene
