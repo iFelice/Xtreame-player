@@ -45,8 +45,13 @@ export function destroyMediaEngines(refs: MediaEngineRefs): MediaEngineRefs {
   return { hls: null, mpegts: null };
 }
 
-export function releaseVideoElement(video: HTMLVideoElement): void {
+export function releaseVideoElement(video: HTMLVideoElement, removeSourceChildren = false): void {
   video.pause();
   video.removeAttribute('src');
+  // A native webOS MPEG-TS source is attached as a child <source>. Remove it
+  // too, otherwise the provider can keep the previous one-stream connection.
+  if (removeSourceChildren) {
+    while (video.firstChild) video.removeChild(video.firstChild);
+  }
   video.load();
 }

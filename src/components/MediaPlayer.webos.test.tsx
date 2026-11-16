@@ -10,12 +10,12 @@ vi.mock('hls.js', () => ({
   },
 }));
 
-const live = (id: number): PlayableMediaItem => ({
+const live = (id: number, format: 'm3u8' | 'ts' = 'm3u8'): PlayableMediaItem => ({
   id: `live_${id}`,
   title: `Canale ${id}`,
   type: 'live',
-  streamUrl: `http://server.esempio:8080/live/demo/demo/${id}.m3u8`,
-  containerExtension: 'm3u8',
+  streamUrl: `http://server.esempio:8080/live/demo/demo/${id}.${format}`,
+  containerExtension: format,
 });
 
 const movie: PlayableMediaItem = {
@@ -45,6 +45,7 @@ function installWebOsHarness() {
     fullscreenElement: null,
     pictureInPictureElement: null,
     pictureInPictureEnabled: false,
+    createElement: (tagName: string) => ({ tagName: tagName.toUpperCase(), src: '', type: '' }),
     addEventListener: () => {},
     removeEventListener: () => {},
   });
@@ -52,11 +53,30 @@ function installWebOsHarness() {
 }
 
 function videoNode() {
-  return {
+  const sources: Array<{ tagName: string; src: string; type: string }> = [];
+  const video = {
     src: '', currentTime: 0, duration: 300, readyState: 0, videoWidth: 0, paused: true,
     canPlayType: vi.fn(() => ''), play: vi.fn(async () => {}), pause: vi.fn(), load: vi.fn(),
-    removeAttribute: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    removeAttribute: vi.fn((name: string) => {
+      if (name === 'src') video.src = '';
+    }),
+    appendChild: vi.fn((source: { tagName: string; src: string; type: string }) => {
+      sources.push(source);
+      return source;
+    }),
+    removeChild: vi.fn((source: { tagName: string; src: string; type: string }) => {
+      sources.splice(sources.indexOf(source), 1);
+      return source;
+    }),
+    get firstChild() {
+      return sources[0] ?? null;
+    },
+    get sourceChildren() {
+      return sources;
+    },
+    addEventListener: vi.fn(), removeEventListener: vi.fn(),
   };
+  return video;
 }
 
 const controlNode = (control = { focus: vi.fn(), click: vi.fn() }) => ({
@@ -103,6 +123,7 @@ describe('real MediaPlayer in webOS mode', () => {
     });
     // LG native-video measurement: HLS is the correct initial format, not TS.
     expect(video.src).toContain('/1.m3u8');
+    expect(video.sourceChildren).toHaveLength(0);
     const player = () => renderer!.root.findByType('video');
     await act(async () => { player().props.onPlaying(); });
 
@@ -125,7 +146,8 @@ describe('real MediaPlayer in webOS mode', () => {
       player().props.onEnded();
       vi.advanceTimersByTime(1_000);
     });
-    expect(video.src).toContain('/1.ts');
+    expect(video.src).toBe('');
+    expect(video.sourceChildren).toEqual([expect.objectContaining({ src: expect.stringContaining('/1.ts'), type: 'video/mp2t' })]);
     await act(async () => {
       player().props.onPlaying();
       vi.advanceTimersByTime(30_000);
@@ -133,12 +155,13 @@ describe('real MediaPlayer in webOS mode', () => {
     expect(saveFormat).toHaveBeenCalledWith('fvp.webos.liveFormat', 'ts');
 
     await act(async () => { renderer!.update(<MediaPlayer media={live(2)} onClose={close} />); });
-    expect(video.src).toContain('/2.ts');
+    expect(video.src).toBe('');
+    expect(video.sourceChildren).toEqual([expect.objectContaining({ src: expect.stringContaining('/2.ts'), type: 'video/mp2t' })]);
     expect(listeners.get('keydown')).toBeTruthy();
     await act(async () => renderer!.unmount());
   });
 
-  it('starts webOS Live in TS when the account allows only TS', async () => {
+  it('uses exactly one typed child source for webOS Live TS when the account allows only TS', async () => {
     installWebOsHarness();
     const { MediaPlayer } = await import('./MediaPlayer');
     const video = videoNode();
@@ -148,7 +171,60 @@ describe('real MediaPlayer in webOS mode', () => {
         createNodeMock: (element) => element.type === 'video' ? video : { querySelectorAll: () => [] },
       });
     });
-    expect(video.src).toContain('/1.ts');
+    expect(video.src).toBe('');
+    expect(video.sourceChildren).toEqual([expect.objectContaining({ src: expect.stringContaining('/1.ts'), type: 'video/mp2t' })]);
+    await act(async () => renderer!.unmount());
+  });
+
+  it('keeps one source while switching TS and HLS, changing channel, and restarting webOS Live', async () => {
+    installWebOsHarness();
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => key === 'fvp.webos.liveFormat' ? 'ts' : null,
+      setItem: () => {},
+    });
+    const { MediaPlayer } = await import('./MediaPlayer');
+    const video = videoNode();
+    let renderer: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(<MediaPlayer media={live(1)} onClose={() => {}} allowedLiveFormats={['m3u8', 'ts']} />, {
+        createNodeMock: (element) => element.type === 'video' ? video : { querySelectorAll: () => [] },
+      });
+    });
+    const player = () => renderer!.root.findByType('video');
+    expect(video.src).toBe('');
+    expect(video.sourceChildren).toHaveLength(1);
+
+    // The first failed TS startup reaches the existing automatic HLS fallback.
+    await act(async () => { player().props.onError(); });
+    expect(video.src).toContain('/1.m3u8');
+    expect(video.sourceChildren).toHaveLength(0);
+
+    // After that one automatic fallback, the existing manual command returns
+    // to TS and must replace the direct src with exactly one typed child.
+    await act(async () => { player().props.onError(); });
+    const switchToTs = renderer!.root.findAll((node) =>
+      node.type === 'button' && String(node.children.join('')).includes('Passa a formato MPEG-TS (.ts)'),
+    )[0];
+    expect(switchToTs).toBeTruthy();
+    await act(async () => { switchToTs!.props.onClick(); });
+    expect(video.src).toBe('');
+    expect(video.sourceChildren).toHaveLength(1);
+    expect(video.sourceChildren[0]).toMatchObject({ src: expect.stringContaining('/1.ts'), type: 'video/mp2t' });
+
+    await act(async () => { renderer!.update(<MediaPlayer media={live(2)} onClose={() => {}} allowedLiveFormats={['m3u8', 'ts']} />); });
+    expect(video.src).toBe('');
+    expect(video.sourceChildren).toHaveLength(1);
+    expect(video.sourceChildren[0]).toMatchObject({ src: expect.stringContaining('/2.ts'), type: 'video/mp2t' });
+
+    video.paused = false;
+    await act(async () => {
+      player().props.onPlaying();
+      player().props.onEnded();
+      vi.advanceTimersByTime(1_000);
+    });
+    expect(video.src).toBe('');
+    expect(video.sourceChildren).toHaveLength(1);
+    expect(video.sourceChildren[0]).toMatchObject({ src: expect.stringContaining('/2.ts'), type: 'video/mp2t' });
     await act(async () => renderer!.unmount());
   });
 
@@ -398,6 +474,22 @@ describe('real MediaPlayer in webOS mode', () => {
     expect(selected).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'live_2' }));
     await act(async () => { listeners.get('keydown')!(remoteEvent('Unidentified', 33)); });
     expect(selected).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'live_2' }));
+    await act(async () => renderer!.unmount());
+  });
+
+  it('focuses Retry on a webOS movie error while Live errors keep Next Channel focused', async () => {
+    installWebOsHarness();
+    const { MediaPlayer } = await import('./MediaPlayer');
+    const video = videoNode();
+    let renderer: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(<MediaPlayer media={movie} onClose={() => {}} />, {
+        createNodeMock: (element) => element.type === 'video' ? video : { querySelectorAll: () => [] },
+      });
+    });
+    await act(async () => { renderer!.root.findByType('video').props.onError(); });
+    const retry = renderer!.root.findAll((node) => node.type === 'button' && node.children.includes('Riprova'))[0];
+    expect(retry.props['data-tv-initial-focus']).toBe(true);
     await act(async () => renderer!.unmount());
   });
 

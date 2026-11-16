@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { destroyMediaEngines, selectMediaEngine } from './mediaEngine';
+import { destroyMediaEngines, releaseVideoElement, selectMediaEngine } from './mediaEngine';
 
 const desktop = {
   isLive: false,
@@ -39,5 +39,30 @@ describe('media engine lifecycle', () => {
     expect(destroyMediaEngines({ hls, mpegts })).toEqual({ hls: null, mpegts: null });
     expect(hls.destroy).toHaveBeenCalledOnce();
     expect(mpegts.destroy).toHaveBeenCalledOnce();
+  });
+
+  it('releases both a src attribute and every typed child source', () => {
+    const first = {} as ChildNode;
+    const second = {} as ChildNode;
+    const children = [first, second];
+    const videoMock = {
+      firstChild: first as ChildNode | null,
+      pause: vi.fn(),
+      removeAttribute: vi.fn(),
+      removeChild: vi.fn((child: ChildNode) => {
+        children.splice(children.indexOf(child), 1);
+        videoMock.firstChild = children[0] ?? null;
+        return child;
+      }),
+      load: vi.fn(),
+    };
+    const video = videoMock as unknown as HTMLVideoElement;
+
+    releaseVideoElement(video, true);
+
+    expect(video.pause).toHaveBeenCalledOnce();
+    expect(video.removeAttribute).toHaveBeenCalledWith('src');
+    expect(video.removeChild).toHaveBeenCalledTimes(2);
+    expect(video.load).toHaveBeenCalledOnce();
   });
 });

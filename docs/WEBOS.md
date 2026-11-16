@@ -51,6 +51,17 @@ formato predefinito: prova prima HLS (`.m3u8`). Questa logica è isolata dalla
 build webOS; browser, build statica, Apple e Capacitor mantengono il loro
 comportamento precedente.
 
+Per il fallback Live `.ts`, la build webOS rimuove l'attributo `src`, elimina
+le sorgenti figlie residue e aggiunge un solo elemento `source` con MIME type
+`video/mp2t`, quindi richiama `load()` e la riproduzione nativa. È un'ipotesi
+ancora da verificare sul TV: senza tipo dichiarato webOS potrebbe trattare il
+MPEG-TS come un file finito e chiuderlo prematuramente. L'idea prende
+ispirazione da [webos-iptv-player](https://github.com/lennylxx/webos-iptv-player)
+(licenza Apache-2.0), in particolare dal suo uso di una sorgente nativa
+tipizzata; è stata reimplementata nel nostro
+stile senza copiare codice. HLS e tutte le altre sorgenti continuano invece a
+usare l'assegnazione diretta a `video.src`.
+
 - I soli formati Live considerati sono `m3u8` e `ts`, letti da
   `user_info.allowed_output_formats`. Se l'elenco non c'è, è vuoto o non
   contiene un formato utilizzabile, entrambi restano tentabili.
@@ -96,8 +107,9 @@ Le costanti in `src/player/streamFormat.ts` sono:
 `WEBOS_LIVE_LEARN_STABILITY_MS = 30000`.
 
 Per gli eventi gestiti, la build webOS scrive diagnostica senza indirizzi o
-credenziali nel formato `[FVP webOS live] evento=... formato=... currentTime=...
-readyState=... conteggio=...`. Gli eventi includono `ended`, stallo rilevato,
+credenziali nel formato `[FVP webOS live] evento=... formato=... sorgente=...
+currentTime=... readyState=... conteggio=...`, dove `sorgente` è `tipizzata`
+per il Live `.ts` e `src` negli altri casi. Gli eventi includono `ended`, stallo rilevato,
 riavvio, cambio automatico di formato ed errore terminale.
 
 ## Smoke test

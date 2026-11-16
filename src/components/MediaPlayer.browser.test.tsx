@@ -18,6 +18,14 @@ const live: PlayableMediaItem = {
   containerExtension: 'm3u8',
 };
 
+const tsLive: PlayableMediaItem = {
+  id: 'live_ts_browser',
+  title: 'Canale TS browser',
+  type: 'live',
+  streamUrl: 'http://server.esempio:8080/live/demo/demo/9.ts',
+  containerExtension: 'ts',
+};
+
 const movie: PlayableMediaItem = {
   id: 'movie_error',
   title: 'Film con errore',
@@ -80,6 +88,27 @@ describe('MediaPlayer browser startup timeout', () => {
     expect(renderer!.root.findAll((node) => String(node.children.join('')).includes('Passa a formato MPEG-TS (.ts)'))).not.toHaveLength(0);
     expect(decodeURIComponent(video.src)).toContain('.m3u8');
     expect(decodeURIComponent(video.src)).not.toContain('.ts');
+    await act(async () => renderer!.unmount());
+  });
+
+  it('keeps browser Live TS on the unchanged direct video src path', async () => {
+    const { MediaPlayer } = await import('./MediaPlayer');
+    const video = {
+      src: '', currentTime: 0, readyState: 0, videoWidth: 0, paused: true, firstChild: null,
+      canPlayType: vi.fn(() => ''), play: vi.fn(async () => {}), pause: vi.fn(), load: vi.fn(),
+      removeAttribute: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    };
+    let renderer: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(<MediaPlayer media={tsLive} onClose={() => {}} />, {
+        createNodeMock: (element) => element.type === 'video' ? video : null,
+      });
+    });
+
+    await act(async () => { renderer!.root.findByType('video').props.onError(); });
+
+    expect(decodeURIComponent(video.src)).toContain('/9.ts');
+    expect(video.firstChild).toBeNull();
     await act(async () => renderer!.unmount());
   });
 

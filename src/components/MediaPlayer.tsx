@@ -326,8 +326,8 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   const releaseCurrentLiveConnection = useCallback(() => {
     const video = videoRef.current;
     destroyEngines();
-    if (video) releaseVideoElement(video);
-  }, [destroyEngines]);
+    if (video) releaseVideoElement(video, isWebOs);
+  }, [destroyEngines, isWebOs]);
 
   const clearPlaybackWatchdogs = useCallback(() => {
     if (startupTimeoutRef.current) clearTimeout(startupTimeoutRef.current);
@@ -385,8 +385,9 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       ? video.currentTime.toFixed(1)
       : 'n/d';
     const readyState = typeof video?.readyState === 'number' ? video.readyState : 'n/d';
+    const sourceKind = format === 'ts' ? 'tipizzata' : 'src';
     // Do not include the source URL: it can contain provider credentials.
-    console.info(`[FVP webOS live] evento=${event} formato=${format} currentTime=${currentTime} readyState=${readyState} conteggio=${interruptionCount}`);
+    console.info(`[FVP webOS live] evento=${event} formato=${format} sorgente=${sourceKind} currentTime=${currentTime} readyState=${readyState} conteggio=${interruptionCount}`);
   }, [isWebOs, media?.type, liveFormat]);
 
   const recoverWebOsLiveInterruption = useCallback((event: 'ended' | 'stall') => {
@@ -769,8 +770,20 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
           setIsLoading(false);
         });
     } else {
-      // Standard video source (MP4, MKV, WebM)
-      video.src = url;
+      // LG webOS can terminate a native MPEG-TS Live connection as though it
+      // were a finite file when no MIME type is declared. Keep every other
+      // native assignment unchanged; only webOS Live TS uses a typed child.
+      if (isWebOs && isLive && liveFormat === 'ts') {
+        video.removeAttribute('src');
+        while (video.firstChild) video.removeChild(video.firstChild);
+        const source = document.createElement('source');
+        source.src = url;
+        source.type = 'video/mp2t';
+        video.appendChild(source);
+      } else {
+        // Standard video source (MP4, MKV, WebM)
+        video.src = url;
+      }
       video.load();
       video
         .play()
@@ -790,7 +803,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
 
       // Stop WebKit/AVFoundation from continuing to buffer a multi-GB VOD
       // after the player is closed or another title is selected.
-      releaseVideoElement(video);
+      releaseVideoElement(video, isWebOs);
     };
   }, [media, getEffectiveUrl, liveFormat, playbackAttempt, clearPlaybackWatchdogs, destroyEngines, appleMobile, staticDeploy, useProxy, playbackTarget, requestLiveFormat, isWebOs, handleLiveStartFailure]);
 
@@ -1485,6 +1498,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
                 </>
               )}
               <button
+                data-tv-initial-focus={isWebOs && media.type !== 'live' ? true : undefined}
                 onClick={() => {
                   dispatchPlayback({ type: 'RETRY' });
                 }}
