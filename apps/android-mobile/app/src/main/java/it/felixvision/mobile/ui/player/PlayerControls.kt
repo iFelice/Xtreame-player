@@ -19,6 +19,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -198,13 +199,12 @@ private fun PlayerTimeline(
         return
     }
 
-    var sliderPosition by remember(state.position, duration) {
-        mutableFloatStateOf(state.position.toFloat().coerceIn(0f, duration.toFloat()))
-    }
+    var sliderPosition by remember(duration) { mutableFloatStateOf(0f) }
+    var dragging by remember(duration) { mutableStateOf(false) }
     Slider(
-        value = sliderPosition,
-        onValueChange = { sliderPosition = it },
-        onValueChangeFinished = { onSeek(sliderPosition.toLong()) },
+        value = if (dragging) sliderPosition else state.position.toFloat().coerceIn(0f, duration.toFloat()),
+        onValueChange = { dragging = true; sliderPosition = it },
+        onValueChangeFinished = { onSeek(sliderPosition.toLong()); dragging = false },
         valueRange = 0f..duration.toFloat(),
         modifier = Modifier.fillMaxWidth().height(28.dp),
     )

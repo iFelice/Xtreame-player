@@ -10,6 +10,7 @@ import it.felixvision.tv.core.HttpClientFactory
 import it.felixvision.tv.core.SystemClock
 import it.felixvision.mobile.data.catalog.CatalogDownloadInterceptor
 import it.felixvision.mobile.data.catalog.CatalogDownloadMonitor
+import it.felixvision.mobile.ui.settings.protection.ProtectedPageGuard
 import it.felixvision.tv.data.catalog.CatalogCache
 import it.felixvision.tv.data.catalog.CatalogClient
 import it.felixvision.tv.data.channels.MyChannelsStore
@@ -136,6 +137,8 @@ class AppContainer(
     val protectedSession: ProtectedSession by lazy {
         ProtectedSession(clock = clock)
     }
+
+    val protectedPageGuard: ProtectedPageGuard by lazy { ProtectedPageGuard() }
 
     val pairingClient: PairingClient by lazy {
         PairingClient(

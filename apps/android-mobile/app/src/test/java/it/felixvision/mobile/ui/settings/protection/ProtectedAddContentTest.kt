@@ -149,8 +149,7 @@ class ProtectedAddContentTest {
     fun createCollaborators() {
         store = ProtectedContentStore(context = context)
         session = ProtectedSession(clock = virtualClock)
-        // PIN già impostato e sessione sbloccata: si entra direttamente nella
-        // pagina principale (la verifica del PIN ha i suoi test dedicati).
+        // La sessione visibile non sostituisce la verifica del PIN.
         runBlocking { store.setPin(server, username, pin) }
         session.unlock()
     }
@@ -176,6 +175,10 @@ class ProtectedAddContentTest {
                 )
             }
         }
+        rule.waitUntil(timeoutMillis = 5_000L) { exists(MOBILE_PIN_ENTRY_TAG) }
+        settle()
+        pin.forEach { click(mobilePinKeyTag(it.digitToInt())) }
+        click(MOBILE_PIN_OK_TAG)
         rule.waitUntil(timeoutMillis = 5_000L) { exists("protected_title") }
         settle()
     }

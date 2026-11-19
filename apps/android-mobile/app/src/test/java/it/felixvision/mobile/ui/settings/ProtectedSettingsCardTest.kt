@@ -322,9 +322,8 @@ class ProtectedSettingsCardTest {
 
     /**
      * Container dell'app con l'archivio dei contenuti protetti pronto: con
-     * [withPin] vero il PIN esiste e la sessione è già sbloccata, così la
-     * pagina si apre sulla gestione degli elenchi (i livelli con PIN hanno i
-     * test dedicati in [it.felixvision.mobile.ui.settings.protection]).
+     * [withPin] vero il PIN esiste e la sessione è già sbloccata; la gestione
+     * richiede comunque la verifica del PIN.
      */
     private fun createContainer(withPin: Boolean): AppContainer {
         val created = AppContainer(context)
@@ -448,9 +447,10 @@ class ProtectedSettingsCardTest {
         rule.onNodeWithTag("settings_protected_manage").performScrollTo().performClick()
         awaitTag(PROTECTED_PAGE_TAG)
 
-        // Sessione già sbloccata: si apre la pagina di gestione, non la verifica.
+        // Anche con la sessione sbloccata la gestione richiede il PIN.
+        awaitTag(MOBILE_PIN_ENTRY_TAG)
+        typePin(PIN)
         awaitTag("protected_title")
-        assertTrue(!exists(MOBILE_PIN_ENTRY_TAG))
 
         pressBack()
         rule.waitUntil(timeoutMillis = 5_000L) { !exists(PROTECTED_PAGE_TAG) }
@@ -465,6 +465,8 @@ class ProtectedSettingsCardTest {
     fun `aggiungi - Indietro dalla scelta del tipo torna a Contenuti protetti`() {
         mount(withPin = true)
         click("settings_protected_manage")
+        awaitTag(MOBILE_PIN_ENTRY_TAG)
+        typePin(PIN)
         awaitTag("protected_title")
         click("protected_add")
         awaitTag("protected_kind_live")
@@ -486,6 +488,8 @@ class ProtectedSettingsCardTest {
     fun `indietro - pagina Contenuti protetti torna alle Impostazioni`() {
         mount(withPin = true)
         click("settings_protected_manage")
+        awaitTag(MOBILE_PIN_ENTRY_TAG)
+        typePin(PIN)
         awaitTag("protected_title")
         click("protected_back")
         awaitTag(SETTINGS_LIST_TAG)
@@ -498,6 +502,8 @@ class ProtectedSettingsCardTest {
         RuntimeEnvironment.setQualifiers("+w1280dp-h800dp-land-mdpi")
         mount(withPin = true)
         click("settings_protected_manage")
+        awaitTag(MOBILE_PIN_ENTRY_TAG)
+        typePin(PIN)
         awaitTag("protected_title")
 
         // La colonna della pagina non supera i 720dp e resta centrata nello

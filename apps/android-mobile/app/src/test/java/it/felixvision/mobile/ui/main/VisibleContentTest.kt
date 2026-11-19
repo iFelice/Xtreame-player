@@ -204,6 +204,18 @@ class VisibleContentTest {
     }
 
     @Test
+    fun `preferito fuori catalogo visibile solo se non vi sono categorie protette del tipo`() {
+        val saved = listOf(FavoriteItem(id = "vod_999", type = FavoriteItem.VOD, title = "Film demo", categoryId = "10"))
+        fun visible(rules: ProtectedContentData, unlocked: Boolean) = visibleContent(
+            catalog, emptyList(), emptyList(), saved, emptyList(), emptyList(), rules, unlocked,
+        ).favorites
+        assertEquals(saved, visible(ProtectedContentData(), false))
+        val protected = ProtectedContentData(hiddenCategories = listOf(HiddenCategory(ProtectedKind.VOD.storageKey, "20", "Demo")))
+        assertTrue(visible(protected, false).isEmpty())
+        assertEquals(saved, visible(protected, true))
+    }
+
+    @Test
     fun `catalogo assente lascia le altre liste filtrate`() {
         val visible = visibleContent(
             catalog = null,

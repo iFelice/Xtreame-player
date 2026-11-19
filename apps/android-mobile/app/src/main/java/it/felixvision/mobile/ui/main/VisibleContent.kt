@@ -8,6 +8,7 @@ import it.felixvision.tv.data.continuewatching.ContinueEntry
 import it.felixvision.tv.data.favorites.FavoriteItem
 import it.felixvision.tv.data.protection.ProtectedContentData
 import it.felixvision.tv.data.protection.ProtectedFilter
+import it.felixvision.tv.data.protection.ProtectedKind
 
 /**
  * Tutte le liste che la schermata principale mostra, già filtrate in base alla
@@ -78,11 +79,17 @@ fun visibleContent(
     val hiddenSeries = if (catalog == null || visibleCatalog === catalog) emptySet() else
         catalog.series.map { it.seriesId }.toSet() - visibleCatalog?.series.orEmpty().map { it.seriesId }.toSet()
     val filteredFavorites = ProtectedFilter.filterFavorites(favorites, data)
+    // Fuori catalogo non conosciamo eventuali categorie secondarie. Se una
+    // categoria del tipo è protetta, non esponiamo voci non verificabili.
+    val hiddenKinds = data.hiddenCategories.mapTo(hashSetOf()) { it.kind }
     val matchedFavorites = filteredFavorites.filterNot {
         when (it.type) {
-            FavoriteItem.LIVE -> it.id.removePrefix("live_") in hiddenLive
-            FavoriteItem.VOD -> it.id.removePrefix("vod_") in hiddenVod
-            FavoriteItem.SERIES -> it.id.removePrefix("series_") in hiddenSeries
+            FavoriteItem.LIVE -> it.id.removePrefix("live_") in hiddenLive ||
+                (ProtectedKind.LIVE.storageKey in hiddenKinds && catalog?.liveStreams?.none { stream -> stream.streamId == it.id.removePrefix("live_") } != false)
+            FavoriteItem.VOD -> it.id.removePrefix("vod_") in hiddenVod ||
+                (ProtectedKind.VOD.storageKey in hiddenKinds && catalog?.vodStreams?.none { stream -> stream.streamId == it.id.removePrefix("vod_") } != false)
+            FavoriteItem.SERIES -> it.id.removePrefix("series_") in hiddenSeries ||
+                (ProtectedKind.SERIES.storageKey in hiddenKinds && catalog?.series?.none { series -> series.seriesId == it.id.removePrefix("series_") } != false)
             else -> false
         }
     }

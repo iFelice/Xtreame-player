@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Text
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -32,6 +33,8 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -102,6 +105,21 @@ fun PlayerScreen(
     var videoView by remember { mutableStateOf<PlayerView?>(null) }
     var fit by remember { mutableStateOf(true) }
     var overlayPanel by remember { mutableStateOf<PlayerPanel?>(null) }
+    var controlInteraction by remember { mutableStateOf(0L) }
+    var controlsPressed by remember { mutableStateOf(false) }
+    val controlTouchModifier = Modifier.pointerInput(Unit) {
+        try {
+            awaitPointerEventScope {
+                while (true) {
+                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                    controlsPressed = event.changes.any { it.pressed }
+                    controlInteraction++
+                }
+            }
+        } finally {
+            controlsPressed = false
+        }
+    }
     var portraitPanel by remember { mutableStateOf(PlayerPanel.GUIDE) }
     var fullScreenPortrait by remember { mutableStateOf(false) }
     var guidePrograms by remember { mutableStateOf<List<EpgProgram>>(emptyList()) }
@@ -123,8 +141,8 @@ fun PlayerScreen(
             engine.refresh()
         }
     }
-    LaunchedEffect(state.controls, overlayPanel) {
-        if (state.controls && overlayPanel == null) {
+    LaunchedEffect(state.controls, overlayPanel, controlInteraction, controlsPressed) {
+        if (state.controls && overlayPanel == null && !controlsPressed) {
             delay(4_000L)
             engine.setControls(false)
         }
@@ -276,6 +294,7 @@ fun PlayerScreen(
                         onExit = onExit,
                         onOpenPanel = { overlayPanel = it },
                         onToggleFit = { fit = !fit },
+                        controlTouchModifier = controlTouchModifier,
                     )
                 }
                 StateOverlays(
@@ -293,7 +312,7 @@ fun PlayerScreen(
                         description = "Torna alla diretta",
                         onClick = engine::returnToLive,
                         modifier = Modifier
-                            .align(Alignment.BottomCenter)
+                            .align(Alignment.TopCenter)
                             .windowInsetsPadding(WindowInsets.safeDrawing),
                     )
                 }
@@ -317,6 +336,7 @@ fun PlayerScreen(
                 onToggleFit = { fit = !fit },
                 onEnterFullScreen = { fullScreenPortrait = true },
                 onExit = onExit,
+                controlTouchModifier = controlTouchModifier,
             )
         }
 
@@ -346,6 +366,7 @@ internal fun BoxScope.ControlsOverlay(
     onExit: () -> Unit,
     onOpenPanel: (PlayerPanel) -> Unit,
     onToggleFit: () -> Unit,
+    controlTouchModifier: Modifier = Modifier,
 ) {
     val nowSeconds = engine.nowMillis() / 1_000L
     val currentProgram = guidePrograms.firstOrNull {
@@ -353,8 +374,9 @@ internal fun BoxScope.ControlsOverlay(
     }
     Column(
         modifier = Modifier
-            .align(Alignment.TopCenter)
+            .align(if (state.playbackType == MobilePlaybackType.LIVE) Alignment.TopCenter else Alignment.BottomCenter)
             .fillMaxWidth()
+            .then(controlTouchModifier)
             // Comandi dentro l'area sicura: fuori dal ritaglio della fotocamera
             // e dalle barre di sistema quando ricompaiono con lo scorrimento.
             .windowInsetsPadding(WindowInsets.safeDrawing),
@@ -433,6 +455,7 @@ private fun PortraitPlayerLayout(
     onToggleFit: () -> Unit,
     onEnterFullScreen: () -> Unit,
     onExit: () -> Unit,
+    controlTouchModifier: Modifier = Modifier,
 ) {
     Column(
         modifier = Modifier
@@ -456,7 +479,7 @@ private fun PortraitPlayerLayout(
             )
             if (state.controls) {
                 Column(
-                    modifier = Modifier.align(Alignment.TopCenter),
+                    modifier = Modifier.align(if (state.playbackType == MobilePlaybackType.LIVE) Alignment.TopCenter else Alignment.BottomCenter).then(controlTouchModifier),
                 ) {
                     PlayerControls(
                         state = state,
@@ -568,6 +591,10 @@ private fun StateOverlays(
             postpone = engine::postponeNextEpisode,
             dismiss = engine::dismissNextEpisode,
             modifier = modifier,
+        )
+        state.buffering -> CircularProgressIndicator(
+            modifier = modifier.testTag("player_buffering"),
+            color = FvpColors.Green,
         )
     }
 }

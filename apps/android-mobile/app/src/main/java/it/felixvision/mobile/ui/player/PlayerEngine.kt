@@ -477,7 +477,8 @@ class PlayerEngine(
         liveAutoRestart.reset()
         sourceGeneration++
         state = state.copy(error = null)
-        buildPlayer(0L, true)
+        val position = retryPosition(state.playbackType, player?.currentPosition, state.position)
+        buildPlayer(position, true)
         startLiveWatchdog()
     }
 
@@ -823,3 +824,7 @@ internal class LiveStallDetector {
         return true
     }
 }
+
+/** Live riparte in diretta; i contenuti navigabili riprendono dalla posizione corrente. */
+internal fun retryPosition(type: MobilePlaybackType, current: Long?, fallback: Long): Long =
+    if (type.supportsSeeking) (current ?: fallback).coerceAtLeast(0L) else 0L

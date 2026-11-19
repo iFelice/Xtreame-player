@@ -340,6 +340,7 @@ fun SettingsScreen(
         ProtectedContentScreen(
             store = container.protectedContentStore,
             session = container.protectedSession,
+            guard = container.protectedPageGuard,
             credentialStore = container.credentialStore,
             clock = container.clock,
             server = settingsViewModel.currentServer,

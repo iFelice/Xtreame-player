@@ -34,6 +34,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -175,6 +176,7 @@ fun ProtectedContentScreen(
     modifier: Modifier = Modifier,
     onRefreshCatalog: () -> Unit = {},
     onExit: () -> Unit = {},
+    guard: ProtectedPageGuard = remember { ProtectedPageGuard() },
 ) {
     val scope = rememberCoroutineScope()
     val revision by store.revision.collectAsState()
@@ -184,6 +186,7 @@ fun ProtectedContentScreen(
     }
 
     val unlocked by session.unlocked.collectAsState()
+    val guardGeneration by guard.generation.collectAsState()
 
     val stack = remember { mutableStateListOf<ProtectedPage>() }
     var pinError by remember { mutableStateOf<String?>(null) }
@@ -211,11 +214,21 @@ fun ProtectedContentScreen(
     }
 
     val page = stack.lastOrNull()
+    var lastGeneration by remember { mutableLongStateOf(guardGeneration) }
+    LaunchedEffect(guardGeneration) {
+        if (guardGeneration != lastGeneration) {
+            lastGeneration = guardGeneration
+            firstPin = null
+            pinError = null
+            createOrigin = CreateOrigin.Initial
+            val current = data
+            if (current == null) stack.clear()
+            else goToRoot(if (current.hasPin) ProtectedPage.VerifyPin else ProtectedPage.CreatePin)
+        }
+    }
+    DisposableEffect(guard) { onDispose { guard.revoke() } }
 
-    // La pagina iniziale dipende dall'archivio: senza PIN si crea, con il PIN
-    // e la sessione bloccata si verifica, altrimenti si apre la pagina
-    // principale. Se il PIN esiste ma la sessione è già sbloccata non serve
-    // verificarlo di nuovo per gestire gli elenchi.
+    // L'accesso alla gestione è separato dalla visibilità della sessione.
     LaunchedEffect(data) {
         val current = data ?: return@LaunchedEffect
         if (stack.isNotEmpty()) return@LaunchedEffect
@@ -226,7 +239,7 @@ fun ProtectedContentScreen(
                     ProtectedPage.CreatePin
                 }
 
-                !session.unlocked.value -> ProtectedPage.VerifyPin
+                !guard.isAuthorized -> ProtectedPage.VerifyPin
                 else -> ProtectedPage.Main
             },
         )
@@ -241,7 +254,7 @@ fun ProtectedContentScreen(
         pinError = null
         when {
             stack.size > 1 -> stack.removeAt(stack.lastIndex)
-            else -> onExit()
+            else -> { guard.revoke(); onExit() }
         }
     }
 
@@ -262,7 +275,10 @@ fun ProtectedContentScreen(
             .padding(horizontal = 16.dp, vertical = 12.dp)
 
         Column(modifier = pageModifier.testTag(PROTECTED_PAGE_COLUMN_TAG)) {
-            when (val current = page) {
+            val currentPage = if (guardGeneration != lastGeneration && data != null) {
+                if (data?.hasPin == true) ProtectedPage.VerifyPin else ProtectedPage.CreatePin
+            } else page
+            when (val current = currentPage) {
                 null -> Unit
 
                 ProtectedPage.CreatePin -> PinPage(onBack = { goBack() }) {
@@ -287,17 +303,20 @@ fun ProtectedContentScreen(
                                 firstPin = null
                                 replaceTop(ProtectedPage.CreatePin)
                             } else {
+                                val ticket = guardGeneration
                                 scope.launch {
                                     store.setPin(server, username, pin)
                                     // PIN nuovo: i tentativi sbagliati del PIN
                                     // precedente non contano più; la sessione
                                     // resta com'è (l'interruttore è l'unico
                                     // sblocco dei contenuti).
-                                    session.registerSuccess()
-                                    firstPin = null
-                                    pinError = null
-                                    createOrigin = CreateOrigin.Initial
-                                    goToRoot(ProtectedPage.Main)
+                                    if (guard.grantIfCurrent(ticket)) {
+                                        session.registerSuccess()
+                                        firstPin = null
+                                        pinError = null
+                                        createOrigin = CreateOrigin.Initial
+                                        goToRoot(ProtectedPage.Main)
+                                    }
                                 }
                             }
                         },
@@ -311,6 +330,7 @@ fun ProtectedContentScreen(
                     server = server,
                     username = username,
                     scope = scope,
+                    guard = guard,
                     errorMessage = pinError,
                     onBack = { goBack() },
                     onMessage = { pinError = it },
@@ -334,6 +354,7 @@ fun ProtectedContentScreen(
                     server = server,
                     username = username,
                     scope = scope,
+                    guard = guard,
                     errorMessage = pinError,
                     onError = { pinError = it },
                     onPasswordAccepted = {
@@ -350,7 +371,9 @@ fun ProtectedContentScreen(
                     unlocked = unlocked,
                     onToggleVisibility = {
                         // Solo lo stato di sessione: nessun filtro in questo passo.
-                        if (unlocked) session.lock() else session.unlock()
+                        if (guard.isAuthorized) {
+                            if (unlocked) session.lock() else session.unlock()
+                        } else goToRoot(ProtectedPage.VerifyPin)
                     },
                     onAdd = {
                         pinError = null
@@ -632,6 +655,7 @@ internal fun ProtectedVerifyPage(
     server: String,
     username: String,
     scope: CoroutineScope,
+    guard: ProtectedPageGuard,
     errorMessage: String?,
     onBack: () -> Unit = {},
     onMessage: (String?) -> Unit,
@@ -670,9 +694,11 @@ internal fun ProtectedVerifyPage(
             errorMessage = if (locked) tooManyAttemptsMessage(secondsLeft) else errorMessage,
             onConfirm = { pin ->
                 if (!locked) {
+                    val ticket = guard.generation.value
                     scope.launch {
                         val ok = store.verifyPin(server, username, pin)
-                        if (ok) {
+                        if (ticket != guard.generation.value) return@launch
+                        if (ok && guard.grantIfCurrent(ticket)) {
                             session.registerSuccess()
                             secondsLeft = 0L
                             onVerified()
@@ -715,6 +741,7 @@ internal fun ProtectedForgotPage(
     server: String,
     username: String,
     scope: CoroutineScope,
+    guard: ProtectedPageGuard,
     errorMessage: String?,
     onError: (String) -> Unit,
     onPasswordAccepted: () -> Unit,
@@ -730,8 +757,10 @@ internal fun ProtectedForgotPage(
             return
         }
         busy = true
+        val ticket = guard.generation.value
         scope.launch {
             val stored = runCatching { credentialStore.load() }.getOrNull()
+            if (ticket != guard.generation.value) return@launch
             val matches = stored != null &&
                 stored.server == server &&
                 stored.username == username &&

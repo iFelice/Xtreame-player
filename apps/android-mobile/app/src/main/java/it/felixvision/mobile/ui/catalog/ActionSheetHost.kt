@@ -175,6 +175,12 @@ fun ActionSheetHost(viewModel: CatalogViewModel) {
                 )
             }
         }
+        is ActionTarget.SavedFavorite -> listOf(
+            SheetAction(label = "Rimuovi dai preferiti", testTag = "sheet_favorite", onClick = {
+                close()
+                if (viewModel.favorites.value.any { it.id == target.item.id }) viewModel.removeSavedFavorite(target.item)
+            }),
+        )
         is ActionTarget.MyChannelEntry -> {
             val channel = target.channel
             listOf(

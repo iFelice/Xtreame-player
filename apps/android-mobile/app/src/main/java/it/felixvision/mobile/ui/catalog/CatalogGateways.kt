@@ -129,6 +129,10 @@ interface FavoritesGateway {
 
     /** Vero se l'elemento è stato aggiunto, falso se tolto. */
     suspend fun toggleFavorite(server: String, username: String, item: FavoriteItem): Boolean
+
+    suspend fun removeFavorite(server: String, username: String, item: FavoriteItem) {
+        if (getFavorites(server, username).any { it.id == item.id }) toggleFavorite(server, username, item)
+    }
 }
 
 /** Implementazione reale su [FavoritesStore] condiviso. */
@@ -142,6 +146,9 @@ class StoreFavoritesGateway(private val store: FavoritesStore) : FavoritesGatewa
         username: String,
         item: FavoriteItem,
     ): Boolean = store.toggleFavorite(server, username, item)
+
+    override suspend fun removeFavorite(server: String, username: String, item: FavoriteItem) =
+        store.removeFavorite(server, username, item.id)
 }
 
 interface MyChannelsGateway {

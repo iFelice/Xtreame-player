@@ -90,6 +90,7 @@ sealed interface DetailTarget {
 /** Le tre schede di Preferiti, come la sezione Preferiti della TV. */
 enum class FavoritesTab(val title: String, val testTag: String) {
     MY_CHANNELS("I miei canali", "favorites_tab_my_channels"),
+    LIVE("Canali preferiti", "favorites_tab_live"),
     FILM_SERIES("Film e Serie", "favorites_tab_film_series"),
     LIVE_CATEGORIES("Categorie Live", "favorites_tab_live_categories"),
 }
@@ -106,6 +107,9 @@ sealed interface ActionTarget {
     data class Film(val stream: VodStream) : ActionTarget
 
     data class Series(val item: SeriesItem) : ActionTarget
+
+    /** Rimozione di una voce salvata anche quando il catalogo non la contiene. */
+    data class SavedFavorite(val item: FavoriteItem) : ActionTarget
 
     data class LiveCategory(val categoryId: String, val name: String) : ActionTarget
 
@@ -474,6 +478,14 @@ class CatalogViewModel(
                         if (added) FAVORITE_ADDED else FAVORITE_REMOVED
                 },
             )
+        }
+    }
+
+    fun removeSavedFavorite(item: FavoriteItem) {
+        viewModelScope.launch {
+            favoritesGateway.removeFavorite(server, username, item)
+            reloadFavoritesInternal()
+            postNotice(FAVORITE_REMOVED)
         }
     }
 

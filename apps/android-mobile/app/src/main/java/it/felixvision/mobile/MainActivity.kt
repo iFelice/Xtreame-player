@@ -22,10 +22,14 @@ import it.felixvision.mobile.ui.theme.FvpTheme
 class MainActivity : ComponentActivity() {
 
     private val protectedSession get() = (application as FvpApplication).container.protectedSession
+    private val protectedPageGuard get() = (application as FvpApplication).container.protectedPageGuard
 
     private val screenOffReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            if (intent.action == Intent.ACTION_SCREEN_OFF) protectedSession.lock()
+            if (intent.action == Intent.ACTION_SCREEN_OFF) {
+                protectedPageGuard.revoke()
+                protectedSession.lock()
+            }
         }
     }
 
@@ -62,6 +66,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
+        protectedPageGuard.revoke()
         if (!isInPictureInPictureMode && !PlayerPipRegistry.inPip) protectedSession.lock()
     }
 

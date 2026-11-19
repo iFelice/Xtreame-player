@@ -266,6 +266,17 @@ class ProtectedPinTest {
     // --- Verifica del PIN ---
 
     @Test
+    fun `la gestione richiede PIN anche con contenuti visibili`() {
+        runBlocking { store.setPin(server, username, pin) }
+        session.unlock()
+        mount()
+        assertFalse(exists("protected_title"))
+        typePinIfEnabled(pin)
+        awaitTag("protected_title")
+        assertTrue(session.unlocked.value)
+    }
+
+    @Test
     fun `verifica - PIN errato mostra il messaggio e non apre la pagina`() {
         runBlocking { store.setPin(server, username, pin) }
         mount()

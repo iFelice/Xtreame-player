@@ -161,12 +161,6 @@ fun HomeScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    // Migrazione dei vecchi preferiti Live, esattamente dove la TV la fa
-    // (prima apertura dell'account; lo store la esegue una sola volta).
-    LaunchedEffect(summary.server, summary.username) {
-        catalogViewModel.migrateLegacyLiveFavorites()
-    }
-
     // Snackbar: conferme delle azioni + riproduzione provvisoria, singola
     // per ogni avviso pubblicato.
     val pendingNotice = notice
@@ -225,6 +219,7 @@ fun HomeScreen(
             is ActionTarget.MyChannelEntry -> catalogViewModel.myChannels.value.any { it.streamId == target.channel.streamId }
             is ActionTarget.Film -> catalog?.vodStreams?.any { it.streamId == target.stream.streamId } == true
             is ActionTarget.Series -> catalog?.series?.any { it.seriesId == target.item.seriesId } == true
+            is ActionTarget.SavedFavorite -> catalogViewModel.favorites.value.any { it.id == target.item.id }
             is ActionTarget.LiveCategory -> catalog?.liveCategories?.any { it.categoryId == target.categoryId } == true
             is ActionTarget.Continue -> catalogViewModel.continueEntries.value.any { it.key == target.entry.key }
             null -> true

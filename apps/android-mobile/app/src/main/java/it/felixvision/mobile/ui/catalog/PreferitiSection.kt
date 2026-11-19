@@ -250,6 +250,11 @@ fun PreferitiSection(
                         workingList.addAll(myChannels)
                     },
                 )
+                FavoritesTab.LIVE -> FavoritesLiveTab(
+                    favorites = favorites.filter { it.type == FavoriteItem.LIVE },
+                    catalog = catalog,
+                    viewModel = viewModel,
+                )
                 FavoritesTab.FILM_SERIES -> FavoritesFilmSeriesTab(
                     filmFavorites = filmFavorites,
                     seriesFavorites = seriesFavorites,
@@ -263,6 +268,26 @@ fun PreferitiSection(
                     viewModel = viewModel,
                     modifier = Modifier.fillMaxWidth(),
                 )
+            }
+        }
+    }
+}
+
+/** Canali salvati separatamente da I miei canali, compresi quelli storici. */
+@Composable
+private fun FavoritesLiveTab(favorites: List<FavoriteItem>, catalog: Catalog?, viewModel: CatalogViewModel) {
+    if (favorites.isEmpty()) {
+        EmptyState(title = "Nessun canale preferito", description = "Aggiungi un canale dai Live.")
+        return
+    }
+    LazyColumn(modifier = Modifier.fillMaxWidth().testTag("favorites_live_list")) {
+        items(favorites, key = { it.id }) { favorite ->
+            val stream = catalog?.liveStreams?.firstOrNull { it.streamId == favorite.id.removePrefix("live_") }
+            TouchListRow(
+                onClick = { if (stream != null) viewModel.onPlayRequest(PlayTarget.LiveChannel(stream.streamId)) },
+                onLongClick = { viewModel.openActions(if (stream != null) ActionTarget.Channel(stream) else ActionTarget.SavedFavorite(favorite)) },
+            ) {
+                Text(favorite.title, color = FvpColors.TextPrimary, modifier = Modifier.padding(16.dp))
             }
         }
     }
@@ -411,6 +436,7 @@ private fun FavoritesFilmSeriesTab(
                             val vodId = favorite.id.removePrefix("vod_")
                             val vod = catalog?.vodStreams.orEmpty().firstOrNull { it.streamId == vodId }
                             if (vod != null) viewModel.openActions(ActionTarget.Film(vod))
+                            else viewModel.openActions(ActionTarget.SavedFavorite(favorite))
                         },
                     )
                 }
@@ -432,6 +458,7 @@ private fun FavoritesFilmSeriesTab(
                             val seriesId = favorite.id.removePrefix("series_")
                             val series = catalog?.series.orEmpty().firstOrNull { it.seriesId == seriesId }
                             if (series != null) viewModel.openActions(ActionTarget.Series(series))
+                            else viewModel.openActions(ActionTarget.SavedFavorite(favorite))
                         },
                     )
                 }

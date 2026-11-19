@@ -41,9 +41,14 @@ class ProtectedSessionLifecycleTest {
     fun screenOffLocksSessionAndReceiverIsUnregistered() {
         start()
         app.container.protectedSession.unlock()
+        val guard = app.container.protectedPageGuard
+        val ticket = guard.generation.value
+        assertTrue(guard.grantIfCurrent(ticket))
         app.sendBroadcast(Intent(Intent.ACTION_SCREEN_OFF))
         shadowOf(Looper.getMainLooper()).idle()
         assertFalse(app.container.protectedSession.unlocked.value)
+        assertFalse(guard.isAuthorized)
+        assertFalse(guard.grantIfCurrent(ticket))
         controller?.pause()?.stop()?.destroy()
         controller = null
         app.container.protectedSession.unlock()
@@ -76,7 +81,10 @@ class ProtectedSessionLifecycleTest {
         val activity = start()
         app.container.protectedSession.unlock()
         PlayerPipRegistry.markEntered()
+        val guard = app.container.protectedPageGuard
+        assertTrue(guard.grantIfCurrent(guard.generation.value))
         controller?.pause()?.stop()
+        assertFalse(guard.isAuthorized)
         assertTrue(app.container.protectedSession.unlocked.value)
         activity.onPictureInPictureModeChanged(false, Configuration())
         shadowOf(Looper.getMainLooper()).idle()
