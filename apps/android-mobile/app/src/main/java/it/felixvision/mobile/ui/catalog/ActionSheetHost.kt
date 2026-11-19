@@ -306,6 +306,7 @@ fun ActionSheetHost(viewModel: CatalogViewModel) {
         is ActionTarget.MyChannelEntry -> target.channel.name
         is ActionTarget.Film -> target.stream.name
         is ActionTarget.Series -> target.item.name
+        is ActionTarget.SavedFavorite -> target.item.title
         is ActionTarget.LiveCategory -> target.name
         is ActionTarget.Continue -> target.entry.title
     }
@@ -314,6 +315,7 @@ fun ActionSheetHost(viewModel: CatalogViewModel) {
         is ActionTarget.MyChannelEntry -> "I miei canali"
         is ActionTarget.Film -> "Film"
         is ActionTarget.Series -> "Serie"
+        is ActionTarget.SavedFavorite -> "Preferito salvato"
         is ActionTarget.LiveCategory -> "Categoria Live"
         is ActionTarget.Continue -> "Riprendi"
     }
