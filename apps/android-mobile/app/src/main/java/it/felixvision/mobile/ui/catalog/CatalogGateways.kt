@@ -250,6 +250,10 @@ interface ProgressGateway {
     val revision: StateFlow<Long>
 
     suspend fun getAll(server: String, username: String): Map<String, WatchProgress>
+
+    suspend fun setWatched(server: String, username: String, key: String, watched: Boolean, durationMillis: Long) {
+        throw UnsupportedOperationException("Scrittura progresso non disponibile")
+    }
 }
 
 /** Implementazione reale su [ProgressStore] condiviso. */
@@ -261,4 +265,9 @@ class StoreProgressGateway(
 
     override suspend fun getAll(server: String, username: String): Map<String, WatchProgress> =
         store.getAll(server, username)
+
+    override suspend fun setWatched(server: String, username: String, key: String, watched: Boolean, durationMillis: Long) {
+        if (watched) store.markWatched(server, username, key, durationMillis)
+        else store.remove(server, username, key)
+    }
 }

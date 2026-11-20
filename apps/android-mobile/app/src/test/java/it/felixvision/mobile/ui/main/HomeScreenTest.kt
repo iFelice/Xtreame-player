@@ -373,15 +373,15 @@ class HomeScreenTest {
             "rail_item_novita",
             "rail_item_preferiti",
             "rail_item_live",
+            "rail_item_guida",
             "rail_item_film",
             "rail_item_serie",
-            "rail_item_riprendi",
             "rail_item_cerca",
             "rail_item_impostazioni",
         ).forEach { rule.onNodeWithTag(it).assertIsDisplayed() }
         assertEquals(8, AppSection.entries.size)
         assertEquals(
-            listOf("Novità", "Preferiti", "Live", "Film", "Serie", "Riprendi", "Cerca", "Impostazioni"),
+            listOf("Novità", "Preferiti", "Live", "Guida TV", "Film", "Serie", "Cerca", "Impostazioni"),
             AppSection.entries.map { it.title },
         )
     }
@@ -432,12 +432,7 @@ class HomeScreenTest {
             assertFalse("${section.name}: etichetta troncata", layout.hasVisualOverflow)
         }
 
-        assertEquals("Riprendi", AppSection.RIPRENDI.railLabel)
-        assertEquals("Riprendi", AppSection.RIPRENDI.title)
-        rule.onNode(
-            hasTestTag("rail_item_riprendi") and
-                hasContentDescription("Riprendi"),
-        ).assertExists()
+        rule.onNodeWithTag("rail_item_riprendi").assertDoesNotExist()
     }
 
     @Test

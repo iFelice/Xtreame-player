@@ -321,6 +321,7 @@ private fun GuideProgramRow(
     ) {
         Column(Modifier.weight(1f)) {
             Text(program.title, color = FvpColors.TextPrimary)
+            if (program.description.isNotBlank()) Text(program.description, color = FvpColors.TextSecondary, maxLines = 3, fontSize = 12.sp)
             Text(
                 "${EpgRules.time(program.start)} – ${EpgRules.time(program.end)}",
                 color = FvpColors.TextSecondary,
@@ -329,7 +330,7 @@ private fun GuideProgramRow(
         }
         if (replayable) {
             TextButton(onClick = { engine.playCatchup(program) }) {
-                Text("Catch-up", color = FvpColors.Green)
+                Text(if (it.felixvision.tv.data.epg.CatchupRules.isOnAir(program, engine.nowMillis() / 1_000L)) "Guarda dall'inizio" else "Catch-up", color = FvpColors.Green)
             }
         }
     }

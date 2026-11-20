@@ -217,14 +217,7 @@ private fun SeriesDetailLoaded(
                             onClick = { playEpisode(episode) },
                             onLongClick = {
                                 viewModel.openActions(
-                                    ActionTarget.Series(
-                                        SeriesItem(
-                                            seriesId = serieId,
-                                            name = serie.name,
-                                            cover = serie.cover,
-                                            categoryId = serie.categoryId,
-                                        ),
-                                    ),
+                                    ActionTarget.Episode(serieId, episode.id, episode.title, (episode.info?.durationSecs?.toLong() ?: 0L) * 1_000L),
                                 )
                             },
                         )
@@ -408,6 +401,9 @@ private fun EpisodeRow(
             }
             episode.info?.duration?.takeIf { it.isNotBlank() }?.let {
                 SecondaryText(text = it, maxLines = 1)
+            }
+            episode.info?.plot?.takeIf { it.isNotBlank() }?.let {
+                SecondaryText(text = it, maxLines = 2)
             }
             if (progress != null && progress.positionMillis > 0L) {
                 WatchProgressLine(progress = progress)

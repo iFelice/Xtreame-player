@@ -127,7 +127,7 @@ class PlayerLifecycleController(
         val channel = liveChannels.getOrNull(liveIndex) ?: return false
         if (channel.streamId != streamId) return false
         val program = programs.firstOrNull { it.start == programStartSeconds } ?: return false
-        if (!CatchupRules.isProgramReplayable(program, channel, nowMillis() / 1_000L)) return false
+        if (!canReplayProgram(program, channel, nowMillis() / 1_000L)) return false
         openSource(
             MobilePlaybackSource.Catchup(
                 stream = channel,

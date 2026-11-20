@@ -41,6 +41,7 @@ import it.felixvision.mobile.ui.theme.FvpColors
 import it.felixvision.tv.core.Clock
 import it.felixvision.tv.data.catalog.LiveStream
 import it.felixvision.tv.data.epg.CatchupRules
+import it.felixvision.mobile.ui.player.canReplayProgram
 import it.felixvision.tv.data.epg.ChannelScheduleLoader
 import it.felixvision.tv.data.epg.EpgProgram
 import it.felixvision.tv.data.epg.EpgRules
@@ -158,7 +159,7 @@ private fun GuideProgramRow(
     onCatchupPlay: () -> Unit,
 ) {
     val nowSeconds = nowMillis / 1_000L
-    val isReplayable = CatchupRules.isProgramReplayable(program, channel, nowSeconds)
+    val isReplayable = canReplayProgram(program, channel, nowSeconds)
     val isOnAir = CatchupRules.isOnAir(program, nowSeconds)
     val timeRange = "${EpgRules.time(program.start)} - ${EpgRules.time(program.end)}"
 
@@ -187,15 +188,17 @@ private fun GuideProgramRow(
             fontSize = 13.sp,
             fontWeight = FontWeight.Medium,
         )
-        Text(
-            text = program.title.ifBlank { "Programma" },
-            color = FvpColors.TextPrimary,
-            fontSize = 15.sp,
-            fontWeight = if (isOnAir) FontWeight.SemiBold else FontWeight.Medium,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(start = 12.dp).weight(1f),
-        )
+        Column(modifier = Modifier.padding(start = 12.dp).weight(1f)) {
+            Text(
+                text = program.title.ifBlank { "Programma" },
+                color = FvpColors.TextPrimary,
+                fontSize = 15.sp,
+                fontWeight = if (isOnAir) FontWeight.SemiBold else FontWeight.Medium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (program.description.isNotBlank()) SecondaryText(text = program.description, maxLines = 3)
+        }
         if (isReplayable) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -206,7 +209,7 @@ private fun GuideProgramRow(
                     .testTag("guide_catchup_chip"),
             ) {
                 Text(
-                    text = "Catch-up",
+                    text = if (isOnAir) "Guarda dall'inizio" else "Catch-up",
                     color = FvpColors.LiveActive,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,

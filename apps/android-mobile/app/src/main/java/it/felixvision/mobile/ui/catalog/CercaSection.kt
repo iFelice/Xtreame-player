@@ -41,6 +41,7 @@ import it.felixvision.mobile.ui.theme.FvpColors
 import it.felixvision.tv.data.catalog.LiveStream
 import it.felixvision.tv.data.search.CatalogSearch
 import it.felixvision.tv.data.search.SearchResults
+import it.felixvision.tv.data.progress.ProgressKeys
 
 /**
  * Sezione "Cerca" del tablet: campo in alto con tastiera aperta all'entrata,
@@ -116,13 +117,15 @@ private fun SearchResultsList(
     viewModel: CatalogViewModel,
     modifier: Modifier = Modifier,
 ) {
+    val favorites by viewModel.favorites.collectAsStateWithLifecycle()
+    val progress by viewModel.watchProgress.collectAsStateWithLifecycle()
     LazyColumn(
         verticalArrangement = Arrangement.spacedBy(16.dp),
         contentPadding = PaddingValues(bottom = 24.dp),
         modifier = modifier.testTag("cerca_results"),
     ) {
         if (results.live.isNotEmpty()) {
-            item(key = "cerca_live_title") { RowTitle(text = "Live") }
+            item(key = "cerca_live_title") { RowTitle(text = "Live (${results.live.size})") }
             items(results.live, key = { "cerca_live_${it.streamId}" }) { channel ->
                 SearchLiveRow(
                     channel = channel,
@@ -133,7 +136,7 @@ private fun SearchResultsList(
             }
         }
         if (results.vod.isNotEmpty()) {
-            item(key = "cerca_film_title") { RowTitle(text = "Film") }
+            item(key = "cerca_film_title") { RowTitle(text = "Film (${results.vod.size})") }
             item(key = "cerca_film_row") {
                 LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -147,6 +150,9 @@ private fun SearchResultsList(
                             imageLoader = imageLoader,
                             width = 132.dp,
                             subtitle = film.year,
+                            isFavorite = favorites.any { it.id == "vod_${film.streamId}" },
+                            progress = progress[ProgressKeys.movie(film.streamId)],
+                            isWatched = progress[ProgressKeys.movie(film.streamId)]?.isWatched == true,
                             onClick = { viewModel.openDetail(DetailTarget.Film(film)) },
                             onLongClick = { viewModel.openActions(ActionTarget.Film(film)) },
                             testTag = "cerca_film_${film.streamId}",
@@ -156,7 +162,7 @@ private fun SearchResultsList(
             }
         }
         if (results.series.isNotEmpty()) {
-            item(key = "cerca_serie_title") { RowTitle(text = "Serie") }
+            item(key = "cerca_serie_title") { RowTitle(text = "Serie (${results.series.size})") }
             item(key = "cerca_serie_row") {
                 LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -170,6 +176,7 @@ private fun SearchResultsList(
                             imageLoader = imageLoader,
                             width = 132.dp,
                             subtitle = serie.releaseDate,
+                            isFavorite = favorites.any { it.id == "series_${serie.seriesId}" },
                             onClick = { viewModel.openDetail(DetailTarget.Series(serie)) },
                             onLongClick = { viewModel.openActions(ActionTarget.Series(serie)) },
                             testTag = "cerca_serie_${serie.seriesId}",

@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -43,6 +44,7 @@ import it.felixvision.mobile.ui.components.rememberChannelSchedulePrograms
 import it.felixvision.mobile.ui.components.rememberMinuteNow
 import it.felixvision.mobile.ui.components.rememberSectionListState
 import it.felixvision.mobile.ui.theme.FvpColors
+import it.felixvision.mobile.ui.main.AppSection
 import it.felixvision.tv.core.Clock
 import it.felixvision.tv.data.catalog.LiveStream
 import it.felixvision.tv.data.epg.ChannelScheduleLoader
@@ -76,6 +78,8 @@ fun LiveSection(
 ) {
     val catalogState by viewModel.ui.collectAsStateWithLifecycle()
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
+    val myChannels by viewModel.myChannels.collectAsStateWithLifecycle()
+    val personalIds = remember(myChannels) { myChannels.mapTo(hashSetOf()) { it.streamId } }
     val catalog = catalogState.catalog
 
     val categories = catalog?.liveCategories.orEmpty()
@@ -148,6 +152,7 @@ fun LiveSection(
                         imageLoader = imageLoader,
                         nowMillis = nowMillis,
                         programs = schedulePrograms[channel.streamId],
+                        isPersonal = channel.streamId in personalIds,
                         onClick = {
                             viewModel.onPlayRequest(PlayTarget.LiveChannel(channel.streamId))
                         },
@@ -156,6 +161,15 @@ fun LiveSection(
                     )
                 }
             }
+        }
+    }
+
+    val withGuide: @Composable (Modifier) -> Unit = { contentModifier ->
+        Column(modifier = contentModifier) {
+            TextButton(onClick = { viewModel.selectSection(AppSection.GUIDA) }, modifier = Modifier.testTag("open_guide_tv")) {
+                Text("Guida TV", color = FvpColors.LiveActive)
+            }
+            listContent(Modifier.weight(1f).fillMaxWidth())
         }
     }
 
@@ -182,7 +196,7 @@ fun LiveSection(
                 },
                 modifier = Modifier.width(240.dp),
             )
-            listContent(Modifier.weight(1f).fillMaxSize())
+            withGuide(Modifier.weight(1f).fillMaxSize())
         }
     } else {
         Box(modifier = modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
@@ -196,7 +210,7 @@ fun LiveSection(
                     },
                     sectionKey = sectionKey,
                 )
-                listContent(Modifier.weight(1f).fillMaxWidth())
+                withGuide(Modifier.weight(1f).fillMaxWidth())
             }
             if (headerOpen) {
                 CollapsingCategoryPanel(
@@ -236,6 +250,7 @@ fun LiveChannelRow(
     onLongClick: () -> Unit,
     onGuide: () -> Unit,
     modifier: Modifier = Modifier,
+    isPersonal: Boolean = false,
 ) {
     TouchListRow(
         onClick = onClick,
@@ -271,6 +286,12 @@ fun LiveChannelRow(
                 modifier = Modifier.testTag("live_schedule_${channel.streamId}"),
             )
         }
+        if (isPersonal) Icon(
+            imageVector = FvpIcons.Star,
+            contentDescription = "Presente in I miei canali",
+            tint = FvpColors.Green,
+            modifier = Modifier.size(20.dp).testTag("live_personal_${channel.streamId}"),
+        )
         IconButton(
             onClick = onGuide,
             modifier = Modifier

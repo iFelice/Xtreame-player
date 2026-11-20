@@ -43,7 +43,7 @@ fun ContinueWatchingRow(
     if (entries.isEmpty()) return
     Column(modifier = modifier.fillMaxWidth()) {
         if (showTitle) {
-            RowTitle(text = "Riprendi")
+            RowTitle(text = "Continua a guardare")
         }
         val rowState = rememberSectionListState(scrollStore, listKey)
         LazyRow(

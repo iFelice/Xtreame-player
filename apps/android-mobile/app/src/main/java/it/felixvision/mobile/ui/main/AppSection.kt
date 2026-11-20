@@ -17,7 +17,7 @@ import it.felixvision.mobile.ui.theme.FvpColors
  * modalità: compare come prima riga di Novità, se non è vuota.
  *
  * Ordine della barra laterale (come la TV):
- * Novità, Preferiti, Live, Film, Serie, Riprendi, Cerca, Impostazioni.
+ * Novità, Preferiti, Live, Guida TV, Film, Serie, Cerca, Impostazioni.
  */
 enum class AppSection(
     val title: String,
@@ -35,14 +35,9 @@ enum class AppSection(
     NOVITA("Novità", FvpColors.NovitaActive, FvpIcons.Novita, "novita"),
     PREFERITI("Preferiti", FvpColors.PreferitiActive, FvpIcons.Star, "preferiti"),
     LIVE("Live", FvpColors.LiveActive, FvpIcons.Live, "live"),
+    GUIDA("Guida TV", FvpColors.LiveActive, FvpIcons.Guida, "guida"),
     FILM("Film", FvpColors.FilmActive, FvpIcons.Film, "film"),
     SERIE("Serie", FvpColors.SerieActive, FvpIcons.Serie, "serie"),
-    RIPRENDI(
-        title = "Riprendi",
-        accent = FvpColors.ContinuaActive,
-        icon = FvpIcons.Continua,
-        stateKey = "riprendi",
-    ),
     CERCA("Cerca", FvpColors.CercaActive, FvpIcons.Cerca, "cerca"),
     IMPOSTAZIONI("Impostazioni", FvpColors.ImpostazioniActive, FvpIcons.Impostazioni, "impostazioni"),
     ;

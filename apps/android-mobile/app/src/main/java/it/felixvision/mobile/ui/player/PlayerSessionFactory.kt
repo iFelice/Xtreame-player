@@ -53,7 +53,7 @@ suspend fun createMobilePlayerSession(
             val programs = container.channelEpgClient.load(account.server, account.username, password, channel.streamId)
             val program = programs.firstOrNull {
                 it.start == target.programStartSeconds &&
-                    CatchupRules.isProgramReplayable(
+                    canReplayProgram(
                         it,
                         channel,
                         container.clock.nowMillis() / 1_000L,

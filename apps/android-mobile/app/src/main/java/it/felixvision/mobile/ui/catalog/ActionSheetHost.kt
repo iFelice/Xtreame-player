@@ -30,6 +30,7 @@ import it.felixvision.mobile.ui.components.SheetAction
 import it.felixvision.mobile.ui.theme.FvpColors
 import it.felixvision.tv.data.channels.MyChannel
 import it.felixvision.tv.data.favorites.FavoriteItem
+import it.felixvision.tv.data.progress.ProgressKeys
 
 /**
  * Punto unico che trasforma lo stato del ViewModel in popup:
@@ -44,6 +45,7 @@ fun ActionSheetHost(viewModel: CatalogViewModel) {
     val positionDialog by viewModel.positionDialog.collectAsStateWithLifecycle()
     val myChannels by viewModel.myChannels.collectAsStateWithLifecycle()
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
+    val progress by viewModel.watchProgress.collectAsStateWithLifecycle()
 
     val close = { viewModel.closeActions() }
 
@@ -237,6 +239,25 @@ fun ActionSheetHost(viewModel: CatalogViewModel) {
                         )
                     },
                 ),
+                SheetAction(
+                    label = if (progress[ProgressKeys.movie(stream.streamId)]?.isWatched == true) "Segna come non visto" else "Segna come visto",
+                    testTag = "sheet_watched",
+                    onClick = {
+                        close()
+                        viewModel.setWatched(ProgressKeys.movie(stream.streamId), progress[ProgressKeys.movie(stream.streamId)]?.isWatched != true, movieId = stream.streamId)
+                    },
+                ),
+            )
+        }
+        is ActionTarget.Episode -> {
+            val key = ProgressKeys.episode(target.episodeId)
+            listOf(
+                SheetAction(label = "Riproduci episodio", testTag = "sheet_play_episode", onClick = {
+                    close(); viewModel.onPlayRequest(PlayTarget.SeriesEpisode(target.seriesId, target.episodeId))
+                }),
+                SheetAction(label = if (progress[key]?.isWatched == true) "Segna come non visto" else "Segna come visto", testTag = "sheet_watched", onClick = {
+                    close(); viewModel.setWatched(key, progress[key]?.isWatched != true, target.durationMillis, seriesId = target.seriesId)
+                }),
             )
         }
         is ActionTarget.Series -> {
@@ -289,8 +310,11 @@ fun ActionSheetHost(viewModel: CatalogViewModel) {
         }
         is ActionTarget.Continue -> {
             listOf(
+                SheetAction(label = "Apri scheda", testTag = "sheet_open_detail", onClick = {
+                    close(); viewModel.openContinueDetail(target.entry)
+                }),
                 SheetAction(
-                    label = "Rimuovi da Riprendi",
+                    label = "Rimuovi da Continua a guardare",
                     testTag = "sheet_hide_continue",
                     onClick = {
                         close()
@@ -306,6 +330,7 @@ fun ActionSheetHost(viewModel: CatalogViewModel) {
         is ActionTarget.MyChannelEntry -> target.channel.name
         is ActionTarget.Film -> target.stream.name
         is ActionTarget.Series -> target.item.name
+        is ActionTarget.Episode -> target.title
         is ActionTarget.SavedFavorite -> target.item.title
         is ActionTarget.LiveCategory -> target.name
         is ActionTarget.Continue -> target.entry.title
@@ -315,6 +340,7 @@ fun ActionSheetHost(viewModel: CatalogViewModel) {
         is ActionTarget.MyChannelEntry -> "I miei canali"
         is ActionTarget.Film -> "Film"
         is ActionTarget.Series -> "Serie"
+        is ActionTarget.Episode -> "Episodio"
         is ActionTarget.SavedFavorite -> "Preferito salvato"
         is ActionTarget.LiveCategory -> "Categoria Live"
         is ActionTarget.Continue -> "Riprendi"

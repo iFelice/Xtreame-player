@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
@@ -48,10 +50,10 @@ import it.felixvision.mobile.ui.catalog.ActionTarget
 import it.felixvision.mobile.ui.catalog.BackAction
 import it.felixvision.mobile.ui.catalog.CatalogViewModel
 import it.felixvision.mobile.ui.catalog.CercaSection
-import it.felixvision.mobile.ui.catalog.ContinueWatchingSection
 import it.felixvision.mobile.ui.catalog.DetailTarget
 import it.felixvision.mobile.ui.catalog.FilmSection
 import it.felixvision.mobile.ui.catalog.LiveSection
+import it.felixvision.mobile.ui.catalog.GuideTvSection
 import it.felixvision.mobile.ui.catalog.NovitaSection
 import it.felixvision.mobile.ui.catalog.PreferitiSection
 import it.felixvision.mobile.ui.catalog.SerieSection
@@ -156,6 +158,7 @@ fun HomeScreen(
     val notice by catalogViewModel.notice.collectAsStateWithLifecycle()
     val playRequest by catalogViewModel.playRequest.collectAsStateWithLifecycle()
     var playerSession by remember(summary.server, summary.username) { mutableStateOf<MobilePlayerSession?>(null) }
+    var preparingPlayback by remember { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -183,12 +186,15 @@ fun HomeScreen(
         val catalog = catalogState.catalog ?: return@LaunchedEffect
         val wasUnlocked = container.protectedSession.unlocked.value
         val protectionRevision = container.protectedContentStore.revision.value
+        preparingPlayback = true
         val resolved = try {
             createMobilePlayerSession(request, catalog, container, summary, password, catalogViewModel)
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
             null
+        } finally {
+            preparingPlayback = false
         }
         catalogViewModel.consumePlayRequest(request)
         if (resolved != null && catalogViewModel.ui.value.catalog == catalog &&
@@ -197,7 +203,14 @@ fun HomeScreen(
         ) {
             playerSession = resolved
         } else {
-            scope.launch { snackbarHostState.showSnackbar("Contenuto non disponibile per la riproduzione") }
+            scope.launch {
+                val message = if (request is it.felixvision.mobile.ui.catalog.PlayTarget.ContinueItem || request is it.felixvision.mobile.ui.catalog.PlayTarget.SeriesEpisode)
+                    "Impossibile caricare l'episodio: verifica la connessione o la disponibilità nel catalogo"
+                else "Contenuto non disponibile per la riproduzione"
+                if (snackbarHostState.showSnackbar(message, actionLabel = "Riprova") == SnackbarResult.ActionPerformed) {
+                    catalogViewModel.onPlayRequest(request)
+                }
+            }
         }
     }
 
@@ -219,6 +232,7 @@ fun HomeScreen(
             is ActionTarget.MyChannelEntry -> catalogViewModel.myChannels.value.any { it.streamId == target.channel.streamId }
             is ActionTarget.Film -> catalog?.vodStreams?.any { it.streamId == target.stream.streamId } == true
             is ActionTarget.Series -> catalog?.series?.any { it.seriesId == target.item.seriesId } == true
+            is ActionTarget.Episode -> catalog?.series?.any { it.seriesId == target.seriesId } == true
             is ActionTarget.SavedFavorite -> catalogViewModel.favorites.value.any { it.id == target.item.id }
             is ActionTarget.LiveCategory -> catalog?.liveCategories?.any { it.categoryId == target.categoryId } == true
             is ActionTarget.Continue -> catalogViewModel.continueEntries.value.any { it.key == target.entry.key }
@@ -371,6 +385,12 @@ fun HomeScreen(
             }
         }
 
+        if (preparingPlayback) {
+            Box(Modifier.fillMaxSize().background(FvpColors.Background.copy(alpha = .7f)).testTag("playback_loading"), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = FvpColors.Green)
+            }
+        }
+
         // Popup da pressione lunga sopra il contenuto.
         if (actionTarget != null || positionDialog != null) {
             ActionSheetHost(catalogViewModel)
@@ -417,10 +437,10 @@ private fun SectionContent(
             imageLoader = imageLoader,
             modifier = modifier,
         )
-        AppSection.RIPRENDI -> ContinueWatchingSection(
-            viewModel = catalogViewModel,
-            imageLoader = imageLoader,
-            modifier = modifier,
+        AppSection.GUIDA -> GuideTvSection(
+            viewModel = catalogViewModel, scheduleLoader = channelScheduleLoader,
+            server = summary.server, username = summary.username, password = password,
+            clock = container.clock, modifier = modifier,
         )
         AppSection.LIVE -> LiveSection(
             viewModel = catalogViewModel,

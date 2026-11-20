@@ -545,7 +545,7 @@ class PlayerEngine(
     }
 
     fun canPlayCatchup(program: EpgProgram, nowSeconds: Long): Boolean =
-        currentLiveChannel?.let { CatchupRules.isProgramReplayable(program, it, nowSeconds) } == true
+        currentLiveChannel?.let { canReplayProgram(program, it, nowSeconds) } == true
 
     fun playCatchup(program: EpgProgram) {
         val channel = currentLiveChannel ?: return

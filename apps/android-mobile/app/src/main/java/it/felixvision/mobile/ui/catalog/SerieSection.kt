@@ -13,10 +13,15 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.ImageLoader
@@ -59,7 +64,10 @@ fun SerieSection(
         ?.takeIf { selected -> displayCategories.any { it.categoryId == selected } }
         ?: displayCategories.firstOrNull()?.categoryId
     val headerOpen = viewModel.sectionStates.isHeaderOpen(sectionKey)
-    val filtered = remember(streams, catalogState.recentSeries, selectedCategoryId) {
+    val context = LocalContext.current
+    val sortStore = remember(context) { CategorySortStore(context) }
+    var sort by remember(selectedCategoryId) { mutableStateOf(sortStore.get("series", selectedCategoryId.orEmpty())) }
+    val filteredUnsorted = remember(streams, catalogState.recentSeries, selectedCategoryId) {
         if (selectedCategoryId == null) {
             emptyList()
         } else {
@@ -67,10 +75,13 @@ fun SerieSection(
         }
     }
 
+    val filtered = remember(filteredUnsorted, sort, selectedCategoryId) {
+        if (selectedCategoryId == NOVITA_CATEGORY_ID) filteredUnsorted else sortSeries(filteredUnsorted, sort)
+    }
     val gridState = rememberSectionGridState(viewModel.sectionStates, "serie_grid")
 
     // Al cambio di categoria la griglia torna in cima (stessa regola della TV).
-    LaunchedEffect(selectedCategoryId) {
+    LaunchedEffect(selectedCategoryId, sort) {
         gridState.scrollToItem(0)
     }
 
@@ -114,6 +125,20 @@ fun SerieSection(
         }
     }
 
+    val sortedGrid: @Composable (Modifier) -> Unit = { gridModifier ->
+        Column(modifier = gridModifier) {
+            if (selectedCategoryId != null && selectedCategoryId != NOVITA_CATEGORY_ID) {
+                TextButton(onClick = {
+                    sort = sort.next()
+                    sortStore.set("series", selectedCategoryId, sort)
+                }, modifier = Modifier.testTag("series_sort")) {
+                    Text("Ordina: ${sort.label}")
+                }
+            }
+            grid(Modifier.weight(1f).fillMaxWidth())
+        }
+    }
+
     if (wideLayout) {
         Row(
             modifier = modifier.padding(horizontal = 16.dp, vertical = 12.dp),
@@ -127,7 +152,7 @@ fun SerieSection(
                 },
                 sectionKey = sectionKey,
             )
-            grid(Modifier.weight(1f).fillMaxSize())
+            sortedGrid(Modifier.weight(1f).fillMaxSize())
         }
     } else {
         Box(modifier = modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
@@ -141,7 +166,7 @@ fun SerieSection(
                     },
                     sectionKey = sectionKey,
                 )
-                grid(Modifier.weight(1f).fillMaxWidth())
+                sortedGrid(Modifier.weight(1f).fillMaxWidth())
             }
             if (headerOpen) {
                 CollapsingCategoryPanel(

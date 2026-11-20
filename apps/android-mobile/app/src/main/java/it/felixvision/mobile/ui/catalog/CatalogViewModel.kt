@@ -27,6 +27,7 @@ import it.felixvision.tv.data.continuewatching.ContinueEntry
 import it.felixvision.tv.data.continuewatching.ContinueWatchingRules
 import it.felixvision.tv.data.favorites.FavoriteItem
 import it.felixvision.tv.data.progress.WatchProgress
+import it.felixvision.tv.data.progress.ProgressKeys
 import it.felixvision.tv.data.search.CatalogSearch
 import it.felixvision.tv.data.search.SearchResults
 import kotlinx.coroutines.FlowPreview
@@ -107,6 +108,8 @@ sealed interface ActionTarget {
     data class Film(val stream: VodStream) : ActionTarget
 
     data class Series(val item: SeriesItem) : ActionTarget
+
+    data class Episode(val seriesId: String, val episodeId: String, val title: String, val durationMillis: Long = 0L) : ActionTarget
 
     /** Rimozione di una voce salvata anche quando il catalogo non la contiene. */
     data class SavedFavorite(val item: FavoriteItem) : ActionTarget
@@ -533,6 +536,30 @@ class CatalogViewModel(
         viewModelScope.launch {
             myChannelsGateway.remove(server, username, streamId)
             postNotice(MY_CHANNEL_REMOVED)
+        }
+    }
+
+    /** Usa solo il catalogo già filtrato: una voce assente resta rimovibile ma non apribile. */
+    fun openContinueDetail(entry: ContinueEntry) {
+        if (continueEntries.value.none { it.key == entry.key }) return
+        val catalog = ui.value.catalog ?: return
+        val detail = if (entry.isMovie) {
+            catalog.vodStreams.firstOrNull { it.streamId == entry.streamId }?.let { DetailTarget.Film(it) }
+        } else {
+            catalog.series.firstOrNull { it.seriesId == entry.seriesId }?.let { DetailTarget.Series(it) }
+        }
+        if (detail == null) postNotice("Scheda non disponibile nel catalogo") else openDetail(detail)
+    }
+
+    fun setWatched(key: String, watched: Boolean, durationMillis: Long = 0L, movieId: String? = null, seriesId: String? = null) {
+        val catalog = ui.value.catalog ?: return
+        if (movieId != null && catalog.vodStreams.none { it.streamId == movieId }) return
+        if (seriesId != null && catalog.series.none { it.seriesId == seriesId }) return
+        if (movieId == null && seriesId == null) return
+        viewModelScope.launch {
+            progressGateway.setWatched(server, username, key, watched, durationMillis)
+            if (watched && movieId != null) continueGateway.hide(server, username, ContinueEntry.movieKey(movieId))
+            postNotice(if (watched) "Segnato come visto" else "Segnato come non visto")
         }
     }
 
