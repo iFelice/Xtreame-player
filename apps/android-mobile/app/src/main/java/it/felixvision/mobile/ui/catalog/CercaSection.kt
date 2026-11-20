@@ -119,6 +119,7 @@ private fun SearchResultsList(
 ) {
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
     val progress by viewModel.watchProgress.collectAsStateWithLifecycle()
+    val continueEntries by viewModel.continueEntries.collectAsStateWithLifecycle()
     LazyColumn(
         verticalArrangement = Arrangement.spacedBy(16.dp),
         contentPadding = PaddingValues(bottom = 24.dp),
@@ -171,6 +172,8 @@ private fun SearchResultsList(
                     modifier = Modifier.fillMaxWidth().testTag("cerca_row_serie"),
                 ) {
                     items(results.series, key = { "cerca_serie_${it.seriesId}" }) { serie ->
+                        val episodeId = continueEntries.firstOrNull { it.isSeries && it.seriesId == serie.seriesId }?.episodeId
+                        val episodeProgress = episodeId?.let { progress[ProgressKeys.episode(it)] }
                         PosterCard(
                             imageUrl = serie.cover,
                             title = serie.name,
@@ -178,6 +181,8 @@ private fun SearchResultsList(
                             width = 132.dp,
                             subtitle = serie.releaseDate,
                             isFavorite = favorites.any { it.id == "series_${serie.seriesId}" },
+                            progress = episodeProgress,
+                            isWatched = episodeProgress?.isWatched == true,
                             onClick = { viewModel.openDetail(DetailTarget.Series(serie)) },
                             onLongClick = { viewModel.openActions(ActionTarget.Series(serie)) },
                             testTag = "cerca_serie_${serie.seriesId}",

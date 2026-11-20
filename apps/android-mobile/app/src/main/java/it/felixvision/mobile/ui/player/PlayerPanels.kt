@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
@@ -356,7 +357,7 @@ private fun ChannelPanel(
         visibleIds, engine.scheduleLoader, engine.session.server, engine.session.username, engine.session.password,
     )
     LazyColumn(Modifier.fillMaxSize(), state = listState) {
-        items(channels, key = { "player_channel_${it.streamId}" }) { channel ->
+        itemsIndexed(channels, key = { _, channel -> "player_channel_${channel.streamId}" }) { index, channel ->
             val selected = channel.streamId == state.currentStreamId
             val personal = engine.personalChannels.any { it.streamId == channel.streamId }
             val program = EpgRules.onAir(schedules[channel.streamId].orEmpty(), engine.nowMillis())
@@ -369,7 +370,7 @@ private fun ChannelPanel(
                 Row(modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     ChannelLogoImage(channel.streamIcon, channel.name, engine.imageLoader, modifier = Modifier.size(40.dp))
                     Column(Modifier.weight(1f).padding(start = 10.dp)) {
-                        Text(listOfNotNull(channel.num?.toString(), channel.name).joinToString(" · "), color = FvpColors.TextPrimary, maxLines = 1)
+                        Text("${channel.num ?: (index + 1)} · ${channel.name}", color = FvpColors.TextPrimary, maxLines = 1)
                         if (program != null) Text(program.title, color = FvpColors.TextSecondary, fontSize = 12.sp, maxLines = 1)
                     }
                     if (personal) Icon(FvpIcons.Star, contentDescription = "I miei canali", tint = FvpColors.Green, modifier = Modifier.size(20.dp))

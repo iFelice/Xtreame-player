@@ -419,7 +419,9 @@ internal fun BoxScope.ControlsOverlay(
             onPlayPause = engine::togglePlayback,
             onSeek = engine::seekTo,
             onSeekBy = engine::seekBy,
-            channel = engine.currentLiveChannel.takeIf { state.playbackType.isLiveOrCatchup },
+            channel = engine.currentLiveChannel?.let { channel ->
+                channel.copy(num = channel.num ?: (engine.zappingChannels.indexOfFirst { it.streamId == channel.streamId } + 1).takeIf { it > 0 })
+            }.takeIf { state.playbackType.isLiveOrCatchup },
             imageLoader = engine.imageLoader,
             categoryName = (engine.playbackSource as? MobilePlaybackSource.Live)?.categoryName,
             isPersonal = engine.personalChannels.any { it.streamId == state.currentStreamId },
@@ -533,7 +535,9 @@ private fun PortraitPlayerLayout(
                         onPlayPause = engine::togglePlayback,
                         onSeek = engine::seekTo,
                         onSeekBy = engine::seekBy,
-                        channel = engine.currentLiveChannel.takeIf { state.playbackType.isLiveOrCatchup },
+                        channel = engine.currentLiveChannel?.let { channel ->
+                            channel.copy(num = channel.num ?: (engine.zappingChannels.indexOfFirst { it.streamId == channel.streamId } + 1).takeIf { it > 0 })
+                        }.takeIf { state.playbackType.isLiveOrCatchup },
                         imageLoader = engine.imageLoader,
                         categoryName = (engine.playbackSource as? MobilePlaybackSource.Live)?.categoryName,
                         isPersonal = engine.personalChannels.any { it.streamId == state.currentStreamId },
