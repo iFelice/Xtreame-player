@@ -612,9 +612,9 @@ class HomeScreenTest {
         rule.onNodeWithTag("favorites_tab_live_categories", useUnmergedTree = true).performClick()
         rule.onNodeWithTag("favorite_livecat_c2", useUnmergedTree = true).assertDoesNotExist()
 
-        rule.onNodeWithTag("rail_item_riprendi").performClick()
-        rule.onNodeWithTag("continua_card_vod_201", useUnmergedTree = true).assertDoesNotExist()
-        rule.onNodeWithTag("continua_card_vod_202", useUnmergedTree = true).assertIsDisplayed()
+        rule.onNodeWithTag("rail_item_novita").performClick()
+        rule.onNodeWithTag("continue_card_vod_201", useUnmergedTree = true).assertDoesNotExist()
+        rule.onNodeWithTag("continue_card_vod_202", useUnmergedTree = true).assertIsDisplayed()
         rule.onNodeWithTag("rail_item_cerca").performClick()
         rule.runOnIdle { vm.onSearchQueryChange("Esempio") }
         shadowOf(Looper.getMainLooper()).idleFor(350, TimeUnit.MILLISECONDS)
@@ -629,8 +629,8 @@ class HomeScreenTest {
         rule.onNodeWithTag("novita_film_201", useUnmergedTree = true).assertIsDisplayed()
         rule.onNodeWithTag("rail_item_film").performClick()
         rule.onNodeWithTag("film_201", useUnmergedTree = true).assertIsDisplayed()
-        rule.onNodeWithTag("rail_item_riprendi").performClick()
-        rule.onNodeWithTag("continua_card_vod_201", useUnmergedTree = true).assertIsDisplayed()
+        rule.onNodeWithTag("rail_item_novita").performClick()
+        rule.onNodeWithTag("continue_card_vod_201", useUnmergedTree = true).assertIsDisplayed()
         rule.onNodeWithTag("rail_item_preferiti").performClick()
         rule.onNodeWithTag("favorite_livecat_c2", useUnmergedTree = true).assertIsDisplayed()
         rule.onNodeWithTag("favorites_tab_film_series", useUnmergedTree = true).performClick()

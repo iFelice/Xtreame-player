@@ -73,6 +73,30 @@ class PlayerScreenTest {
     }
 
     @Test
+    @Config(sdk = [34], qualifiers = "w1280dp-h800dp-land-mdpi")
+    fun liveControlsExposePersonalChannelFormatAndAudio() {
+        var personalClicks = 0
+        var formatClicks = 0
+        rule.setContent {
+            FvpTheme {
+                PlayerControls(
+                    state = MobilePlayerState(playbackType = MobilePlaybackType.LIVE, audioLabel = "AAC", ffmpegActive = true),
+                    currentProgram = null, nowMillis = 0L, isFit = true,
+                    onBack = {}, onTracks = {}, onFit = {}, onPip = {}, onPlayPause = {}, onSeek = {}, onSeekBy = {},
+                    isPersonal = false, onTogglePersonal = { personalClicks++ },
+                    onChangeVideoFormat = { formatClicks++ },
+                )
+            }
+        }
+        rule.onNodeWithContentDescription("Aggiungi a I miei canali").performClick()
+        rule.onNodeWithTag("player_video_format", useUnmergedTree = true).performClick()
+        rule.onNodeWithTag("player_audio_format", useUnmergedTree = true).assertIsDisplayed()
+        rule.onNodeWithTag("player_ffmpeg_badge", useUnmergedTree = true).assertIsDisplayed()
+        assertEquals(1, personalClicks)
+        assertEquals(1, formatClicks)
+    }
+
+    @Test
     @Config(sdk = [34], qualifiers = "w800dp-h1280dp-port-mdpi")
     fun portraitMovieShowsDetailsWithoutGuideOrChannelTabs() {
         val engine = engineFor(MobilePlaybackSource.Movie(movie()))

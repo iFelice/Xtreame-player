@@ -20,6 +20,7 @@ import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import it.felixvision.mobile.AppContainer
 import it.felixvision.tv.core.AppLog
 import it.felixvision.tv.data.catalog.LiveStream
+import it.felixvision.tv.data.channels.MyChannel
 import it.felixvision.tv.data.catalog.VodInfoResponse
 import it.felixvision.tv.data.catalog.VodInfoResult
 import it.felixvision.tv.data.catalog.VodStream
@@ -115,6 +116,7 @@ data class MobilePlayerState(
     val audioTracks: List<MobileTrackOption> = emptyList(),
     val subtitleTracks: List<MobileTrackOption> = emptyList(),
     val audioLabel: String = "",
+    val ffmpegActive: Boolean = false,
     val channelName: String = "",
     val playbackType: MobilePlaybackType = MobilePlaybackType.LIVE,
     val currentStreamId: String? = null,
@@ -130,6 +132,10 @@ class PlayerEngine(
     val session: MobilePlayerSession,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    internal val imageLoader get() = container.imageLoader
+    internal val scheduleLoader get() = container.channelScheduleLoader
+    var personalChannels by mutableStateOf<List<MyChannel>>(emptyList())
+        private set
     private var started = false
     private var hostStopped = false
     private var released = false
@@ -281,7 +287,7 @@ class PlayerEngine(
                     }
                 }
                 PlayerErrorAction.SHOW_ERROR -> {
-                    state = state.copy(error = "Impossibile riprodurre questo contenuto", buffering = false)
+                    state = state.copy(error = playerErrorMessage(error.errorCode), buffering = false)
                 }
             }
         }
@@ -298,15 +304,18 @@ class PlayerEngine(
             initializedTimestampMs: Long,
             initializationDurationMs: Long,
         ) {
-            if (AudioFormatLabels.isFfmpegDecoder(decoderName)) {
-                state = state.copy(audioLabel = "FFmpeg")
-            }
+            state = state.copy(ffmpegActive = AudioFormatLabels.isFfmpegDecoder(decoderName))
         }
     }
 
     fun start() {
         if (started || released) return
         started = true
+        if (liveChannels.isNotEmpty()) scope.launch {
+            container.myChannelsStore.revision.collect {
+                personalChannels = container.myChannelsStore.getChannels(session.server, session.username)
+            }
+        }
         scope.launch {
             val resume = lifecycleController.start(session.autoResume)
             if (resume != null) {
@@ -359,6 +368,7 @@ class PlayerEngine(
         state = state.copy(
             error = null,
             buffering = true,
+            ffmpegActive = false,
             channelName = title(),
             playbackType = currentSource.playbackType(),
             currentStreamId = streamIdOf(currentSource),
@@ -554,6 +564,19 @@ class PlayerEngine(
             programStartSeconds = program.start,
             programs = listOf(program),
         )
+    }
+
+    fun toggleCurrentPersonalChannel() {
+        val channel = currentLiveChannel ?: return
+        if (released || zappingChannels.none { it.streamId == channel.streamId }) return
+        scope.launch {
+            if (released || zappingChannels.none { it.streamId == channel.streamId }) return@launch
+            if (personalChannels.any { it.streamId == channel.streamId }) {
+                container.myChannelsStore.remove(session.server, session.username, channel.streamId)
+            } else {
+                container.myChannelsStore.add(session.server, session.username, MyChannel(channel.streamId, channel.name, channel.streamIcon))
+            }
+        }
     }
 
     fun selectChannel(index: Int) {
@@ -828,3 +851,14 @@ internal class LiveStallDetector {
 /** Live riparte in diretta; i contenuti navigabili riprendono dalla posizione corrente. */
 internal fun retryPosition(type: MobilePlaybackType, current: Long?, fallback: Long): Long =
     if (type.supportsSeeking) (current ?: fallback).coerceAtLeast(0L) else 0L
+
+/** Messaggi senza URL o credenziali. */
+internal fun playerErrorMessage(code: Int): String = when (code) {
+    PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+    PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT -> "Connessione al server non disponibile. Controlla la rete e riprova."
+    PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS,
+    PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND -> "Contenuto non disponibile sul server."
+    PlaybackException.ERROR_CODE_DECODING_FAILED,
+    PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED -> "Formato audio o video non supportato."
+    else -> "Impossibile riprodurre questo contenuto. Riprova."
+}

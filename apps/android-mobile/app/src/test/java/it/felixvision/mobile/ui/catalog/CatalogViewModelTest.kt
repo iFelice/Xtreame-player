@@ -250,6 +250,11 @@ class CatalogViewModelTest {
 
         override suspend fun getAll(server: String, username: String): Map<String, WatchProgress> =
             progress
+
+        override suspend fun setWatched(server: String, username: String, key: String, watched: Boolean, durationMillis: Long) {
+            progress = if (watched) progress + (key to it.felixvision.tv.data.progress.WatchRules.watchedEntry(durationMillis, 1L)) else progress - key
+            _revision.value += 1
+        }
     }
 
     private fun newViewModel(
@@ -348,6 +353,45 @@ class CatalogViewModelTest {
         assertEquals(0, gateway.loadCalls)
         assertEquals(42L, viewModel.ui.value.lastUpdateMillis)
         assertEquals(cachedCatalog, viewModel.ui.value.catalog)
+    }
+
+    @Test
+    fun `visto e non visto aggiornano progresso e rimuovono la ripresa del film`() = runTest(scheduler) {
+        val progress = FakeProgressGateway()
+        val resume = FakeContinueWatchingGateway().apply {
+            entries.add(ContinueEntry.movie("201", "Film Esempio", null, "v1", "mp4"))
+        }
+        val vm = newViewModel(progressGateway = progress, continueGateway = resume)
+        advanceUntilIdle()
+        vm.setWatched("vod_201", true, movieId = "201")
+        advanceUntilIdle()
+        assertTrue(vm.watchProgress.value["vod_201"]?.isWatched == true)
+        assertTrue(resume.entries.isEmpty())
+        vm.setWatched("vod_201", false, movieId = "201")
+        advanceUntilIdle()
+        assertFalse(vm.watchProgress.value.containsKey("vod_201"))
+        vm.setWatched("ep_001", true, seriesId = "301")
+        advanceUntilIdle()
+        assertTrue(vm.watchProgress.value["ep_001"]?.isWatched == true)
+        vm.setWatched("ep_002", true, seriesId = "sconosciuta")
+        advanceUntilIdle()
+        assertFalse(vm.watchProgress.value.containsKey("ep_002"))
+    }
+
+    @Test
+    fun `apri scheda usa solo contenuti presenti nel catalogo visibile`() = runTest(scheduler) {
+        val resume = FakeContinueWatchingGateway().apply {
+            entries.add(ContinueEntry.movie("201", "Film Esempio", null, "v1", "mp4"))
+            entries.add(ContinueEntry.movie("999", "Film assente", null, "v1", "mp4"))
+        }
+        val vm = newViewModel(continueGateway = resume)
+        advanceUntilIdle()
+        vm.openContinueDetail(resume.entries[0])
+        assertEquals("201", (vm.detailTarget.value as DetailTarget.Film).stream.streamId)
+        vm.closeDetail()
+        vm.openContinueDetail(resume.entries[1])
+        assertEquals(null, vm.detailTarget.value)
+        assertEquals("Scheda non disponibile nel catalogo", vm.notice.value?.message)
     }
 
     @Test

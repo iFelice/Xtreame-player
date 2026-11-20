@@ -33,7 +33,10 @@ private fun titleComparator(): Collator = Collator.getInstance(Locale.ITALIAN).a
 
 internal fun sortFilms(items: List<VodStream>, sort: CategorySort): List<VodStream> = when (sort) {
     CategorySort.ADDED -> items.sortedWith(compareByDescending<VodStream> { date(it.added) }.thenByDescending { it.streamId.toLongOrNull() ?: 0L })
-    CategorySort.AZ -> items.sortedWith(Comparator<VodStream> { a, b -> titleComparator().compare(a.name, b.name) }.thenByDescending { it.streamId.toLongOrNull() ?: 0L })
+    CategorySort.AZ -> {
+        val collator = titleComparator()
+        items.sortedWith(Comparator<VodStream> { a, b -> collator.compare(a.name, b.name) }.thenByDescending { it.streamId.toLongOrNull() ?: 0L })
+    }
     CategorySort.YEAR -> items.sortedWith(compareByDescending<VodStream> { filmYear(it) ?: Int.MIN_VALUE }.thenByDescending { date(it.added) }.thenByDescending { it.streamId.toLongOrNull() ?: 0L })
 }
 
@@ -41,7 +44,10 @@ internal fun sortSeries(items: List<SeriesItem>, sort: CategorySort): List<Serie
     fun added(item: SeriesItem) = date(item.lastModified?.takeIf { it.isNotBlank() } ?: item.releaseDate)
     return when (sort) {
         CategorySort.ADDED -> items.sortedWith(compareByDescending<SeriesItem> { added(it) }.thenByDescending { it.seriesId.toLongOrNull() ?: 0L })
-        CategorySort.AZ -> items.sortedWith(Comparator<SeriesItem> { a, b -> titleComparator().compare(a.name, b.name) }.thenByDescending { it.seriesId.toLongOrNull() ?: 0L })
+        CategorySort.AZ -> {
+            val collator = titleComparator()
+            items.sortedWith(Comparator<SeriesItem> { a, b -> collator.compare(a.name, b.name) }.thenByDescending { it.seriesId.toLongOrNull() ?: 0L })
+        }
         CategorySort.YEAR -> items.sortedWith(compareByDescending<SeriesItem> { seriesYear(it) ?: Int.MIN_VALUE }.thenByDescending { added(it) }.thenByDescending { it.seriesId.toLongOrNull() ?: 0L })
     }
 }

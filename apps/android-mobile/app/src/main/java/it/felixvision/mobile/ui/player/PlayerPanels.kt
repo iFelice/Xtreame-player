@@ -9,10 +9,12 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -22,6 +24,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -32,6 +35,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import it.felixvision.mobile.ui.components.FvpIcons
+import it.felixvision.mobile.ui.components.ChannelLogoImage
+import it.felixvision.mobile.ui.components.rememberChannelSchedulePrograms
 import it.felixvision.mobile.ui.theme.FvpColors
 import it.felixvision.tv.data.epg.EpgProgram
 import it.felixvision.tv.data.epg.EpgRules
@@ -342,25 +347,34 @@ private fun ChannelPanel(
     engine: PlayerEngine,
     state: MobilePlayerState,
 ) {
-    LazyColumn(Modifier.fillMaxSize()) {
-        items(engine.zappingChannels, key = { "player_channel_${it.streamId}" }) { channel ->
+    val channels = engine.zappingChannels
+    val listState = rememberLazyListState()
+    val visibleIds by remember(channels) { derivedStateOf {
+        listState.layoutInfo.visibleItemsInfo.mapNotNull { channels.getOrNull(it.index)?.streamId }
+    } }
+    val schedules = rememberChannelSchedulePrograms(
+        visibleIds, engine.scheduleLoader, engine.session.server, engine.session.username, engine.session.password,
+    )
+    LazyColumn(Modifier.fillMaxSize(), state = listState) {
+        items(channels, key = { "player_channel_${it.streamId}" }) { channel ->
             val selected = channel.streamId == state.currentStreamId
+            val personal = engine.personalChannels.any { it.streamId == channel.streamId }
+            val program = EpgRules.onAir(schedules[channel.streamId].orEmpty(), engine.nowMillis())
             Surface(
                 modifier = Modifier.fillMaxWidth().testTag("player_channel_${channel.streamId}"),
                 color = if (selected) FvpColors.SurfaceElevated else Color.Transparent,
                 shape = RoundedCornerShape(10.dp),
-                onClick = {
-                    val index = engine.zappingChannels.indexOfFirst {
-                        it.streamId == channel.streamId
-                    }
-                    engine.selectChannel(index)
-                },
+                onClick = { engine.selectChannel(channels.indexOfFirst { it.streamId == channel.streamId }) },
             ) {
-                Text(
-                    text = channel.name,
-                    color = FvpColors.TextPrimary,
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 13.dp),
-                )
+                Row(modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    ChannelLogoImage(channel.streamIcon, channel.name, engine.imageLoader, modifier = Modifier.size(40.dp))
+                    Column(Modifier.weight(1f).padding(start = 10.dp)) {
+                        Text(listOfNotNull(channel.num?.toString(), channel.name).joinToString(" · "), color = FvpColors.TextPrimary, maxLines = 1)
+                        if (program != null) Text(program.title, color = FvpColors.TextSecondary, fontSize = 12.sp, maxLines = 1)
+                    }
+                    if (personal) Icon(FvpIcons.Star, contentDescription = "I miei canali", tint = FvpColors.Green, modifier = Modifier.size(20.dp))
+                    if (selected) Icon(FvpIcons.Play, contentDescription = "Canale in riproduzione", tint = FvpColors.Green, modifier = Modifier.size(20.dp))
+                }
             }
         }
     }

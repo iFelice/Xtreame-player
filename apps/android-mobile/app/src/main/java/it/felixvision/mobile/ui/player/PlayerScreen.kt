@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.statusBars
@@ -104,6 +105,7 @@ fun PlayerScreen(
     val feedback = rememberPlayerGestureFeedback()
     var videoView by remember { mutableStateOf<PlayerView?>(null) }
     var fit by remember { mutableStateOf(true) }
+    var videoFormat by remember { mutableStateOf(PlayerVideoFormat.ORIGINAL) }
     var overlayPanel by remember { mutableStateOf<PlayerPanel?>(null) }
     var controlInteraction by remember { mutableStateOf(0L) }
     var controlsPressed by remember { mutableStateOf(false) }
@@ -125,6 +127,7 @@ fun PlayerScreen(
     var guidePrograms by remember { mutableStateOf<List<EpgProgram>>(emptyList()) }
     var guideLoading by remember { mutableStateOf(false) }
     var movieInfo by remember { mutableStateOf<VodInfoResponse?>(null) }
+    var nextMinimized by remember(state.nextEpisodeTitle) { mutableStateOf(false) }
     val density = LocalDensity.current.density
     // Volume e luminosità reali, iniettati nello strato dei gesti: la
     // luminosità viene ripristinata all'uscita dal player.
@@ -242,7 +245,7 @@ fun PlayerScreen(
         val gestureEnabled = overlayPanel == null &&
             state.resume == null &&
             state.error == null &&
-            state.nextEpisodeTitle == null &&
+            (state.nextEpisodeTitle == null || nextMinimized) &&
             !isPip
         val gestureLayer = Modifier
             .playerGestureLayer(
@@ -264,6 +267,7 @@ fun PlayerScreen(
                 onPreviousChannel = engine::previousChannel,
                 onZoomMode = { mode ->
                     fit = mode == TouchGestureRules.ZoomMode.FIT
+                    videoFormat = PlayerVideoFormat.ORIGINAL
                     feedback.showZoom(if (fit) "Adatta" else "Riempi")
                 },
             )
@@ -272,6 +276,7 @@ fun PlayerScreen(
             PlayerVideoSurface(
                 player = engine.player,
                 fit = fit,
+                videoFormat = videoFormat,
                 modifier = Modifier.fillMaxSize(),
                 onView = { videoView = it },
             )
@@ -280,6 +285,7 @@ fun PlayerScreen(
                 PlayerVideoSurface(
                     player = engine.player,
                     fit = fit,
+                    videoFormat = videoFormat,
                     modifier = Modifier.fillMaxSize(),
                     onView = { videoView = it },
                 )
@@ -293,7 +299,9 @@ fun PlayerScreen(
                         engine = engine,
                         onExit = onExit,
                         onOpenPanel = { overlayPanel = it },
-                        onToggleFit = { fit = !fit },
+                        onToggleFit = { fit = !fit; videoFormat = PlayerVideoFormat.ORIGINAL },
+                        videoFormat = videoFormat,
+                        onChangeVideoFormat = { videoFormat = videoFormat.next() },
                         controlTouchModifier = controlTouchModifier,
                     )
                 }
@@ -301,6 +309,9 @@ fun PlayerScreen(
                     state = state,
                     engine = engine,
                     modifier = Modifier.align(Alignment.Center),
+                    nextModifier = Modifier.align(Alignment.BottomEnd),
+                    nextMinimized = nextMinimized,
+                    onNextMinimized = { nextMinimized = it },
                 )
                 PlayerIndicators(
                     feedback = feedback,
@@ -333,10 +344,14 @@ fun PlayerScreen(
                 onVideoView = { videoView = it },
                 onPanelChange = { portraitPanel = it },
                 onOpenPanel = { overlayPanel = it },
-                onToggleFit = { fit = !fit },
+                onToggleFit = { fit = !fit; videoFormat = PlayerVideoFormat.ORIGINAL },
+                videoFormat = videoFormat,
+                onChangeVideoFormat = { videoFormat = videoFormat.next() },
                 onEnterFullScreen = { fullScreenPortrait = true },
                 onExit = onExit,
                 controlTouchModifier = controlTouchModifier,
+                nextMinimized = nextMinimized,
+                onNextMinimized = { nextMinimized = it },
             )
         }
 
@@ -366,6 +381,8 @@ internal fun BoxScope.ControlsOverlay(
     onExit: () -> Unit,
     onOpenPanel: (PlayerPanel) -> Unit,
     onToggleFit: () -> Unit,
+    videoFormat: PlayerVideoFormat = PlayerVideoFormat.ORIGINAL,
+    onChangeVideoFormat: () -> Unit = {},
     controlTouchModifier: Modifier = Modifier,
 ) {
     val nowSeconds = engine.nowMillis() / 1_000L
@@ -374,7 +391,7 @@ internal fun BoxScope.ControlsOverlay(
     }
     Column(
         modifier = Modifier
-            .align(if (state.playbackType == MobilePlaybackType.LIVE) Alignment.TopCenter else Alignment.BottomCenter)
+            .align(Alignment.BottomCenter)
             .fillMaxWidth()
             .then(controlTouchModifier)
             // Comandi dentro l'area sicura: fuori dal ritaglio della fotocamera
@@ -402,6 +419,13 @@ internal fun BoxScope.ControlsOverlay(
             onPlayPause = engine::togglePlayback,
             onSeek = engine::seekTo,
             onSeekBy = engine::seekBy,
+            channel = engine.currentLiveChannel.takeIf { state.playbackType.isLiveOrCatchup },
+            imageLoader = engine.imageLoader,
+            categoryName = (engine.playbackSource as? MobilePlaybackSource.Live)?.categoryName,
+            isPersonal = engine.personalChannels.any { it.streamId == state.currentStreamId },
+            onTogglePersonal = if (state.playbackType.isLiveOrCatchup) engine::toggleCurrentPersonalChannel else null,
+            videoFormat = videoFormat,
+            onChangeVideoFormat = onChangeVideoFormat,
             modifier = Modifier.fillMaxWidth(),
         )
         if (state.playbackType.isLiveOrCatchup) {
@@ -453,9 +477,13 @@ private fun PortraitPlayerLayout(
     onPanelChange: (PlayerPanel) -> Unit,
     onOpenPanel: (PlayerPanel) -> Unit,
     onToggleFit: () -> Unit,
+    videoFormat: PlayerVideoFormat,
+    onChangeVideoFormat: () -> Unit,
     onEnterFullScreen: () -> Unit,
     onExit: () -> Unit,
     controlTouchModifier: Modifier = Modifier,
+    nextMinimized: Boolean = false,
+    onNextMinimized: (Boolean) -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -474,12 +502,13 @@ private fun PortraitPlayerLayout(
             PlayerVideoSurface(
                 player = engine.player,
                 fit = fit,
+                videoFormat = videoFormat,
                 modifier = Modifier.fillMaxSize(),
                 onView = onVideoView,
             )
             if (state.controls) {
                 Column(
-                    modifier = Modifier.align(if (state.playbackType == MobilePlaybackType.LIVE) Alignment.TopCenter else Alignment.BottomCenter).then(controlTouchModifier),
+                    modifier = Modifier.align(Alignment.BottomCenter).then(controlTouchModifier),
                 ) {
                     PlayerControls(
                         state = state,
@@ -504,6 +533,13 @@ private fun PortraitPlayerLayout(
                         onPlayPause = engine::togglePlayback,
                         onSeek = engine::seekTo,
                         onSeekBy = engine::seekBy,
+                        channel = engine.currentLiveChannel.takeIf { state.playbackType.isLiveOrCatchup },
+                        imageLoader = engine.imageLoader,
+                        categoryName = (engine.playbackSource as? MobilePlaybackSource.Live)?.categoryName,
+                        isPersonal = engine.personalChannels.any { it.streamId == state.currentStreamId },
+                        onTogglePersonal = if (state.playbackType.isLiveOrCatchup) engine::toggleCurrentPersonalChannel else null,
+                        videoFormat = videoFormat,
+                        onChangeVideoFormat = onChangeVideoFormat,
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
@@ -512,6 +548,9 @@ private fun PortraitPlayerLayout(
                 state = state,
                 engine = engine,
                 modifier = Modifier.align(Alignment.Center),
+                nextModifier = Modifier.align(Alignment.BottomEnd),
+                nextMinimized = nextMinimized,
+                onNextMinimized = onNextMinimized,
             )
             PlayerIndicators(
                 feedback = feedback,
@@ -571,6 +610,9 @@ private fun StateOverlays(
     state: MobilePlayerState,
     engine: PlayerEngine,
     modifier: Modifier = Modifier,
+    nextModifier: Modifier = modifier,
+    nextMinimized: Boolean = false,
+    onNextMinimized: (Boolean) -> Unit = {},
 ) {
     when {
         state.error != null -> ErrorOverlay(
@@ -584,13 +626,17 @@ private fun StateOverlays(
             start = engine::playFromStart,
             modifier = modifier,
         )
+        state.nextEpisodeTitle != null && nextMinimized && state.nextCountdown != null -> TextButton(
+            onClick = { onNextMinimized(false) }, modifier = nextModifier.testTag("player_next_label"),
+        ) { Text("Prossimo episodio tra ${state.nextCountdown} s", color = FvpColors.TextPrimary) }
         state.nextEpisodeTitle != null -> NextEpisodeOverlay(
             title = state.nextEpisodeTitle,
             countdown = state.nextCountdown,
             next = engine::nextEpisode,
             postpone = engine::postponeNextEpisode,
             dismiss = engine::dismissNextEpisode,
-            modifier = modifier,
+            minimize = { onNextMinimized(true) },
+            modifier = nextModifier,
         )
         state.buffering -> CircularProgressIndicator(
             modifier = modifier.testTag("player_buffering"),
@@ -652,12 +698,15 @@ private fun NextEpisodeOverlay(
     next: () -> Unit,
     postpone: () -> Unit,
     dismiss: () -> Unit,
+    minimize: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
         modifier = modifier
+            .padding(12.dp)
             .background(FvpColors.Background.copy(alpha = .95f))
-            .padding(16.dp),
+            .padding(16.dp)
+            .testTag("player_next_dialog"),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Text(
@@ -669,6 +718,7 @@ private fun NextEpisodeOverlay(
             TextButton(onClick = next) { Text("Riproduci", color = FvpColors.Green) }
             TextButton(onClick = postpone) { Text("Rinvio", color = FvpColors.Green) }
             TextButton(onClick = dismiss) { Text("Annulla", color = FvpColors.Green) }
+            if (countdown != null) TextButton(onClick = minimize) { Text("Riduci", color = FvpColors.Green) }
         }
     }
 }
@@ -678,35 +728,37 @@ private fun NextEpisodeOverlay(
 private fun PlayerVideoSurface(
     player: Player?,
     fit: Boolean,
+    videoFormat: PlayerVideoFormat,
     modifier: Modifier,
     onView: (PlayerView) -> Unit,
 ) {
-    AndroidView(
-        // Tag usato dai test su emulatore per conoscere i confini dell'area
-        // video (gesti volume/luminosità/canale) in orizzontale e in verticale.
-        modifier = modifier.testTag("player_video"),
-        factory = { context ->
-            PlayerView(context).apply {
-                useController = false
-                resizeMode = if (fit) {
-                    AspectRatioFrameLayout.RESIZE_MODE_FIT
-                } else {
-                    AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+    BoxWithConstraints(modifier = modifier.testTag("player_video"), contentAlignment = Alignment.Center) {
+        val ratio = videoFormat.ratio
+        val viewModifier = when {
+            ratio == null -> Modifier.fillMaxSize()
+            maxHeight.value <= 0f -> Modifier.fillMaxSize()
+            maxWidth.value / maxHeight.value > ratio -> Modifier.fillMaxHeight().aspectRatio(ratio)
+            else -> Modifier.fillMaxWidth().aspectRatio(ratio)
+        }
+        val mode = if (ratio != null) AspectRatioFrameLayout.RESIZE_MODE_FILL
+            else if (fit) AspectRatioFrameLayout.RESIZE_MODE_FIT else AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+        AndroidView(
+            modifier = viewModifier,
+            factory = { context ->
+                PlayerView(context).apply {
+                    useController = false
+                    resizeMode = mode
+                    this.player = player
+                    onView(this)
                 }
-                this.player = player
-                onView(this)
-            }
-        },
-        update = { view ->
-            view.player = player
-            view.resizeMode = if (fit) {
-                AspectRatioFrameLayout.RESIZE_MODE_FIT
-            } else {
-                AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-            }
-            onView(view)
-        },
-    )
+            },
+            update = { view ->
+                view.player = player
+                view.resizeMode = mode
+                onView(view)
+            },
+        )
+    }
 }
 
 @Composable

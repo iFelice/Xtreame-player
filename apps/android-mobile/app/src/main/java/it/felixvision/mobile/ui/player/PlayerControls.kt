@@ -16,6 +16,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -32,6 +33,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import it.felixvision.mobile.ui.components.FvpIcons
+import it.felixvision.mobile.ui.components.ChannelLogoImage
+import it.felixvision.tv.data.catalog.LiveStream
+import coil3.ImageLoader
 import it.felixvision.mobile.ui.theme.FvpColors
 import it.felixvision.tv.data.epg.EpgProgram
 
@@ -50,6 +54,13 @@ fun PlayerControls(
     onSeek: (Long) -> Unit,
     onSeekBy: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    channel: LiveStream? = null,
+    imageLoader: ImageLoader? = null,
+    categoryName: String? = null,
+    isPersonal: Boolean = false,
+    onTogglePersonal: (() -> Unit)? = null,
+    videoFormat: PlayerVideoFormat = PlayerVideoFormat.ORIGINAL,
+    onChangeVideoFormat: (() -> Unit)? = null,
 ) {
     Column(
         modifier = modifier
@@ -64,6 +75,11 @@ fun PlayerControls(
             onTracks = onTracks,
             onFit = onFit,
             onPip = onPip,
+            channel = channel,
+            imageLoader = imageLoader,
+            categoryName = categoryName,
+            isPersonal = isPersonal,
+            onTogglePersonal = onTogglePersonal,
         )
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -98,6 +114,13 @@ fun PlayerControls(
             nowMillis = nowMillis,
             onSeek = onSeek,
         )
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            if (state.audioLabel.isNotBlank()) Text(state.audioLabel, color = FvpColors.TextSecondary, fontSize = 11.sp, modifier = Modifier.testTag("player_audio_format"))
+            if (state.ffmpegActive) Text(" FFmpeg", color = FvpColors.Green, fontSize = 11.sp, modifier = Modifier.testTag("player_ffmpeg_badge"))
+            if (onChangeVideoFormat != null) TextButton(onClick = onChangeVideoFormat, modifier = Modifier.testTag("player_video_format")) {
+                Text("Formato: ${videoFormat.label}", fontSize = 11.sp)
+            }
+        }
     }
 }
 
@@ -111,6 +134,11 @@ private fun PlayerTopControls(
     onTracks: () -> Unit,
     onFit: () -> Unit,
     onPip: () -> Unit,
+    channel: LiveStream?,
+    imageLoader: ImageLoader?,
+    categoryName: String?,
+    isPersonal: Boolean,
+    onTogglePersonal: (() -> Unit)?,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -120,6 +148,10 @@ private fun PlayerTopControls(
             image = FvpIcons.Indietro,
             description = "Indietro",
             onClick = onBack,
+        )
+        if (channel != null && imageLoader != null) ChannelLogoImage(
+            imageUrl = channel.streamIcon, name = channel.name, imageLoader = imageLoader,
+            modifier = Modifier.size(36.dp),
         )
         Column(
             modifier = Modifier.weight(1f).padding(horizontal = 4.dp),
@@ -133,6 +165,8 @@ private fun PlayerTopControls(
                 maxLines = 1,
                 modifier = Modifier.testTag("player_channel_name"),
             )
+            val channelMeta = listOfNotNull(channel?.num?.let { "Canale $it" }, categoryName?.takeIf { it.isNotBlank() }).joinToString(" · ")
+            if (channelMeta.isNotBlank()) Text(channelMeta, color = FvpColors.TextSecondary, fontSize = 11.sp, maxLines = 1)
             if (currentProgram != null) {
                 Text(
                     text = currentProgram.title,
@@ -142,6 +176,11 @@ private fun PlayerTopControls(
                 )
             }
         }
+        if (onTogglePersonal != null) PlayerIconAction(
+            image = FvpIcons.Star,
+            description = if (isPersonal) "Rimuovi da I miei canali" else "Aggiungi a I miei canali",
+            onClick = onTogglePersonal,
+        )
         PlayerIconAction(
             image = FvpIcons.Tracce,
             description = "Tracce audio e sottotitoli",
