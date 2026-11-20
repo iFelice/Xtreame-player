@@ -130,6 +130,7 @@ private fun SearchResultsList(
                 SearchLiveRow(
                     channel = channel,
                     imageLoader = imageLoader,
+                    isFavorite = favorites.any { it.id == "live_${channel.streamId}" },
                     onClick = { viewModel.onPlayRequest(PlayTarget.LiveChannel(channel.streamId)) },
                     onLongClick = { viewModel.openActions(ActionTarget.Channel(channel)) },
                 )
@@ -192,6 +193,7 @@ private fun SearchResultsList(
 private fun SearchLiveRow(
     channel: LiveStream,
     imageLoader: ImageLoader,
+    isFavorite: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
 ) {
@@ -219,6 +221,12 @@ private fun SearchLiveRow(
                 SecondaryText(text = "Canale $num")
             }
         }
+        if (isFavorite) Icon(
+            imageVector = FvpIcons.Star,
+            contentDescription = "Canale preferito",
+            tint = FvpColors.Green,
+            modifier = Modifier.size(20.dp).testTag("search_favorite_${channel.streamId}"),
+        )
         Icon(
             imageVector = FvpIcons.Play,
             contentDescription = "Riproduci ${channel.name}",

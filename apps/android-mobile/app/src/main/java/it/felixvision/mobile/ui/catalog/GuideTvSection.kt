@@ -107,7 +107,7 @@ fun GuideTvSection(
                     Text(
                         channel.name, maxLines = 2, overflow = TextOverflow.Ellipsis,
                         color = FvpColors.TextPrimary,
-                        modifier = Modifier.width(130.dp).height(72.dp).clickable {
+                        modifier = Modifier.width(130.dp).height(72.dp).testTag("guide_tv_channel_${channel.streamId}").clickable {
                             viewModel.onPlayRequest(PlayTarget.LiveChannel(channel.streamId))
                         }.padding(8.dp),
                     )

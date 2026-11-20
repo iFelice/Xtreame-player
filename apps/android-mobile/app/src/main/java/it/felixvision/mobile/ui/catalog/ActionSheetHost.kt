@@ -343,7 +343,7 @@ fun ActionSheetHost(viewModel: CatalogViewModel) {
         is ActionTarget.Episode -> "Episodio"
         is ActionTarget.SavedFavorite -> "Preferito salvato"
         is ActionTarget.LiveCategory -> "Categoria Live"
-        is ActionTarget.Continue -> "Riprendi"
+        is ActionTarget.Continue -> "Continua a guardare"
     }
 
     ActionSheet(

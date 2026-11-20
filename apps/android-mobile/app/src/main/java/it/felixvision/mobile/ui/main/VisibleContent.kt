@@ -95,8 +95,10 @@ fun visibleContent(
     }
     val filteredContinue = ProtectedFilter.filterContinueEntries(continueEntries, data)
     val matchedContinue = filteredContinue.filterNot {
-        (it.isMovie && it.streamId?.let { id -> id in hiddenVod } == true) ||
-            (it.isSeries && it.seriesId?.let { id -> id in hiddenSeries } == true)
+        (it.isMovie && (it.streamId?.let { id -> id in hiddenVod } == true ||
+            (ProtectedKind.VOD.storageKey in hiddenKinds && catalog?.vodStreams?.none { stream -> stream.streamId == it.streamId } != false))) ||
+            (it.isSeries && (it.seriesId?.let { id -> id in hiddenSeries } == true ||
+                (ProtectedKind.SERIES.storageKey in hiddenKinds && catalog?.series?.none { series -> series.seriesId == it.seriesId } != false)))
     }
     return VisibleContent(
         catalog = visibleCatalog,

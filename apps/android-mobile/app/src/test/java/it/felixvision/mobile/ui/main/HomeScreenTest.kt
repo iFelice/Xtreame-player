@@ -550,6 +550,27 @@ class HomeScreenTest {
 
     @Test
     @Config(sdk = [34], qualifiers = "w1280dp-h800dp-land-mdpi")
+    fun `guida multicanale usa solo canali visibili`() {
+        val container = AppContainer(ApplicationProvider.getApplicationContext())
+        runBlocking {
+            container.protectedContentStore.toggleItem(
+                "http://server.esempio:8080", "demo", ProtectedKind.LIVE, "101", "c1", "Canale Uno",
+            )
+        }
+        val vm = createCatalogViewModel(protection = container)
+        mount(vm, container)
+        rule.waitUntil(10_000L) { vm.ui.value.catalog?.liveStreams?.size == 2 }
+        rule.onNodeWithTag("rail_item_guida").performClick()
+        rule.onNodeWithTag("guide_tv").assertIsDisplayed()
+        rule.onNodeWithTag("guide_tv_channel_101", useUnmergedTree = true).assertDoesNotExist()
+        rule.onNodeWithTag("guide_tv_channel_102", useUnmergedTree = true).assertIsDisplayed()
+        rule.runOnIdle { container.protectedSession.unlock() }
+        rule.waitUntil(10_000L) { vm.ui.value.catalog?.liveStreams?.size == 3 }
+        rule.onNodeWithTag("guide_tv_channel_101", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    @Config(sdk = [34], qualifiers = "w1280dp-h800dp-land-mdpi")
     fun `live nasconde il canale bloccato e lo ripristina senza ricaricare`() {
         val container = AppContainer(ApplicationProvider.getApplicationContext())
         runBlocking {

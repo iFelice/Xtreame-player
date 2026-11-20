@@ -708,7 +708,7 @@ class CatalogViewModel(
         const val MY_CHANNEL_REMOVED = "Rimosso da I miei canali"
         const val ADDED_AT_POSITION_PREFIX = "Aggiunto in posizione"
         const val MOVED_TO_POSITION_PREFIX = "Spostato in posizione"
-        const val CONTINUE_REMOVED = "Rimosso da Riprendi"
+        const val CONTINUE_REMOVED = "Rimosso da Continua a guardare"
 
         /** Debounce della ricerca, come nella sezione Cerca della TV. */
         const val SEARCH_DEBOUNCE_MILLIS = 300L

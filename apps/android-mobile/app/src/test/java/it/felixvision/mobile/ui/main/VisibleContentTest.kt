@@ -216,6 +216,16 @@ class VisibleContentTest {
     }
 
     @Test
+    fun `ripresa fuori catalogo con categoria protetta e nascosta finche la sessione non e sbloccata`() {
+        val entry = ContinueEntry.movie("999", "Film demo", null, "10", "mp4")
+        val rules = ProtectedContentData(hiddenCategories = listOf(HiddenCategory(ProtectedKind.VOD.storageKey, "20", "Demo")))
+        fun visible(unlocked: Boolean) = visibleContent(catalog, emptyList(), emptyList(), emptyList(), listOf(entry), emptyList(), rules, unlocked).continueEntries
+        assertTrue(visible(false).isEmpty())
+        assertEquals(listOf(entry), visible(true))
+        assertEquals(listOf(entry), visibleContent(catalog, emptyList(), emptyList(), emptyList(), listOf(entry), emptyList(), ProtectedContentData(), false).continueEntries)
+    }
+
+    @Test
     fun `catalogo assente lascia le altre liste filtrate`() {
         val visible = visibleContent(
             catalog = null,
