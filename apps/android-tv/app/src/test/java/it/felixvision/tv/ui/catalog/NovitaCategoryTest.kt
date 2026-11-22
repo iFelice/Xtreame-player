@@ -1,5 +1,6 @@
 package it.felixvision.tv.ui.catalog
 
+import it.felixvision.tv.data.catalog.Catalog
 import it.felixvision.tv.data.catalog.Category
 import it.felixvision.tv.data.catalog.SeriesItem
 import it.felixvision.tv.data.catalog.VodStream
@@ -31,6 +32,25 @@ class NovitaCategoryTest {
             "Novità",
             it.felixvision.tv.ui.navigation.DrawerSection.Novita.label,
         )
+    }
+
+    @Test
+    fun `home Novita mostra 60 elementi e le categorie Film e Serie fino a 120`() {
+        val films = (1..125).map { index ->
+            VodStream(streamId = index.toString(), name = "Film $index", added = index.toString())
+        }
+        val series = (1..125).map { index ->
+            SeriesItem(seriesId = index.toString(), name = "Serie $index", lastModified = index.toString())
+        }
+
+        assertEquals(60, NOVITA_HOME_ROW_LIMIT)
+        assertEquals(120, NOVITA_CATEGORY_RECENT_LIMIT)
+        assertEquals(films.take(60), novitaHomeItems(films))
+        assertEquals(series.take(60), novitaHomeItems(series))
+
+        val catalogRecent = catalogRecentItems(Catalog(vodStreams = films, series = series))
+        assertEquals(120, catalogRecent.films.size)
+        assertEquals(120, catalogRecent.series.size)
     }
 
     @Test

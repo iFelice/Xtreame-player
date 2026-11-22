@@ -201,7 +201,7 @@ private fun compareYears(a: Int?, b: Int?): Int = when {
  * Contenuti di una categoria di Film nell'ordine scelto: l'appartenenza resta
  * quella di [filmsForCategory], che un contenuto mostra in tutte le sue
  * categorie; la categoria locale NOVITÀ non si ordina (i contenuti recenti
- * arrivano già per data di aggiunta, al massimo 40).
+ * arrivano già per data di aggiunta, fino a [NOVITA_CATEGORY_RECENT_LIMIT]).
  */
 fun sortedFilmsCategory(
     categoryId: String,

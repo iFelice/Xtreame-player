@@ -33,6 +33,16 @@ data class CatalogUiState(
     val refreshSections: List<CatalogSectionProgress> = CatalogRefresh.idle(),
 )
 
+internal data class CatalogRecentItems(
+    val films: List<VodStream>,
+    val series: List<SeriesItem>,
+)
+
+internal fun catalogRecentItems(catalog: Catalog): CatalogRecentItems = CatalogRecentItems(
+    films = CatalogOrdering.recentVodStreams(catalog.vodStreams, NOVITA_CATEGORY_RECENT_LIMIT),
+    series = CatalogOrdering.recentSeries(catalog.series, NOVITA_CATEGORY_RECENT_LIMIT),
+)
+
 class CatalogViewModel(
     private val container: AppContainer,
     private val server: String,
@@ -124,12 +134,13 @@ class CatalogViewModel(
     }
 
     private fun applyCatalog(catalog: Catalog, updatedAt: Long) {
+        val recent = catalogRecentItems(catalog)
         _ui.update {
             it.copy(
                 catalog = catalog,
                 lastUpdateMillis = updatedAt,
-                recentFilms = CatalogOrdering.recentVodStreams(catalog.vodStreams, 40),
-                recentSeries = CatalogOrdering.recentSeries(catalog.series, 40),
+                recentFilms = recent.films,
+                recentSeries = recent.series,
             )
         }
     }

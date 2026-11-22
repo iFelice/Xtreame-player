@@ -7,6 +7,15 @@ import it.felixvision.tv.data.catalog.allCategoryIds
 
 const val NOVITA_CATEGORY_ID = "__fvp_novita__"
 
+/** Massimo di film e serie recenti mostrati per riga nella pagina Novità. */
+const val NOVITA_HOME_ROW_LIMIT = 60
+
+/** Massimo di elementi recenti disponibili nella categoria Novità di Film e Serie. */
+const val NOVITA_CATEGORY_RECENT_LIMIT = 120
+
+/** La home mostra una selezione più breve rispetto alle sezioni Film e Serie. */
+fun <T> novitaHomeItems(items: List<T>): List<T> = items.take(NOVITA_HOME_ROW_LIMIT)
+
 /**
  * Nome della categoria locale nella colonna delle categorie: maiuscolo, con la
  * À accentata. Il menu laterale ([it.felixvision.tv.ui.navigation.DrawerSection])
