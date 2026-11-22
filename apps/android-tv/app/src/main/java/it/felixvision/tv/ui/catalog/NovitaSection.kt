@@ -39,7 +39,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -189,11 +192,13 @@ fun NovitaSection(
         fallback = contentFocusRequester
     )
 
-    // Con i margini del focus le righe non stanno sempre in altezza: la
-    // sezione scorre e la riga che riceve il focus viene portata interamente in
-    // vista, titolo compreso.
+    // Con i margini del focus le righe possono uscire dal viewport. Si chiede
+    // il bring-into-view solo quando la riga focalizzata non è già interamente
+    // visibile, evitando scroll annidati non necessari.
     val rowsScrollState = rememberScrollState()
     val rowsBringIntoView = rememberRowsBringIntoViewer()
+    val rowsViewportBounds = remember { LayoutBoundsRef() }
+    val filmsRowBounds = remember { LayoutBoundsRef() }
 
     LaunchedEffect(flickerDiagnostics, rowsScrollState) {
         if (!flickerDiagnostics.logFocus) return@LaunchedEffect
@@ -218,6 +223,9 @@ fun NovitaSection(
             // sta nel contentPadding, non nel contenitore.
             modifier = Modifier
                 .fillMaxSize()
+                .onGloballyPositioned { coordinates ->
+                    rowsViewportBounds.bounds = coordinates.boundsInRoot()
+                }
                 .verticalScroll(rowsScrollState)
                 .padding(horizontal = scale.dp(4f)),
             verticalArrangement = Arrangement.Top,
@@ -247,7 +255,11 @@ fun NovitaSection(
             if (continueEntries.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(scale.dp(18f)))
             }
-            Column(modifier = rowsBringIntoView.rowModifier(ROW_FILMS)) {
+            Column(
+                modifier = rowsBringIntoView.rowModifier(ROW_FILMS).onGloballyPositioned { coordinates ->
+                    filmsRowBounds.bounds = coordinates.boundsInRoot()
+                },
+            ) {
                 Text(
                     text = "Ultimi film",
                     color = FvpColors.TextPrimary,
@@ -306,15 +318,27 @@ fun NovitaSection(
                                             )
                                         }
                                         if (focusState.isFocused) {
-                                            if (flickerDiagnostics.disableFilmBringIntoView) {
-                                                if (flickerDiagnostics.logFocus) {
-                                                    Log.i(FLICKER_DIAGNOSTIC_TAG, "filmBringIntoView skipped index=$index")
+                                            val filmRowFullyVisible = isFullyVisibleInViewport(
+                                                content = filmsRowBounds.bounds,
+                                                viewport = rowsViewportBounds.bounds,
+                                            )
+                                            when {
+                                                flickerDiagnostics.disableFilmBringIntoView -> {
+                                                    if (flickerDiagnostics.logFocus) {
+                                                        Log.i(FLICKER_DIAGNOSTIC_TAG, "filmBringIntoView skipped by diagnostic flag index=$index")
+                                                    }
                                                 }
-                                            } else {
-                                                if (flickerDiagnostics.logFocus) {
-                                                    Log.i(FLICKER_DIAGNOSTIC_TAG, "filmRowFocusCallback index=$index")
+                                                filmRowFullyVisible -> {
+                                                    if (flickerDiagnostics.logFocus) {
+                                                        Log.i(FLICKER_DIAGNOSTIC_TAG, "filmBringIntoView skipped row already visible index=$index")
+                                                    }
                                                 }
-                                                rowsBringIntoView.onRowFocused(ROW_FILMS)
+                                                else -> {
+                                                    if (flickerDiagnostics.logFocus) {
+                                                        Log.i(FLICKER_DIAGNOSTIC_TAG, "filmRowFocusCallback index=$index rowVisible=false")
+                                                    }
+                                                    rowsBringIntoView.onRowFocused(ROW_FILMS)
+                                                }
                                             }
                                         }
                                     }
@@ -523,6 +547,18 @@ private const val SCROLL_LOG_INTERVAL_MILLIS = 80L
 private const val EXTRA_DIAGNOSTIC_LOG_FOCUS = "fvp_diag_log_focus"
 private const val EXTRA_DIAGNOSTIC_DISABLE_FILM_SCALE = "fvp_diag_disable_film_scale"
 private const val EXTRA_DIAGNOSTIC_DISABLE_FILM_BRING = "fvp_diag_disable_film_bring"
+
+internal fun isFullyVisibleInViewport(content: Rect?, viewport: Rect?): Boolean {
+    if (content == null || viewport == null) return false
+    return content.left >= viewport.left &&
+        content.top >= viewport.top &&
+        content.right <= viewport.right &&
+        content.bottom <= viewport.bottom
+}
+
+private class LayoutBoundsRef {
+    var bounds: Rect? = null
+}
 
 private data class FlickerDiagnosticOptions(
     val logFocus: Boolean = false,
