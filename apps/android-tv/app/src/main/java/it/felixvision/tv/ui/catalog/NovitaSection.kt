@@ -158,12 +158,14 @@ fun NovitaSection(
 
     val filmsListState = rememberLazyListState()
     val seriesListState = rememberLazyListState()
+    val homeRecentFilms = remember(recentFilms) { novitaHomeItems(recentFilms) }
+    val homeRecentSeries = remember(recentSeries) { novitaHomeItems(recentSeries) }
 
-    val filmItemFocusRequesters = remember(recentFilms) {
-        recentFilms.associate { it.streamId to FocusRequester() }
+    val filmItemFocusRequesters = remember(homeRecentFilms) {
+        homeRecentFilms.associate { it.streamId to FocusRequester() }
     }
-    val serieItemFocusRequesters = remember(recentSeries) {
-        recentSeries.associate { it.seriesId to FocusRequester() }
+    val serieItemFocusRequesters = remember(homeRecentSeries) {
+        homeRecentSeries.associate { it.seriesId to FocusRequester() }
     }
     val filmRestoreHelper = rememberListDetailFocusRestore(
         listState = filmsListState,
@@ -242,7 +244,7 @@ fun NovitaSection(
                         contentPadding = PaddingValues(scale.focusSafePadding),
                         modifier = Modifier.fillMaxWidth().testTag("novita_films_row"),
                     ) {
-                        itemsIndexed(recentFilms, key = { _, f -> f.streamId }) { index, film ->
+                        itemsIndexed(homeRecentFilms, key = { _, f -> f.streamId }) { index, film ->
                             val isFav = favorites.any { it.id == "vod_${film.streamId}" }
                             val filmProgress = progress[ProgressKeys.movie(film.streamId)]
                             val itemFr = remember(film.streamId, filmItemFocusRequesters) { filmItemFocusRequesters[film.streamId] ?: FocusRequester() }
@@ -333,7 +335,7 @@ fun NovitaSection(
                         contentPadding = PaddingValues(scale.focusSafePadding),
                         modifier = Modifier.fillMaxWidth().testTag("novita_series_row"),
                     ) {
-                        itemsIndexed(recentSeries, key = { _, s -> s.seriesId }) { index, serie ->
+                        itemsIndexed(homeRecentSeries, key = { _, s -> s.seriesId }) { index, serie ->
                             val isFav = favorites.any { it.id == "series_${serie.seriesId}" }
                             val itemFr = remember(serie.seriesId, serieItemFocusRequesters) { serieItemFocusRequesters[serie.seriesId] ?: FocusRequester() }
                             var focused by remember(serie.seriesId) { mutableStateOf(false) }
