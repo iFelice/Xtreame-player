@@ -33,7 +33,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -178,11 +181,13 @@ fun NovitaSection(
         fallback = contentFocusRequester
     )
 
-    // Con i margini del focus le righe non stanno sempre in altezza: la
-    // sezione scorre e la riga che riceve il focus viene portata interamente in
-    // vista, titolo compreso.
+    // Con i margini del focus le righe possono uscire dal viewport. Si chiede
+    // il bring-into-view solo quando la riga focalizzata non è già interamente
+    // visibile, evitando scroll annidati non necessari.
     val rowsScrollState = rememberScrollState()
     val rowsBringIntoView = rememberRowsBringIntoViewer()
+    val rowsViewportBounds = remember { LayoutBoundsRef() }
+    val filmsRowBounds = remember { LayoutBoundsRef() }
 
     Box(modifier = modifier.fillMaxSize()) {
         Column(
@@ -190,6 +195,9 @@ fun NovitaSection(
             // sta nel contentPadding, non nel contenitore.
             modifier = Modifier
                 .fillMaxSize()
+                .onGloballyPositioned { coordinates ->
+                    rowsViewportBounds.bounds = coordinates.boundsInRoot()
+                }
                 .verticalScroll(rowsScrollState)
                 .padding(horizontal = scale.dp(4f)),
             verticalArrangement = Arrangement.Top,
@@ -219,7 +227,11 @@ fun NovitaSection(
             if (continueEntries.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(scale.dp(18f)))
             }
-            Column(modifier = rowsBringIntoView.rowModifier(ROW_FILMS)) {
+            Column(
+                modifier = rowsBringIntoView.rowModifier(ROW_FILMS).onGloballyPositioned { coordinates ->
+                    filmsRowBounds.bounds = coordinates.boundsInRoot()
+                },
+            ) {
                 Text(
                     text = "Ultimi film",
                     color = FvpColors.TextPrimary,
@@ -270,7 +282,13 @@ fun NovitaSection(
                                     )
                                     .onFocusChanged { focusState ->
                                         focused = focusState.isFocused
-                                        if (focusState.isFocused) rowsBringIntoView.onRowFocused(ROW_FILMS)
+                                        if (focusState.isFocused) {
+                                            val filmRowFullyVisible = isFullyVisibleInViewport(
+                                                content = filmsRowBounds.bounds,
+                                                viewport = rowsViewportBounds.bounds,
+                                            )
+                                            if (!filmRowFullyVisible) rowsBringIntoView.onRowFocused(ROW_FILMS)
+                                        }
                                     }
                                     .fvpLongPress { onLongPressFilm(film) },
                                 scale = CardDefaults.scale(focusedScale = 1.04f),
@@ -457,3 +475,15 @@ fun NovitaSection(
 private const val ROW_CONTINUE = 0
 private const val ROW_FILMS = 1
 private const val ROW_SERIES = 2
+
+internal fun isFullyVisibleInViewport(content: Rect?, viewport: Rect?): Boolean {
+    if (content == null || viewport == null) return false
+    return content.left >= viewport.left &&
+        content.top >= viewport.top &&
+        content.right <= viewport.right &&
+        content.bottom <= viewport.bottom
+}
+
+private class LayoutBoundsRef {
+    var bounds: Rect? = null
+}
