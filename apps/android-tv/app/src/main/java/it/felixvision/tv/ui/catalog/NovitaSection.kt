@@ -1,5 +1,10 @@
 package it.felixvision.tv.ui.catalog
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.os.SystemClock
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.rememberScrollState
@@ -26,6 +31,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,6 +40,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -41,6 +48,7 @@ import androidx.tv.material3.Border
 import androidx.tv.material3.Card
 import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.Text
+import it.felixvision.tv.BuildConfig
 import it.felixvision.tv.data.catalog.SeriesInfoResponse
 import it.felixvision.tv.data.catalog.SeriesItem
 import it.felixvision.tv.data.catalog.VodInfoResponse
@@ -63,6 +71,7 @@ import it.felixvision.tv.ui.detail.FilmDetailOverlay
 import it.felixvision.tv.ui.detail.SeriesDetailOverlay
 import it.felixvision.tv.ui.theme.FvpColors
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.collect
 
 @Composable
 fun NovitaSection(
@@ -93,6 +102,8 @@ fun NovitaSection(
     refocusTick: Int = 0,
     focusEpisodeId: String? = null,
 ) {
+    val context = LocalContext.current
+    val flickerDiagnostics = remember(context) { readFlickerDiagnostics(context) }
     val filmsFirstFocus = remember { FocusRequester() }
     var detailFilm by remember { mutableStateOf<VodStream?>(null) }
     var detailFilmInfo by remember { mutableStateOf<VodInfoResponse?>(null) }
@@ -184,6 +195,23 @@ fun NovitaSection(
     val rowsScrollState = rememberScrollState()
     val rowsBringIntoView = rememberRowsBringIntoViewer()
 
+    LaunchedEffect(flickerDiagnostics, rowsScrollState) {
+        if (!flickerDiagnostics.logFocus) return@LaunchedEffect
+        Log.i(
+            FLICKER_DIAGNOSTIC_TAG,
+            "Novita diagnostic: disableFilmScale=${flickerDiagnostics.disableFilmScale}, " +
+                "disableFilmBringIntoView=${flickerDiagnostics.disableFilmBringIntoView}",
+        )
+        var lastScrollLogAt = 0L
+        snapshotFlow { rowsScrollState.value }.collect { scrollY ->
+            val now = SystemClock.elapsedRealtime()
+            if (now - lastScrollLogAt >= SCROLL_LOG_INTERVAL_MILLIS) {
+                lastScrollLogAt = now
+                Log.i(FLICKER_DIAGNOSTIC_TAG, "verticalScrollY=$scrollY")
+            }
+        }
+    }
+
     Box(modifier = modifier.fillMaxSize()) {
         Column(
             // 4 + FocusSafePadding delle righe = i 16 di prima: il margine del focus
@@ -270,10 +298,30 @@ fun NovitaSection(
                                     )
                                     .onFocusChanged { focusState ->
                                         focused = focusState.isFocused
-                                        if (focusState.isFocused) rowsBringIntoView.onRowFocused(ROW_FILMS)
+                                        if (flickerDiagnostics.logFocus) {
+                                            Log.i(
+                                                FLICKER_DIAGNOSTIC_TAG,
+                                                "filmFocus index=$index focused=${focusState.isFocused} " +
+                                                    "scrollY=${rowsScrollState.value}",
+                                            )
+                                        }
+                                        if (focusState.isFocused) {
+                                            if (flickerDiagnostics.disableFilmBringIntoView) {
+                                                if (flickerDiagnostics.logFocus) {
+                                                    Log.i(FLICKER_DIAGNOSTIC_TAG, "filmBringIntoView skipped index=$index")
+                                                }
+                                            } else {
+                                                if (flickerDiagnostics.logFocus) {
+                                                    Log.i(FLICKER_DIAGNOSTIC_TAG, "filmRowFocusCallback index=$index")
+                                                }
+                                                rowsBringIntoView.onRowFocused(ROW_FILMS)
+                                            }
+                                        }
                                     }
                                     .fvpLongPress { onLongPressFilm(film) },
-                                scale = CardDefaults.scale(focusedScale = 1.04f),
+                                scale = CardDefaults.scale(
+                                    focusedScale = if (flickerDiagnostics.disableFilmScale) 1f else 1.04f,
+                                ),
                                 border = CardDefaults.border(focusedBorder = Border(BorderStroke(2.dp, FvpColors.GreenFocus))),
                                 colors = CardDefaults.colors(containerColor = FvpColors.Surface),
                                 shape = CardDefaults.shape(shape = RoundedCornerShape(scale.dp(10f))),
@@ -355,7 +403,19 @@ fun NovitaSection(
                                     )
                                     .onFocusChanged { focusState ->
                                         focused = focusState.isFocused
-                                        if (focusState.isFocused) rowsBringIntoView.onRowFocused(ROW_SERIES)
+                                        if (flickerDiagnostics.logFocus) {
+                                            Log.i(
+                                                FLICKER_DIAGNOSTIC_TAG,
+                                                "seriesFocus index=$index focused=${focusState.isFocused} " +
+                                                    "scrollY=${rowsScrollState.value}",
+                                            )
+                                        }
+                                        if (focusState.isFocused) {
+                                            if (flickerDiagnostics.logFocus) {
+                                                Log.i(FLICKER_DIAGNOSTIC_TAG, "seriesRowFocusCallback index=$index")
+                                            }
+                                            rowsBringIntoView.onRowFocused(ROW_SERIES)
+                                        }
                                     }
                                     .fvpLongPress { onLongPressSeries(serie) },
                                 scale = CardDefaults.scale(focusedScale = 1.04f),
@@ -457,3 +517,34 @@ fun NovitaSection(
 private const val ROW_CONTINUE = 0
 private const val ROW_FILMS = 1
 private const val ROW_SERIES = 2
+
+private const val FLICKER_DIAGNOSTIC_TAG = "FvpFlickerDiag"
+private const val SCROLL_LOG_INTERVAL_MILLIS = 80L
+private const val EXTRA_DIAGNOSTIC_LOG_FOCUS = "fvp_diag_log_focus"
+private const val EXTRA_DIAGNOSTIC_DISABLE_FILM_SCALE = "fvp_diag_disable_film_scale"
+private const val EXTRA_DIAGNOSTIC_DISABLE_FILM_BRING = "fvp_diag_disable_film_bring"
+
+private data class FlickerDiagnosticOptions(
+    val logFocus: Boolean = false,
+    val disableFilmScale: Boolean = false,
+    val disableFilmBringIntoView: Boolean = false,
+)
+
+/** Intent extras usati solo dalla build debug; la release non accetta override diagnostici. */
+private fun readFlickerDiagnostics(context: Context): FlickerDiagnosticOptions {
+    if (!BuildConfig.DEBUG) return FlickerDiagnosticOptions()
+    val intent = context.findActivity()?.intent ?: return FlickerDiagnosticOptions()
+    return FlickerDiagnosticOptions(
+        logFocus = intent.getBooleanExtra(EXTRA_DIAGNOSTIC_LOG_FOCUS, false),
+        disableFilmScale = intent.getBooleanExtra(EXTRA_DIAGNOSTIC_DISABLE_FILM_SCALE, false),
+        disableFilmBringIntoView = intent.getBooleanExtra(EXTRA_DIAGNOSTIC_DISABLE_FILM_BRING, false),
+    )
+}
+
+private fun Context.findActivity(): Activity? {
+    var current: Context = this
+    while (true) {
+        if (current is Activity) return current
+        current = (current as? ContextWrapper)?.baseContext ?: return null
+    }
+}
