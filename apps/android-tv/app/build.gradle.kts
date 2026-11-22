@@ -79,11 +79,6 @@ android {
     }
 
     buildTypes {
-        debug {
-            // Build diagnostiche installabili accanto alla release senza sostituirla
-            // o toccarne i dati locali.
-            applicationIdSuffix = ".diag"
-        }
         release {
             // Nessuna minificazione in questa fase: l'APK è quello di debug/release
             // senza shrinker, così i simboli restano leggibili nei log.
