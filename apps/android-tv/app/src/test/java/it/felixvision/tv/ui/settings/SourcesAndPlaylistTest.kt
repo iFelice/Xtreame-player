@@ -2,7 +2,9 @@ package it.felixvision.tv.ui.settings
 
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -21,6 +23,9 @@ import it.felixvision.tv.data.sources.Source
 import it.felixvision.tv.data.sources.SourceType
 import it.felixvision.tv.data.store.StoredCredentials
 import it.felixvision.tv.ui.components.FvpCompactButton
+import it.felixvision.tv.ui.components.LocalSourceLabels
+import it.felixvision.tv.ui.components.SourceBadge
+import it.felixvision.tv.ui.components.SourceLabels
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.player.MoviePlaylist
 import it.felixvision.tv.ui.theme.FvpTheme
@@ -115,6 +120,52 @@ class SourcesAndPlaylistTest {
 
         rule.onNodeWithTag("settings_source_title_S1").assertTextEquals("Account Xtream · S1")
         rule.onNodeWithTag("settings_source_title_S2").assertDoesNotExist()
+    }
+
+    @Test
+    fun `l'etichetta della sorgente compare solo con piu sorgenti`() {
+        rule.setContent {
+            FvpTheme {
+                // Due sorgenti abilitate: la voce M3U mostra "S2", quella
+                // Xtream "S1". Con una sola sorgente l'etichetta non c'è.
+                Column {
+                    CompositionLocalProvider(
+                        LocalSourceLabels provides SourceLabels.from(
+                            listOf(xtreamSource, m3uSource),
+                        ),
+                    ) {
+                        Row {
+                            SourceBadge(
+                                label = SourceLabels.from(listOf(xtreamSource, m3uSource))
+                                    .labelFor("101") ?: "",
+                                scale = scale,
+                                testTag = "badge_xtream",
+                            )
+                            SourceBadge(
+                                label = SourceLabels.from(listOf(xtreamSource, m3uSource))
+                                    .labelFor("s2:abc") ?: "",
+                                scale = scale,
+                                testTag = "badge_m3u",
+                            )
+                        }
+                    }
+                    CompositionLocalProvider(
+                        LocalSourceLabels provides SourceLabels.from(listOf(xtreamSource)),
+                    ) {
+                        Text(
+                            text = SourceLabels.from(listOf(xtreamSource)).labelFor("s2:abc") ?: "nessuna",
+                            modifier = Modifier.testTag("badge_single"),
+                        )
+                    }
+                }
+            }
+        }
+        rule.waitForIdle()
+
+        rule.onNodeWithTag("badge_xtream").assertTextEquals("S1")
+        rule.onNodeWithTag("badge_m3u").assertTextEquals("S2")
+        // Una sola sorgente: nessuna etichetta, l'app resta come oggi.
+        rule.onNodeWithTag("badge_single").assertTextEquals("nessuna")
     }
 
     @Test

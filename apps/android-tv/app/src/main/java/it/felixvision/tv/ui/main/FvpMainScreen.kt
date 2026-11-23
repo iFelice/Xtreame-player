@@ -95,6 +95,8 @@ import it.felixvision.tv.ui.components.ErrorState
 import it.felixvision.tv.ui.components.FvpPrimaryButton
 import it.felixvision.tv.ui.components.FvpSecondaryButton
 import it.felixvision.tv.ui.components.LoadingState
+import it.felixvision.tv.ui.components.LocalSourceLabels
+import it.felixvision.tv.ui.components.SourceLabels
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.navigation.DrawerFocusHandle
 import it.felixvision.tv.ui.navigation.DrawerSection
@@ -849,8 +851,15 @@ fun FvpMainScreen(
         }
     }
 
+    // Etichette delle sorgenti per Cerca, Preferiti e Riprendi: con una sola
+    // sorgente abilitata restano spente, come oggi.
+    val sourceLabels = remember(catalogSources) { SourceLabels.from(catalogSources) }
+
     // La scheda serie legge da qui la stagione dell'episodio da continuare.
-    CompositionLocalProvider(LocalContinueEntries provides visibleContinueEntries) {
+    CompositionLocalProvider(
+        LocalContinueEntries provides visibleContinueEntries,
+        LocalSourceLabels provides sourceLabels,
+    ) {
     FvpNavigationDrawer(
         selected = selectedTab,
         onSelect = {
