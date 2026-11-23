@@ -15,6 +15,8 @@ import it.felixvision.tv.data.playback.LiveStreamFormat
 import it.felixvision.tv.data.protection.ProtectedContentStore
 import it.felixvision.tv.data.protection.ProtectedPageAccess
 import it.felixvision.tv.data.protection.ProtectedSession
+import it.felixvision.tv.data.sources.Source
+import it.felixvision.tv.data.sources.SourceType
 import it.felixvision.tv.data.store.CredentialStore
 import it.felixvision.tv.core.Clock
 import it.felixvision.tv.data.store.StoredCredentials
@@ -106,6 +108,13 @@ data class SettingsUiState(
     val versionCode: Int = BuildConfig.VERSION_CODE,
     val updateStatus: AppUpdateStatus = AppUpdateStatus.Checking,
     val canInstallPackages: Boolean = false,
+    /**
+     * Sorgenti dell'elenco (S1 Xtream, S2 Lista M3U) con il loro interruttore
+     * "Mostra". La riga M3U non mostra mai l'indirizzo della lista.
+     */
+    val sources: List<Source> = emptyList(),
+    /** Errore non bloccante della lista M3U (impossibile aggiornarla). */
+    val m3uError: String? = null,
 ) {
     val isDownloadingUpdate: Boolean
         get() = updateStatus is AppUpdateStatus.Downloading
@@ -249,6 +258,15 @@ class SettingsViewModel(
                 }
                 lastInstallNotificationId = notification.id
                 handleInstallEvent(notification.event)
+            }
+        }
+        // Elenco delle sorgenti: si rilegge a ogni modifica dell'interruttore.
+        viewModelScope.launch {
+            container.sourceRepository.revision.collect { refreshSources() }
+        }
+        viewModelScope.launch {
+            container.m3uSourceService.error.collect { error ->
+                _ui.update { it.copy(m3uError = error?.message) }
             }
         }
         refreshServerLabel()
@@ -613,6 +631,30 @@ class SettingsViewModel(
      * "Personalizzato"). Viene chiamata all'inizializzazione e a ogni apertura
      * delle Impostazioni.
      */
+    /** Rilegge l'elenco delle sorgenti per il riquadro "Sorgenti". */
+    private suspend fun refreshSources() {
+        val sources = runCatching { container.sourceRepository.sources() }.getOrDefault(emptyList())
+        _ui.update { it.copy(sources = sources) }
+    }
+
+    /**
+     * Interruttore "Mostra" di una sorgente. La scelta è salvata: l'etichetta
+     * (S1, S2, S3) non cambia mai. Accendendo la Lista M3U se ne tenta subito il
+     * caricamento, così le sue categorie compaiono senza aspettare un riavvio.
+     */
+    fun setSourceEnabled(sourceId: String, enabled: Boolean) {
+        viewModelScope.launch {
+            container.sourceRepository.setEnabled(sourceId, enabled)
+            if (enabled) {
+                val source = _ui.value.sources.firstOrNull { it.id == sourceId }
+                if (source?.type == SourceType.M3U) {
+                    runCatching { container.m3uSourceService.playlist(source) }
+                }
+            }
+            refreshSources()
+        }
+    }
+
     fun refreshServerLabel() {
         serverLabelJob?.cancel()
         serverLabelJob = viewModelScope.launch {

@@ -1,6 +1,7 @@
 package it.felixvision.tv.ui.catalog
 
 import android.content.Context
+import it.felixvision.tv.data.sources.SourceIds
 
 /**
  * Ordinamento scelto **per categoria** di Film e Serie, salvato in
@@ -25,21 +26,62 @@ class CategorySortStore(
     private val preferences = context.applicationContext
         .getSharedPreferences(preferencesName, Context.MODE_PRIVATE)
 
-    /** Ordine salvato per la categoria [categoryId] della sezione [section]. */
+    /** Ordine dell'account Xtream (S1): la chiave di sempre. */
     override fun sort(section: String, categoryId: String): CatalogSort =
-        CatalogSort.fromStorage(
-            runCatching { preferences.getString(key(section, categoryId), null) }.getOrNull()
-        )
+        sort(LEGACY_SOURCE_ID, section, categoryId)
 
-    /** Salva l'ordine della categoria [categoryId] della sezione [section]. */
+    /** Ordine dell'account Xtream (S1): la chiave di sempre. */
     override fun set(section: String, categoryId: String, sort: CatalogSort) {
-        preferences.edit().putString(key(section, categoryId), sort.storageKey).apply()
+        set(LEGACY_SOURCE_ID, section, categoryId, sort)
     }
 
-    /** Chiave usata nelle preferenze: `<vod|series>_<categoryId>`. */
-    fun key(section: String, categoryId: String): String = "${section}_$categoryId"
+    /**
+     * Ordine salvato per la categoria [categoryId] della sorgente [sourceId].
+     *
+     * Per S1, alla prima lettura di una chiave partizionata che non c'è ancora,
+     * si legge la chiave della versione precedente (`<section>_<categoryId>`) e
+     * la si ricopia in quella nuova: la scelta già fatta dall'utente passa a S1
+     * senza chiedergli nulla.
+     */
+    override fun sort(sourceId: String, section: String, categoryId: String): CatalogSort {
+        val stored = runCatching { preferences.getString(partitionedKey(sourceId, section, categoryId), null) }.getOrNull()
+        if (stored != null) return CatalogSort.fromStorage(stored)
+        if (SourceIds.isScoped(categoryId) || !isLegacySource(sourceId)) return CatalogSort.DEFAULT
+        val legacy = runCatching { preferences.getString(legacyKey(section, categoryId), null) }.getOrNull()
+            ?: return CatalogSort.DEFAULT
+        val migrated = CatalogSort.fromStorage(legacy)
+        runCatching { preferences.edit().putString(partitionedKey(sourceId, section, categoryId), migrated.storageKey).apply() }
+        return migrated
+    }
+
+    /** Salva l'ordine della categoria [categoryId] della sorgente [sourceId]. */
+    override fun set(sourceId: String, section: String, categoryId: String, sort: CatalogSort) {
+        runCatching {
+            preferences.edit().putString(partitionedKey(sourceId, section, categoryId), sort.storageKey).apply()
+        }
+    }
+
+    /**
+     * Chiave usata nelle preferenze, partizionata per sorgente:
+     * `<section>_<sourceId>_<categoryId>`. Per S1 resta disponibile
+     * [legacyKey], la chiave della versione precedente.
+     */
+    fun partitionedKey(sourceId: String, section: String, categoryId: String): String =
+        "${section}_${sourceId}_$categoryId"
+
+    /** Chiave della versione precedente, senza sorgente (`<section>_<categoryId>`). */
+    fun legacyKey(section: String, categoryId: String): String = "${section}_$categoryId"
+
+    /** Chiave dell'account Xtream (S1) prima della partizione per sorgente. */
+    fun key(section: String, categoryId: String): String = legacyKey(section, categoryId)
+
+    private fun isLegacySource(sourceId: String): Boolean =
+        sourceId == LEGACY_SOURCE_ID
 
     companion object {
+
+        /** Sorgente dell'account Xtream: mantiene le chiavi della versione precedente. */
+        const val LEGACY_SOURCE_ID = "s1"
 
         /** Nome delle preferenze dell'ordinamento. */
         const val PREFERENCES_NAME = "fvp_sort"
@@ -63,11 +105,23 @@ class CategorySortStore(
  */
 interface CategorySortStorage {
 
-    /** Ordine salvato per la categoria [categoryId] della sezione [section]. */
+    /** Ordine salvato per la categoria [categoryId] della sezione [section] (S1). */
     fun sort(section: String, categoryId: String): CatalogSort
 
-    /** Salva l'ordine della categoria [categoryId] della sezione [section]. */
+    /** Salva l'ordine della categoria [categoryId] della sezione [section] (S1). */
     fun set(section: String, categoryId: String, sort: CatalogSort)
+
+    /**
+     * Ordine della categoria [categoryId] appartenente alla sorgente
+     * [sourceId]: ogni sorgente ha il proprio ordinamento. Le implementazioni
+     * che non partizionano ricadono sulle due funzioni di sopra.
+     */
+    fun sort(sourceId: String, section: String, categoryId: String): CatalogSort =
+        sort(section, categoryId)
+
+    /** Salva l'ordine della categoria [categoryId] della sorgente [sourceId]. */
+    fun set(sourceId: String, section: String, categoryId: String, sort: CatalogSort) =
+        set(section, categoryId, sort)
 }
 
 /**
@@ -80,13 +134,21 @@ class InMemoryCategorySortStore : CategorySortStorage {
     private val values = mutableMapOf<String, CatalogSort>()
 
     override fun sort(section: String, categoryId: String): CatalogSort =
-        values[key(section, categoryId)] ?: CatalogSort.DEFAULT
+        sort(LEGACY_SOURCE_ID, section, categoryId)
 
     override fun set(section: String, categoryId: String, sort: CatalogSort) {
-        values[key(section, categoryId)] = sort
+        set(LEGACY_SOURCE_ID, section, categoryId, sort)
     }
 
-    private fun key(section: String, categoryId: String): String = "${section}_$categoryId"
+    override fun sort(sourceId: String, section: String, categoryId: String): CatalogSort =
+        values[key(sourceId, section, categoryId)] ?: CatalogSort.DEFAULT
+
+    override fun set(sourceId: String, section: String, categoryId: String, sort: CatalogSort) {
+        values[key(sourceId, section, categoryId)] = sort
+    }
+
+    private fun key(sourceId: String, section: String, categoryId: String): String =
+        "${sourceId}_${section}_$categoryId"
 }
 
 /**

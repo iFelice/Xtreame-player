@@ -35,6 +35,21 @@ sealed interface PlaybackSource {
         val stream: VodStream,
         val categoryId: String?,
         val title: String,
+        /**
+         * Voci della Lista M3U: indirizzo già pronto, riprodotto così com'è.
+         * Per l'account Xtream resta `null` e l'URL si costruisce come sempre.
+         */
+        val directUrl: String? = null,
+        /**
+         * Coda della categoria M3U nell'ordine del file: è quella che
+         * Successivo/Precedente scorrono e che a fine video passa alla voce
+         * dopo. Vuota per i film Xtream.
+         */
+        val queue: List<VodStream> = emptyList(),
+        /** Posizione della voce aperta dentro [queue]. */
+        val startIndex: Int = 0,
+        /** Indirizzo diretto di ogni voce della coda, per identificativo. */
+        val directUrls: Map<String, String> = emptyMap(),
     ) : PlaybackSource
 
     data class Series(

@@ -57,9 +57,14 @@ fun CatalogSortButton(
     scale: UiScale,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * Testo mostrato. Le categorie della Lista M3U usano "Ordina: Ordine del
+     * file" per il valore predefinito, che per loro non è "Aggiunti di recente".
+     */
+    label: String = sort.buttonLabel(),
 ) {
     FvpCompactButton(
-        text = sort.buttonLabel(),
+        text = label,
         onClick = onClick,
         scale = scale,
         modifier = modifier,

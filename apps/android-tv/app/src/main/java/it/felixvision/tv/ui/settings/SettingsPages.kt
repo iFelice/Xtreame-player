@@ -43,6 +43,8 @@ import it.felixvision.tv.data.playback.LiveStreamFormat
 import it.felixvision.tv.player.ZappingSeconds
 import it.felixvision.tv.ui.access.AccessViewModel
 import it.felixvision.tv.ui.access.PairingPanel
+import it.felixvision.tv.data.sources.Sources
+import it.felixvision.tv.ui.components.FvpCheckboxButton
 import it.felixvision.tv.ui.components.FvpCompactButton
 import it.felixvision.tv.ui.components.FvpPrimaryButton
 import it.felixvision.tv.ui.components.FvpSecondaryButton
@@ -150,6 +152,12 @@ object ZappingRepeat {
 /** Riquadro Account dentro la pagina Account. */
 const val SETTINGS_ACCOUNT_SECTION_TAG = "settings_account_section"
 
+/** Riquadro "Sorgenti" dentro la pagina Account: elenco con l'interruttore. */
+const val SETTINGS_SOURCES_SECTION_TAG = "settings_sources_section"
+
+/** Testo dell'interruttore di una sorgente. */
+const val SETTINGS_SOURCE_TOGGLE_LABEL = "Mostra"
+
 /** Riquadro dell'abbinamento da remoto dentro la pagina Account. */
 const val SETTINGS_PAIRING_SECTION_TAG = "settings_pairing_section"
 
@@ -233,6 +241,7 @@ internal fun SettingsAccountPage(
     onExitClicked: () -> Unit = {},
     onRenewCode: () -> Unit = {},
     entryFocusRequester: FocusRequester? = null,
+    onSourceToggle: (String, Boolean) -> Unit = { _, _ -> },
 ) {
     val localExitFocus = remember { FocusRequester() }
     val exitFocus = entryFocusRequester ?: localExitFocus
@@ -288,6 +297,70 @@ internal fun SettingsAccountPage(
                     .focusRequester(exitFocus)
                     .testTag(SETTINGS_EXIT_TAG),
             )
+        }
+
+        // Sorgenti: una riga per sorgente con l'interruttore "Mostra". La riga
+        // M3U è etichettata ("Lista M3U · S2") e non mostra mai l'indirizzo
+        // della lista. L'etichetta S1/S2/S3 è quella assegnata alla creazione.
+        if (state.sources.isNotEmpty()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(scale.dp(14f)))
+                    .background(FvpColors.Surface)
+                    .padding(scale.settingsSectionPadding)
+                    .testTag(SETTINGS_SOURCES_SECTION_TAG),
+                verticalArrangement = Arrangement.spacedBy(scale.settingsRowSpacing),
+            ) {
+                Text(
+                    text = "Sorgenti",
+                    color = FvpColors.TextPrimary,
+                    fontSize = scale.sp(16f),
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = "Fino a tre sorgenti. Disattivare una sorgente la toglie dal catalogo, senza cancellare i suoi dati.",
+                    color = FvpColors.TextSecondary,
+                    fontSize = scale.settingsRowText,
+                )
+                state.sources.forEach { source ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("settings_source_row_${source.label}"),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(scale.dp(2f))) {
+                            Text(
+                                text = Sources.rowTitle(source),
+                                color = FvpColors.TextPrimary,
+                                fontSize = scale.settingsRowText,
+                                modifier = Modifier.testTag("settings_source_title_${source.label}"),
+                            )
+                            Text(
+                                text = Sources.statusLabel(source),
+                                color = FvpColors.TextSecondary,
+                                fontSize = scale.settingsRowText,
+                            )
+                        }
+                        FvpCheckboxButton(
+                            text = SETTINGS_SOURCE_TOGGLE_LABEL,
+                            checked = source.enabled,
+                            onCheckedChange = { enabled -> onSourceToggle(source.id, enabled) },
+                            scale = scale,
+                            modifier = Modifier.testTag("settings_source_toggle_${source.label}"),
+                        )
+                    }
+                }
+                state.m3uError?.let { message ->
+                    FvpStatusText(
+                        message = "Lista M3U: $message. Le altre sorgenti restano disponibili.",
+                        scale = scale,
+                        modifier = Modifier.testTag("settings_sources_error"),
+                    )
+                }
+            }
         }
 
         val accountReadAt = state.lastAccountReadMillis

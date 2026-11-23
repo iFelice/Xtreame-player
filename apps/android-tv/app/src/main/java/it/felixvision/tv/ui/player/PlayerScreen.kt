@@ -430,6 +430,26 @@ fun PlayerScreen(
                         }
                         return@onPreviewKeyEvent false
                     }
+                    // Tasti media del telecomando: Successivo/Precedente
+                    // scorrono le voci della categoria aperta (Lista M3U),
+                    // nell'ordine del file. Per gli altri contenuti non fanno
+                    // nulla e il tasto resta al sistema.
+                    if (event.type == KeyEventType.KeyDown && !state.hasModalOverlay) {
+                        when (event.key) {
+                            Key.MediaNext -> {
+                                if (engine.hasMovieQueue) {
+                                    engine.nextMovie()
+                                    return@onPreviewKeyEvent true
+                                }
+                            }
+                            Key.MediaPrevious -> {
+                                if (engine.hasMovieQueue) {
+                                    engine.previousMovie()
+                                    return@onPreviewKeyEvent true
+                                }
+                            }
+                        }
+                    }
                     val native = event.nativeKeyEvent
                     if (session.source is PlaybackSource.Live && !state.isReplay && !state.hasModalOverlay) {
                         if (engine.onChannelNumberKey(

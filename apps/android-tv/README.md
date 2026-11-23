@@ -191,6 +191,29 @@ con le stesse protezioni del modulo manuale.
 
 Le credenziali non vengono mai scritte nei log, né a mano né dal client di rete.
 
+### Sorgenti: Xtream (S1) e Lista M3U (S2)
+
+L'app ha un elenco di sorgenti, al massimo tre. L'account Xtream è **S1**: il
+vecchio blob singolo (`credentials_blob_v1`) viene convertito alla prima lettura
+in un elenco (`sources_blob_v1`, sempre cifrato AES-GCM) con le stesse
+credenziali, senza perdere preferiti, avanzamento, PIN o copie del catalogo: le
+chiavi degli archivi per server+utente non cambiano.
+
+La **Lista M3U** è la seconda sorgente e si attiva alla compilazione con la
+proprietà Gradle o la variabile d'ambiente `FVP_M3U_URL` (stesso schema di
+`FVP_VERSION_NAME`), vuota per impostazione predefinita:
+
+```bash
+FVP_M3U_URL="http://server.esempio/lista.m3u8" ./gradlew assembleDebug
+```
+
+In CI l'indirizzo arriva dalla variabile di repository `FVP_M3U_URL` (`vars`, non
+`secret`). Con la variabile vuota la sorgente non esiste e non compare; non è
+mai scritta nel codice né mostrata in Impostazioni. Le voci della lista sono
+tutte Film, con le categorie dei `group-title`, riprodotte dall'indirizzo diretto
+(HLS o MP4/MKV); preferiti, ripresa e avanzamento usano un identificativo
+stabile (hash del `tvg-id`, altrimenti dell'indirizzo).
+
 ### Traffico in chiaro
 
 `res/xml/network_security_config.xml` consente esplicitamente il traffico HTTP: molti

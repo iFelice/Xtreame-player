@@ -44,8 +44,13 @@ jobs:
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKMANAGER" --licenses > /dev/null || true
 
+      # L'indirizzo della Lista M3U arriva dalla variabile di repository
+      # `FVP_M3U_URL` (vars, non secret), quando è configurata. Vuota = la
+      # sorgente M3U non esiste: la CI resta identica a prima.
       - name: Test unitari e lint
         working-directory: apps/android-tv
+        env:
+          FVP_M3U_URL: ${{ vars.FVP_M3U_URL }}
         shell: bash
         run: ./gradlew testDebugUnitTest lintDebug 2>&1 | tee /tmp/fvp-tv-build.log
 

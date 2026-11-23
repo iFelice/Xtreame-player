@@ -68,6 +68,7 @@ import it.felixvision.tv.data.playback.SeriesPlayback
 import it.felixvision.tv.data.playback.buildEpisodeQueue
 import it.felixvision.tv.data.playback.indexOfEpisode
 import it.felixvision.tv.data.progress.ProgressKeys
+import it.felixvision.tv.data.sources.Source
 import it.felixvision.tv.data.progress.WatchProgress
 import it.felixvision.tv.data.update.UpdateCheckState
 import it.felixvision.tv.ui.access.AccessViewModel
@@ -221,11 +222,24 @@ fun FvpMainScreen(
     val drawerFocusHandle = remember { DrawerFocusHandle() }
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
 
+    // Sorgenti dell'elenco (S1 Xtream, S2 Lista M3U): servono al prefisso delle
+    // categorie, all'etichetta delle voci e alla coda di riproduzione M3U.
+    val sourcesRevision by container.sourceRepository.revision.collectAsState()
+    val catalogSources by produceState(
+        initialValue = emptyList<Source>(),
+        sourcesRevision,
+        sessionId,
+    ) {
+        value = runCatching { container.sourceRepository.sources() }.getOrDefault(emptyList())
+    }
+
     val catalogViewModel: CatalogViewModel = viewModel(
         factory = viewModelFactory {
             initializer { CatalogViewModel(container, currentServer, currentUsername, currentPassword) }
         },
-        key = catalogSessionKey(sessionId, currentServer, currentUsername),
+        // La revisione delle sorgenti riapre il catalogo quando un interruttore
+        // cambia: le categorie unite si ricompongono subito.
+        key = catalogSessionKey(sessionId, currentServer, currentUsername) + "_src$sourcesRevision",
     )
     val catalogState by catalogViewModel.ui.collectAsState()
 
@@ -680,11 +694,25 @@ fun FvpMainScreen(
             ?.vodStreams
             ?.firstOrNull { it.streamId == film.streamId }
             ?: film
+        // Voce della Lista M3U: indirizzo diretto e coda della categoria
+        // nell'ordine del file (Successivo/Precedente e passaggio automatico).
+        val m3uSource = container.m3uSourceService.sourceOf(resolved.streamId, catalogSources)
+        val directUrls = m3uSource
+            ?.let { container.m3uSourceService.directUrlsFor(it) }
+            .orEmpty()
+        val queue = m3uSource
+            ?.let { source -> resolved.categoryId?.let { container.m3uSourceService.queueFor(source, it) } }
+            .orEmpty()
+        val queueIndex = queue.indexOfFirst { it.streamId == resolved.streamId }
         playerSession = newPlayerSession(
             PlaybackSource.Movie(
                 stream = resolved,
                 categoryId = resolved.categoryId,
                 title = resolved.name.ifBlank { film.name },
+                directUrl = directUrls[resolved.streamId],
+                queue = queue,
+                startIndex = if (queueIndex >= 0) queueIndex else 0,
+                directUrls = directUrls,
             ),
             autoResume = autoResume,
         )
