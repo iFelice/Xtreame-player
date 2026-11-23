@@ -206,40 +206,6 @@ class SourcesAndPlaylistTest {
         assertEquals(0, MoviePlaylist.previousIndex(0, titles.size))
         assertTrue(MoviePlaylist.hasNext(0, titles.size))
     }
-}
-
-/**
- * Banco di prova della coda: due pulsanti che chiamano [MoviePlaylist] come fa
- * il player e il titolo della voce in onda.
- */
-@Composable
-private fun MovieQueueHarness(titles: List<String>, scale: UiScale) {
-    var index by remember { mutableStateOf(0) }
-    Column {
-        Text(
-            text = MoviePlaylist.counter(index, titles.size),
-            modifier = Modifier.testTag("queue_counter"),
-        )
-        Text(
-            text = titles[index.coerceIn(0, titles.lastIndex)],
-            modifier = Modifier.testTag("queue_title"),
-        )
-        FvpCompactButton(
-            text = "Successivo",
-            onClick = {
-                val next = MoviePlaylist.nextIndex(index, titles.size)
-                if (next >= 0) index = next
-            },
-            scale = scale,
-            modifier = Modifier.testTag("queue_next"),
-        )
-        FvpCompactButton(
-            text = "Precedente",
-            onClick = { index = MoviePlaylist.previousIndex(index, titles.size) },
-            scale = scale,
-            modifier = Modifier.testTag("queue_previous"),
-        )
-    }
 
     @Test
     fun `una riga di errore per ogni lista in errore`() {
@@ -308,4 +274,39 @@ private fun MovieQueueHarness(titles: List<String>, scale: UiScale) {
             rule.onNodeWithTag("settings_source_toggle_${source.label}").assertExists()
         }
     }
+}
+
+/**
+ * Banco di prova della coda: due pulsanti che chiamano [MoviePlaylist] come fa
+ * il player e il titolo della voce in onda.
+ */
+@Composable
+private fun MovieQueueHarness(titles: List<String>, scale: UiScale) {
+    var index by remember { mutableStateOf(0) }
+    Column {
+        Text(
+            text = MoviePlaylist.counter(index, titles.size),
+            modifier = Modifier.testTag("queue_counter"),
+        )
+        Text(
+            text = titles[index.coerceIn(0, titles.lastIndex)],
+            modifier = Modifier.testTag("queue_title"),
+        )
+        FvpCompactButton(
+            text = "Successivo",
+            onClick = {
+                val next = MoviePlaylist.nextIndex(index, titles.size)
+                if (next >= 0) index = next
+            },
+            scale = scale,
+            modifier = Modifier.testTag("queue_next"),
+        )
+        FvpCompactButton(
+            text = "Precedente",
+            onClick = { index = MoviePlaylist.previousIndex(index, titles.size) },
+            scale = scale,
+            modifier = Modifier.testTag("queue_previous"),
+        )
+    }
+
 }
