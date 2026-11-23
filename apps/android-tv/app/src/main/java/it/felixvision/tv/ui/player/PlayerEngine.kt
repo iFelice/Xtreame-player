@@ -21,6 +21,7 @@ import androidx.media3.exoplayer.analytics.AnalyticsListener
 import it.felixvision.tv.AppContainer
 import it.felixvision.tv.core.AppLog
 import it.felixvision.tv.data.catalog.Category
+import it.felixvision.tv.data.catalog.VodStream
 import it.felixvision.tv.data.catalog.LiveStream
 import it.felixvision.tv.data.channels.MyChannelPlayback
 import it.felixvision.tv.data.continuewatching.ContinueEntry

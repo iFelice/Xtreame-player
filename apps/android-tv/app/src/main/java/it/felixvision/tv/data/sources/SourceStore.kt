@@ -119,7 +119,7 @@ class EncryptedSourceStore(
         return migrated
     }
 
-    private fun decode(encoded: String): List<Source>? = try {
+    private suspend fun decode(encoded: String): List<Source>? = try {
         val blob = Base64.getDecoder().decode(encoded)
         val plaintext = cipher.decrypt(blob)
         val record = json.decodeFromString<SourceListRecord>(plaintext.toString(Charsets.UTF_8))

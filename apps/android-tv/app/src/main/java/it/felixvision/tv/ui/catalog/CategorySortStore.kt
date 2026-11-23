@@ -134,10 +134,10 @@ class InMemoryCategorySortStore : CategorySortStorage {
     private val values = mutableMapOf<String, CatalogSort>()
 
     override fun sort(section: String, categoryId: String): CatalogSort =
-        sort(LEGACY_SOURCE_ID, section, categoryId)
+        sort(CategorySortStore.LEGACY_SOURCE_ID, section, categoryId)
 
     override fun set(section: String, categoryId: String, sort: CatalogSort) {
-        set(LEGACY_SOURCE_ID, section, categoryId, sort)
+        set(CategorySortStore.LEGACY_SOURCE_ID, section, categoryId, sort)
     }
 
     override fun sort(sourceId: String, section: String, categoryId: String): CatalogSort =
