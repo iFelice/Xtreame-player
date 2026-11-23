@@ -111,9 +111,11 @@ object Sources {
         .thenBy { labelNumber(it) ?: Int.MAX_VALUE }
         .thenBy { it }
 
-    /** Sorgenti nell'ordine delle etichette. */
-    fun ordered(sources: List<Source>): List<Source> =
-        sources.sortedWith(compareBy(LABEL_COMPARATOR) { it.label }.thenBy { it.id })
+    /** Sorgenti nell'ordine delle etichette, a parità per identificativo. */
+    fun ordered(sources: List<Source>): List<Source> = sources.sortedWith { first, second ->
+        val byLabel = LABEL_COMPARATOR.compare(first.label, second.label)
+        if (byLabel != 0) byLabel else first.id.compareTo(second.id)
+    }
 
     /** Solo le sorgenti abilitate, in ordine di etichetta. */
     fun enabled(sources: List<Source>): List<Source> = ordered(sources).filter { it.enabled }

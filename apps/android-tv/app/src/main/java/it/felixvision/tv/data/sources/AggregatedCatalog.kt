@@ -36,7 +36,9 @@ object AggregatedCatalog {
 
     fun merge(parts: List<CatalogPart>): Catalog {
         if (parts.isEmpty()) return EMPTY
-        val ordered = parts.sortedWith(compareBy(Sources.LABEL_COMPARATOR) { it.source.label })
+        val ordered = parts.sortedWith { first, second ->
+            Sources.LABEL_COMPARATOR.compare(first.source.label, second.source.label)
+        }
         if (ordered.size == 1) return ordered.first().catalog
         return Catalog(
             liveCategories = ordered.flatMap { part ->
