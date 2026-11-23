@@ -31,8 +31,9 @@ data class M3uSourceError(
 
 /**
  * Sorgente "Lista M3U": scarica la lista, ne tiene una copia in memoria e una su
- * disco (per 6 ore, come il catalogo), e fornisce al resto dell'app ciò che
- * serve per catalogo e riproduzione.
+ * disco (valida fino al primo dei quattro orari giornalieri di
+ * [M3uRefreshSchedule]), e fornisce al resto dell'app ciò che serve per
+ * catalogo e riproduzione.
  *
  * Comportamento quando la lista non è raggiungibile:
  * - se c'è una copia salvata si usa quella, senza bloccare l'app;
@@ -67,7 +68,7 @@ class M3uSourceService(
      * Lista della [source], dalla copia in memoria, dal disco o dalla rete.
      *
      * @param forceRefresh `true` per "Aggiorna catalogo": ignora la scadenza
-     *   delle 6 ore.
+     *   e riscarica subito.
      */
     suspend fun playlist(source: Source, forceRefresh: Boolean = false): M3uPlaylist? {
         val current = withContext(io) {
@@ -103,6 +104,16 @@ class M3uSourceService(
                 current
             }
         }
+    }
+
+    /**
+     * Vero quando la lista di [source] non è in memoria o ha superato il primo
+     * orario di rilettura successivo al download: serve al controllo periodico
+     * ad app aperta.
+     */
+    fun isRefreshDue(source: Source, nowMillis: Long = clock.nowMillis()): Boolean {
+        val current = playlists.value[source.id] ?: return true
+        return cache.shouldRefresh(current.fetchedAtMillis, nowMillis)
     }
 
     /** Catalogo Film della lista già scaricata, `null` se non c'è una copia. */

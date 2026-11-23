@@ -36,6 +36,7 @@ import it.felixvision.tv.data.sources.EncryptedSourceStore
 import it.felixvision.tv.data.sources.M3uSourceService
 import it.felixvision.tv.data.sources.SourceRepository
 import it.felixvision.tv.data.sources.SourceStore
+import it.felixvision.tv.data.sources.Sources
 import it.felixvision.tv.data.sources.XtreamCredentialStore
 import it.felixvision.tv.data.store.CredentialStore
 import it.felixvision.tv.data.store.DataStoreSecurePreferences
@@ -288,15 +289,16 @@ class AppContainer(
 
     /**
      * Elenco delle sorgenti, cifrato come le credenziali. Contiene l'account
-     * Xtream (S1, migrato dal vecchio blob singolo) e la Lista M3U (S2), che
-     * esiste solo se la compilazione ha ricevuto `FVP_M3U_URL`.
+     * Xtream (S1, migrato dal vecchio blob singolo) e una sorgente per ogni
+     * lista M3U prevista da `FVP_M3U_URL` (S2, S3): più indirizzi separati da
+     * virgola. Senza indirizzi le sorgenti M3U non esistono.
      */
     val sourceStore: SourceStore by lazy {
         EncryptedSourceStore(
             preferences = DataStoreSecurePreferences(credentialPreferences),
             cipher = KeystoreCredentialCipher(),
             json = json,
-            m3uUrl = BuildConfig.FVP_M3U_URL,
+            m3uUrls = Sources.parseM3uUrls(BuildConfig.FVP_M3U_URL),
         )
     }
 

@@ -16,6 +16,7 @@ import it.felixvision.tv.data.protection.ProtectedContentStore
 import it.felixvision.tv.data.protection.ProtectedPageAccess
 import it.felixvision.tv.data.protection.ProtectedSession
 import it.felixvision.tv.data.sources.Source
+import it.felixvision.tv.data.sources.Sources
 import it.felixvision.tv.data.sources.SourceType
 import it.felixvision.tv.data.store.CredentialStore
 import it.felixvision.tv.core.Clock
@@ -266,7 +267,17 @@ class SettingsViewModel(
         }
         viewModelScope.launch {
             container.m3uSourceService.error.collect { error ->
-                _ui.update { it.copy(m3uError = error?.message) }
+                // Con più liste M3U l'errore dice a quale appartiene: si mostra
+                // l'etichetta della sorgente, mai il suo indirizzo.
+                val message = error?.let { failure ->
+                    val label = runCatching {
+                        container.sourceRepository.sources()
+                            .firstOrNull { it.id == failure.sourceId }
+                            ?.let { Sources.rowTitle(it) }
+                    }.getOrNull()
+                    if (label != null) "$label: ${failure.message}" else failure.message
+                }
+                _ui.update { it.copy(m3uError = message) }
             }
         }
         refreshServerLabel()

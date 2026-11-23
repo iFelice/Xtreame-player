@@ -33,11 +33,12 @@ class M3uCache(
         io: CoroutineDispatcher = Dispatchers.IO,
     ) : this(cacheDir = context.filesDir, json = json, io = io)
 
-    /** La copia salvata vale 6 ore: oltre, si riprova a scaricare. */
-    fun shouldRefresh(fetchedAtMillis: Long?, nowMillis: Long = System.currentTimeMillis()): Boolean {
-        if (fetchedAtMillis == null || fetchedAtMillis <= 0L) return true
-        return (nowMillis - fetchedAtMillis) >= REFRESH_INTERVAL_MILLIS
-    }
+    /**
+     * La copia salvata vale fino al primo orario di rilettura successivo al
+     * download ([M3uRefreshSchedule]): 08:30, 14:30, 18:30, 22:30.
+     */
+    fun shouldRefresh(fetchedAtMillis: Long?, nowMillis: Long = System.currentTimeMillis()): Boolean =
+        M3uRefreshSchedule.shouldRefresh(fetchedAtMillis, nowMillis)
 
     fun fileFor(sourceId: String): File {
         val safe = sourceId.lowercase().replace(Regex("[^a-z0-9._-]"), "_").take(40)
@@ -83,7 +84,4 @@ class M3uCache(
         if (file.exists()) file.delete()
     }
 
-    companion object {
-        const val REFRESH_INTERVAL_MILLIS = 6L * 60L * 60L * 1000L
-    }
 }

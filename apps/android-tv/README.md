@@ -207,9 +207,23 @@ proprietà Gradle o la variabile d'ambiente `FVP_M3U_URL` (stesso schema di
 FVP_M3U_URL="http://server.esempio/lista.m3u8" ./gradlew assembleDebug
 ```
 
-In CI l'indirizzo arriva dalla variabile di repository `FVP_M3U_URL` (`vars`, non
-`secret`). Con la variabile vuota la sorgente non esiste e non compare; non è
-mai scritta nel codice né mostrata in Impostazioni. Le voci della lista sono
+La variabile accetta **più liste**, separate da virgola (o da uno spazio o un a
+capo): ogni `playlist.m3u` diventa una sorgente a sé con la stessa etichetta di
+tipo e il primo numero libero — con l'account Xtream su S1, quindi `Lista M3U ·
+S2` e `Lista M3U · S3`. L'identificativo di ogni lista è ricavato dal solo
+indirizzo, quindi cambiare l'ordine nella variabile non cambia etichette né
+archivi.
+
+```bash
+FVP_M3U_URL="https://raw.githubusercontent.com/utente/repo/main/playlist1.m3u,https://raw.githubusercontent.com/utente/repo/main/playlist2.m3u" ./gradlew assembleRelease
+```
+
+In CI gli indirizzi arrivano dalla variabile di repository `FVP_M3U_URL` (`vars`,
+non `secret`). Con la variabile vuota le sorgenti non esistono e non compaiono;
+gli indirizzi non sono mai scritti nel codice né mostrati in Impostazioni. Le
+liste vengono rilette alle **08:30, 14:30, 18:30 e 22:30** (ora locale): la copia
+salvata vale fino al primo di questi orari successivo al download, e "Aggiorna
+catalogo" riscarica subito. Le voci della lista sono
 tutte Film, con le categorie dei `group-title`, riprodotte dall'indirizzo diretto
 (HLS o MP4/MKV); preferiti, ripresa e avanzamento usano un identificativo
 stabile (hash del `tvg-id`, altrimenti dell'indirizzo).

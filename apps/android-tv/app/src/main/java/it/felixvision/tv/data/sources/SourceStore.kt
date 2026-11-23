@@ -38,31 +38,50 @@ interface SourceStore {
  * dati vengono eliminati e [load] restituisce un elenco vuoto: l'app torna alla
  * schermata di accesso, senza crash.
  *
- * ## Lista M3U
+ * ## Liste M3U
  *
- * L'indirizzo della lista non è salvato nell'elenco: arriva da [m3uUrl]
- * (variabile di compilazione `FVP_M3U_URL`). Vuoto vuol dire "la sorgente M3U
- * non esiste": la riga non compare e le voci salvate restano su disco, pronte
- * se la variabile torna a essere valorizzata.
+ * Gli indirizzi delle liste non sono salvati nell'elenco: arrivano da
+ * [m3uUrls] (variabile di compilazione `FVP_M3U_URL`, uno o più separati da
+ * virgola). Ogni lista è **una sorgente a sé** con la stessa etichetta di tipo
+ * ("Lista M3U · S2", "Lista M3U · S3") e un identificativo ricavato dal solo
+ * indirizzo, così l'etichetta assegnata alla creazione non cambia mai. Nessun
+ * indirizzo vuol dire "le sorgenti M3U non esistono": le righe non compaiono e
+ * quelle salvate restano su disco, pronte se la variabile torna a essere
+ * valorizzata.
  */
 class EncryptedSourceStore(
     private val preferences: SecurePreferences,
     private val cipher: CredentialCipher,
     private val json: Json = FvpJson,
-    private val m3uUrl: String = "",
+    private val m3uUrls: List<String> = emptyList(),
     private val onDecryptionFailure: (Throwable) -> Unit = {},
 ) : SourceStore {
 
-    /** Vero quando la compilazione prevede la lista M3U. */
-    private val hasM3uUrl: Boolean get() = m3uUrl.isNotBlank()
+    /** Indirizzi previsti alla compilazione, senza vuoti e senza doppioni. */
+    private val configuredM3uUrls: List<String> = m3uUrls
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .distinct()
+
+    /** Identificativo stabile → indirizzo di ogni lista configurata. */
+    private val configuredM3uIds: Map<String, String> =
+        configuredM3uUrls.associateBy { url -> Sources.m3uId(url) }
 
     override suspend fun load(): List<Source> {
         val stored = readStored().orEmpty()
-        val completed = ensureM3uSource(stored)
+        val completed = ensureM3uSources(stored)
         if (completed != stored) writeStored(completed)
-        // Senza indirizzo la sorgente M3U non esiste, anche se era salvata.
+        // Senza indirizzo la lista non esiste, anche se la riga era salvata.
         return Sources.ordered(
-            completed.filter { source -> source.type != SourceType.M3U || hasM3uUrl },
+            completed
+                .filter { source -> source.type != SourceType.M3U || source.id in configuredM3uIds }
+                .map { source ->
+                    if (source.type == SourceType.M3U) {
+                        source.copy(m3uUrl = configuredM3uIds[source.id])
+                    } else {
+                        source
+                    }
+                },
         )
     }
 
@@ -75,33 +94,43 @@ class EncryptedSourceStore(
         .filter { source ->
             when (source.type) {
                 SourceType.XTREAM -> source.xtream != null
-                SourceType.M3U -> hasM3uUrl
+                SourceType.M3U -> source.id in configuredM3uIds
             }
         }
         .distinctBy { it.id }
         .take(Sources.MAX_SOURCES)
         .map { source ->
-            if (source.type == SourceType.M3U) source.copy(m3uUrl = m3uUrl) else source
+            if (source.type == SourceType.M3U) {
+                source.copy(m3uUrl = configuredM3uIds[source.id])
+            } else {
+                source
+            }
         }
 
     /**
-     * Aggiunge la riga M3U la prima volta che l'indirizzo è configurato:
-     * l'etichetta assegnata alla creazione resta poi per sempre.
+     * Aggiunge una riga per ogni lista configurata che non ce l'ha ancora: la
+     * prima volta prende la prima etichetta libera (S2 con l'account Xtream,
+     * poi S3) e quella resta per sempre. Oltre il massimo delle sorgenti le
+     * liste in più non compaiono.
      */
-    private fun ensureM3uSource(stored: List<Source>): List<Source> {
-        if (!hasM3uUrl) return stored
-        if (stored.any { it.type == SourceType.M3U }) {
-            return stored.map { if (it.type == SourceType.M3U) it.copy(m3uUrl = m3uUrl) else it }
+    private fun ensureM3uSources(stored: List<Source>): List<Source> {
+        if (configuredM3uIds.isEmpty()) return stored
+        val known = stored.filter { it.type == SourceType.M3U }.map { it.id }.toSet()
+        val missing = configuredM3uUrls.filter { url -> Sources.m3uId(url) !in known }
+        if (missing.isEmpty()) return stored
+        val result = stored.toMutableList()
+        for (url in missing) {
+            if (result.size >= Sources.MAX_SOURCES) break
+            val label = Sources.nextLabel(result.map { it.label }) ?: break
+            result += Source(
+                id = Sources.m3uId(url),
+                type = SourceType.M3U,
+                label = label,
+                enabled = true,
+                m3uUrl = url,
+            )
         }
-        if (stored.size >= Sources.MAX_SOURCES) return stored
-        val label = Sources.nextLabel(stored.map { it.label }) ?: return stored
-        return stored + Source(
-            id = Sources.newId(stored),
-            type = SourceType.M3U,
-            label = label,
-            enabled = true,
-            m3uUrl = m3uUrl,
-        )
+        return result
     }
 
     private suspend fun readStored(): List<Source>? {

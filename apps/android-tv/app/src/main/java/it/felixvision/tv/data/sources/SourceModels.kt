@@ -1,5 +1,7 @@
 package it.felixvision.tv.data.sources
 
+import java.security.MessageDigest
+
 import it.felixvision.tv.data.store.StoredCredentials
 
 /**
@@ -106,9 +108,38 @@ object Sources {
     fun primaryXtream(sources: List<Source>): Source? =
         ordered(sources).firstOrNull { it.type == SourceType.XTREAM }
 
-    /** Le sorgenti M3U configurate (al massimo una in questa versione). */
+    /**
+     * Le liste M3U configurate, in ordine di etichetta: una sorgente per ogni
+     * `playlist.m3u` previsto alla compilazione (al massimo quante ne stanno
+     * nelle tre sorgenti, quindi due con l'account Xtream).
+     */
     fun m3uSources(sources: List<Source>): List<Source> =
         ordered(sources).filter { it.type == SourceType.M3U }
+
+    /**
+     * Identificativo **stabile** di una lista M3U, ricavato dal solo indirizzo:
+     * riordinare o rinominare i file nella variabile di compilazione non cambia
+     * id, quindi etichette, ordinamenti e archivi restano attaccati alla lista
+     * giusta.
+     */
+    fun m3uId(url: String): String {
+        val digest = MessageDigest.getInstance("SHA-256").digest(url.trim().toByteArray(Charsets.UTF_8))
+        val hex = digest.take(5).joinToString("") { byte ->
+            (byte.toInt() and 0xff).toString(16).padStart(2, '0')
+        }
+        return "m3u_$hex"
+    }
+
+    /**
+     * Indirizzi M3U dalla variabile di compilazione `FVP_M3U_URL`: uno solo
+     * oppure più di uno separati da virgola, punto e virgola o a capo. Vuoto
+     * vuol dire "nessuna lista".
+     */
+    fun parseM3uUrls(value: String): List<String> =
+        value.split(Regex("[,;\\s]+"))
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .distinct()
 }
 
 /**

@@ -87,7 +87,7 @@ class EncryptedSourceStoreTest {
     fun `la migrazione non perde l'etichetta tra due letture`() = runTest {
         val preferences = InMemoryPreferences()
         seedLegacy(preferences)
-        val store = EncryptedSourceStore(preferences, FakeCipher(), m3uUrl = "http://server.esempio/lista.m3u8")
+        val store = EncryptedSourceStore(preferences, FakeCipher(), m3uUrls = listOf("http://server.esempio/lista.m3u8"))
 
         val first = store.load()
         val second = store.load()
@@ -99,11 +99,70 @@ class EncryptedSourceStoreTest {
     }
 
     @Test
+    fun `due liste diventano S2 e S3 con id ricavati dall'indirizzo`() = runTest {
+        val preferences = InMemoryPreferences()
+        seedLegacy(preferences)
+        val first = "http://server.esempio/playlist1.m3u8"
+        val second = "http://server.esempio/playlist2.m3u8"
+        val store = EncryptedSourceStore(
+            preferences,
+            FakeCipher(),
+            m3uUrls = listOf(first, second),
+        )
+
+        val sources = store.load()
+
+        assertEquals(listOf("S1", "S2", "S3"), sources.map { it.label })
+        assertEquals(listOf(SourceType.XTREAM, SourceType.M3U, SourceType.M3U), sources.map { it.type })
+        assertEquals(first, sources[1].m3uUrl)
+        assertEquals(second, sources[2].m3uUrl)
+        // Gli id dipendono dal solo indirizzo: riordinare le liste nella
+        // variabile di compilazione non cambia né id né etichette.
+        val reordered = EncryptedSourceStore(
+            preferences,
+            FakeCipher(),
+            m3uUrls = listOf(second, first),
+        ).load()
+        assertEquals(sources.map { it.id to it.label }, reordered.map { it.id to it.label })
+    }
+
+    @Test
+    fun `togliendo un indirizzo la sua riga non compare piu`() = runTest {
+        val preferences = InMemoryPreferences()
+        seedLegacy(preferences)
+        val first = "http://server.esempio/playlist1.m3u8"
+        val second = "http://server.esempio/playlist2.m3u8"
+        EncryptedSourceStore(preferences, FakeCipher(), m3uUrls = listOf(first, second)).load()
+
+        val onlyFirst = EncryptedSourceStore(
+            preferences,
+            FakeCipher(),
+            m3uUrls = listOf(first),
+        ).load()
+
+        assertEquals(listOf("S1", "S2"), onlyFirst.map { it.label })
+        assertEquals(listOf(first), onlyFirst.filter { it.type == SourceType.M3U }.map { it.m3uUrl })
+    }
+
+    @Test
+    fun `la variabile di compilazione accetta piu indirizzi`() {
+        assertEquals(
+            listOf("http://server.esempio/a.m3u8", "http://server.esempio/b.m3u8"),
+            Sources.parseM3uUrls(" http://server.esempio/a.m3u8 ,\nhttp://server.esempio/b.m3u8 "),
+        )
+        assertTrue(Sources.parseM3uUrls("   ").isEmpty())
+        assertEquals(
+            listOf("http://server.esempio/a.m3u8"),
+            Sources.parseM3uUrls("http://server.esempio/a.m3u8,http://server.esempio/a.m3u8"),
+        )
+    }
+
+    @Test
     fun `senza indirizzo la sorgente M3U non esiste`() = runTest {
         val preferences = InMemoryPreferences()
         seedLegacy(preferences)
 
-        val store = EncryptedSourceStore(preferences, FakeCipher(), m3uUrl = "")
+        val store = EncryptedSourceStore(preferences, FakeCipher(), m3uUrls = emptyList())
         val sources = store.load()
 
         assertEquals(listOf(SourceType.XTREAM), sources.map { it.type })
@@ -112,7 +171,7 @@ class EncryptedSourceStoreTest {
     @Test
     fun `l'indirizzo vuoto non crea la riga M3U`() = runTest {
         val preferences = InMemoryPreferences()
-        val store = EncryptedSourceStore(preferences, FakeCipher(), m3uUrl = "   ")
+        val store = EncryptedSourceStore(preferences, FakeCipher(), m3uUrls = listOf("   "))
 
         assertTrue(store.load().isEmpty())
     }
@@ -140,7 +199,7 @@ class EncryptedSourceStoreTest {
     fun `la scelta dell'interruttore resta con la stessa etichetta`() = runTest {
         val preferences = InMemoryPreferences()
         seedLegacy(preferences)
-        val store = EncryptedSourceStore(preferences, FakeCipher(), m3uUrl = "http://server.esempio/lista.m3u8")
+        val store = EncryptedSourceStore(preferences, FakeCipher(), m3uUrls = listOf("http://server.esempio/lista.m3u8"))
         val repository = SourceRepository(store)
         val m3u = repository.sources().first { it.type == SourceType.M3U }
 
@@ -175,7 +234,7 @@ class EncryptedSourceStoreTest {
     fun `la facciata delle credenziali aggiorna l'account senza cambiare etichetta`() = runTest {
         val preferences = InMemoryPreferences()
         seedLegacy(preferences)
-        val store = EncryptedSourceStore(preferences, FakeCipher(), m3uUrl = "http://server.esempio/lista.m3u8")
+        val store = EncryptedSourceStore(preferences, FakeCipher(), m3uUrls = listOf("http://server.esempio/lista.m3u8"))
         val credentialStore = XtreamCredentialStore(store)
         val replacement = credentials.copy(username = "demo2", password = "demo-password-2")
 
@@ -191,7 +250,7 @@ class EncryptedSourceStoreTest {
     fun `uscire dall'account toglie solo le sorgenti Xtream`() = runTest {
         val preferences = InMemoryPreferences()
         seedLegacy(preferences)
-        val store = EncryptedSourceStore(preferences, FakeCipher(), m3uUrl = "http://server.esempio/lista.m3u8")
+        val store = EncryptedSourceStore(preferences, FakeCipher(), m3uUrls = listOf("http://server.esempio/lista.m3u8"))
         val credentialStore = XtreamCredentialStore(store)
 
         credentialStore.clear()
@@ -204,7 +263,7 @@ class EncryptedSourceStoreTest {
     fun `con un indirizzo gia configurato la riga M3U e S2`() = runTest {
         val preferences = InMemoryPreferences()
         seedLegacy(preferences)
-        val store = EncryptedSourceStore(preferences, FakeCipher(), m3uUrl = "http://server.esempio/lista.m3u8")
+        val store = EncryptedSourceStore(preferences, FakeCipher(), m3uUrls = listOf("http://server.esempio/lista.m3u8"))
 
         val sources = store.load()
 
