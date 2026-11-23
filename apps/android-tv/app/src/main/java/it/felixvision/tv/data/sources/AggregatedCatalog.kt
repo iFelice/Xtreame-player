@@ -19,8 +19,9 @@ data class CatalogPart(
  *   sorgente: nessun prefisso, nessuna etichetta (l'app si comporta come oggi);
  * - più sorgenti → le categorie di ogni sorgente restano separate (nessuna
  *   deduplicazione e nessuna fusione, anche con nomi uguali) e il nome porta
- *   l'etichetta della sorgente: "S1 · Azione", "S2 · Azione";
- * - l'ordine è quello delle etichette: S1, poi S2, poi S3;
+ *   l'etichetta della sorgente: "S1 · Azione", "M1 · Scaletta";
+ * - l'ordine è quello delle etichette: prima gli account Xtream (S1, S2, S3),
+ *   poi le liste M3U in ordine numerico (M1, M2, …, M10);
  * - gli identificativi delle voci M3U portano già il `sourceId`
  *   ([SourceIds.scoped]); quelli dell'account Xtream restano quelli di sempre,
  *   così preferiti e avanzamento salvati continuano a valere.
@@ -35,7 +36,7 @@ object AggregatedCatalog {
 
     fun merge(parts: List<CatalogPart>): Catalog {
         if (parts.isEmpty()) return EMPTY
-        val ordered = parts.sortedBy { Sources.labelIndex(it.source.label) }
+        val ordered = parts.sortedWith(compareBy(Sources.LABEL_COMPARATOR) { it.source.label })
         if (ordered.size == 1) return ordered.first().catalog
         return Catalog(
             liveCategories = ordered.flatMap { part ->

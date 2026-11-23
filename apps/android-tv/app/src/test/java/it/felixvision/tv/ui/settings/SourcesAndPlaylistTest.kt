@@ -19,6 +19,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.tv.material3.Text
+import it.felixvision.tv.data.sources.M3uErrorRow
 import it.felixvision.tv.data.sources.Source
 import it.felixvision.tv.data.sources.SourceType
 import it.felixvision.tv.data.store.StoredCredentials
@@ -41,7 +42,7 @@ import org.robolectric.annotation.Config
  * Sorgenti nella pagina "Impostazioni › Account" e Successivo/Precedente nella
  * coda di una categoria della Lista M3U.
  *
- * - la riga M3U è etichettata "Lista M3U · S2" e non mostra mai l'indirizzo
+ * - la riga M3U è etichettata "Lista M3U · M1" e non mostra mai l'indirizzo
  *   della lista;
  * - l'interruttore "Mostra" è un pulsante tv-material: si attiva con
  *   `SemanticsActions.OnClick`;
@@ -70,7 +71,7 @@ class SourcesAndPlaylistTest {
         ),
     )
 
-    private val m3uSource = Source(id = "s2", type = SourceType.M3U, label = "S2")
+    private val m3uSource = Source(id = "s2", type = SourceType.M3U, label = "M1")
 
     @Test
     fun `la riga della Lista M3U mostra l'etichetta e non l'indirizzo`() {
@@ -92,11 +93,11 @@ class SourcesAndPlaylistTest {
 
         rule.onNodeWithTag(SETTINGS_SOURCES_SECTION_TAG).assertExists()
         rule.onNodeWithTag("settings_source_title_S1").assertTextEquals("Account Xtream · S1")
-        rule.onNodeWithTag("settings_source_title_S2").assertTextEquals("Lista M3U · S2")
-        rule.onNodeWithTag("settings_source_row_S2").assertIsDisplayed()
+        rule.onNodeWithTag("settings_source_title_M1").assertTextEquals("Lista M3U · M1")
+        rule.onNodeWithTag("settings_source_row_M1").assertIsDisplayed()
 
         // L'interruttore spegne la sorgente: la riga resta, l'etichetta pure.
-        rule.onNodeWithTag("settings_source_toggle_S2").performSemanticsAction(SemanticsActions.OnClick)
+        rule.onNodeWithTag("settings_source_toggle_M1").performSemanticsAction(SemanticsActions.OnClick)
         rule.waitForIdle()
 
         assertEquals("s2" to false, toggled)
@@ -119,14 +120,14 @@ class SourcesAndPlaylistTest {
         rule.waitForIdle()
 
         rule.onNodeWithTag("settings_source_title_S1").assertTextEquals("Account Xtream · S1")
-        rule.onNodeWithTag("settings_source_title_S2").assertDoesNotExist()
+        rule.onNodeWithTag("settings_source_title_M1").assertDoesNotExist()
     }
 
     @Test
     fun `l'etichetta della sorgente compare solo con piu sorgenti`() {
         rule.setContent {
             FvpTheme {
-                // Due sorgenti abilitate: la voce M3U mostra "S2", quella
+                // Due sorgenti abilitate: la voce M3U mostra "M1", quella
                 // Xtream "S1". Con una sola sorgente l'etichetta non c'è.
                 Column {
                     CompositionLocalProvider(
@@ -163,7 +164,7 @@ class SourcesAndPlaylistTest {
         rule.waitForIdle()
 
         rule.onNodeWithTag("badge_xtream").assertTextEquals("S1")
-        rule.onNodeWithTag("badge_m3u").assertTextEquals("S2")
+        rule.onNodeWithTag("badge_m3u").assertTextEquals("M1")
         // Una sola sorgente: nessuna etichetta, l'app resta come oggi.
         rule.onNodeWithTag("badge_single").assertTextEquals("nessuna")
     }
@@ -238,5 +239,73 @@ private fun MovieQueueHarness(titles: List<String>, scale: UiScale) {
             scale = scale,
             modifier = Modifier.testTag("queue_previous"),
         )
+    }
+
+    @Test
+    fun `una riga di errore per ogni lista in errore`() {
+        rule.setContent {
+            FvpTheme {
+                SettingsAccountPage(
+                    state = SettingsUiState(
+                        username = "demo",
+                        status = "Attivo",
+                        sources = listOf(
+                            xtreamSource,
+                            m3uSource,
+                            Source(id = "s3", type = SourceType.M3U, label = "M2"),
+                        ),
+                        m3uErrors = listOf(
+                            M3uErrorRow(
+                                sourceId = "s2",
+                                title = "Lista M3U · M1",
+                                message = "Lista non raggiungibile",
+                            ),
+                            M3uErrorRow(
+                                sourceId = "s3",
+                                title = "Lista M3U · M2",
+                                message = "Lista non trovata (404)",
+                            ),
+                        ),
+                    ),
+                    scale = scale,
+                )
+            }
+        }
+        rule.waitForIdle()
+
+        rule.onNodeWithTag("settings_sources_error_s2").assertTextEquals(
+            "Lista M3U · M1: Lista non raggiungibile. Le altre sorgenti restano disponibili.",
+        )
+        rule.onNodeWithTag("settings_sources_error_s3").assertTextEquals(
+            "Lista M3U · M2: Lista non trovata (404). Le altre sorgenti restano disponibili.",
+        )
+    }
+
+    @Test
+    fun `il riquadro Sorgenti mostra tutte le liste`() {
+        val lists = (1..6).map { index ->
+            Source(id = "s$index", type = SourceType.M3U, label = "M$index")
+        }
+        rule.setContent {
+            FvpTheme {
+                SettingsAccountPage(
+                    state = SettingsUiState(
+                        username = "demo",
+                        status = "Attivo",
+                        sources = listOf(xtreamSource) + lists,
+                    ),
+                    scale = scale,
+                )
+            }
+        }
+        rule.waitForIdle()
+
+        rule.onNodeWithTag(SETTINGS_SOURCES_SECTION_TAG).assertExists()
+        rule.onNodeWithTag("settings_source_title_S1").assertTextEquals("Account Xtream · S1")
+        lists.forEach { source ->
+            rule.onNodeWithTag("settings_source_title_${source.label}")
+                .assertTextEquals("Lista M3U · ${source.label}")
+            rule.onNodeWithTag("settings_source_toggle_${source.label}").assertExists()
+        }
     }
 }

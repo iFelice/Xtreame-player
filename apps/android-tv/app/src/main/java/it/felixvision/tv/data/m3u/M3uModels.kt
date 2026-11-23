@@ -11,6 +11,8 @@ import kotlinx.serialization.Serializable
  * @property url indirizzo completo della voce: solo `http://` e `https://`,
  *   quelli relativi vengono scartati.
  * @property group `group-title` dell'`#EXTINF`, `null` quando manca.
+ * @property tvgName `tvg-name` dell'`#EXTINF`, usato come titolo quando dopo la
+ *   virgola non c'è niente; `null` quando manca.
  * @property tvgId `tvg-id` dell'`#EXTINF`, `null` quando manca.
  * @property logo `tvg-logo` dell'`#EXTINF`, `null` quando manca.
  */
@@ -19,6 +21,7 @@ data class M3uEntry(
     val title: String = "",
     val url: String = "",
     val group: String? = null,
+    val tvgName: String? = null,
     val tvgId: String? = null,
     val logo: String? = null,
 )

@@ -91,12 +91,35 @@ class M3uParserTest {
     }
 
     @Test
-    fun `senza titolo si usa il nome del file`() {
+    fun `senza titolo si usa tvg-name`() {
         val parsed = entries(
-            "#EXTM3U\n#EXTINF:-1,\nhttp://server.esempio/cartella/Nome%20file.mp4\n",
+            "#EXTM3U\n#EXTINF:-1 tvg-name=\"Puntata uno\",\nhttp://server.esempio/puntata-01.mp4\n",
         )
 
-        assertEquals("Nome%20file", parsed.single().title)
+        assertEquals("Puntata uno", parsed.single().title)
+    }
+
+    @Test
+    fun `senza titolo ne tvg-name si usa Video N`() {
+        val parsed = entries(
+            "#EXTM3U\n" +
+                "#EXTINF:-1\nhttp://server.esempio/a.mp4\n" +
+                "#EXTINF:-1,\nhttp://server.esempio/a.mp4\n" +
+                "#EXTINF:-1 tvg-name=\" \"\nhttp://server.esempio/a.mp4\n",
+        )
+
+        // Mai il nome del file: nelle liste reali molti indirizzi finiscono con
+        // lo stesso nome.
+        assertEquals(listOf("Video 1", "Video 2", "Video 3"), parsed.map { it.title })
+    }
+
+    @Test
+    fun `tvg-id resta la chiave della voce`() {
+        val parsed = entries(
+            "#EXTM3U\n#EXTINF:-1 tvg-id=\"ep01\",Puntata 1\nhttp://server.esempio/uno.mp4\n",
+        )
+
+        assertEquals("ep01", parsed.single().tvgId)
     }
 
     @Test

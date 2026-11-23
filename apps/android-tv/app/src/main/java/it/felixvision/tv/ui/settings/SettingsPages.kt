@@ -319,7 +319,7 @@ internal fun SettingsAccountPage(
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    text = "Fino a tre sorgenti. Disattivare una sorgente la toglie dal catalogo, senza cancellare i suoi dati.",
+                    text = "Gli account Xtream sono al massimo tre, le liste M3U non hanno limite. Disattivare una sorgente la toglie dal catalogo, senza cancellare i suoi dati.",
                     color = FvpColors.TextSecondary,
                     fontSize = scale.settingsRowText,
                 )
@@ -353,11 +353,11 @@ internal fun SettingsAccountPage(
                         )
                     }
                 }
-                state.m3uError?.let { message ->
+                state.m3uErrors.forEach { row ->
                     FvpStatusText(
-                        message = "Lista M3U: $message. Le altre sorgenti restano disponibili.",
+                        message = "${row.title}: ${row.message}. Le altre sorgenti restano disponibili.",
                         scale = scale,
-                        modifier = Modifier.testTag("settings_sources_error"),
+                        modifier = Modifier.testTag("settings_sources_error_${row.sourceId}"),
                     )
                 }
             }

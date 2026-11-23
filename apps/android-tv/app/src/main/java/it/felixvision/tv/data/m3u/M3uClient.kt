@@ -41,6 +41,14 @@ sealed interface M3uFetchResult {
     }
 }
 
+/** Esito del download del solo testo (lista o indice). */
+sealed interface M3uTextResult {
+
+    data class Success(val text: String) : M3uTextResult
+
+    data class Failure(val error: M3uFetchResult.Failure) : M3uTextResult
+}
+
 /**
  * Scarica e analizza una lista M3U.
  *
@@ -57,11 +65,31 @@ class M3uClient(
     private val io: CoroutineDispatcher = Dispatchers.IO,
 ) {
 
-    suspend fun fetch(url: String): M3uFetchResult = withContext(io) {
+    suspend fun fetch(url: String): M3uFetchResult = when (val text = fetchText(url)) {
+        is M3uTextResult.Success -> when (val parsed = M3uParser.parse(text.text)) {
+            is M3uParseResult.Success -> M3uFetchResult.Success(parsed.entries)
+            is M3uParseResult.Failure -> M3uFetchResult.Failure(
+                reason = when (parsed.reason) {
+                    M3uFailure.HLS_PLAYLIST -> M3uFetchFailure.HLS
+                    M3uFailure.TOO_LARGE -> M3uFetchFailure.TOO_LARGE
+                    M3uFailure.NOT_A_LIST,
+                    M3uFailure.INVALID_TEXT,
+                    -> M3uFetchFailure.INVALID
+                },
+            )
+        }
+        is M3uTextResult.Failure -> text.error
+    }
+
+    /**
+     * Scarica il testo grezzo: una lista M3U oppure un indice di liste. Serve a
+     * distinguere i due casi dal contenuto (`#EXTM3U`), non dall'estensione.
+     */
+    suspend fun fetchText(url: String): M3uTextResult = withContext(io) {
         val httpUrl = url.trim().takeIf { it.isNotEmpty() }?.toHttpUrlOrNull()
-            ?: return@withContext M3uFetchResult.Failure(M3uFetchFailure.INVALID)
+            ?: return@withContext M3uTextResult.Failure(M3uFetchResult.Failure(M3uFetchFailure.INVALID))
         if (httpUrl.scheme != "http" && httpUrl.scheme != "https") {
-            return@withContext M3uFetchResult.Failure(M3uFetchFailure.INVALID)
+            return@withContext M3uTextResult.Failure(M3uFetchResult.Failure(M3uFetchFailure.INVALID))
         }
         val request = Request.Builder()
             .url(httpUrl)
@@ -71,38 +99,32 @@ class M3uClient(
         try {
             http.newCall(request).execute().use { response ->
                 when {
-                    response.code == 404 -> return@withContext M3uFetchResult.Failure(M3uFetchFailure.NOT_FOUND)
-                    response.code == 429 -> return@withContext M3uFetchResult.Failure(M3uFetchFailure.RATE_LIMITED)
-                    !response.isSuccessful ->
-                        return@withContext M3uFetchResult.Failure(
-                            M3uFetchFailure.SERVER_ERROR,
-                            detail = response.code.toString(),
-                        )
-                }
-                val body = response.body
-                val declared = body.contentLength()
-                if (declared > M3uParser.MAX_PLAYLIST_BYTES) {
-                    return@withContext M3uFetchResult.Failure(M3uFetchFailure.TOO_LARGE)
-                }
-                val bytes = readLimited(body.byteStream()) 
-                    ?: return@withContext M3uFetchResult.Failure(M3uFetchFailure.TOO_LARGE)
-                when (val parsed = M3uParser.parse(M3uParser.decode(bytes))) {
-                    is M3uParseResult.Success -> M3uFetchResult.Success(parsed.entries)
-                    is M3uParseResult.Failure -> M3uFetchResult.Failure(
-                        reason = when (parsed.reason) {
-                            M3uFailure.HLS_PLAYLIST -> M3uFetchFailure.HLS
-                            M3uFailure.TOO_LARGE -> M3uFetchFailure.TOO_LARGE
-                            M3uFailure.NOT_A_LIST,
-                            M3uFailure.INVALID_TEXT,
-                            -> M3uFetchFailure.INVALID
-                        },
+                    response.code == 404 -> return@withContext M3uTextResult.Failure(
+                        M3uFetchResult.Failure(M3uFetchFailure.NOT_FOUND),
+                    )
+                    response.code == 429 -> return@withContext M3uTextResult.Failure(
+                        M3uFetchResult.Failure(M3uFetchFailure.RATE_LIMITED),
+                    )
+                    !response.isSuccessful -> return@withContext M3uTextResult.Failure(
+                        M3uFetchResult.Failure(M3uFetchFailure.SERVER_ERROR, detail = response.code.toString()),
                     )
                 }
+                val body = response.body
+                if (body.contentLength() > M3uParser.MAX_PLAYLIST_BYTES) {
+                    return@withContext M3uTextResult.Failure(
+                        M3uFetchResult.Failure(M3uFetchFailure.TOO_LARGE),
+                    )
+                }
+                val bytes = readLimited(body.byteStream())
+                    ?: return@withContext M3uTextResult.Failure(
+                        M3uFetchResult.Failure(M3uFetchFailure.TOO_LARGE),
+                    )
+                M3uTextResult.Success(M3uParser.decode(bytes))
             }
         } catch (timeout: InterruptedIOException) {
-            M3uFetchResult.Failure(M3uFetchFailure.TIMEOUT)
+            M3uTextResult.Failure(M3uFetchResult.Failure(M3uFetchFailure.TIMEOUT))
         } catch (_: IOException) {
-            M3uFetchResult.Failure(M3uFetchFailure.UNREACHABLE)
+            M3uTextResult.Failure(M3uFetchResult.Failure(M3uFetchFailure.UNREACHABLE))
         }
     }
 

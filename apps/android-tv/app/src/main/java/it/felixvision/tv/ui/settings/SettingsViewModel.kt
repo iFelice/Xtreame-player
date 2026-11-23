@@ -15,6 +15,7 @@ import it.felixvision.tv.data.playback.LiveStreamFormat
 import it.felixvision.tv.data.protection.ProtectedContentStore
 import it.felixvision.tv.data.protection.ProtectedPageAccess
 import it.felixvision.tv.data.protection.ProtectedSession
+import it.felixvision.tv.data.sources.M3uErrorRow
 import it.felixvision.tv.data.sources.Source
 import it.felixvision.tv.data.sources.Sources
 import it.felixvision.tv.data.sources.SourceType
@@ -114,8 +115,11 @@ data class SettingsUiState(
      * "Mostra". La riga M3U non mostra mai l'indirizzo della lista.
      */
     val sources: List<Source> = emptyList(),
-    /** Errore non bloccante della lista M3U (impossibile aggiornarla). */
-    val m3uError: String? = null,
+    /**
+     * Una riga per ogni lista M3U in errore (con la sua etichetta `M<n>`) e per
+     * l'indice delle liste. Le altre sorgenti restano disponibili.
+     */
+    val m3uErrors: List<M3uErrorRow> = emptyList(),
 ) {
     val isDownloadingUpdate: Boolean
         get() = updateStatus is AppUpdateStatus.Downloading
@@ -266,19 +270,12 @@ class SettingsViewModel(
             container.sourceRepository.revision.collect { refreshSources() }
         }
         viewModelScope.launch {
-            container.m3uSourceService.error.collect { error ->
-                // Con più liste M3U l'errore dice a quale appartiene: si mostra
-                // l'etichetta della sorgente, mai il suo indirizzo.
-                val message = error?.let { failure ->
-                    val label = runCatching {
-                        container.sourceRepository.sources()
-                            .firstOrNull { it.id == failure.sourceId }
-                            ?.let { Sources.rowTitle(it) }
-                    }.getOrNull()
-                    if (label != null) "$label: ${failure.message}" else failure.message
-                }
-                _ui.update { it.copy(m3uError = message) }
-            }
+            // Una riga per ogni lista in errore (con la sua etichetta), più
+            // quella dell'indice: mai l'indirizzo.
+            container.m3uSourceService.errors.collect { refreshM3uErrors() }
+        }
+        viewModelScope.launch {
+            container.m3uSourceService.indexError.collect { refreshM3uErrors() }
         }
         refreshServerLabel()
         refreshProtectedSummary()
@@ -643,9 +640,17 @@ class SettingsViewModel(
      * delle Impostazioni.
      */
     /** Rilegge l'elenco delle sorgenti per il riquadro "Sorgenti". */
+    /** Ricalcola le righe d'errore delle liste (etichette comprese). */
+    private suspend fun refreshM3uErrors() {
+        val sources = runCatching { container.sourceRepository.sources() }.getOrDefault(emptyList())
+        val rows = container.m3uSourceService.errorRows(sources)
+        _ui.update { it.copy(m3uErrors = rows) }
+    }
+
     private suspend fun refreshSources() {
         val sources = runCatching { container.sourceRepository.sources() }.getOrDefault(emptyList())
-        _ui.update { it.copy(sources = sources) }
+        val errors = container.m3uSourceService.errorRows(sources)
+        _ui.update { it.copy(sources = sources, m3uErrors = errors) }
     }
 
     /**

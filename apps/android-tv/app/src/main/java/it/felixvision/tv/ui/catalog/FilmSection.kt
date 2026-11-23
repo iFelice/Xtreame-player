@@ -125,10 +125,10 @@ fun FilmSection(
             detailIsLoading = false
             return@LaunchedEffect
         }
-        // Voci della Lista M3U: non hanno metadati (trama, anno) e nessuna
-        // chiamata al pannello Xtream. La scheda resta minima, senza campi vuoti
-        // e senza errori.
-        if (catalogViewModel == null || SourceIds.isScoped(film.streamId)) {
+        // Nessun ViewModel (anteprime, test): la scheda resta senza metadati e
+        // senza errori. Le voci delle liste M3U non passano più da qui: il loro
+        // OK avvia direttamente la riproduzione.
+        if (catalogViewModel == null) {
             detailInfo = null
             detailIsLoading = false
             detailError = null
@@ -361,8 +361,15 @@ fun FilmSection(
                         var focused by remember(film.streamId) { mutableStateOf(false) }
                         Card(
                             onClick = {
-                                restoreHelper.onOpen(film.streamId, index)
-                                detailFilm = film
+                                if (SourceIds.isScoped(film.streamId)) {
+                                    // Liste M3U: OK avvia subito la riproduzione,
+                                    // senza scheda di dettaglio (le voci non hanno
+                                    // trama, anno né cast da mostrare).
+                                    onPlayFilm(film)
+                                } else {
+                                    restoreHelper.onOpen(film.streamId, index)
+                                    detailFilm = film
+                                }
                             },
                             modifier = Modifier
                                 .fillMaxWidth()

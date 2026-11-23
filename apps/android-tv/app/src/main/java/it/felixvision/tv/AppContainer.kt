@@ -33,7 +33,9 @@ import it.felixvision.tv.data.playback.ChannelVideoFormatStore
 import it.felixvision.tv.data.playback.PlaybackActivityTracker
 import it.felixvision.tv.data.progress.ProgressStore
 import it.felixvision.tv.data.sources.EncryptedSourceStore
+import it.felixvision.tv.data.m3u.M3uIndexCache
 import it.felixvision.tv.data.sources.M3uSourceService
+import it.felixvision.tv.data.sources.M3uUrlRegistry
 import it.felixvision.tv.data.sources.SourceRepository
 import it.felixvision.tv.data.sources.SourceStore
 import it.felixvision.tv.data.sources.Sources
@@ -298,7 +300,7 @@ class AppContainer(
             preferences = DataStoreSecurePreferences(credentialPreferences),
             cipher = KeystoreCredentialCipher(),
             json = json,
-            m3uUrls = Sources.parseM3uUrls(BuildConfig.FVP_M3U_URL),
+            m3uUrls = { m3uUrlRegistry.playlists() },
         )
     }
 
@@ -316,8 +318,21 @@ class AppContainer(
     }
 
     /** Copia su disco della lista M3U (6 ore), una per sorgente. */
+    /**
+     * Indirizzi delle liste: le voci configurate con `FVP_M3U_URL` (una lista
+     * oppure un indice di liste) e le liste che ne derivano.
+     */
+    val m3uUrlRegistry: M3uUrlRegistry by lazy {
+        M3uUrlRegistry(Sources.parseM3uUrls(BuildConfig.FVP_M3U_URL))
+    }
+
     val m3uCache: M3uCache by lazy {
         M3uCache(context = context, json = json)
+    }
+
+    /** Copia dell'ultima risoluzione dell'indice, usata se l'indice non risponde. */
+    val m3uIndexCache: M3uIndexCache by lazy {
+        M3uIndexCache(context = context, json = json)
     }
 
     /** Sorgente "Lista M3U": download, copia, catalogo e ripresa. */
@@ -325,6 +340,8 @@ class AppContainer(
         M3uSourceService(
             client = M3uClient(http = httpClient),
             cache = m3uCache,
+            indexCache = m3uIndexCache,
+            registry = m3uUrlRegistry,
             clock = clock,
             scope = applicationScope,
         )

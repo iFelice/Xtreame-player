@@ -16,9 +16,11 @@ import it.felixvision.tv.data.catalog.VodInfoResponse
 import it.felixvision.tv.data.catalog.VodStream
 import it.felixvision.tv.data.sources.AggregatedCatalog
 import it.felixvision.tv.data.sources.CatalogPart
+import it.felixvision.tv.data.sources.M3uErrorRow
 import it.felixvision.tv.data.sources.Source
 import it.felixvision.tv.data.sources.SourceIds
 import it.felixvision.tv.data.sources.SourceType
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -38,10 +40,11 @@ data class CatalogUiState(
     /** Una riga per Live, Film, Serie: stato dell'ultimo aggiornamento. */
     val refreshSections: List<CatalogSectionProgress> = CatalogRefresh.idle(),
     /**
-     * Errore non bloccante della Lista M3U: le altre sorgenti restano
-     * utilizzabili e la riga si può ignorare.
+     * Righe non bloccanti delle liste M3U: una per lista in errore (con la sua
+     * etichetta `M<n>`), più quella dell'indice se serve. Le altre sorgenti
+     * restano utilizzabili.
      */
-    val m3uError: String? = null,
+    val m3uErrors: List<M3uErrorRow> = emptyList(),
 )
 
 internal data class CatalogRecentItems(
@@ -71,10 +74,10 @@ internal fun catalogRecentItems(catalog: Catalog): CatalogRecentItems = CatalogR
  * disco di 24 ore). La Lista M3U, quando esiste ed è abilitata, si scarica con
  * la sua copia di 6 ore; i due cataloghi si uniscono con [AggregatedCatalog].
  *
- * Un errore della lista M3U non blocca nulla: si usa la copia salvata (se c'è),
- * l'errore finisce in [CatalogUiState.m3uError] e le altre sorgenti restano
- * visibili. I tentativi successivi sono in silenzio, con attese crescenti (vedi
- * `M3uSourceService`).
+ * Un errore di una lista non blocca nulla: si usa la copia salvata (se c'è),
+ * l'errore finisce in [CatalogUiState.m3uErrors] (una riga per lista, con la sua
+ * etichetta) e le altre sorgenti restano visibili. I tentativi successivi sono
+ * in silenzio, con attese crescenti (vedi `M3uSourceService`).
  */
 class CatalogViewModel(
     private val container: AppContainer,
@@ -99,11 +102,12 @@ class CatalogViewModel(
 
     init {
         viewModelScope.launch {
-            // Riga non bloccante dell'errore M3U: cambia anche con i tentativi
-            // in silenzio.
-            container.m3uSourceService.error.collect { error ->
-                _ui.update { it.copy(m3uError = error?.message) }
-            }
+            // Righe non bloccanti: una per lista in errore (e quella
+            // dell'indice). Cambiano anche con i tentativi in silenzio.
+            container.m3uSourceService.errors.collect { refreshM3uErrors() }
+        }
+        viewModelScope.launch {
+            container.m3uSourceService.indexError.collect { refreshM3uErrors() }
         }
         viewModelScope.launch {
             // Ad app aperta: controllo periodico degli orari di rilettura delle
@@ -115,6 +119,7 @@ class CatalogViewModel(
             }
         }
         viewModelScope.launch {
+            prepareM3u(forceRefresh = false)
             val cached = cache.load(server, username)
             val sources = enabledSources()
             m3uParts = loadM3uParts(sources, forceRefresh = false)
@@ -153,16 +158,36 @@ class CatalogViewModel(
     private suspend fun refreshM3uIfDue() {
         if (!loadMutex.tryLock()) return
         try {
+            val indexDue = container.m3uSourceService.isIndexRefreshDue()
             val m3uSources = enabledSources().filter { it.type == SourceType.M3U }
-            if (m3uSources.isEmpty()) return
-            if (m3uSources.none { container.m3uSourceService.isRefreshDue(it) }) return
-            val refreshed = loadM3uParts(m3uSources, forceRefresh = false)
+            if (!indexDue && m3uSources.isEmpty()) return
+            if (!indexDue && m3uSources.none { container.m3uSourceService.isRefreshDue(it) }) return
+            prepareM3u(forceRefresh = false)
+            val refreshed = loadM3uParts(enabledSources(), forceRefresh = false)
             if (refreshed == m3uParts) return
             m3uParts = refreshed
             applyCatalog(merged(), _ui.value.lastUpdateMillis ?: System.currentTimeMillis())
         } finally {
             loadMutex.unlock()
         }
+    }
+
+    /** Risolve l'indice delle liste; se l'elenco cambia, la UI lo ricarica. */
+    private suspend fun prepareM3u(forceRefresh: Boolean) {
+        val changed = try {
+            container.m3uSourceService.prepare(forceRefresh)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            false
+        }
+        if (changed) container.sourceRepository.notifyChanged()
+    }
+
+    /** Ricalcola le righe d'errore delle liste abilitate. */
+    private suspend fun refreshM3uErrors() {
+        val rows = container.m3uSourceService.errorRows(enabledSources())
+        _ui.update { it.copy(m3uErrors = rows) }
     }
 
     private suspend fun refreshInternal(showLoading: Boolean, forceM3u: Boolean = false) {
@@ -179,6 +204,7 @@ class CatalogViewModel(
                 _ui.update { it.copy(isRefreshing = true) }
             }
 
+            prepareM3u(forceRefresh = forceM3u)
             val sources = enabledSources()
             m3uParts = loadM3uParts(sources, forceRefresh = forceM3u)
             val xtreamSource = sources.firstOrNull { it.type == SourceType.XTREAM }
@@ -232,17 +258,8 @@ class CatalogViewModel(
      * disponibile la parte è vuota (e la riga d'errore lo dice): le altre
      * sorgenti si vedono lo stesso.
      */
-    private suspend fun loadM3uParts(sources: List<Source>, forceRefresh: Boolean): List<CatalogPart> {
-        val m3uSources = sources.filter { it.type == SourceType.M3U }
-        if (m3uSources.isEmpty()) return emptyList()
-        return m3uSources.map { source ->
-            container.m3uSourceService.playlist(source, forceRefresh = forceRefresh)
-            CatalogPart(
-                source = source,
-                catalog = container.m3uSourceService.catalogFor(source) ?: Catalog(),
-            )
-        }
-    }
+    private suspend fun loadM3uParts(sources: List<Source>, forceRefresh: Boolean): List<CatalogPart> =
+        container.m3uSourceService.playlists(sources, forceRefresh = forceRefresh)
 
     /** Catalogo unito delle parti lette (Xtream, poi M3U in ordine di etichetta). */
     private fun merged(): Catalog = AggregatedCatalog.merge(

@@ -30,9 +30,9 @@ enum class SourceType(val storageKey: String) {
  * Una sorgente del catalogo.
  *
  * @property id identificativo stabile, assegnato alla creazione e mai riusato.
- * @property label etichetta visibile ("S1", "S2", "S3"), assegnata alla
- *   creazione e **mai riassegnata**: disabilitare o riabilitare una sorgente non
- *   cambia la sua etichetta.
+ * @property label etichetta visibile: `S1`…`S3` per gli account Xtream, `M1`,
+ *   `M2`, … per le liste M3U. È assegnata alla creazione e **mai riassegnata**:
+ *   disabilitare o riabilitare una sorgente non cambia la sua etichetta.
  * @property enabled interruttore "Mostra" delle Impostazioni.
  * @property xtream credenziali dell'account Xtream (solo per [SourceType.XTREAM]).
  * @property m3uUrl indirizzo della lista M3U (solo per [SourceType.M3U]); arriva
@@ -55,13 +55,19 @@ data class Source(
 /** Regole comuni all'elenco delle sorgenti. */
 object Sources {
 
-    /** Massimo numero di sorgenti in totale, Lista M3U compresa. */
-    const val MAX_SOURCES = 3
+    /**
+     * Massimo numero di **account Xtream**. Le liste M3U non hanno un tetto:
+     * ognuna è una sorgente a sé e se ne possono configurare quante servono.
+     */
+    const val MAX_XTREAM_SOURCES = 3
 
-    /** Etichette disponibili, nell'ordine in cui vengono assegnate. */
-    val LABELS: List<String> = listOf("S1", "S2", "S3")
+    /** Etichette riservate agli account Xtream, nell'ordine di assegnazione. */
+    val XTREAM_LABELS: List<String> = listOf("S1", "S2", "S3")
 
-    /** Separatore tra etichetta e nome nella categoria ("S2 · Film"). */
+    /** Prefisso delle etichette delle liste M3U: "M1", "M2", … */
+    const val M3U_LABEL_PREFIX = "M"
+
+    /** Separatore tra etichetta e nome nella categoria ("M1 · Film"). */
     const val LABEL_SEPARATOR = " · "
 
     /** Nome visibile del tipo di sorgente (mai l'indirizzo). */
@@ -70,7 +76,7 @@ object Sources {
         SourceType.M3U -> "Lista M3U"
     }
 
-    /** Riga delle Impostazioni: "Account Xtream · S1" oppure "Lista M3U · S2". */
+    /** Riga delle Impostazioni: "Account Xtream · S1" oppure "Lista M3U · M1". */
     fun rowTitle(source: Source): String =
         "${typeName(source.type)}$LABEL_SEPARATOR${source.label}"
 
@@ -78,24 +84,58 @@ object Sources {
     fun statusLabel(source: Source): String =
         if (source.enabled) "Abilitata" else "Disabilitata"
 
-    /** Posizione dell'etichetta nell'ordine canonico (le ignote vanno in coda). */
-    fun labelIndex(label: String): Int =
-        LABELS.indexOf(label).let { if (it < 0) LABELS.size else it }
+    /**
+     * Numero dell'etichetta: `S2` → 2, `M10` → 10. `null` per un'etichetta che
+     * non segue lo schema.
+     */
+    fun labelNumber(label: String): Int? {
+        val trimmed = label.trim()
+        if (trimmed.length < 2) return null
+        val prefix = trimmed.first().uppercaseChar()
+        if (prefix != 'S' && prefix != 'M') return null
+        return trimmed.drop(1).toIntOrNull()?.takeIf { it > 0 }
+    }
 
-    /** Sorgenti nell'ordine delle etichette: S1, S2, S3. */
+    /** Vero per un'etichetta di lista M3U (`M1`, `M2`, …). */
+    fun isM3uLabel(label: String): Boolean {
+        val trimmed = label.trim()
+        return trimmed.firstOrNull()?.uppercaseChar() == 'M' && labelNumber(trimmed) != null
+    }
+
+    /**
+     * Ordine delle etichette: prima gli account Xtream (S1, S2, S3), poi le
+     * liste M3U in ordine numerico (`M2` prima di `M10`). Le etichette fuori
+     * schema finiscono in coda.
+     */
+    val LABEL_COMPARATOR: Comparator<String> = compareBy<String> { rankOf(it) }
+        .thenBy { labelNumber(it) ?: Int.MAX_VALUE }
+        .thenBy { it }
+
+    /** Sorgenti nell'ordine delle etichette. */
     fun ordered(sources: List<Source>): List<Source> =
-        sources.sortedWith(compareBy({ labelIndex(it.label) }, { it.id }))
+        sources.sortedWith(compareBy(LABEL_COMPARATOR) { it.label }.thenBy { it.id })
 
     /** Solo le sorgenti abilitate, in ordine di etichetta. */
     fun enabled(sources: List<Source>): List<Source> = ordered(sources).filter { it.enabled }
 
-    /** Prima etichetta libera, oppure `null` quando le tre sono tutte occupate. */
-    fun nextLabel(taken: Collection<String>): String? =
-        LABELS.firstOrNull { label -> taken.none { it == label } }
+    /**
+     * Prima etichetta libera **per tipo**: `S1`…`S3` per gli account Xtream
+     * (`null` quando sono tutte occupate), `M1`, `M2`, … per le liste, senza
+     * limite.
+     */
+    fun nextLabel(type: SourceType, taken: Collection<String>): String? = when (type) {
+        SourceType.XTREAM -> XTREAM_LABELS.firstOrNull { label -> taken.none { it == label } }
+        SourceType.M3U -> {
+            val used = taken.filter { isM3uLabel(it) }.mapNotNull { labelNumber(it) }.toSet()
+            var number = 1
+            while (number in used) number += 1
+            "$M3U_LABEL_PREFIX$number"
+        }
+    }
 
     /**
-     * Identificativo nuovo e stabile: `src1`, `src2`, … senza riusare quelli
-     * già presenti.
+     * Identificativo nuovo per un account Xtream: `src1`, `src2`, … senza
+     * riusare quelli già presenti.
      */
     fun newId(existing: Collection<Source>): String {
         val used = existing.mapTo(HashSet()) { it.id }
@@ -108,19 +148,14 @@ object Sources {
     fun primaryXtream(sources: List<Source>): Source? =
         ordered(sources).firstOrNull { it.type == SourceType.XTREAM }
 
-    /**
-     * Le liste M3U configurate, in ordine di etichetta: una sorgente per ogni
-     * `playlist.m3u` previsto alla compilazione (al massimo quante ne stanno
-     * nelle tre sorgenti, quindi due con l'account Xtream).
-     */
+    /** Le liste M3U configurate, in ordine di etichetta (`M1`, `M2`, …). */
     fun m3uSources(sources: List<Source>): List<Source> =
         ordered(sources).filter { it.type == SourceType.M3U }
 
     /**
      * Identificativo **stabile** di una lista M3U, ricavato dal solo indirizzo:
-     * riordinare o rinominare i file nella variabile di compilazione non cambia
-     * id, quindi etichette, ordinamenti e archivi restano attaccati alla lista
-     * giusta.
+     * riordinare o rinominare le liste nell'indice non cambia id, quindi
+     * etichette, ordinamenti e archivi restano attaccati alla lista giusta.
      */
     fun m3uId(url: String): String {
         val digest = MessageDigest.getInstance("SHA-256").digest(url.trim().toByteArray(Charsets.UTF_8))
@@ -132,21 +167,28 @@ object Sources {
 
     /**
      * Indirizzi M3U dalla variabile di compilazione `FVP_M3U_URL`: uno solo
-     * oppure più di uno separati da virgola, punto e virgola o a capo. Vuoto
-     * vuol dire "nessuna lista".
+     * oppure più di uno separati da virgola, punto e virgola o a capo. Ogni
+     * indirizzo può essere una lista oppure un indice di liste. Vuoto vuol dire
+     * "nessuna lista".
      */
     fun parseM3uUrls(value: String): List<String> =
         value.split(Regex("[,;\\s]+"))
             .map { it.trim() }
             .filter { it.isNotEmpty() }
             .distinct()
+
+    /** 0 per gli account Xtream, 1 per le liste M3U, 2 per le etichette ignote. */
+    private fun rankOf(label: String): Int {
+        if (labelNumber(label) == null) return 2
+        return if (isM3uLabel(label)) 1 else 0
+    }
 }
 
 /**
  * Identificativi aggregati.
  *
  * Le voci di una sorgente che non è l'account Xtream portano il proprio
- * `sourceId` dentro l'identificativo (`s2:9f3c…`), così restano univoche anche
+ * `sourceId` dentro l'identificativo (`m3u_1a2b3c4d5e:9f3c…`), così restano univoche anche
  * con più sorgenti e non dipendono da quali sorgenti sono abilitate. Le voci
  * dell'account Xtream restano identiche a prima: preferiti, avanzamento e
  * "Riprendi" già salvati continuano a valere senza migrazioni.

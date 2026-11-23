@@ -39,6 +39,11 @@ sealed interface M3uParseResult {
  * (ignorate) e attributi mancanti. Gli indirizzi relativi (`/film.mp4`,
  * `film.mp4`, `file://…`) vengono scartati: si accettano solo `http` e `https`.
  *
+ * Titolo di una voce: il testo dopo la virgola dell'`#EXTINF`; se manca, il
+ * `tvg-name`; se manca anche quello, `Video N` con `N` posizione della voce
+ * nella lista. Non si usa il nome del file dell'indirizzo: nelle liste reali
+ * molti indirizzi finiscono con lo stesso nome.
+ *
  * Se il file è una playlist HLS e non una lista, l'esito è
  * [M3uParseResult.Failure] con [M3uFailure.HLS_PLAYLIST]: una playlist di
  * segmenti non è un catalogo e non va mostrata come tale.
@@ -54,8 +59,11 @@ object M3uParser {
     private const val TARGET_DURATION = "#EXT-X-TARGETDURATION"
     private const val STREAM_INF = "#EXT-X-STREAM-INF"
 
-    /** Nome dato a una voce senza titolo nell'`#EXTINF` e senza nome nel file. */
+    /** Nome dato a una voce rimasta senza titolo (nessun `tvg-name`). */
     const val UNTITLED = "Senza titolo"
+
+    /** Titolo di riserva: `Video 1`, `Video 2`, … secondo la posizione nella lista. */
+    fun videoTitle(position: Int): String = "Video $position"
 
     /** Decodifica i byte come UTF-8, togliendo l'eventuale BOM. */
     fun decode(bytes: ByteArray): String =
@@ -101,9 +109,12 @@ object M3uParser {
             }
             val base = pending ?: M3uEntry()
             pending = null
+            val position = entries.size + 1
             entries += base.copy(
                 url = line,
-                title = base.title.ifBlank { titleFromUrl(line) },
+                title = base.title
+                    .ifBlank { base.tvgName.orEmpty().trim() }
+                    .ifBlank { videoTitle(position) },
             )
         }
 
@@ -127,6 +138,7 @@ object M3uParser {
             title = title,
             url = "",
             group = attributes["group-title"]?.trim()?.takeIf { it.isNotEmpty() },
+            tvgName = attributes["tvg-name"]?.trim()?.takeIf { it.isNotEmpty() },
             tvgId = attributes["tvg-id"]?.trim()?.takeIf { it.isNotEmpty() },
             logo = attributes["tvg-logo"]?.trim()?.takeIf { it.isNotEmpty() },
         )
@@ -165,11 +177,4 @@ object M3uParser {
         return lower.startsWith("http://") || lower.startsWith("https://")
     }
 
-    /** Nome del file nell'indirizzo: usato solo quando il titolo manca. */
-    private fun titleFromUrl(url: String): String {
-        val path = url.substringBefore('?').substringBefore('#').trimEnd('/')
-        val fileName = path.substringAfterLast('/')
-        val base = fileName.substringBeforeLast('.', fileName)
-        return base.ifBlank { UNTITLED }
-    }
 }

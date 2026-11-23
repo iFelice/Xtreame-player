@@ -29,7 +29,7 @@ class AggregatedCatalogTest {
         ),
     )
 
-    private val m3u = Source(id = "s2", type = SourceType.M3U, label = "S2")
+    private val m3u = Source(id = "s2", type = SourceType.M3U, label = "M1")
 
     private fun xtreamCatalog(): Catalog = Catalog(
         vodCategories = listOf(Category(categoryId = "10", categoryName = "Azione")),
@@ -65,7 +65,7 @@ class AggregatedCatalogTest {
         )
 
         assertEquals(
-            listOf("S1 · Azione", "S2 · Azione"),
+            listOf("S1 · Azione", "M1 · Azione"),
             merged.vodCategories.map { it.categoryName },
         )
         // Le categorie restano separate: nessuna deduplicazione, nessuna fusione.
@@ -83,7 +83,7 @@ class AggregatedCatalogTest {
         val merged = AggregatedCatalog.merge(parts)
 
         // L'ordine è quello delle etichette, non quello della lista di parti.
-        assertEquals(listOf("S1 · Azione", "S2 · Azione"), merged.vodCategories.map { it.categoryName })
+        assertEquals(listOf("S1 · Azione", "M1 · Azione"), merged.vodCategories.map { it.categoryName })
     }
 
     @Test
@@ -113,7 +113,7 @@ class AggregatedCatalogTest {
         val enabled = listOf(xtream, m3u)
 
         assertEquals("S1", AggregatedCatalog.itemLabel("101", xtream, enabled))
-        assertEquals("S2", AggregatedCatalog.itemLabel("s2:abc", xtream, enabled))
+        assertEquals("M1", AggregatedCatalog.itemLabel("s2:abc", xtream, enabled))
     }
 
     @Test

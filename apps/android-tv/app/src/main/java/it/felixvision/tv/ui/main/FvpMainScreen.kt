@@ -29,6 +29,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
@@ -1113,6 +1114,32 @@ fun FvpMainScreen(
                             }
                         } else {
                             EmptyState(title = "Catalogo vuoto", description = "Il server non ha restituito contenuti. Premi Riprova.", scale = scale)
+                        }
+                    }
+                }
+
+                // Righe non bloccanti delle liste M3U in errore: una per lista
+                // (con la sua etichetta M<n>), più quella dell'indice. Non
+                // prendono il focus e non fermano il resto dell'app.
+                if (catalogState.m3uErrors.isNotEmpty()) {
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(scale.dp(16f))
+                            .testTag("home_m3u_errors"),
+                        verticalArrangement = Arrangement.spacedBy(scale.dp(4f)),
+                    ) {
+                        catalogState.m3uErrors.forEach { row ->
+                            Text(
+                                text = "${row.title}: ${row.message}",
+                                color = FvpColors.TextSecondary,
+                                fontSize = scale.sp(12f),
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(scale.dp(6f)))
+                                    .background(FvpColors.SurfaceElevated)
+                                    .padding(horizontal = scale.dp(10f), vertical = scale.dp(6f))
+                                    .testTag("home_m3u_error_${row.sourceId}"),
+                            )
                         }
                     }
                 }

@@ -16,7 +16,7 @@ interface SourceStore {
     /** Sorgenti usabili adesso, in ordine di etichetta (S1, S2, S3). */
     suspend fun load(): List<Source>
 
-    /** Sostituisce l'elenco: al massimo [Sources.MAX_SOURCES] sorgenti. */
+    /** Sostituisce l'elenco delle sorgenti (tetti per tipo, vedi [sanitize]). */
     suspend fun save(sources: List<Source>)
 }
 
@@ -53,31 +53,33 @@ class EncryptedSourceStore(
     private val preferences: SecurePreferences,
     private val cipher: CredentialCipher,
     private val json: Json = FvpJson,
-    private val m3uUrls: List<String> = emptyList(),
+    private val m3uUrls: () -> List<String> = { emptyList() },
     private val onDecryptionFailure: (Throwable) -> Unit = {},
 ) : SourceStore {
 
-    /** Indirizzi previsti alla compilazione, senza vuoti e senza doppioni. */
-    private val configuredM3uUrls: List<String> = m3uUrls
+    /** Indirizzi delle liste attualmente configurate, senza vuoti né doppioni. */
+    private fun configuredM3uUrls(): List<String> = m3uUrls()
         .map { it.trim() }
         .filter { it.isNotEmpty() }
         .distinct()
 
     /** Identificativo stabile → indirizzo di ogni lista configurata. */
-    private val configuredM3uIds: Map<String, String> =
-        configuredM3uUrls.associateBy { url -> Sources.m3uId(url) }
+    private fun configuredM3uIds(): Map<String, String> =
+        configuredM3uUrls().associateBy { url -> Sources.m3uId(url) }
 
     override suspend fun load(): List<Source> {
         val stored = readStored().orEmpty()
-        val completed = ensureM3uSources(stored)
+        val normalized = normalizeM3uLabels(stored)
+        val completed = ensureM3uSources(normalized)
         if (completed != stored) writeStored(completed)
+        val configured = configuredM3uIds()
         // Senza indirizzo la lista non esiste, anche se la riga era salvata.
         return Sources.ordered(
             completed
-                .filter { source -> source.type != SourceType.M3U || source.id in configuredM3uIds }
+                .filter { source -> source.type != SourceType.M3U || source.id in configured }
                 .map { source ->
                     if (source.type == SourceType.M3U) {
-                        source.copy(m3uUrl = configuredM3uIds[source.id])
+                        source.copy(m3uUrl = configured[source.id])
                     } else {
                         source
                     }
@@ -89,46 +91,79 @@ class EncryptedSourceStore(
         writeStored(sanitize(sources))
     }
 
-    /** Al massimo tre sorgenti, etichette uniche, M3U solo con indirizzo. */
-    private fun sanitize(sources: List<Source>): List<Source> = sources
-        .filter { source ->
-            when (source.type) {
-                SourceType.XTREAM -> source.xtream != null
-                SourceType.M3U -> source.id in configuredM3uIds
-            }
-        }
-        .distinctBy { it.id }
-        .take(Sources.MAX_SOURCES)
-        .map { source ->
-            if (source.type == SourceType.M3U) {
-                source.copy(m3uUrl = configuredM3uIds[source.id])
-            } else {
-                source
-            }
-        }
+    /**
+     * Al massimo [Sources.MAX_XTREAM_SOURCES] account Xtream; le liste M3U non
+     * hanno un tetto, ma sul disco se ne tengono al massimo [MAX_STORED_LISTS]
+     * (prima quelle configurate): le righe non più configurate restano così con
+     * la loro etichetta, pronte se la lista torna nell'indice.
+     */
+    private fun sanitize(sources: List<Source>): List<Source> {
+        val configured = configuredM3uIds()
+        val xtream = sources
+            .filter { it.type == SourceType.XTREAM && it.xtream != null }
+            .distinctBy { it.id }
+            .take(Sources.MAX_XTREAM_SOURCES)
+        val lists = sources
+            .filter { it.type == SourceType.M3U }
+            .distinctBy { it.id }
+            .sortedWith(
+                compareBy<Source> { if (it.id in configured) 0 else 1 }
+                    .thenBy { Sources.labelNumber(it.label) ?: Int.MAX_VALUE }
+                    .thenBy { it.id },
+            )
+            .take(MAX_STORED_LISTS)
+            .map { it.copy(m3uUrl = configured[it.id]) }
+        return xtream + lists
+    }
 
     /**
      * Aggiunge una riga per ogni lista configurata che non ce l'ha ancora: la
-     * prima volta prende la prima etichetta libera (S2 con l'account Xtream,
-     * poi S3) e quella resta per sempre. Oltre il massimo delle sorgenti le
-     * liste in più non compaiono.
+     * prima volta prende la prima etichetta `M` libera (`M1`, `M2`, …) e quella
+     * resta per sempre. Le liste non hanno un tetto.
      */
     private fun ensureM3uSources(stored: List<Source>): List<Source> {
-        if (configuredM3uIds.isEmpty()) return stored
+        val configured = configuredM3uIds()
+        if (configured.isEmpty()) return stored
         val known = stored.filter { it.type == SourceType.M3U }.map { it.id }.toSet()
-        val missing = configuredM3uUrls.filter { url -> Sources.m3uId(url) !in known }
+        val missing = configured.keys.filter { id -> id !in known }
         if (missing.isEmpty()) return stored
         val result = stored.toMutableList()
-        for (url in missing) {
-            if (result.size >= Sources.MAX_SOURCES) break
-            val label = Sources.nextLabel(result.map { it.label }) ?: break
+        for (id in missing) {
+            val label = Sources.nextLabel(SourceType.M3U, result.map { it.label }) ?: break
             result += Source(
-                id = Sources.m3uId(url),
+                id = id,
                 type = SourceType.M3U,
                 label = label,
                 enabled = true,
-                m3uUrl = url,
+                m3uUrl = configured[id],
             )
+        }
+        return result
+    }
+
+    /**
+     * Migrazione delle etichette: le liste create da una versione precedente
+     * avevano un'etichetta `S2`/`S3`. La lettera `S` è ora riservata agli
+     * account Xtream, quindi le liste passano a `M1`, `M2`, … nell'ordine in
+     * cui erano e da lì non cambiano più.
+     */
+    private fun normalizeM3uLabels(sources: List<Source>): List<Source> {
+        val legacy = sources.withIndex().filter {
+            it.value.type == SourceType.M3U && !Sources.isM3uLabel(it.value.label)
+        }
+        if (legacy.isEmpty()) return sources
+        val result = sources.toMutableList()
+        val taken = result
+            .filter { it.type == SourceType.M3U && Sources.isM3uLabel(it.label) }
+            .mapTo(HashSet()) { it.label }
+        val ordered = legacy.sortedWith(
+            compareBy<IndexedValue<Source>> { Sources.labelNumber(it.value.label) ?: Int.MAX_VALUE }
+                .thenBy { it.value.id },
+        )
+        for ((index, source) in ordered) {
+            val label = Sources.nextLabel(SourceType.M3U, taken) ?: continue
+            taken += label
+            result[index] = source.copy(label = label)
         }
         return result
     }
@@ -179,7 +214,7 @@ class EncryptedSourceStore(
             Source(
                 id = LEGACY_XTREAM_ID,
                 type = SourceType.XTREAM,
-                label = Sources.LABELS.first(),
+                label = Sources.XTREAM_LABELS.first(),
                 enabled = true,
                 xtream = credentials,
             ),
@@ -293,6 +328,13 @@ class EncryptedSourceStore(
 
         /** Versione del formato dell'elenco. */
         const val LIST_VERSION = 2
+
+        /**
+         * Righe di liste M3U tenute su disco: le configurate più le ultime
+         * rimaste, così un'etichetta `M<n>` non si perde quando una lista esce
+         * temporaneamente dall'indice.
+         */
+        const val MAX_STORED_LISTS = 32
     }
 }
 
@@ -321,7 +363,7 @@ class XtreamCredentialStore(
             sources.save(current.map { if (it.id == primary.id) it.copy(xtream = credentials) else it })
             return
         }
-        val label = Sources.nextLabel(current.map { it.label }) ?: return
+        val label = Sources.nextLabel(SourceType.XTREAM, current.map { it.label }) ?: return
         sources.save(
             current + Source(
                 id = Sources.newId(current),
