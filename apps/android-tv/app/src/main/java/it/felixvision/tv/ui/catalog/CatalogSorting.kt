@@ -54,6 +54,12 @@ enum class CatalogSort(val storageKey: String) {
 }
 
 /**
+ * Testo mostrato dalle categorie della Lista M3U per l'ordine predefinito:
+ * quello del file, che non ha date di aggiunta da cui partire.
+ */
+const val M3U_FILE_ORDER_LABEL: String = "Ordina: Ordine del file"
+
+/**
  * Testo del pulsante di ordinamento. Il valore è lo stesso in tutta l'app:
  * Film e Serie mostrano le tre etichette qui sotto, a ciclo.
  */

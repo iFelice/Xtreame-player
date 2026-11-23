@@ -24,15 +24,24 @@ import it.felixvision.tv.data.images.CacheCleanup
 import it.felixvision.tv.data.images.FvpImageLoader
 import it.felixvision.tv.data.pairing.PairingClient
 import it.felixvision.tv.data.pairing.PairingCoordinator
+import it.felixvision.tv.data.m3u.M3uCache
+import it.felixvision.tv.data.m3u.M3uClient
 import it.felixvision.tv.data.protection.ProtectedContentStore
 import it.felixvision.tv.data.protection.ProtectedPageAccess
 import it.felixvision.tv.data.protection.ProtectedSession
 import it.felixvision.tv.data.playback.ChannelVideoFormatStore
 import it.felixvision.tv.data.playback.PlaybackActivityTracker
 import it.felixvision.tv.data.progress.ProgressStore
+import it.felixvision.tv.data.sources.EncryptedSourceStore
+import it.felixvision.tv.data.m3u.M3uIndexCache
+import it.felixvision.tv.data.sources.M3uSourceService
+import it.felixvision.tv.data.sources.M3uUrlRegistry
+import it.felixvision.tv.data.sources.SourceRepository
+import it.felixvision.tv.data.sources.SourceStore
+import it.felixvision.tv.data.sources.Sources
+import it.felixvision.tv.data.sources.XtreamCredentialStore
 import it.felixvision.tv.data.store.CredentialStore
 import it.felixvision.tv.data.store.DataStoreSecurePreferences
-import it.felixvision.tv.data.store.EncryptedCredentialStore
 import it.felixvision.tv.data.store.KeystoreCredentialCipher
 import it.felixvision.tv.data.update.AndroidUpdateInstaller
 import it.felixvision.tv.data.update.GithubUpdateClient
@@ -280,11 +289,61 @@ class AppContainer(
         )
     }
 
-    val credentialStore: CredentialStore by lazy {
-        credentialStoreOverride ?: EncryptedCredentialStore(
+    /**
+     * Elenco delle sorgenti, cifrato come le credenziali. Contiene l'account
+     * Xtream (S1, migrato dal vecchio blob singolo) e una sorgente per ogni
+     * lista M3U prevista da `FVP_M3U_URL` (S2, S3): più indirizzi separati da
+     * virgola. Senza indirizzi le sorgenti M3U non esistono.
+     */
+    val sourceStore: SourceStore by lazy {
+        EncryptedSourceStore(
             preferences = DataStoreSecurePreferences(credentialPreferences),
             cipher = KeystoreCredentialCipher(),
             json = json,
+            m3uUrls = { m3uUrlRegistry.playlists() },
+        )
+    }
+
+    /** Interruttore "Mostra" delle sorgenti, con la revisione per la UI. */
+    val sourceRepository: SourceRepository by lazy {
+        SourceRepository(store = sourceStore)
+    }
+
+    /**
+     * L'accesso e le Impostazioni continuano a parlare di un solo account
+     * Xtream: questa facciata legge e scrive la sorgente Xtream dell'elenco.
+     */
+    val credentialStore: CredentialStore by lazy {
+        credentialStoreOverride ?: XtreamCredentialStore(sources = sourceStore)
+    }
+
+    /** Copia su disco della lista M3U (6 ore), una per sorgente. */
+    /**
+     * Indirizzi delle liste: le voci configurate con `FVP_M3U_URL` (una lista
+     * oppure un indice di liste) e le liste che ne derivano.
+     */
+    val m3uUrlRegistry: M3uUrlRegistry by lazy {
+        M3uUrlRegistry(Sources.parseM3uUrls(BuildConfig.FVP_M3U_URL))
+    }
+
+    val m3uCache: M3uCache by lazy {
+        M3uCache(context = context, json = json)
+    }
+
+    /** Copia dell'ultima risoluzione dell'indice, usata se l'indice non risponde. */
+    val m3uIndexCache: M3uIndexCache by lazy {
+        M3uIndexCache(context = context, json = json)
+    }
+
+    /** Sorgente "Lista M3U": download, copia, catalogo e ripresa. */
+    val m3uSourceService: M3uSourceService by lazy {
+        M3uSourceService(
+            client = M3uClient(http = httpClient),
+            cache = m3uCache,
+            indexCache = m3uIndexCache,
+            registry = m3uUrlRegistry,
+            clock = clock,
+            scope = applicationScope,
         )
     }
 

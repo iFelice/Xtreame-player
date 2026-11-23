@@ -67,6 +67,9 @@ jobs:
           FVP_KEY_PASSWORD: ${{ secrets.FVP_KEY_PASSWORD }}
           FVP_VERSION_NAME: ${{ steps.version.outputs.version_name }}
           FVP_VERSION_CODE: ${{ github.run_number }}
+          # Lista M3U: variabile di repository (vars, non secret). Vuota = la
+          # sorgente M3U non esiste e la release è identica a prima.
+          FVP_M3U_URL: ${{ vars.FVP_M3U_URL }}
         shell: bash
         run: |
           set -euo pipefail

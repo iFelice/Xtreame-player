@@ -21,6 +21,7 @@ import androidx.media3.exoplayer.analytics.AnalyticsListener
 import it.felixvision.tv.AppContainer
 import it.felixvision.tv.core.AppLog
 import it.felixvision.tv.data.catalog.Category
+import it.felixvision.tv.data.catalog.VodStream
 import it.felixvision.tv.data.catalog.LiveStream
 import it.felixvision.tv.data.channels.MyChannelPlayback
 import it.felixvision.tv.data.continuewatching.ContinueEntry
@@ -43,6 +44,7 @@ import it.felixvision.tv.data.playback.StreamTarget
 import it.felixvision.tv.data.playback.StreamUrls
 import it.felixvision.tv.data.playback.VideoFormat
 import it.felixvision.tv.data.progress.ProgressKeys
+import it.felixvision.tv.data.sources.SourceIds
 import it.felixvision.tv.data.progress.WatchRules
 import it.felixvision.tv.data.volume.PlayerVolume
 import kotlinx.coroutines.CoroutineScope
@@ -100,6 +102,16 @@ class PlayerEngine(
         channels.size,
     )
     private var episodeIndex: Int = (source as? PlaybackSource.Series)?.playback?.startIndex ?: 0
+
+    /**
+     * Coda della categoria per le voci della Lista M3U: Successivo/Precedente
+     * scorrono queste voci, nell'ordine del file. Vuota per i film Xtream.
+     */
+    private val movieSource: PlaybackSource.Movie? = source as? PlaybackSource.Movie
+    private val movieQueue: List<VodStream> = movieSource?.queue.orEmpty()
+    private var movieIndex: Int = movieSource?.startIndex
+        ?.coerceIn(0, (movieQueue.size - 1).coerceAtLeast(0))
+        ?: 0
 
     var state by mutableStateOf(
         PlayerUiState(
@@ -709,10 +721,16 @@ class PlayerEngine(
                     preferredFormat = liveFormatOverride ?: session.liveFormat,
                 )
             }
-            is PlaybackSource.Movie -> StreamTarget.Movie(
-                streamId = currentSource.stream.streamId,
-                containerExtension = currentSource.stream.containerExtension,
-            )
+            is PlaybackSource.Movie -> {
+                val movie = currentMovie() ?: return null
+                // Liste M3U: indirizzo diretto, nessuna costruzione Xtream.
+                movieDirectUrl(movie)?.let { return it }
+                if (SourceIds.isScoped(movie.streamId)) return null
+                StreamTarget.Movie(
+                    streamId = movie.streamId,
+                    containerExtension = movie.containerExtension,
+                )
+            }
             is PlaybackSource.Series -> {
                 val current = currentEpisode() ?: return null
                 StreamTarget.Episode(
@@ -731,7 +749,7 @@ class PlayerEngine(
 
     private fun progressKey(): String? = when (val currentSource = source) {
         is PlaybackSource.Live -> null
-        is PlaybackSource.Movie -> ProgressKeys.movie(currentSource.stream.streamId)
+        is PlaybackSource.Movie -> currentMovie()?.let { ProgressKeys.movie(it.streamId) }
         is PlaybackSource.Series -> currentEpisode()?.let { ProgressKeys.episode(it.episode.id) }
     }
 
@@ -776,9 +794,34 @@ class PlayerEngine(
         ?.queue
         ?.getOrNull(episodeIndex)
 
+    /** Film in onda: la voce della coda M3U, altrimenti quella della sessione. */
+    private fun currentMovie(): VodStream? {
+        val movie = movieSource ?: return null
+        return movieQueue.getOrNull(movieIndex) ?: movie.stream
+    }
+
+    /**
+     * Indirizzo diretto di una voce M3U, se la sessione lo conosce. Per i film
+     * Xtream resta `null`: l'URL si costruisce con [StreamUrls].
+     */
+    private fun movieDirectUrl(movie: VodStream): String? {
+        val movieSource = movieSource ?: return null
+        movieSource.directUrls[movie.streamId]?.let { return it }
+        return movieSource.directUrl?.takeIf { movie.streamId == movieSource.stream.streamId }
+    }
+
+    /** Vero quando la riproduzione corrente è una coda della Lista M3U. */
+    val hasMovieQueue: Boolean get() = movieQueue.isNotEmpty()
+
+    /** Posizione nella coda M3U (0 se non è una coda). */
+    val movieQueueIndex: Int get() = if (movieQueue.isEmpty()) -1 else movieIndex
+
+    /** Numero di voci della coda M3U (0 se non è una coda). */
+    val movieQueueSize: Int get() = movieQueue.size
+
     private fun titleForCurrent(): String = when (val currentSource = source) {
         is PlaybackSource.Live -> currentLiveChannel()?.name.orEmpty()
-        is PlaybackSource.Movie -> currentSource.title
+        is PlaybackSource.Movie -> currentMovie()?.name?.takeIf { it.isNotBlank() } ?: currentSource.title
         is PlaybackSource.Series -> currentEpisode()?.displayTitle ?: currentSource.playback.title
     }
 
@@ -855,12 +898,13 @@ class PlayerEngine(
         when (val currentSource = source) {
             is PlaybackSource.Live -> return
             is PlaybackSource.Movie -> {
+                val playing = currentMovie() ?: return
                 val movie = ContinueEntry.movie(
-                    streamId = currentSource.stream.streamId,
-                    title = currentSource.title.ifBlank { currentSource.stream.name },
-                    poster = currentSource.stream.streamIcon,
-                    categoryId = currentSource.categoryId ?: currentSource.stream.categoryId,
-                    containerExtension = currentSource.stream.containerExtension,
+                    streamId = playing.streamId,
+                    title = playing.name.ifBlank { currentSource.title },
+                    poster = playing.streamIcon,
+                    categoryId = playing.categoryId ?: currentSource.categoryId,
+                    containerExtension = playing.containerExtension,
                 )
                 store.recordMovie(
                     server = session.server,
@@ -954,6 +998,98 @@ class PlayerEngine(
         }
         liveIndex = LiveZapping.previous(liveIndex, channels.size)
         switchLiveChannel()
+    }
+
+    /** Successivo della categoria M3U; sull'ultima voce si torna indietro. */
+    fun nextMovie() {
+        moveMovie(1)
+    }
+
+    /** Precedente della categoria M3U; sulla prima voce non fa nulla. */
+    fun previousMovie() {
+        moveMovie(-1)
+    }
+
+    private fun moveMovie(delta: Int) {
+        if (movieQueue.isEmpty()) return
+        if (exited || state.hasModalOverlay) return
+        if (delta > 0) {
+            val next = MoviePlaylist.nextIndex(movieIndex, movieQueue.size)
+            if (next < 0) {
+                // Dopo l'ultima voce si torna alla schermata precedente, senza
+                // ricominciare da capo.
+                requestExit()
+                return
+            }
+            switchMovie(next)
+            return
+        }
+        if (movieIndex == 0) return
+        switchMovie(MoviePlaylist.previousIndex(movieIndex, movieQueue.size))
+    }
+
+    /**
+     * Passa alla voce [newIndex] della coda M3U: salva posizione e voce della
+     * riproduzione che lascia (con il suo identificativo stabile, quindi con la
+     * sua ripresa) e riapre il player sulla voce nuova.
+     */
+    private fun switchMovie(newIndex: Int) {
+        if (exited) return
+        val movie = currentMovie() ?: return
+        val position = exoPlayer?.currentPosition ?: state.positionMillis
+        val duration = playerDuration().takeIf { it > 0L } ?: state.durationMillis
+        destroyPlayer()
+        if (position > 0L || duration > 0L) {
+            container.applicationScope.launch {
+                persistMovieProgress(movie, position.coerceAtLeast(0L), duration)
+            }
+        }
+        movieIndex = newIndex
+        val next = movieQueue.getOrNull(newIndex) ?: return
+        state = state.copy(
+            positionMillis = 0L,
+            durationMillis = 0L,
+            isPlaying = false,
+            controlsVisible = false,
+            resumePositionMillis = null,
+            currentTitle = next.name,
+        )
+        buildPlayer(startPositionMillis = 0L, autoPlay = true)
+    }
+
+    /**
+     * Avanzamento e "Continua a guardare" di una voce M3U lasciata andando alla
+     * successiva: stessa forma di [persistWatchState], ma sulla voce indicata.
+     */
+    private suspend fun persistMovieProgress(
+        movie: VodStream,
+        positionMillis: Long,
+        durationMillis: Long,
+    ) {
+        runCatching {
+            container.progressStore.save(
+                session.server,
+                session.username,
+                ProgressKeys.movie(movie.streamId),
+                positionMillis,
+                durationMillis,
+            )
+        }
+        runCatching {
+            container.continueWatchingStore.recordMovie(
+                server = session.server,
+                username = session.username,
+                movie = ContinueEntry.movie(
+                    streamId = movie.streamId,
+                    title = movie.name,
+                    poster = movie.streamIcon,
+                    categoryId = movie.categoryId,
+                    containerExtension = movie.containerExtension,
+                ),
+                positionMillis = positionMillis,
+                durationMillis = durationMillis,
+            )
+        }
     }
 
     fun selectChannel(index: Int) {
@@ -1579,6 +1715,20 @@ class PlayerEngine(
         // l'errore con "Riprova".
         if (isLiveSource) {
             restartLiveAfterStall()
+            return
+        }
+        // Lista M3U: a fine video si passa subito alla voce successiva della
+        // categoria; dopo l'ultima si torna alla schermata precedente, senza
+        // ricominciare da capo. La voce lasciata resta salvata con la sua
+        // posizione (fine video) per identificativo stabile.
+        if (movieQueue.isNotEmpty()) {
+            val next = MoviePlaylist.nextIndex(movieIndex, movieQueue.size)
+            if (next >= 0) {
+                switchMovie(next)
+            } else {
+                saveProgress(completed = true)
+                requestExit()
+            }
             return
         }
         saveProgress(completed = true)

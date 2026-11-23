@@ -83,6 +83,8 @@ import it.felixvision.tv.ui.components.ChannelScheduleInfo
 import it.felixvision.tv.ui.components.rememberChannelSchedulePrograms
 import it.felixvision.tv.ui.components.rememberMinuteNow
 import it.felixvision.tv.ui.components.FocusMarqueeText
+import it.felixvision.tv.ui.components.LocalSourceLabels
+import it.felixvision.tv.ui.components.SourceBadge
 import it.felixvision.tv.ui.components.RowsBringIntoViewer
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.components.WatchProgressLine
@@ -902,6 +904,23 @@ private fun FavoriteRow(
                                 scale = scale,
                                 modifier = Modifier.align(Alignment.BottomCenter),
                             )
+                            // Etichetta della sorgente: solo con più sorgenti
+                            // abilitate, e solo per film e serie (le categorie
+                            // Live non sono voci di catalogo).
+                            LocalSourceLabels.current
+                                .labelFor(
+                                    fav.id.substringAfter('_').takeIf {
+                                        fav.type == FavoriteItem.VOD || fav.type == FavoriteItem.SERIES
+                                    },
+                                )
+                                ?.let { label ->
+                                    SourceBadge(
+                                        label = label,
+                                        scale = scale,
+                                        modifier = Modifier.align(Alignment.BottomStart).padding(scale.dp(6f)),
+                                        testTag = "favorite_${fav.id}_source",
+                                    )
+                                }
                         }
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(scale.dp(4f)), modifier = Modifier.padding(top = scale.dp(6f))) {
                             FocusMarqueeText(

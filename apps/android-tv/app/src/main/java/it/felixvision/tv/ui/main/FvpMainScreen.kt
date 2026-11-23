@@ -29,6 +29,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
@@ -68,6 +69,7 @@ import it.felixvision.tv.data.playback.SeriesPlayback
 import it.felixvision.tv.data.playback.buildEpisodeQueue
 import it.felixvision.tv.data.playback.indexOfEpisode
 import it.felixvision.tv.data.progress.ProgressKeys
+import it.felixvision.tv.data.sources.Source
 import it.felixvision.tv.data.progress.WatchProgress
 import it.felixvision.tv.data.update.UpdateCheckState
 import it.felixvision.tv.ui.access.AccessViewModel
@@ -94,6 +96,8 @@ import it.felixvision.tv.ui.components.ErrorState
 import it.felixvision.tv.ui.components.FvpPrimaryButton
 import it.felixvision.tv.ui.components.FvpSecondaryButton
 import it.felixvision.tv.ui.components.LoadingState
+import it.felixvision.tv.ui.components.LocalSourceLabels
+import it.felixvision.tv.ui.components.SourceLabels
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.navigation.DrawerFocusHandle
 import it.felixvision.tv.ui.navigation.DrawerSection
@@ -221,11 +225,24 @@ fun FvpMainScreen(
     val drawerFocusHandle = remember { DrawerFocusHandle() }
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
 
+    // Sorgenti dell'elenco (S1 Xtream, S2 Lista M3U): servono al prefisso delle
+    // categorie, all'etichetta delle voci e alla coda di riproduzione M3U.
+    val sourcesRevision by container.sourceRepository.revision.collectAsState()
+    val catalogSources by produceState(
+        initialValue = emptyList<Source>(),
+        sourcesRevision,
+        sessionId,
+    ) {
+        value = runCatching { container.sourceRepository.sources() }.getOrDefault(emptyList())
+    }
+
     val catalogViewModel: CatalogViewModel = viewModel(
         factory = viewModelFactory {
             initializer { CatalogViewModel(container, currentServer, currentUsername, currentPassword) }
         },
-        key = catalogSessionKey(sessionId, currentServer, currentUsername),
+        // La revisione delle sorgenti riapre il catalogo quando un interruttore
+        // cambia: le categorie unite si ricompongono subito.
+        key = catalogSessionKey(sessionId, currentServer, currentUsername) + "_src$sourcesRevision",
     )
     val catalogState by catalogViewModel.ui.collectAsState()
 
@@ -680,11 +697,25 @@ fun FvpMainScreen(
             ?.vodStreams
             ?.firstOrNull { it.streamId == film.streamId }
             ?: film
+        // Voce della Lista M3U: indirizzo diretto e coda della categoria
+        // nell'ordine del file (Successivo/Precedente e passaggio automatico).
+        val m3uSource = container.m3uSourceService.sourceOf(resolved.streamId, catalogSources)
+        val directUrls = m3uSource
+            ?.let { container.m3uSourceService.directUrlsFor(it) }
+            .orEmpty()
+        val queue = m3uSource
+            ?.let { source -> resolved.categoryId?.let { container.m3uSourceService.queueFor(source, it) } }
+            .orEmpty()
+        val queueIndex = queue.indexOfFirst { it.streamId == resolved.streamId }
         playerSession = newPlayerSession(
             PlaybackSource.Movie(
                 stream = resolved,
                 categoryId = resolved.categoryId,
                 title = resolved.name.ifBlank { film.name },
+                directUrl = directUrls[resolved.streamId],
+                queue = queue,
+                startIndex = if (queueIndex >= 0) queueIndex else 0,
+                directUrls = directUrls,
             ),
             autoResume = autoResume,
         )
@@ -821,8 +852,15 @@ fun FvpMainScreen(
         }
     }
 
+    // Etichette delle sorgenti per Cerca, Preferiti e Riprendi: con una sola
+    // sorgente abilitata restano spente, come oggi.
+    val sourceLabels = remember(catalogSources) { SourceLabels.from(catalogSources) }
+
     // La scheda serie legge da qui la stagione dell'episodio da continuare.
-    CompositionLocalProvider(LocalContinueEntries provides visibleContinueEntries) {
+    CompositionLocalProvider(
+        LocalContinueEntries provides visibleContinueEntries,
+        LocalSourceLabels provides sourceLabels,
+    ) {
     FvpNavigationDrawer(
         selected = selectedTab,
         onSelect = {
@@ -1076,6 +1114,32 @@ fun FvpMainScreen(
                             }
                         } else {
                             EmptyState(title = "Catalogo vuoto", description = "Il server non ha restituito contenuti. Premi Riprova.", scale = scale)
+                        }
+                    }
+                }
+
+                // Righe non bloccanti delle liste M3U in errore: una per lista
+                // (con la sua etichetta M<n>), più quella dell'indice. Non
+                // prendono il focus e non fermano il resto dell'app.
+                if (catalogState.m3uErrors.isNotEmpty()) {
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(scale.dp(16f))
+                            .testTag("home_m3u_errors"),
+                        verticalArrangement = Arrangement.spacedBy(scale.dp(4f)),
+                    ) {
+                        catalogState.m3uErrors.forEach { row ->
+                            Text(
+                                text = "${row.title}: ${row.message}",
+                                color = FvpColors.TextSecondary,
+                                fontSize = scale.sp(12f),
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(scale.dp(6f)))
+                                    .background(FvpColors.SurfaceElevated)
+                                    .padding(horizontal = scale.dp(10f), vertical = scale.dp(6f))
+                                    .testTag("home_m3u_error_${row.sourceId}"),
+                            )
                         }
                     }
                 }

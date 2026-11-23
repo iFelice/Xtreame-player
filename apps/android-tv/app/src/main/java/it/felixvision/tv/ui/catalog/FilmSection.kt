@@ -53,6 +53,7 @@ import it.felixvision.tv.data.catalog.VodStream
 import it.felixvision.tv.data.favorites.FavoriteItem
 import it.felixvision.tv.data.progress.ProgressKeys
 import it.felixvision.tv.data.progress.WatchProgress
+import it.felixvision.tv.data.sources.SourceIds
 import it.felixvision.tv.ui.components.CatalogPosterImage
 import it.felixvision.tv.ui.components.CollapsingCategoryColumn
 import it.felixvision.tv.ui.components.EmptyState
@@ -124,6 +125,9 @@ fun FilmSection(
             detailIsLoading = false
             return@LaunchedEffect
         }
+        // Nessun ViewModel (anteprime, test): la scheda resta senza metadati e
+        // senza errori. Le voci delle liste M3U non passano più da qui: il loro
+        // OK avvia direttamente la riproduzione.
         if (catalogViewModel == null) {
             detailInfo = null
             detailIsLoading = false
@@ -175,6 +179,20 @@ fun FilmSection(
     // Il pulsante di ordinamento non c'è in NOVITÀ: quella categoria resta
     // nell'ordine dei contenuti recenti.
     val showSortButton = debouncedCategoryId != NOVITA_CATEGORY_ID
+    // Le categorie della Lista M3U hanno due soli ordini: "Ordine del file"
+    // (predefinito, ed è l'ordine in cui le voci sono nel file) e A-Z. Aggiunti
+    // e Anno non si offrono: le voci M3U non hanno data né anno.
+    val m3uCategory = SourceIds.isScoped(debouncedCategoryId)
+    val sortButtonLabel = if (m3uCategory && categorySort == CatalogSort.ADDED) {
+        M3U_FILE_ORDER_LABEL
+    } else {
+        categorySort.buttonLabel()
+    }
+    val sortButtonNext = when {
+        !m3uCategory -> categorySort.next()
+        categorySort == CatalogSort.AZ -> CatalogSort.ADDED
+        else -> CatalogSort.AZ
+    }
     val sortButtonFocus = remember { FocusRequester() }
     // Se la griglia è vuota, il telecomando deve poter entrare nelle categorie
     // e scegliere un'altra voce, invece di cercare una card che non esiste.
@@ -343,8 +361,15 @@ fun FilmSection(
                         var focused by remember(film.streamId) { mutableStateOf(false) }
                         Card(
                             onClick = {
-                                restoreHelper.onOpen(film.streamId, index)
-                                detailFilm = film
+                                if (SourceIds.isScoped(film.streamId)) {
+                                    // Liste M3U: OK avvia subito la riproduzione,
+                                    // senza scheda di dettaglio (le voci non hanno
+                                    // trama, anno né cast da mostrare).
+                                    onPlayFilm(film)
+                                } else {
+                                    restoreHelper.onOpen(film.streamId, index)
+                                    detailFilm = film
+                                }
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -439,7 +464,8 @@ fun FilmSection(
                     CatalogSortButton(
                         sort = categorySort,
                         scale = scale,
-                        onClick = { changeSort(categorySort.next()) },
+                        label = sortButtonLabel,
+                        onClick = { changeSort(sortButtonNext) },
                         modifier = Modifier
                             .testTag(FILM_SORT_BUTTON_TAG)
                             .focusRequester(sortButtonFocus)

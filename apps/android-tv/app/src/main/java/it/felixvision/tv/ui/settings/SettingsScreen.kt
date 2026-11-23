@@ -232,6 +232,7 @@ fun SettingsScreen(
                 onExitClicked = { viewModel.onExitClicked() },
                 onRenewCode = { viewModel.onRenewCode() },
                 entryFocusRequester = entryFocus,
+                onSourceToggle = { sourceId, enabled -> viewModel.setSourceEnabled(sourceId, enabled) },
             )
         },
         // La pagina Aspetto dà il focus alla dimensione attiva con i propri

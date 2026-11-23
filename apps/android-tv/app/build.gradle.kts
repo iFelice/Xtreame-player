@@ -31,6 +31,20 @@ if (!hasReleaseSigning) {
     )
 }
 
+// Indirizzo della Lista M3U, definito alla compilazione: proprietà Gradle o
+// variabile d'ambiente FVP_M3U_URL (stesso schema di FVP_VERSION_NAME). Vuoto
+// per impostazione predefinita: la sorgente "Lista M3U" non esiste e non
+// compare. Nessun indirizzo reale nel codice: in CI arriva dalla variabile di
+// repository `vars.FVP_M3U_URL`, quando è configurata.
+val m3uUrl: String = (
+    project.findProperty("FVP_M3U_URL") as String?
+        ?: System.getenv("FVP_M3U_URL")
+        ?: ""
+    ).trim()
+val m3uUrlForBuildConfig: String = m3uUrl
+    .replace("\\", "\\\\")
+    .replace("\"", "\\\"")
+
 android {
     if (hasReleaseSigning) {
         signingConfigs {
@@ -63,6 +77,9 @@ android {
             "PAIRING_RELAY_URL",
             "\"https://felixvision-pairing-relay.manganiellofelice.workers.dev\"",
         )
+
+        // Lista M3U (sorgente S2 quando configurata): vuota = sorgente assente.
+        buildConfigField("String", "FVP_M3U_URL", "\"$m3uUrlForBuildConfig\"")
     }
 
     buildFeatures {

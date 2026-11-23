@@ -191,6 +191,109 @@ con le stesse protezioni del modulo manuale.
 
 Le credenziali non vengono mai scritte nei log, né a mano né dal client di rete.
 
+### Sorgenti: account Xtream (S1, S2, S3) e liste M3U (M1, M2, …)
+
+L'app ha un elenco di sorgenti. L'account Xtream è **S1**: il vecchio blob
+singolo (`credentials_blob_v1`) viene convertito alla prima lettura in un elenco
+(`sources_blob_v1`, sempre cifrato AES-GCM) con le stesse credenziali, senza
+perdere preferiti, avanzamento, PIN o copie del catalogo: le chiavi degli
+archivi per server+utente non cambiano.
+
+Le etichette seguono il tipo di sorgente: `S1`…`S3` sono riservate agli account
+Xtream (al massimo tre), le liste M3U prendono `M1`, `M2`, … e **non hanno
+limite**. L'etichetta è assegnata alla creazione e non cambia più; le liste
+create da una versione precedente con un'etichetta `S` vengono portate a `M`
+alla prima lettura.
+
+Le liste si configurano alla compilazione con la proprietà Gradle o la variabile
+d'ambiente `FVP_M3U_URL` (stesso schema di `FVP_VERSION_NAME`), vuota per
+impostazione predefinita. La variabile accetta **più indirizzi** separati da
+virgola, spazio o a capo:
+
+```bash
+FVP_M3U_URL="http://server.esempio/lista1.m3u8,http://server.esempio/lista2.m3u8" ./gradlew assembleDebug
+```
+
+In CI gli indirizzi arrivano dalla variabile di repository `FVP_M3U_URL` (`vars`,
+non `secret`). Con la variabile vuota le liste non esistono e non compaiono; gli
+indirizzi non sono mai scritti nel codice né mostrati in Impostazioni.
+**L'indirizzo compilato nell'APK è leggibile da chi estrae l'APK**: non metterci
+credenziali, e usa un indice (sotto) se vuoi cambiare le liste senza
+ricompilare.
+
+#### Una lista M3U
+
+Il formato è quello esteso, un indirizzo per voce:
+
+```
+#EXTM3U
+#EXTINF:-1 tvg-id="p1v1" tvg-logo="http://server.esempio/copertina1.jpg" group-title="Scaletta",Puntata 1
+http://server.esempio/puntata-01.mp4
+#EXTINF:-1 tvg-id="p1v2" tvg-logo="http://server.esempio/copertina2.jpg" group-title="Scaletta",Puntata 2
+http://server.esempio/puntata-02.mp4
+```
+
+- ogni voce è un **Film**; le categorie sono i `group-title` nell'ordine del
+  file, chi non ne ha finisce in "Senza categoria";
+- il titolo è il testo dopo la virgola; se manca si usa `tvg-name`, poi
+  `Video N` (posizione nella lista);
+- l'identificativo della voce è l'hash del `tvg-id`, altrimenti dell'indirizzo:
+  **scrivi `tvg-id` quando gli indirizzi possono cambiare**, altrimenti
+  preferiti e avanzamento restano attaccati agli indirizzi vecchi;
+- le copertine arrivano da `tvg-logo`: JPEG, PNG o WebP, rapporto **2:3** (per
+  esempio 400×600), sotto i 200 KB, indirizzo pubblico **senza login**. Niente
+  SVG né GIF animate: non vengono lette. Se l'immagine manca resta il
+  segnaposto;
+- gli indirizzi relativi vengono scartati e una playlist **HLS** (`#EXT-X-STREAM-INF`,
+  `#EXT-X-TARGETDURATION`) viene rifiutata con un errore: le voci devono puntare
+  a un video (`.mp4`, `.mkv`, oppure a un `.m3u8` servito come stream);
+- il file può pesare al massimo 5 MB.
+
+#### Indice delle liste
+
+L'indirizzo compilato può essere un **indice**: un file di testo con una lista
+per riga (righe vuote e righe che iniziano con `#` ignorate, massimo 64 KB).
+
+```
+# liste del mese
+http://server.esempio/lista1.m3u8
+http://server.esempio/lista2.m3u8
+```
+
+Il riconoscimento è automatico: se il contenuto inizia con `#EXTM3U` è una
+lista, altrimenti è un indice. Ogni riga diventa una sorgente `M<n>`, con
+l'identificativo ricavato dal solo indirizzo: **riordinare l'indice non cambia le
+etichette**, e una lista tolta dall'indice sparisce dall'elenco senza toccare
+preferiti e avanzamento già salvati (la riga resta su disco con la sua etichetta,
+quindi riprendendo la stessa lista riprende lo stesso `M`).
+
+#### Aggiornamento
+
+Le liste e l'indice vengono riletti alle **08:30, 14:30, 18:30 e 22:30** (ora
+locale del dispositivo): la copia salvata vale fino al primo di questi orari
+successivo al download, e "Aggiorna catalogo" riscarica subito. Le liste si
+scaricano in parallelo (massimo tre richieste alla volta), quindi una lista lenta
+non blocca le altre. Se una lista non risponde si usa la copia salvata e compare
+una riga d'errore per ogni lista interessata (`Lista M3U · M2: …`), sia in
+Impostazioni › Account sia nella schermata principale, senza bloccare le altre
+sorgenti; i tentativi successivi sono in silenzio, con attese crescenti (30 s,
+2 min, 5 min). Se non risponde l'indice si usano le liste dell'ultima risoluzione
+buona.
+
+#### Riproduzione e contenuti protetti
+
+Le voci delle liste si riproducono dall'indirizzo diretto, senza pannello
+Xtream. OK su una card **avvia subito** il video (nessuna scheda di dettaglio),
+con la coda della categoria: Successivo/Precedente scorrono le voci in ordine di
+file, a fine video si passa da solo alla successiva e dopo l'ultima si torna al
+catalogo. La pressione lunga di OK aggiunge o toglie la voce dai preferiti.
+
+Le voci delle liste seguono gli **stessi contenuti protetti** dell'account
+Xtream: le categorie e i titoli nascosti in Impostazioni › Contenuti protetti
+vengono filtrati anche per le liste, perché il filtro lavora sul catalogo già
+unito (identificativi compresi). Non ci sono liste nascoste separate per
+sorgente: il PIN e l'elenco dei contenuti nascosti restano quelli dell'account.
+
 ### Traffico in chiaro
 
 `res/xml/network_security_config.xml` consente esplicitamente il traffico HTTP: molti

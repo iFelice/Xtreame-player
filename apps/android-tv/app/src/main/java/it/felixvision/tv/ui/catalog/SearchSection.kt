@@ -68,6 +68,8 @@ import it.felixvision.tv.data.search.CatalogSearch
 import it.felixvision.tv.ui.components.CatalogPosterImage
 import it.felixvision.tv.ui.components.ChannelLogoImage
 import it.felixvision.tv.ui.components.FocusMarqueeText
+import it.felixvision.tv.ui.components.LocalSourceLabels
+import it.felixvision.tv.ui.components.SourceBadge
 import it.felixvision.tv.ui.components.ListPosition
 import it.felixvision.tv.ui.components.PositionIndicator
 import it.felixvision.tv.ui.components.FvpTextField
@@ -346,6 +348,7 @@ fun SearchSection(
                                 PosterResultCard(
                                     title = film.name,
                                     poster = film.streamIcon,
+                                    contentId = film.streamId,
                                     scale = scale,
                                     isFavorite = favorites.any { it.id == "vod_${film.streamId}" },
                                     progress = filmProgress,
@@ -391,6 +394,7 @@ fun SearchSection(
                                 PosterResultCard(
                                     title = serie.name,
                                     poster = serie.cover,
+                                    contentId = serie.seriesId,
                                     scale = scale,
                                     isFavorite = favorites.any { it.id == "series_${serie.seriesId}" },
                                     progress = null,
@@ -620,6 +624,11 @@ private fun LiveResultCard(
 private fun PosterResultCard(
     title: String,
     poster: String?,
+    /**
+     * Identificativo del contenuto: serve all'etichetta della sorgente, che
+     * compare solo con più sorgenti abilitate.
+     */
+    contentId: String,
     scale: UiScale,
     isFavorite: Boolean,
     progress: WatchProgress?,
@@ -682,6 +691,15 @@ private fun PosterResultCard(
                             .align(Alignment.TopStart)
                             .padding(scale.dp(6f))
                             .testTag("${progressKeyPrefix}_seen"),
+                    )
+                }
+                // Etichetta della sorgente: solo con più sorgenti abilitate.
+                LocalSourceLabels.current.labelFor(contentId)?.let { label ->
+                    SourceBadge(
+                        label = label,
+                        scale = scale,
+                        modifier = Modifier.align(Alignment.BottomStart).padding(scale.dp(6f)),
+                        testTag = "${progressKeyPrefix}_source",
                     )
                 }
                 if (isFavorite) {
