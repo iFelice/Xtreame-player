@@ -94,6 +94,12 @@ class M3uSourceService(
     /** Errore dell'indice delle liste (non raggiungibile o non valido). */
     val indexError: StateFlow<String?> = _indexError.asStateFlow()
 
+    /** Tentativi in silenzio già avviati, per sorgente. */
+    private val retryJobs = HashMap<String, Job>()
+
+    /** Tentativi già consumati, per sorgente. */
+    private val retryAttempts = HashMap<String, Int>()
+
     /** Lista di [source]: dalla copia in memoria, dal disco o dalla rete. */
     suspend fun playlist(source: Source, forceRefresh: Boolean = false): M3uPlaylist? {
         val current = withContext(io) {
