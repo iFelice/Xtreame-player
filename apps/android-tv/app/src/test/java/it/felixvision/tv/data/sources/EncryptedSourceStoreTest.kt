@@ -56,7 +56,10 @@ class EncryptedSourceStoreTest {
     /** Scrive il vecchio blob singolo, come lo lascia la versione precedente. */
     private suspend fun seedLegacy(preferences: InMemoryPreferences) {
         val record = """{"server":"http://server.esempio:8080","username":"demo","password":"demo-password","serverCode":"001"}"""
-        val encoded = Base64.getEncoder().encodeToString(record.toByteArray(Charsets.UTF_8))
+        // Il blob di prima era cifrato come quello nuovo: si cifra con lo
+        // stesso cifrario finto del test.
+        val blob = FakeCipher().encrypt(record.toByteArray(Charsets.UTF_8))
+        val encoded = Base64.getEncoder().encodeToString(blob)
         preferences.write(EncryptedSourceStore.KEY_LEGACY_CREDENTIALS, encoded)
     }
 

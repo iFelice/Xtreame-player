@@ -108,7 +108,14 @@ class EncryptedSourceStore(
         val encoded = preferences.read(KEY_SOURCES)
         if (encoded != null) return decode(encoded)
         val legacy = preferences.read(KEY_LEGACY_CREDENTIALS) ?: return null
-        val migrated = migrateLegacy(legacy)
+        val migrated = try {
+            migrateLegacy(legacy)
+        } catch (error: CredentialCipherException) {
+            // Chiave del Keystore persa: i dati non sono leggibili, come per
+            // l'elenco nuovo.
+            discardUnreadableData(error)
+            return null
+        }
         if (migrated == null) {
             discardUnreadableData(IllegalStateException("Blob delle credenziali non valido"))
             return null
@@ -148,6 +155,8 @@ class EncryptedSourceStore(
                 xtream = credentials,
             ),
         )
+    } catch (error: CredentialCipherException) {
+        throw error
     } catch (error: Exception) {
         null
     }
