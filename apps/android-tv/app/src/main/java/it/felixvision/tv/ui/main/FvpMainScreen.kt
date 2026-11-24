@@ -1019,7 +1019,13 @@ fun FvpMainScreen(
                                 DrawerSection.Film -> FilmSection(
                                     categories = visibleFilmCatalog?.vodCategories.orEmpty(),
                                     streams = visibleFilmCatalog?.vodStreams.orEmpty(),
-                                    recentStreams = visibleRecentFilms,
+                                    // Novità resta dell'account Xtream: con le liste
+                                    // scelte la categoria c'è ma non ha voci.
+                                    recentStreams = if (filmSource?.key == SectionSourceKeys.M3U_LISTS) {
+                                        emptyList()
+                                    } else {
+                                        visibleRecentFilms
+                                    },
                                     scale = scale,
                                     onLongPressFilm = { vod ->
                                         val fav = FavoriteItem(id = "vod_${vod.streamId}", type = "vod", title = vod.name, poster = vod.streamIcon, categoryId = vod.categoryId)
