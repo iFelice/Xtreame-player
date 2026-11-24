@@ -70,6 +70,8 @@ import it.felixvision.tv.ui.components.rememberGridDetailFocusRestore
 import it.felixvision.tv.ui.components.gridPosition
 import it.felixvision.tv.ui.detail.FilmDetailOverlay
 import it.felixvision.tv.ui.theme.FvpColors
+import it.felixvision.tv.ui.theme.positionText
+import it.felixvision.tv.ui.theme.rowText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 
