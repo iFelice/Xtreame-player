@@ -46,6 +46,8 @@ import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Border
 import androidx.tv.material3.Card
 import androidx.tv.material3.CardDefaults
+import androidx.tv.material3.DenseListItem
+import androidx.tv.material3.ListItemDefaults
 import androidx.tv.material3.Text
 import it.felixvision.tv.data.catalog.Category
 import it.felixvision.tv.data.catalog.VodInfoResponse
@@ -204,17 +206,44 @@ fun FilmSection(
     }
     val sortButtonFocus = remember { FocusRequester() }
 
-    // Scelta della sorgente: il pulsante c'è solo con due sorgenti con film e
-    // passa a quella successiva, così si cambia sorgente con un tasto solo.
-    val showSourceSwitch = filmSourceOptions.size > 1
-    val sourceSwitchIndex = filmSourceOptions
-        .indexOfFirst { it.key == selectedFilmSource }
-        .coerceAtLeast(0)
-    val sourceSwitchLabel = filmSourceOptions.getOrNull(sourceSwitchIndex)?.label.orEmpty()
-    val sourceSwitchNext = filmSourceOptions
-        .getOrNull(if (filmSourceOptions.isEmpty()) 0 else (sourceSwitchIndex + 1) % filmSourceOptions.size)
-        ?.key
-        .orEmpty()
+    // Riga "Cambia Sorgente": compare solo con due sorgenti con film e apre la
+    // finestra di scelta. Il focus sulla riga non tocca la categoria mostrata:
+    // la griglia resta dov'è finché non si sceglie.
+    val showSourceEntry = filmSourceOptions.size > 1
+    val sourceLabelText = if (showSourceEntry) {
+        filmSourceOptions.firstOrNull { it.key == selectedFilmSource }?.label
+    } else {
+        null
+    }
+    val sourceEntryFocus = remember { FocusRequester() }
+    var sourceDialogOpen by remember { mutableStateOf(false) }
+    var sourceDialogWasOpen by remember { mutableStateOf(false) }
+
+    // Alla chiusura della finestra il focus torna sulla riga "Cambia Sorgente".
+    LaunchedEffect(sourceDialogOpen, showSourceEntry) {
+        if (sourceDialogOpen) {
+            sourceDialogWasOpen = true
+        } else if (sourceDialogWasOpen) {
+            sourceDialogWasOpen = false
+            if (showSourceEntry) runCatching { sourceEntryFocus.requestFocus() }
+        }
+    }
+
+    // La categoria mostrata deve esistere nel catalogo della sorgente scelta:
+    // cambiando sorgente (o quando il catalogo arriva dopo) si riparte dalla
+    // prima categoria disponibile, con la griglia dall'inizio.
+    val categoryIds = remember(displayCategories) { displayCategories.map { it.categoryId } }
+    LaunchedEffect(categoryIds) {
+        if (debouncedCategoryId in categoryIds) return@LaunchedEffect
+        val target = if (recentStreams.isEmpty()) {
+            categoryIds.firstOrNull { it != NOVITA_CATEGORY_ID } ?: NOVITA_CATEGORY_ID
+        } else {
+            NOVITA_CATEGORY_ID
+        }
+        debouncedCategoryId = target
+        focusedCategoryId = target
+        gridState.scrollToItem(0)
+    }
     // Se la griglia è vuota, il telecomando deve poter entrare nelle categorie
     // e scegliere un'altra voce, invece di cercare una card che non esiste.
     val columnFocusRequesters = remember(categoryFocusRequesters, filtered.isEmpty(), focusedCategoryId, contentFocusRequester) {
@@ -348,6 +377,19 @@ fun FilmSection(
             focusRequesters = columnFocusRequesters,
             testTagPrefix = "film",
             onCategoryConfirmed = confirmCategory,
+            header = if (showSourceEntry) {
+                { expanded ->
+                    FilmSourceEntryRow(
+                        expanded = expanded,
+                        scale = scale,
+                        focusRequester = sourceEntryFocus,
+                        onClick = { sourceDialogOpen = true },
+                        onFocused = { categoryExpanded = true },
+                    )
+                }
+            } else {
+                null
+            },
         )
 
         Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
@@ -365,7 +407,7 @@ fun FilmSection(
                     contentPadding = PaddingValues(
                         start = scale.focusSafePadding,
                         end = scale.focusSafePadding,
-                        top = if ((showSortButton || showSourceSwitch) && filtered.isNotEmpty()) {
+                        top = if ((showSortButton || sourceLabelText != null) && filtered.isNotEmpty()) {
                             scale.focusSafePadding + scale.sortRowHeight
                         } else {
                             scale.focusSafePadding
@@ -480,39 +522,56 @@ fun FilmSection(
                 totalItems = filtered.size,
             ),
             scale = scale,
-            topRowEnd = if ((showSortButton || showSourceSwitch) && filtered.isNotEmpty()) {
+            topRowEnd = if ((showSortButton || sourceLabelText != null) && filtered.isNotEmpty()) {
                 {
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(scale.dp(8f)),
+                        horizontalArrangement = Arrangement.spacedBy(scale.dp(10f)),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                    if (showSourceSwitch) {
-                        FilmSourceButton(
-                            label = sourceSwitchLabel,
-                            scale = scale,
-                            onClick = { onSelectFilmSource(sourceSwitchNext) },
-                            modifier = Modifier.testTag(FILM_SOURCE_BUTTON_TAG),
-                        )
-                    }
-                    CatalogSortButton(
-                        sort = categorySort,
-                        scale = scale,
-                        label = sortButtonLabel,
-                        onClick = { changeSort(sortButtonNext) },
-                        modifier = Modifier
-                            .testTag(FILM_SORT_BUTTON_TAG)
-                            .focusRequester(sortButtonFocus)
-                            .onPreviewKeyEvent { event ->
-                                if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionDown) {
-                                    sortButtonDown()
-                                } else {
-                                    false
-                                }
-                            },
-                    )
+                        // Testo non focusabile: dice in quale sorgente sei senza
+                        // entrare nel percorso del telecomando.
+                        sourceLabelText?.let { label ->
+                            Text(
+                                text = "Sorgente · $label",
+                                color = FvpColors.TextSecondary,
+                                fontSize = scale.positionText,
+                                modifier = Modifier.testTag(FILM_SOURCE_LABEL_TAG),
+                            )
+                        }
+                        if (showSortButton) {
+                            CatalogSortButton(
+                                sort = categorySort,
+                                scale = scale,
+                                label = sortButtonLabel,
+                                onClick = { changeSort(sortButtonNext) },
+                                modifier = Modifier
+                                    .testTag(FILM_SORT_BUTTON_TAG)
+                                    .focusRequester(sortButtonFocus)
+                                    .onPreviewKeyEvent { event ->
+                                        if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionDown) {
+                                            sortButtonDown()
+                                        } else {
+                                            false
+                                        }
+                                    },
+                            )
+                        }
                     }
                 }
             } else null,
+        )
+    }
+
+    if (sourceDialogOpen && showSourceEntry) {
+        FilmSourceDialog(
+            options = filmSourceOptions,
+            selectedKey = selectedFilmSource,
+            scale = scale,
+            onSelect = { key ->
+                sourceDialogOpen = false
+                onSelectFilmSource(key)
+            },
+            onDismiss = { sourceDialogOpen = false },
         )
     }
 
@@ -544,4 +603,59 @@ fun FilmSection(
             refocusTick = refocusTick,
         )
     }
+}
+
+/**
+ * Riga "Cambia Sorgente" in testa alla colonna delle categorie.
+ *
+ * Non è una categoria: non cambia quella mostrata, non entra nell'ordinamento
+ * salvato e non compare nei contenuti protetti. Ha un fondo diverso dalle
+ * categorie per non sembrare una categoria con contenuti; quando la colonna è
+ * compatta mostra solo il simbolo.
+ */
+@Composable
+private fun FilmSourceEntryRow(
+    expanded: Boolean,
+    scale: UiScale,
+    focusRequester: FocusRequester,
+    onClick: () -> Unit,
+    onFocused: () -> Unit,
+) {
+    var focused by remember { mutableStateOf(false) }
+    DenseListItem(
+        selected = false,
+        onClick = onClick,
+        headlineContent = {
+            if (expanded) {
+                FocusMarqueeText(
+                    text = FilmSourceDialogTexts.ENTRY,
+                    focused = focused,
+                    fontSize = scale.rowText,
+                    color = FvpColors.TextPrimary,
+                )
+            } else {
+                Text(
+                    text = FilmSourceDialogTexts.ENTRY_COMPACT,
+                    color = FvpColors.TextPrimary,
+                )
+            }
+        },
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(FILM_SOURCE_ENTRY_TAG)
+            .focusRequester(focusRequester)
+            .onFocusChanged {
+                focused = it.isFocused
+                if (it.isFocused) onFocused()
+            },
+        colors = ListItemDefaults.colors(
+            containerColor = FvpColors.SurfaceElevated,
+            contentColor = FvpColors.TextPrimary,
+            focusedContainerColor = FvpColors.SurfaceElevated,
+            focusedContentColor = FvpColors.TextPrimary,
+            focusedSelectedContainerColor = FvpColors.SurfaceElevated,
+            focusedSelectedContentColor = FvpColors.TextPrimary,
+        ),
+        scale = ListItemDefaults.scale(focusedScale = 1.04f),
+    )
 }

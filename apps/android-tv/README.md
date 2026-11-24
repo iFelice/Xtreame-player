@@ -237,13 +237,21 @@ liste abilitate unite in una sola voce). Le voci del selettore sono solo quelle
 che hanno film: Serie e Live sono sempre dell'account, quindi non entrano nella
 scelta.
 
-- Con **due** sorgenti con film, in alto sopra la griglia compare il pulsante
-  della sorgente in uso ("Xtream" o "Liste M3U"): un tasto lo porta sull'altra.
+- Con **due** sorgenti con film, la colonna delle categorie ha in testa la riga
+  **"Cambia Sorgente"** (sotto Novità): OK apre la finestra **"Scegli la
+  sorgente"**, con "Account Xtream" e "Liste M3U", la spunta sulla sorgente in
+  uso e il focus lì; OK su una riga la sceglie, Indietro chiude senza cambiare
+  nulla. Scegliere una sorgente **non** disattiva niente: le sorgenti restano
+  tutte attive nelle Impostazioni e i cataloghi sono già in memoria, quindi il
+  cambio è immediato, senza ricaricamenti né rete.
   La scelta è ricordata per sezione (`fvp_section_source`, chiave `film`): alla
   riapertura la sezione parte dall'ultima sorgente usata, o da Xtream alla prima
   apertura. Se quella ricordata è stata disattivata o non ha più film si apre la
-  prima disponibile.
-- Con **una sola** sorgente con film non c'è nessun pulsante: si entra
+  prima disponibile. Sopra la griglia, accanto al pulsante di ordinamento, un
+  testo non focusabile dice sempre in quale sorgente sei ("Sorgente · Xtream").
+  La riga "Cambia Sorgente" non è una categoria: non entra nell'ordinamento
+  salvato, nei contenuti protetti né nella griglia.
+- Con **una sola** sorgente con film non c'è nessun comando: si entra
   direttamente. Se tutte le sorgenti sono disattivate la schermata mostra
   "Nessuna sorgente attiva" con il rimando a Impostazioni › Account.
 - Nei **film delle liste M3U** le categorie sono i `group-title` di tutte le
@@ -674,7 +682,7 @@ simulato e implementazioni finte per cifrario e preferenze:
 | `ServerAddressTest`, `ServerInputTest` | regola "codice o indirizzo" e normalizzazione dell'indirizzo |
 | `QrMatrixTest` | il QR decodifica in `<PAIRING_RELAY_URL>/?code=<PIN>` |
 | `EncryptedCredentialStoreTest` | cifratura dietro interfaccia, nessun dato in chiaro, cancellazione quando la decifratura fallisce |
-| `SectionSourceSelectionTest`, `FilmSourcePickerTest` | voci della scelta della sorgente solo per le sorgenti con film, apertura sull'ultima usata, ripiego sulla prima se la ricordata non c'è più, pulsante presente solo con due sorgenti e passaggio all'altra, nessun badge di sorgente sulle card |
+| `SectionSourceSelectionTest`, `FilmSourcePickerTest` | voci della scelta della sorgente solo per le sorgenti con film, apertura sull'ultima usata, ripiego sulla prima se la ricordata non c'è più, riga "Cambia Sorgente" solo con due sorgenti, finestra di scelta con spunta sull'attiva, testo della sorgente non focusabile, nessun badge di sorgente sulle card |
 | `SourceRepositoryCleanupTest` | righe orfane eliminate solo senza dati utente, righe con dati utente conservate e nascoste |
 | `AggregatedCatalogTest` | catalogo unito senza etichette, categorie omonime delle liste M3U fuse in una, voci in ordine di lista e di file, provenienza negli identificativi |
 | `CatalogModelsTest` | JSON reali tipici con stream_id numerico/testuale, added testuale, campi null, ordine Novità |

@@ -53,7 +53,7 @@ class FilmSourcePickerTest {
     }
 
     @Test
-    fun `con due sorgenti il pulsante c'e e passa all'altra`() {
+    fun `con due sorgenti la riga apre la finestra e la scelta cambia sorgente`() {
         var chosen: String? = null
         rule.setContent {
             FvpTheme {
@@ -68,20 +68,51 @@ class FilmSourcePickerTest {
             }
         }
         rule.waitForIdle()
-        confirmCategory()
 
-        rule.onNodeWithTag(FILM_SOURCE_BUTTON_TAG).assertIsDisplayed()
-        rule.onNodeWithTag(FILM_SOURCE_BUTTON_TAG).assertTextEquals("Xtream")
+        // La finestra non c'è finché non si preme OK sulla riga.
+        rule.onNodeWithTag(FILM_SOURCE_DIALOG_TAG).assertDoesNotExist()
 
-        rule.onNodeWithTag(FILM_SOURCE_BUTTON_TAG)
+        rule.onNodeWithTag(FILM_SOURCE_ENTRY_TAG)
+            .performSemanticsAction(SemanticsActions.OnClick)
+        rule.waitForIdle()
+
+        rule.onNodeWithTag(FILM_SOURCE_DIALOG_TAG).assertExists()
+        // Spunta sulla sorgente in uso, niente sull'altra.
+        rule.onNodeWithTag(filmSourceCheckTag(SectionSourceKeys.XTREAM)).assertExists()
+        rule.onNodeWithTag(filmSourceCheckTag(SectionSourceKeys.M3U_LISTS)).assertDoesNotExist()
+
+        rule.onNodeWithTag(filmSourceRowTag(SectionSourceKeys.M3U_LISTS))
             .performSemanticsAction(SemanticsActions.OnClick)
         rule.waitForIdle()
 
         assertEquals(SectionSourceKeys.M3U_LISTS, chosen)
+        // Scelta fatta: la finestra si chiude.
+        rule.onNodeWithTag(FILM_SOURCE_DIALOG_TAG).assertDoesNotExist()
     }
 
     @Test
-    fun `con una sola sorgente non c'e nessun pulsante`() {
+    fun `il testo della sorgente in uso non prende il focus`() {
+        rule.setContent {
+            FvpTheme {
+                FilmSection(
+                    categories = listOf(Category(categoryId = categoryId, categoryName = "Azione")),
+                    streams = listOf(stream),
+                    scale = scale,
+                    filmSourceOptions = bothOptions,
+                    selectedFilmSource = SectionSourceKeys.M3U_LISTS,
+                )
+            }
+        }
+        rule.waitForIdle()
+        confirmCategory()
+
+        rule.onNodeWithTag(FILM_SOURCE_LABEL_TAG).assertTextEquals("Sorgente · Liste M3U")
+        // Le card non portano etichette di sorgente.
+        rule.onNodeWithTag("film_${stream.streamId}_source").assertDoesNotExist()
+    }
+
+    @Test
+    fun `con una sola sorgente non c'e la riga e nessun testo di sorgente`() {
         rule.setContent {
             FvpTheme {
                 FilmSection(
@@ -96,10 +127,9 @@ class FilmSourcePickerTest {
         rule.waitForIdle()
         confirmCategory()
 
-        // Il pulsante non c'è: si entra direttamente nell'unica sorgente.
-        rule.onNodeWithTag(FILM_SOURCE_BUTTON_TAG).assertDoesNotExist()
+        // Nessun comando: si entra direttamente nell'unica sorgente.
+        rule.onNodeWithTag(FILM_SOURCE_ENTRY_TAG).assertDoesNotExist()
+        rule.onNodeWithTag(FILM_SOURCE_LABEL_TAG).assertDoesNotExist()
         rule.onNodeWithTag("film_${stream.streamId}").assertIsDisplayed()
-        // Nessuna etichetta di sorgente sulle card.
-        rule.onNodeWithTag("film_${stream.streamId}_source").assertDoesNotExist()
     }
 }

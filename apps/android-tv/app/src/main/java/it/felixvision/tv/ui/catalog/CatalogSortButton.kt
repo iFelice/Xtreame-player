@@ -73,31 +73,3 @@ fun CatalogSortButton(
         maxHeightBase = SORT_BUTTON_MAX_HEIGHT_BASE,
     )
 }
-
-/** Tag del pulsante che cambia la sorgente della sezione Film. */
-const val FILM_SOURCE_BUTTON_TAG = "film_source_button"
-
-/**
- * Pulsante che mostra la sorgente in uso nella sezione Film e passa all'altra.
- *
- * Compare solo quando ci sono **due** sorgenti con film (Xtream e Liste M3U):
- * con una sola il pulsante non serve. Ha la stessa forma e la stessa altezza del
- * pulsante di ordinamento, che gli sta accanto nella riga sopra la griglia.
- */
-@Composable
-fun FilmSourceButton(
-    label: String,
-    scale: UiScale,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    FvpCompactButton(
-        text = label,
-        onClick = onClick,
-        scale = scale,
-        modifier = modifier,
-        fontWeight = FvpCompactButtonStyle.SECONDARY_WEIGHT,
-        verticalPaddingBase = 4f,
-        maxHeightBase = 32f,
-    )
-}
