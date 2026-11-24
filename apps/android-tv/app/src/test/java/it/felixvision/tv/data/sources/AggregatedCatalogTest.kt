@@ -69,7 +69,7 @@ class AggregatedCatalogTest {
         assertEquals(listOf("Azione", "Azione"), merged.vodCategories.map { it.categoryName })
         assertEquals(2, merged.vodCategories.size)
         assertEquals(2, merged.vodCategories.map { it.categoryId }.distinct().size)
-        assertTrue(merged.vodCategories.none { it.categoryName.contains("·") })
+        assertTrue(merged.vodCategories.none { it.categoryName?.contains("·") == true })
     }
 
     @Test
@@ -103,7 +103,7 @@ class AggregatedCatalogTest {
     fun `con una sola sorgente nessuna voce ha l'etichetta`() {
         val merged = AggregatedCatalog.merge(listOf(CatalogPart(xtream, xtreamCatalog())))
 
-        assertTrue(merged.vodCategories.none { it.categoryName.contains("·") })
+        assertTrue(merged.vodCategories.none { it.categoryName?.contains("·") == true })
         assertTrue(merged.liveCategories.none { it.categoryName?.contains("·") == true })
     }
 

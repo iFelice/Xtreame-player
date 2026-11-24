@@ -57,9 +57,11 @@ object AggregatedCatalog {
         for (part in parts) {
             val localKeys = HashMap<String, String>(part.catalog.vodCategories.size)
             for (category in part.catalog.vodCategories) {
-                val key = M3uLibrary.categoryKey(category.categoryName)
+                val name = category.categoryName?.takeIf { it.isNotBlank() }
+                    ?: M3uLibrary.UNCATEGORIZED
+                val key = M3uLibrary.categoryKey(name)
                 localKeys[category.categoryId] = key
-                bucket(key, category.categoryName)
+                bucket(key, name)
             }
             for (stream in part.catalog.vodStreams) {
                 val key = localKeys[stream.categoryId]
