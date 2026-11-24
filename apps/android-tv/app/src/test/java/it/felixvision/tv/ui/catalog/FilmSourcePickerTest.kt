@@ -77,9 +77,12 @@ class FilmSourcePickerTest {
         rule.waitForIdle()
 
         rule.onNodeWithTag(FILM_SOURCE_DIALOG_TAG).assertExists()
-        // Spunta sulla sorgente in uso, niente sull'altra.
-        rule.onNodeWithTag(filmSourceCheckTag(SectionSourceKeys.XTREAM)).assertExists()
-        rule.onNodeWithTag(filmSourceCheckTag(SectionSourceKeys.M3U_LISTS)).assertDoesNotExist()
+        // Spunta sulla sorgente in uso, niente sull'altra. La spunta sta dentro
+        // la riga (che unisce la semantica dei figli): serve l'albero non unito.
+        rule.onNodeWithTag(filmSourceCheckTag(SectionSourceKeys.XTREAM), useUnmergedTree = true)
+            .assertExists()
+        rule.onNodeWithTag(filmSourceCheckTag(SectionSourceKeys.M3U_LISTS), useUnmergedTree = true)
+            .assertDoesNotExist()
 
         rule.onNodeWithTag(filmSourceRowTag(SectionSourceKeys.M3U_LISTS))
             .performSemanticsAction(SemanticsActions.OnClick)
