@@ -39,6 +39,27 @@ class SourceRepository(
         _revision.value += 1L
     }
 
+    /**
+     * Elimina le righe delle liste che non hanno più un indirizzo **e** che non
+     * hanno dati utente (preferiti, avanzamento, contenuti nascosti). Le righe
+     * con dati restano salvate, quindi nascoste, come prima: se la lista
+     * tornasse, preferiti e avanzamento sarebbero ancora lì.
+     *
+     * @param hasUserData vero se la sorgente ha dati utente da conservare.
+     * @return vero se l'elenco è cambiato.
+     */
+    suspend fun cleanupOrphans(hasUserData: suspend (String) -> Boolean): Boolean {
+        val visible = store.load()
+        val visibleIds = visible.mapTo(HashSet(visible.size)) { it.id }
+        val orphans = store.loadAll().filter { it.id !in visibleIds }
+        if (orphans.isEmpty()) return false
+        val kept = orphans.filter { source -> hasUserData(source.id) }
+        if (kept.size == orphans.size) return false
+        store.save(visible + kept)
+        _revision.value += 1L
+        return true
+    }
+
     /** Notifica un cambiamento fatto altrove (per esempio dall'accesso). */
     fun notifyChanged() {
         _revision.value += 1L

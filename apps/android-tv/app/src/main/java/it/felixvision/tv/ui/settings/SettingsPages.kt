@@ -323,6 +323,8 @@ internal fun SettingsAccountPage(
                     color = FvpColors.TextSecondary,
                     fontSize = scale.settingsRowText,
                 )
+                // Nome visibile: "Account Xtream" o il nome del file della lista.
+                val sourceNames = Sources.displayNames(state.sources)
                 state.sources.forEach { source ->
                     Row(
                         modifier = Modifier
@@ -333,7 +335,7 @@ internal fun SettingsAccountPage(
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(scale.dp(2f))) {
                             Text(
-                                text = Sources.rowTitle(source),
+                                text = sourceNames[source.id] ?: Sources.typeName(source.type),
                                 color = FvpColors.TextPrimary,
                                 fontSize = scale.settingsRowText,
                                 modifier = Modifier.testTag("settings_source_title_${source.label}"),

@@ -20,6 +20,7 @@ import it.felixvision.tv.data.sources.M3uErrorRow
 import it.felixvision.tv.data.sources.Source
 import it.felixvision.tv.data.sources.SourceIds
 import it.felixvision.tv.data.sources.SourceType
+import it.felixvision.tv.data.sources.Sources
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -45,6 +46,15 @@ data class CatalogUiState(
      * restano utilizzabili.
      */
     val m3uErrors: List<M3uErrorRow> = emptyList(),
+    /**
+     * Catalogo dell'account Xtream: è quello che la sezione Film mostra quando
+     * si sceglie "Xtream". Serie e Live restano sempre dell'account.
+     */
+    val xtreamCatalog: Catalog? = null,
+    /** Film di tutte le liste M3U abilitate, unite in una sola voce. */
+    val m3uCatalog: Catalog? = null,
+    /** Falso quando nessuna sorgente è attiva: stato vuoto con rimando alle Impostazioni. */
+    val hasAnySource: Boolean = true,
 )
 
 internal data class CatalogRecentItems(
@@ -207,6 +217,10 @@ class CatalogViewModel(
             prepareM3u(forceRefresh = forceM3u)
             val sources = enabledSources()
             m3uParts = loadM3uParts(sources, forceRefresh = forceM3u)
+            // Righe delle liste sparite dall'indice e senza dati utente: si
+            // eliminano al primo aggiornamento utile, mentre quelle con dati
+            // (preferiti, avanzamento, nascosti) restano salvate e nascoste.
+            runCatching { container.sourceRepository.cleanupOrphans { id -> hasUserData(id) } }
             val xtreamSource = sources.firstOrNull { it.type == SourceType.XTREAM }
 
             // Nessun account Xtream abilitato: nessuna richiesta al pannello, si
@@ -250,8 +264,38 @@ class CatalogViewModel(
     }
 
     /** Sorgenti abilitate, in ordine di etichetta; errore di lettura = nessuna. */
-    private suspend fun enabledSources(): List<Source> =
-        runCatching { container.sourceRepository.enabledSources() }.getOrDefault(emptyList())
+    private suspend fun enabledSources(): List<Source> {
+        val sources = runCatching { container.sourceRepository.enabledSources() }
+            .getOrDefault(emptyList())
+        val any = sources.isNotEmpty()
+        if (_ui.value.hasAnySource != any) {
+            _ui.update { it.copy(hasAnySource = any) }
+        }
+        return sources
+    }
+
+    /**
+     * Vero se la riga [sourceId] ha dati utente da conservare: preferiti,
+     * avanzamento o contenuti nascosti. Senza account Xtream non c'è dove
+     * salvarli, quindi la riga si può eliminare.
+     */
+    private suspend fun hasUserData(sourceId: String): Boolean {
+        val credentials = Sources.primaryXtream(enabledSources())?.xtream ?: return false
+        val marker = "$sourceId:"
+        val favorites = runCatching {
+            container.favoritesStore.getFavorites(credentials.server, credentials.username)
+        }.getOrDefault(emptyList())
+        if (favorites.any { it.id.contains(marker) }) return true
+        val progress = runCatching {
+            container.progressStore.getAll(credentials.server, credentials.username)
+        }.getOrDefault(emptyMap())
+        if (progress.keys.any { it.contains(marker) }) return true
+        val hidden = runCatching {
+            container.protectedContentStore.get(credentials.server, credentials.username)
+        }.getOrNull() ?: return false
+        return hidden.hiddenCategories.any { it.categoryId.contains(marker) } ||
+            hidden.hiddenItems.any { it.itemId.contains(marker) }
+    }
 
     /**
      * Catalogo della Lista M3U per ogni sorgente M3U abilitata. Senza copia
@@ -285,6 +329,8 @@ class CatalogViewModel(
         _ui.update {
             it.copy(
                 catalog = catalog,
+                xtreamCatalog = xtreamPart?.catalog,
+                m3uCatalog = if (m3uParts.isEmpty()) null else AggregatedCatalog.mergeM3u(m3uParts),
                 lastUpdateMillis = updatedAt,
                 recentFilms = recent.films,
                 recentSeries = recent.series,

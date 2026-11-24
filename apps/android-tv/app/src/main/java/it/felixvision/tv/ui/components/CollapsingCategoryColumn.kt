@@ -75,6 +75,12 @@ fun CollapsingCategoryColumn(
     favoriteCategoryIds: Set<String> = emptySet(),
     onLongPressCategory: ((Category) -> Unit)? = null,
     onCategoryConfirmed: ((String) -> Unit)? = null,
+    /**
+     * Voce fissa in testa alla colonna, sopra le categorie: non è una categoria
+     * e non partecipa alla scelta (per esempio "Cambia Sorgente" in Film).
+     * Riceve `expanded` per adattare il testo quando la colonna è compatta.
+     */
+    header: (@Composable (Boolean) -> Unit)? = null,
 ) {
     // Il margine sicuro del focus sta dentro la colonna, quindi la larghezza
     // cresce di FocusSafePadding per lato: la voce con il focus (con il suo
@@ -105,6 +111,11 @@ fun CollapsingCategoryColumn(
             modifier = Modifier.fillMaxHeight()
                 .then(if (!expanded) Modifier.testTag("${testTagPrefix}_category_collapsed") else Modifier)
         ) {
+            // Voce fissa in testa (per esempio "Cambia Sorgente" in Film).
+            val headerSlot = header
+            if (headerSlot != null) {
+                item(key = "${testTagPrefix}_column_header") { headerSlot(expanded) }
+            }
             itemsIndexed(categories, key = { _, c -> c.categoryId }) { index, cat ->
                 val selected = cat.categoryId == debouncedCategoryId
                 val fr = remember(cat.categoryId, focusRequesters) { focusRequesters[cat.categoryId] ?: FocusRequester() }

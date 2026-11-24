@@ -77,6 +77,10 @@ import it.felixvision.tv.ui.catalog.CatalogViewModel
 import it.felixvision.tv.ui.catalog.CategorySortStore
 import it.felixvision.tv.ui.catalog.FavoritesSection
 import it.felixvision.tv.ui.catalog.FilmSection
+import it.felixvision.tv.ui.catalog.SectionKeys
+import it.felixvision.tv.ui.catalog.SectionSourceKeys
+import it.felixvision.tv.ui.catalog.filmSourceOptionsFor
+import it.felixvision.tv.ui.catalog.resolveFilmSource
 import it.felixvision.tv.ui.catalog.LiveSection
 import it.felixvision.tv.ui.catalog.MyChannelBulkConfirmDialog
 import it.felixvision.tv.ui.catalog.MyChannelDialog
@@ -96,8 +100,6 @@ import it.felixvision.tv.ui.components.ErrorState
 import it.felixvision.tv.ui.components.FvpPrimaryButton
 import it.felixvision.tv.ui.components.FvpSecondaryButton
 import it.felixvision.tv.ui.components.LoadingState
-import it.felixvision.tv.ui.components.LocalSourceLabels
-import it.felixvision.tv.ui.components.SourceLabels
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.navigation.DrawerFocusHandle
 import it.felixvision.tv.ui.navigation.DrawerSection
@@ -395,6 +397,36 @@ fun FvpMainScreen(
         )
     }
     val visibleCatalog = visible.catalog
+
+    // Sorgente della sezione Film: "Xtream" o "Liste M3U". La scelta è ricordata
+    // per sezione; se la sorgente ricordata non è più attiva (o non ha più
+    // film) si apre la prima che ne ha, e con una sola il pulsante non c'è.
+    val filmSourceStorage = remember { container.sectionSourceStore }
+    var filmSourceKey by remember { mutableStateOf(filmSourceStorage.read(SectionKeys.FILM)) }
+    val filmSourceOptions = remember(catalogState.xtreamCatalog, catalogState.m3uCatalog) {
+        filmSourceOptionsFor(
+            hasXtreamFilms = catalogState.xtreamCatalog?.vodStreams?.isNotEmpty() == true,
+            hasM3uFilms = catalogState.m3uCatalog?.vodStreams?.isNotEmpty() == true,
+        )
+    }
+    val filmSource = resolveFilmSource(filmSourceOptions, filmSourceKey)
+    val visibleFilmCatalog = remember(
+        catalogState.xtreamCatalog,
+        catalogState.m3uCatalog,
+        filmSource?.key,
+        protectedData,
+        unlocked,
+    ) {
+        protectedFilmCatalog(
+            catalog = when (filmSource?.key) {
+                SectionSourceKeys.M3U_LISTS -> catalogState.m3uCatalog
+                SectionSourceKeys.XTREAM -> catalogState.xtreamCatalog
+                else -> null
+            },
+            data = protectedData,
+            unlocked = unlocked,
+        )
+    }
     val visibleRecentFilms = visible.recentFilms
     val visibleRecentSeries = visible.recentSeries
     val visibleFavorites = visible.favorites
@@ -852,14 +884,9 @@ fun FvpMainScreen(
         }
     }
 
-    // Etichette delle sorgenti per Cerca, Preferiti e Riprendi: con una sola
-    // sorgente abilitata restano spente, come oggi.
-    val sourceLabels = remember(catalogSources) { SourceLabels.from(catalogSources) }
-
     // La scheda serie legge da qui la stagione dell'episodio da continuare.
     CompositionLocalProvider(
         LocalContinueEntries provides visibleContinueEntries,
-        LocalSourceLabels provides sourceLabels,
     ) {
     FvpNavigationDrawer(
         selected = selectedTab,
@@ -909,6 +936,13 @@ fun FvpMainScreen(
                     )
                     // L'attesa del primo catalogo è a schermo intero: il BrandBackdrop
                     // è composto in fondo a questa schermata, sopra il menu laterale.
+                    // Nessuna sorgente attiva: si dice dove riaccenderla.
+                    !catalogState.hasAnySource -> EmptyState(
+                        title = "Nessuna sorgente attiva",
+                        description = "Attiva una sorgente in Impostazioni → Account per vedere i contenuti.",
+                        scale = scale,
+                        modifier = Modifier.align(Alignment.Center),
+                    )
                     catalogState.isLoading && catalogState.catalog == null -> Unit
                     catalogState.errorMessage != null && catalogState.catalog == null -> {
                         ErrorState(message = catalogState.errorMessage!!, scale = scale, onRetry = { catalogViewModel.retry() }, modifier = Modifier.align(Alignment.Center))
@@ -983,9 +1017,15 @@ fun FvpMainScreen(
                                     modifier = Modifier.fillMaxSize(),
                                 )
                                 DrawerSection.Film -> FilmSection(
-                                    categories = catalog.vodCategories,
-                                    streams = catalog.vodStreams,
-                                    recentStreams = visibleRecentFilms,
+                                    categories = visibleFilmCatalog?.vodCategories.orEmpty(),
+                                    streams = visibleFilmCatalog?.vodStreams.orEmpty(),
+                                    // Novità resta dell'account Xtream: con le liste
+                                    // scelte la categoria c'è ma non ha voci.
+                                    recentStreams = if (filmSource?.key == SectionSourceKeys.M3U_LISTS) {
+                                        emptyList()
+                                    } else {
+                                        visibleRecentFilms
+                                    },
                                     scale = scale,
                                     onLongPressFilm = { vod ->
                                         val fav = FavoriteItem(id = "vod_${vod.streamId}", type = "vod", title = vod.name, poster = vod.streamIcon, categoryId = vod.categoryId)
@@ -1001,6 +1041,12 @@ fun FvpMainScreen(
                                     refocusTick = playerReturnTick,
                                     contentFocusRequester = contentFocusRequester,
                                     sortStorage = categorySortStore,
+                                    filmSourceOptions = filmSourceOptions,
+                                    selectedFilmSource = filmSource?.key,
+                                    onSelectFilmSource = { key ->
+                                        filmSourceKey = key
+                                        filmSourceStorage.write(SectionKeys.FILM, key)
+                                    },
                                     modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
                                 )
                                 DrawerSection.Serie -> SerieSection(
