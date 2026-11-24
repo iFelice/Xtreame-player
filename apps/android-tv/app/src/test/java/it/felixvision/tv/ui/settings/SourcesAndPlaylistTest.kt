@@ -42,7 +42,7 @@ import org.robolectric.annotation.Config
  * Sorgenti nella pagina "Impostazioni › Account" e Successivo/Precedente nella
  * coda di una categoria della Lista M3U.
  *
- * - la riga M3U è etichettata "Lista M3U · M1" e non mostra mai l'indirizzo
+ * - la riga M3U porta il nome del file dell'indirizzo e non l'indirizzo
  *   della lista;
  * - l'interruttore "Mostra" è un pulsante tv-material: si attiva con
  *   `SemanticsActions.OnClick`;
@@ -71,10 +71,15 @@ class SourcesAndPlaylistTest {
         ),
     )
 
-    private val m3uSource = Source(id = "s2", type = SourceType.M3U, label = "M1")
+    private val m3uSource = Source(
+        id = "s2",
+        type = SourceType.M3U,
+        label = "M1",
+        m3uUrl = "http://server.esempio:8080/lista.m3u8",
+    )
 
     @Test
-    fun `la riga della Lista M3U mostra l'etichetta e non l'indirizzo`() {
+    fun `la riga della Lista M3U mostra il nome del file e non l'indirizzo`() {
         var toggled: Pair<String, Boolean>? = null
         rule.setContent {
             FvpTheme {
@@ -92,8 +97,8 @@ class SourcesAndPlaylistTest {
         rule.waitForIdle()
 
         rule.onNodeWithTag(SETTINGS_SOURCES_SECTION_TAG).assertExists()
-        rule.onNodeWithTag("settings_source_title_S1").assertTextEquals("Account Xtream · S1")
-        rule.onNodeWithTag("settings_source_title_M1").assertTextEquals("Lista M3U · M1")
+        rule.onNodeWithTag("settings_source_title_S1").assertTextEquals("Account Xtream")
+        rule.onNodeWithTag("settings_source_title_M1").assertTextEquals("lista")
         rule.onNodeWithTag("settings_source_row_M1").assertIsDisplayed()
 
         // L'interruttore spegne la sorgente: la riga resta, l'etichetta pure.
@@ -119,7 +124,7 @@ class SourcesAndPlaylistTest {
         }
         rule.waitForIdle()
 
-        rule.onNodeWithTag("settings_source_title_S1").assertTextEquals("Account Xtream · S1")
+        rule.onNodeWithTag("settings_source_title_S1").assertTextEquals("Account Xtream")
         rule.onNodeWithTag("settings_source_title_M1").assertDoesNotExist()
     }
 
@@ -223,12 +228,12 @@ class SourcesAndPlaylistTest {
                         m3uErrors = listOf(
                             M3uErrorRow(
                                 sourceId = "s2",
-                                title = "Lista M3U · M1",
+                                title = "lista",
                                 message = "Lista non raggiungibile",
                             ),
                             M3uErrorRow(
                                 sourceId = "s3",
-                                title = "Lista M3U · M2",
+                                title = "serie",
                                 message = "Lista non trovata (404)",
                             ),
                         ),
@@ -240,17 +245,22 @@ class SourcesAndPlaylistTest {
         rule.waitForIdle()
 
         rule.onNodeWithTag("settings_sources_error_s2").assertTextEquals(
-            "Lista M3U · M1: Lista non raggiungibile. Le altre sorgenti restano disponibili.",
+            "lista: Lista non raggiungibile. Le altre sorgenti restano disponibili.",
         )
         rule.onNodeWithTag("settings_sources_error_s3").assertTextEquals(
-            "Lista M3U · M2: Lista non trovata (404). Le altre sorgenti restano disponibili.",
+            "serie: Lista non trovata (404). Le altre sorgenti restano disponibili.",
         )
     }
 
     @Test
     fun `il riquadro Sorgenti mostra tutte le liste`() {
         val lists = (1..6).map { index ->
-            Source(id = "s$index", type = SourceType.M3U, label = "M$index")
+            Source(
+                id = "s$index",
+                type = SourceType.M3U,
+                label = "M$index",
+                m3uUrl = "http://server.esempio:8080/lista$index.m3u8",
+            )
         }
         rule.setContent {
             FvpTheme {
@@ -267,10 +277,10 @@ class SourcesAndPlaylistTest {
         rule.waitForIdle()
 
         rule.onNodeWithTag(SETTINGS_SOURCES_SECTION_TAG).assertExists()
-        rule.onNodeWithTag("settings_source_title_S1").assertTextEquals("Account Xtream · S1")
+        rule.onNodeWithTag("settings_source_title_S1").assertTextEquals("Account Xtream")
         lists.forEach { source ->
             rule.onNodeWithTag("settings_source_title_${source.label}")
-                .assertTextEquals("Lista M3U · ${source.label}")
+                .assertTextEquals("lista${source.label.removePrefix("M")}")
             rule.onNodeWithTag("settings_source_toggle_${source.label}").assertExists()
         }
     }

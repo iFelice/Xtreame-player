@@ -53,6 +53,7 @@ import it.felixvision.tv.data.volume.VolumeStore
 import it.felixvision.tv.data.xtream.XtreamClient
 import it.felixvision.tv.player.PlayerPreferences
 import it.felixvision.tv.ui.catalog.CategorySortStore
+import it.felixvision.tv.ui.catalog.SectionSourceStore
 import it.felixvision.tv.ui.settings.InterfaceSizeStore
 import it.felixvision.tv.vpn.KeystoreVpnConfigCipher
 import it.felixvision.tv.vpn.VpnController
@@ -188,6 +189,14 @@ class AppContainer(
      */
     val categorySortStore: CategorySortStore by lazy {
         CategorySortStore(context)
+    }
+
+    /**
+     * Ultima sorgente scelta in ogni sezione (per ora solo Film): "Xtream" o
+     * "Liste M3U", in SharedPreferences (`fvp_section_source`).
+     */
+    val sectionSourceStore: SectionSourceStore by lazy {
+        SectionSourceStore(context)
     }
 
     /** Formato dello schermo scelto per ogni canale Live, per server+utente. */

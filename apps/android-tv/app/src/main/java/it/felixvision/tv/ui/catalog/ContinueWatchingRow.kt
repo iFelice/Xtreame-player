@@ -59,8 +59,6 @@ import it.felixvision.tv.data.progress.WatchProgress
 import it.felixvision.tv.ui.components.CatalogPosterImage
 import it.felixvision.tv.ui.components.FvpCompactButton
 import it.felixvision.tv.ui.components.FocusMarqueeText
-import it.felixvision.tv.ui.components.LocalSourceLabels
-import it.felixvision.tv.ui.components.SourceBadge
 import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.components.ignoreHeldOkUntilReleased
 import it.felixvision.tv.ui.components.WatchProgressLine
@@ -298,36 +296,6 @@ fun ContinueWatchingRow(
                                         scale = scale,
                                         modifier = Modifier.align(Alignment.BottomCenter),
                                     )
-                                    // Etichetta della sorgente della voce di
-                                    // "Riprendi": solo con più sorgenti.
-                                    LocalSourceLabels.current
-                                        .labelFor(entry.streamId ?: entry.seriesId)
-                                        ?.let { label ->
-                                            SourceBadge(
-                                                label = label,
-                                                scale = scale,
-                                                modifier = Modifier
-                                                    .align(Alignment.BottomStart)
-                                                    .padding(scale.dp(6f)),
-                                                testTag = "continua_${entry.key}_source",
-                                            )
-                                        }
-                                    if (loadingKey == entry.key) {
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .background(FvpColors.Background.copy(alpha = 0.6f)),
-                                            contentAlignment = Alignment.Center,
-                                        ) {
-                                            Text(
-                                                text = "Caricamento…",
-                                                color = FvpColors.TextPrimary,
-                                                fontSize = scale.sp(14f),
-                                                textAlign = TextAlign.Center,
-                                                modifier = Modifier.testTag("continua_loading_${entry.key}"),
-                                            )
-                                        }
-                                    }
                                 }
                                 FocusMarqueeText(
                                     text = entry.title,

@@ -96,6 +96,9 @@ object M3uLibrary {
         return Catalog(vodCategories = categories, vodStreams = streams)
     }
 
+    /** Chiave di confronto dei nomi di categoria: senza spazi ai bordi, senza maiuscole. */
+    fun categoryKey(name: String): String = name.trim().lowercase()
+
     /** Voce della lista corrispondente all'identificativo aggregato, se c'è. */
     fun entryFor(entries: List<M3uEntry>, sourceId: String, streamId: String): M3uEntry? {
         if (SourceIds.sourceOf(streamId) != sourceId) return null

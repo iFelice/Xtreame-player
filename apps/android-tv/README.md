@@ -205,6 +205,14 @@ limite**. L'etichetta è assegnata alla creazione e non cambia più; le liste
 create da una versione precedente con un'etichetta `S` vengono portate a `M`
 alla prima lettura.
 
+**Le etichette restano interne**: non compaiono nella sezione Film, in Serie, in
+Cerca, nei Preferiti o in Riprendi, né come prefisso di categoria né come badge
+sulla card. Servono solo a "I miei canali" e agli archivi su disco (dove sono la
+provenienza delle voci, `s2:<id>`); in Impostazioni › Account le liste si
+chiamano come il **file dell'indirizzo**, senza estensione e con un numero
+quando due liste hanno lo stesso nome (`lista`, `lista 2`, …). L'account resta
+"Account Xtream". Le righe d'errore usano lo stesso nome.
+
 Le liste si configurano alla compilazione con la proprietà Gradle o la variabile
 d'ambiente `FVP_M3U_URL` (stesso schema di `FVP_VERSION_NAME`), vuota per
 impostazione predefinita. La variabile accetta **più indirizzi** separati da
@@ -220,6 +228,33 @@ indirizzi non sono mai scritti nel codice né mostrati in Impostazioni.
 **L'indirizzo compilato nell'APK è leggibile da chi estrae l'APK**: non metterci
 credenziali, e usa un indice (sotto) se vuoi cambiare le liste senza
 ricompilare.
+
+#### Scelta della sorgente in Film
+
+La sezione Film ha **una sorgente per volta**: "Xtream" (il catalogo
+dell'account, con categorie e ordinamento di sempre) oppure "Liste M3U" (tutte le
+liste abilitate unite in una sola voce). Le voci del selettore sono solo quelle
+che hanno film: Serie e Live sono sempre dell'account, quindi non entrano nella
+scelta.
+
+- Con **due** sorgenti con film, in alto sopra la griglia compare il pulsante
+  della sorgente in uso ("Xtream" o "Liste M3U"): un tasto lo porta sull'altra.
+  La scelta è ricordata per sezione (`fvp_section_source`, chiave `film`): alla
+  riapertura la sezione parte dall'ultima sorgente usata, o da Xtream alla prima
+  apertura. Se quella ricordata è stata disattivata o non ha più film si apre la
+  prima disponibile.
+- Con **una sola** sorgente con film non c'è nessun pulsante: si entra
+  direttamente. Se tutte le sorgenti sono disattivate la schermata mostra
+  "Nessuna sorgente attiva" con il rimando a Impostazioni › Account.
+- Nei **film delle liste M3U** le categorie sono i `group-title` di tutte le
+  liste abilitate: quelle con lo stesso nome (maiuscole e spazi ai bordi non
+  contano) diventano **una sola** categoria, con le voci in ordine di lista (come
+  nell'indice) e poi di comparsa nel file; "Senza categoria" resta una sola.
+  L'ordinamento della categoria (file o A-Z) è quello di sempre.
+- **Cerca, Preferiti, Riprendi e Novità** continuano a guardare tutte le sorgenti
+  abilitate e non portano etichette. Un contenuto presente in due liste compare
+  due volte e ognuna apre la propria: la provenienza resta nell'identificativo
+  della voce. Novità resta del solo account Xtream.
 
 #### Una lista M3U
 
@@ -263,9 +298,11 @@ http://server.esempio/lista2.m3u8
 Il riconoscimento è automatico: se il contenuto inizia con `#EXTM3U` è una
 lista, altrimenti è un indice. Ogni riga diventa una sorgente `M<n>`, con
 l'identificativo ricavato dal solo indirizzo: **riordinare l'indice non cambia le
-etichette**, e una lista tolta dall'indice sparisce dall'elenco senza toccare
-preferiti e avanzamento già salvati (la riga resta su disco con la sua etichetta,
-quindi riprendendo la stessa lista riprende lo stesso `M`).
+etichette**. Una lista tolta dall'indice sparisce dall'elenco; al primo
+aggiornamento utile la sua riga viene **eliminata** se non ha dati utente
+(preferiti, avanzamento, contenuti nascosti), mentre se ne ha resta su disco —
+quindi nascosta — e riprendendo la stessa lista riprende lo stesso `M` con i
+suoi dati.
 
 #### Aggiornamento
 
@@ -274,7 +311,7 @@ locale del dispositivo): la copia salvata vale fino al primo di questi orari
 successivo al download, e "Aggiorna catalogo" riscarica subito. Le liste si
 scaricano in parallelo (massimo tre richieste alla volta), quindi una lista lenta
 non blocca le altre. Se una lista non risponde si usa la copia salvata e compare
-una riga d'errore per ogni lista interessata (`Lista M3U · M2: …`), sia in
+una riga d'errore per ogni lista interessata (`lista: …`, il nome del file), sia in
 Impostazioni › Account sia nella schermata principale, senza bloccare le altre
 sorgenti; i tentativi successivi sono in silenzio, con attese crescenti (30 s,
 2 min, 5 min). Se non risponde l'indice si usano le liste dell'ultima risoluzione
@@ -637,6 +674,9 @@ simulato e implementazioni finte per cifrario e preferenze:
 | `ServerAddressTest`, `ServerInputTest` | regola "codice o indirizzo" e normalizzazione dell'indirizzo |
 | `QrMatrixTest` | il QR decodifica in `<PAIRING_RELAY_URL>/?code=<PIN>` |
 | `EncryptedCredentialStoreTest` | cifratura dietro interfaccia, nessun dato in chiaro, cancellazione quando la decifratura fallisce |
+| `SectionSourceSelectionTest`, `FilmSourcePickerTest` | voci della scelta della sorgente solo per le sorgenti con film, apertura sull'ultima usata, ripiego sulla prima se la ricordata non c'è più, pulsante presente solo con due sorgenti e passaggio all'altra, nessun badge di sorgente sulle card |
+| `SourceRepositoryCleanupTest` | righe orfane eliminate solo senza dati utente, righe con dati utente conservate e nascoste |
+| `AggregatedCatalogTest` | catalogo unito senza etichette, categorie omonime delle liste M3U fuse in una, voci in ordine di lista e di file, provenienza negli identificativi |
 | `CatalogModelsTest` | JSON reali tipici con stream_id numerico/testuale, added testuale, campi null, ordine Novità |
 | `CatalogClientSequentialTest` | nessuna richiesta concorrente, errore interrompe sequenza senza retry |
 | `CatalogCacheTest` | lettura all'avvio, regola 24h, separazione per server+utente, clear su Esci |

@@ -16,6 +16,12 @@ interface SourceStore {
     /** Sorgenti usabili adesso, in ordine di etichetta (S1, S2, S3). */
     suspend fun load(): List<Source>
 
+    /**
+     * Tutte le righe salvate, comprese le liste che non hanno più un indirizzo:
+     * servono alla pulizia delle righe orfane (vedi `SourceRepository`).
+     */
+    suspend fun loadAll(): List<Source>
+
     /** Sostituisce l'elenco delle sorgenti (tetti per tipo, vedi [sanitize]). */
     suspend fun save(sources: List<Source>)
 }
@@ -67,23 +73,25 @@ class EncryptedSourceStore(
     private fun configuredM3uIds(): Map<String, String> =
         configuredM3uUrls().associateBy { url -> Sources.m3uId(url) }
 
-    override suspend fun load(): List<Source> {
+    override suspend fun load(): List<Source> = loadAll().filter { source ->
+        // Senza indirizzo la lista non esiste, anche se la riga era salvata.
+        source.type != SourceType.M3U || source.m3uUrl != null
+    }
+
+    override suspend fun loadAll(): List<Source> {
         val stored = readStored().orEmpty()
         val normalized = normalizeM3uLabels(stored)
         val completed = ensureM3uSources(normalized)
         if (completed != stored) writeStored(completed)
         val configured = configuredM3uIds()
-        // Senza indirizzo la lista non esiste, anche se la riga era salvata.
         return Sources.ordered(
-            completed
-                .filter { source -> source.type != SourceType.M3U || source.id in configured }
-                .map { source ->
-                    if (source.type == SourceType.M3U) {
-                        source.copy(m3uUrl = configured[source.id])
-                    } else {
-                        source
-                    }
-                },
+            completed.map { source ->
+                if (source.type == SourceType.M3U) {
+                    source.copy(m3uUrl = configured[source.id])
+                } else {
+                    source
+                }
+            },
         )
     }
 

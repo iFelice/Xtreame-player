@@ -76,9 +76,44 @@ object Sources {
         SourceType.M3U -> "Lista M3U"
     }
 
-    /** Riga delle Impostazioni: "Account Xtream · S1" oppure "Lista M3U · M1". */
-    fun rowTitle(source: Source): String =
-        "${typeName(source.type)}$LABEL_SEPARATOR${source.label}"
+    /**
+     * Nome visibile della sorgente nelle Impostazioni e nelle righe d'errore:
+     * "Account Xtream" per l'account, il nome del file dell'indirizzo (senza
+     * estensione) per le liste, con un numero quando due liste hanno lo stesso
+     * nome. Le etichette `S#`/`M#` restano interne: non si mostrano più da
+     * nessuna parte.
+     */
+    fun displayNames(sources: List<Source>): Map<String, String> {
+        val lists = ordered(sources).filter { it.type == SourceType.M3U }
+        val bases = lists.associate { it.id to fileNameOf(it.m3uUrl) }
+        val repeats = bases.values.groupingBy { it }.eachCount()
+        val used = HashMap<String, Int>()
+        val names = HashMap<String, String>(sources.size)
+        for (source in sources) {
+            names[source.id] = when (source.type) {
+                SourceType.XTREAM -> typeName(SourceType.XTREAM)
+                SourceType.M3U -> {
+                    val base = bases[source.id] ?: typeName(SourceType.M3U)
+                    if ((repeats[base] ?: 0) > 1) {
+                        val number = (used[base] ?: 0) + 1
+                        used[base] = number
+                        "$base $number"
+                    } else {
+                        base
+                    }
+                }
+            }
+        }
+        return names
+    }
+
+    /** Nome del file nell'indirizzo della lista, senza estensione né query. */
+    fun fileNameOf(url: String?): String {
+        val path = url.orEmpty().substringBefore('?').substringBefore('#').trimEnd('/')
+        val file = path.substringAfterLast('/')
+        val base = file.substringBeforeLast('.', file)
+        return base.ifBlank { typeName(SourceType.M3U) }
+    }
 
     /** Stato mostrato accanto all'interruttore. */
     fun statusLabel(source: Source): String =

@@ -268,8 +268,11 @@ class EncryptedSourceStoreTest {
         val sources = store.load()
 
         assertEquals(listOf("S1", "M1"), sources.map { it.label })
-        assertEquals(Sources.rowTitle(sources[1]), "Lista M3U · M1")
-        assertFalse(Sources.rowTitle(sources[1]).contains("server.esempio"))
+        // Nelle Impostazioni la lista si chiama come il file dell'indirizzo.
+        val names = Sources.displayNames(sources)
+        assertEquals("Account Xtream", names.getValue(sources[0].id))
+        assertEquals("lista", names.getValue(sources[1].id))
+        assertFalse(names.getValue(sources[1].id).contains("server.esempio"))
     }
 
     @Test

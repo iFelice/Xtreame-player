@@ -101,6 +101,15 @@ fun FilmSection(
      * applicazione). `null` fuori dall'applicazione: vale l'ordine predefinito.
      */
     sortStorage: CategorySortStorage? = null,
+    /**
+     * Sorgenti con film da scegliere: "Xtream" e/o "Liste M3U". Il pulsante
+     * compare solo quando sono più di una; con una sola si entra direttamente.
+     */
+    filmSourceOptions: List<FilmSourceOption> = emptyList(),
+    /** Chiave della sorgente mostrata adesso ([SectionSourceKeys]). */
+    selectedFilmSource: String? = null,
+    /** Chiamata con la chiave della sorgente da mostrare. */
+    onSelectFilmSource: (String) -> Unit = {},
 ) {
     val displayCategories = remember(categories) { withNovitaCategory(categories) }
     var debouncedCategoryId by remember { mutableStateOf(NOVITA_CATEGORY_ID) }
@@ -194,6 +203,18 @@ fun FilmSection(
         else -> CatalogSort.AZ
     }
     val sortButtonFocus = remember { FocusRequester() }
+
+    // Scelta della sorgente: il pulsante c'è solo con due sorgenti con film e
+    // passa a quella successiva, così si cambia sorgente con un tasto solo.
+    val showSourceSwitch = filmSourceOptions.size > 1
+    val sourceSwitchIndex = filmSourceOptions
+        .indexOfFirst { it.key == selectedFilmSource }
+        .coerceAtLeast(0)
+    val sourceSwitchLabel = filmSourceOptions.getOrNull(sourceSwitchIndex)?.label.orEmpty()
+    val sourceSwitchNext = filmSourceOptions
+        .getOrNull(if (filmSourceOptions.isEmpty()) 0 else (sourceSwitchIndex + 1) % filmSourceOptions.size)
+        ?.key
+        .orEmpty()
     // Se la griglia è vuota, il telecomando deve poter entrare nelle categorie
     // e scegliere un'altra voce, invece di cercare una card che non esiste.
     val columnFocusRequesters = remember(categoryFocusRequesters, filtered.isEmpty(), focusedCategoryId, contentFocusRequester) {
@@ -344,7 +365,7 @@ fun FilmSection(
                     contentPadding = PaddingValues(
                         start = scale.focusSafePadding,
                         end = scale.focusSafePadding,
-                        top = if (showSortButton && filtered.isNotEmpty()) {
+                        top = if ((showSortButton || showSourceSwitch) && filtered.isNotEmpty()) {
                             scale.focusSafePadding + scale.sortRowHeight
                         } else {
                             scale.focusSafePadding
@@ -459,8 +480,20 @@ fun FilmSection(
                 totalItems = filtered.size,
             ),
             scale = scale,
-            topRowEnd = if (showSortButton && filtered.isNotEmpty()) {
+            topRowEnd = if ((showSortButton || showSourceSwitch) && filtered.isNotEmpty()) {
                 {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(scale.dp(8f)),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                    if (showSourceSwitch) {
+                        FilmSourceButton(
+                            label = sourceSwitchLabel,
+                            scale = scale,
+                            onClick = { onSelectFilmSource(sourceSwitchNext) },
+                            modifier = Modifier.testTag(FILM_SOURCE_BUTTON_TAG),
+                        )
+                    }
                     CatalogSortButton(
                         sort = categorySort,
                         scale = scale,
@@ -477,6 +510,7 @@ fun FilmSection(
                                 }
                             },
                     )
+                    }
                 }
             } else null,
         )

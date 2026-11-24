@@ -85,3 +85,21 @@ fun visibleContent(
         ),
     )
 }
+
+/**
+ * Catalogo della sorgente scelta in Film con i contenuti protetti tolti.
+ *
+ * Serve alla sezione Film, che mostra una sola sorgente per volta: le regole
+ * sono le stesse di [visibleContent], sullo stesso archivio di contenuti
+ * nascosti. Con la sessione sbloccata il catalogo passa com'è; con l'archivio
+ * non ancora letto il chiamante non mostra nulla (vedi [VisibleContent.pending]).
+ */
+fun protectedFilmCatalog(
+    catalog: Catalog?,
+    data: ProtectedContentData?,
+    unlocked: Boolean,
+): Catalog? {
+    if (catalog == null) return null
+    if (unlocked || data == null) return catalog
+    return ProtectedFilter.filterCatalog(catalog, data)
+}

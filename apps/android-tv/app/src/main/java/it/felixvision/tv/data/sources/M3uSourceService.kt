@@ -262,12 +262,13 @@ class M3uSourceService(
      */
     fun errorRows(sources: List<Source>): List<M3uErrorRow> {
         val current = errors.value
+        val names = Sources.displayNames(sources)
         val rows = Sources.ordered(sources)
             .mapNotNull { source ->
                 val error = current[source.id] ?: return@mapNotNull null
                 M3uErrorRow(
                     sourceId = source.id,
-                    title = Sources.rowTitle(source),
+                    title = names[source.id] ?: Sources.typeName(source.type),
                     message = error.message,
                 )
             }
