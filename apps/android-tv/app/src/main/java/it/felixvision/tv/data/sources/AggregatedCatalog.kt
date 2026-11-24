@@ -91,7 +91,10 @@ object AggregatedCatalog {
         if (parts.isEmpty()) return EMPTY
         if (parts.size == 1) return parts.first().catalog
         val ordered = parts.sortedWith { first, second ->
-            val byLabel = Sources.LABEL_COMPARATOR.compare(first.source.label, second.source.label)
+            val byLabel = Sources.LABEL_COMPARATOR.compare(
+                first.source.label.orEmpty(),
+                second.source.label.orEmpty(),
+            )
             if (byLabel != 0) byLabel else first.source.id.compareTo(second.source.id)
         }
         return Catalog(
