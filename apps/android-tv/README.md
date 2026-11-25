@@ -244,10 +244,10 @@ scelta.
   nulla. Scegliere una sorgente **non** disattiva niente: le sorgenti restano
   tutte attive nelle Impostazioni e i cataloghi sono già in memoria, quindi il
   cambio è immediato, senza ricaricamenti né rete.
-  La scelta è ricordata per sezione (`fvp_section_source`, chiave `film`): alla
-  riapertura la sezione parte dall'ultima sorgente usata, o da Xtream alla prima
-  apertura. Se quella ricordata è stata disattivata o non ha più film si apre la
-  prima disponibile. Sopra la griglia, accanto al pulsante di ordinamento, un
+  La scelta vale **per la sessione**: tornando in Film si ritrova la sorgente in
+  uso, ma alla riapertura dell'app si riparte sempre da **Xtream** (o dall'unica
+  sorgente che ha film): non c'è nessun salvataggio su disco. Se la sorgente
+  scelta viene disattivata o resta senza film si apre la prima disponibile. Sopra la griglia, accanto al pulsante di ordinamento, un
   testo non focusabile dice sempre in quale sorgente sei ("Sorgente · Xtream").
   La riga "Cambia Sorgente" non è una categoria: non entra nell'ordinamento
   salvato, nei contenuti protetti né nella griglia.
