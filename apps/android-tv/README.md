@@ -619,6 +619,13 @@ server Xtream raggiunti con indirizzo privato non risponderebbero.
   Il mini-player parte dal livello salvato (mai più a palla dopo che è stato
   abbassato) e i **tasti Volume del telecomando** funzionano anche in Guida TV:
   cambiano il livello, lo salvano e l'anteprima lo segue subito.
+  Nel player il pannello del volume si apre con Giù e **Su/Giù cambiano il
+  livello solo finché il focus è sul volume** (radice del player o pulsante
+  "Volume"): appena il focus va su un altro comando il pannello si chiude e le
+  frecce tornano ai pulsanti, così Su apre di nuovo la barra con la timeline.
+  Il pannello si chiude comunque dopo **3 s** senza tasti che agiscano sul
+  volume, anche con il focus sul volume: gli altri tasti non rinnovano il
+  conteggio.
 - **"Stai ancora guardando?"**: avviso a schermo nello stesso stile dei pannelli
   del player (superficie al 60% di nero, angoli 14 dp, bordo bianco al 10%,
   pulsanti compatti), con "Sì, sto guardando" (focus iniziale) e "No, esci".
@@ -682,6 +689,7 @@ simulato e implementazioni finte per cifrario e preferenze:
 | `ServerAddressTest`, `ServerInputTest` | regola "codice o indirizzo" e normalizzazione dell'indirizzo |
 | `QrMatrixTest` | il QR decodifica in `<PAIRING_RELAY_URL>/?code=<PIN>` |
 | `EncryptedCredentialStoreTest` | cifratura dietro interfaccia, nessun dato in chiaro, cancellazione quando la decifratura fallisce |
+| `PlayerVolumeKeysTest` | Su/Giù a volume solo con pannello aperto e focus sul volume, chiusura del pannello appena il focus lascia il volume |
 | `SectionSourceSelectionTest`, `FilmSourcePickerTest` | voci della scelta della sorgente solo per le sorgenti con film, apertura sull'ultima usata, ripiego sulla prima se la ricordata non c'è più, riga "Cambia Sorgente" solo con due sorgenti, finestra di scelta con spunta sull'attiva, testo della sorgente non focusabile, nessun badge di sorgente sulle card |
 | `SourceRepositoryCleanupTest` | righe orfane eliminate solo senza dati utente, righe con dati utente conservate e nascoste |
 | `AggregatedCatalogTest` | catalogo unito senza etichette, categorie omonime delle liste M3U fuse in una, voci in ordine di lista e di file, provenienza negli identificativi |

@@ -1,6 +1,7 @@
 package it.felixvision.tv.ui.catalog
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,6 +28,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.tv.material3.Border
 import androidx.tv.material3.DenseListItem
 import androidx.tv.material3.ListItemDefaults
 import androidx.tv.material3.Text
@@ -160,6 +162,10 @@ fun FilmSourceDialog(
                             focusedSelectedContainerColor = FvpColors.SurfaceElevated,
                             focusedSelectedContentColor = FvpColors.TextPrimary,
                         ),
+                        border = ListItemDefaults.border(
+                            focusedBorder = Border(BorderStroke(scale.dp(2f), FvpColors.GreenFocus)),
+                        ),
+                        shape = ListItemDefaults.shape(shape = RoundedCornerShape(scale.dp(8f))),
                         scale = ListItemDefaults.scale(focusedScale = 1.04f),
                     )
                 }

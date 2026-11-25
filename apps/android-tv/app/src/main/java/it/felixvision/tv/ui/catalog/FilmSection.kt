@@ -658,6 +658,11 @@ private fun FilmSourceEntryRow(
             focusedSelectedContainerColor = FvpColors.SurfaceElevated,
             focusedSelectedContentColor = FvpColors.TextPrimary,
         ),
+        // Stessa cornice di focus delle categorie: senza, il focus non si vede.
+        border = ListItemDefaults.border(
+            focusedBorder = Border(BorderStroke(scale.dp(2f), FvpColors.GreenFocus)),
+        ),
+        shape = ListItemDefaults.shape(shape = RoundedCornerShape(scale.dp(8f))),
         scale = ListItemDefaults.scale(focusedScale = 1.04f),
     )
 }
