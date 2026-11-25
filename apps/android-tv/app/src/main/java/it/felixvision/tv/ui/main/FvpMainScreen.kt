@@ -77,7 +77,6 @@ import it.felixvision.tv.ui.catalog.CatalogViewModel
 import it.felixvision.tv.ui.catalog.CategorySortStore
 import it.felixvision.tv.ui.catalog.FavoritesSection
 import it.felixvision.tv.ui.catalog.FilmSection
-import it.felixvision.tv.ui.catalog.SectionKeys
 import it.felixvision.tv.ui.catalog.SectionSourceKeys
 import it.felixvision.tv.ui.catalog.filmSourceOptionsFor
 import it.felixvision.tv.ui.catalog.resolveFilmSource
@@ -398,11 +397,11 @@ fun FvpMainScreen(
     }
     val visibleCatalog = visible.catalog
 
-    // Sorgente della sezione Film: "Xtream" o "Liste M3U". La scelta è ricordata
-    // per sezione; se la sorgente ricordata non è più attiva (o non ha più
-    // film) si apre la prima che ne ha, e con una sola il pulsante non c'è.
-    val filmSourceStorage = remember { container.sectionSourceStore }
-    var filmSourceKey by remember { mutableStateOf(filmSourceStorage.read(SectionKeys.FILM)) }
+    // Sorgente della sezione Film: "Xtream" o "Liste M3U". La scelta vale finché
+    // l'app resta aperta (tornando in Film si ritrova la sorgente in uso), ma
+    // non va su disco: alla riapertura dell'app si riparte da Xtream, la prima
+    // disponibile. Con una sola sorgente il comando non c'è.
+    var filmSourceKey by remember { mutableStateOf<String?>(null) }
     val filmSourceOptions = remember(catalogState.xtreamCatalog, catalogState.m3uCatalog) {
         filmSourceOptionsFor(
             hasXtreamFilms = catalogState.xtreamCatalog?.vodStreams?.isNotEmpty() == true,
@@ -1043,10 +1042,7 @@ fun FvpMainScreen(
                                     sortStorage = categorySortStore,
                                     filmSourceOptions = filmSourceOptions,
                                     selectedFilmSource = filmSource?.key,
-                                    onSelectFilmSource = { key ->
-                                        filmSourceKey = key
-                                        filmSourceStorage.write(SectionKeys.FILM, key)
-                                    },
+                                    onSelectFilmSource = { key -> filmSourceKey = key },
                                     modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
                                 )
                                 DrawerSection.Serie -> SerieSection(

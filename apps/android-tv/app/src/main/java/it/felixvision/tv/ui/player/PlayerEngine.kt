@@ -1384,12 +1384,6 @@ class PlayerEngine(
         }
     }
 
-    /** Un tasto qualsiasi con il pannello aperto rimanda la chiusura a 3 s. */
-    fun keepVolumePanelAlive() {
-        if (!state.volumePanelVisible) return
-        scheduleVolumeHide()
-    }
-
     private fun scheduleVolumeHide() {
         volumeJob?.cancel()
         volumeJob = scope.launch {

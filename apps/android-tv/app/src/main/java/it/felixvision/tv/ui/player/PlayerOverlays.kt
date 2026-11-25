@@ -449,6 +449,8 @@ fun PlayerControlsBar(
     modifier: Modifier = Modifier,
     audioFormatLabel: String = "",
     ffmpegActive: Boolean = false,
+    /** Vero quando il focus è sul pulsante del volume (vedi `PlayerVolumeKeys`). */
+    onVolumeFocusChanged: (Boolean) -> Unit = {},
 ) {
     var progressFocused by remember { mutableStateOf(false) }
     Column(
@@ -585,7 +587,9 @@ fun PlayerControlsBar(
                 text = "Volume ${state.volumeLevel}",
                 onClick = onVolume,
                 scale = scale,
-                modifier = Modifier.testTag("player_volume_button"),
+                modifier = Modifier
+                    .testTag("player_volume_button")
+                    .onFocusChanged { onVolumeFocusChanged(it.isFocused) },
             )
             FvpCompactButton(
                 text = "Formato",

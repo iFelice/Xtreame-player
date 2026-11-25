@@ -100,6 +100,18 @@ fun PlayerScreen(
     val audioFocus = remember { FocusRequester() }
     val progressFocus = remember { FocusRequester() }
     var rootFocused by remember { mutableStateOf(false) }
+    // Focus sul pulsante "Volume" della barra comandi.
+    var volumeButtonFocused by remember { mutableStateOf(false) }
+    val volumeFocus = PlayerVolumeKeys.volumeHasFocus(rootFocused, volumeButtonFocused)
+    val volumeIsTarget = PlayerVolumeKeys.upDownAdjustVolume(state.volumePanelVisible, volumeFocus)
+
+    // Il pannello sparisce appena il focus lascia il volume; con il focus sul
+    // volume resta i 3 s di sempre, perché i tasti estranei non lo rinnovano.
+    LaunchedEffect(state.volumePanelVisible, volumeFocus) {
+        if (PlayerVolumeKeys.shouldClosePanel(state.volumePanelVisible, volumeFocus)) {
+            engine.closeVolumePanel()
+        }
+    }
     var keyTick by remember { mutableStateOf(0) }
     var seekDirection by remember { mutableStateOf(0) }
     var seekStartedAt by remember { mutableStateOf(0L) }
@@ -460,7 +472,6 @@ fun PlayerScreen(
                         ) {
                             if (event.type == KeyEventType.KeyDown) {
                                 keyTick++
-                                if (state.volumePanelVisible) engine.keepVolumePanelAlive()
                             }
                             return@onPreviewKeyEvent true
                         }
@@ -483,8 +494,8 @@ fun PlayerScreen(
                             // Un tasto di conferma è un utente presente: il conto
                             // di "Stai ancora guardando?" riparte da zero.
                             engine.noteUserInput()
-                            // Qualsiasi tasto rimanda la chiusura del pannello volume.
-                            if (state.volumePanelVisible) engine.keepVolumePanelAlive()
+                            // Solo i tasti che agiscono sul volume rinnovano i 3 s
+                            // del pannello: gli altri devono lasciarlo scadere.
                             if (state.channelListVisible && event.key == Key.DirectionRight) {
                                 engine.closeChannelList()
                                 rootFocus.requestFocus()
@@ -493,9 +504,10 @@ fun PlayerScreen(
                             if (state.hasModalOverlay) {
                                 return@onPreviewKeyEvent false
                             }
-                            // Pannello del volume aperto: Su/Giù cambiano il livello
-                            // anche con il focus ancora sulla barra comandi.
-                            if (state.volumePanelVisible) {
+                            // Pannello del volume aperto e focus sul volume: Su/Giù
+                            // cambiano il livello. Con il focus su un altro comando
+                            // le frecce tornano ai pulsanti.
+                            if (volumeIsTarget) {
                                 when (event.key) {
                                     Key.DirectionUp -> {
                                         engine.changeVolume(1)
@@ -519,9 +531,9 @@ fun PlayerScreen(
                                 }
                                 Key.DirectionUp -> {
                                     when {
-                                        // Con il pannello aperto Su/Giù cambiano il
-                                        // livello, non il canale.
-                                        state.volumePanelVisible -> engine.changeVolume(1)
+                                        // Con il pannello aperto e il focus sul
+                                        // volume, Su/Giù cambiano il livello.
+                                        volumeIsTarget -> engine.changeVolume(1)
                                         session.source is PlaybackSource.Live && !state.isReplay -> engine.onUp()
                                         // La barra appare senza mettere in pausa; il focus
                                         // entra sulla barra di avanzamento dopo il frame.
@@ -537,7 +549,7 @@ fun PlayerScreen(
                                 }
                                 Key.DirectionDown -> {
                                     when {
-                                        state.volumePanelVisible -> engine.changeVolume(-1)
+                                        volumeIsTarget -> engine.changeVolume(-1)
                                         state.controlsVisible && session.source !is PlaybackSource.Live ->
                                             audioFocus.requestFocus()
                                         session.source is PlaybackSource.Live && !state.isReplay -> engine.onDown()
@@ -719,6 +731,7 @@ fun PlayerScreen(
                     onAudio = { engine.openTrackPanel(TrackPanelType.AUDIO) },
                     onSubtitles = { engine.openTrackPanel(TrackPanelType.SUBTITLES) },
                     onVolume = { engine.openVolumePanel() },
+                    onVolumeFocusChanged = { volumeButtonFocused = it },
                     onFormat = { engine.openFormatPanel() },
                     modifier = Modifier.align(Alignment.BottomCenter),
                     audioFormatLabel = state.audioFormatLabel,

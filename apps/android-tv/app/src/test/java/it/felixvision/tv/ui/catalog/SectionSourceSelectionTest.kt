@@ -5,8 +5,9 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
- * Scelta della sorgente in Film: quali voci compaiono, quale si apre e cosa
- * succede quando la sorgente ricordata non è più disponibile.
+ * Scelta della sorgente in Film: quali voci compaiono, quale si apre, cosa
+ * succede quando la sorgente scelta non è più disponibile e perché alla
+ * riapertura dell'app si riparte da Xtream.
  */
 class SectionSourceSelectionTest {
 
@@ -44,7 +45,9 @@ class SectionSourceSelectionTest {
     }
 
     @Test
-    fun `alla prima apertura si parte da Xtream`() {
+    fun `alla riapertura dell'app si parte da Xtream`() {
+        // Nessuna scelta salvata: si riparte sempre da Xtream, non dall'ultima
+        // sorgente usata nella sessione precedente.
         assertEquals(SectionSourceKeys.XTREAM, resolveFilmSource(both, null)?.key)
     }
 
@@ -61,16 +64,5 @@ class SectionSourceSelectionTest {
     @Test
     fun `senza sorgenti non c'e niente da mostrare`() {
         assertNull(resolveFilmSource(emptyList(), SectionSourceKeys.XTREAM))
-    }
-
-    @Test
-    fun `la scelta e ricordata per sezione`() {
-        val storage = InMemorySectionSourceStorage()
-
-        storage.write(SectionKeys.FILM, SectionSourceKeys.M3U_LISTS)
-
-        assertEquals(SectionSourceKeys.M3U_LISTS, storage.read(SectionKeys.FILM))
-        assertNull(storage.read("serie"))
-        assertEquals(SectionKeys.FILM, "film")
     }
 }
