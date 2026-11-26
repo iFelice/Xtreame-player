@@ -111,7 +111,22 @@ import it.felixvision.tv.ui.settings.SettingsViewModel
 import it.felixvision.tv.ui.theme.FvpColors
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
+
+/**
+ * Vero quando gli stati **globali** dell'area contenuti (nessuna sorgente
+ * attiva, primo caricamento del catalogo, errore, contenuti protetti non ancora
+ * letti) possono prendere il posto della scheda scelta.
+ *
+ * Impostazioni e Guida TV non lo sono mai: sono le due schermate da cui si
+ * rimette a posto qualcosa e devono restare raggiungibili anche a catalogo
+ * assente. Senza questa regola, con tutte le sorgenti spente il messaggio
+ * "attiva una sorgente in Impostazioni" copriva anche le Impostazioni stesse, e
+ * non c'era più modo di riaccendere niente.
+ */
+internal fun tabAcceptsGlobalContentState(tab: DrawerSection): Boolean =
+    tab != DrawerSection.Impostazioni && tab != DrawerSection.GuidaTv
 
 /**
  * Costruisce la chiave di un ViewModel legata alla sessione di accesso in
@@ -241,10 +256,17 @@ fun FvpMainScreen(
         factory = viewModelFactory {
             initializer { CatalogViewModel(container, currentServer, currentUsername, currentPassword) }
         },
-        // La revisione delle sorgenti riapre il catalogo quando un interruttore
-        // cambia: le categorie unite si ricompongono subito.
-        key = catalogSessionKey(sessionId, currentServer, currentUsername) + "_src$sourcesRevision",
+        key = catalogSessionKey(sessionId, currentServer, currentUsername),
     )
+    // Un interruttore "Mostra", l'ordine delle liste o un elenco diverso non
+    // ricreano più il catalogo (prima la `key` cambiava e con lei sparivano il
+    // catalogo a schermo e la pagina delle Impostazioni): si rileggono le
+    // sorgenti e il catalogo si ricompone in memoria, restando a schermo.
+    LaunchedEffect(catalogViewModel) {
+        container.sourceRepository.revision.drop(1).collect {
+            catalogViewModel.reloadSources()
+        }
+    }
     val catalogState by catalogViewModel.ui.collectAsState()
 
     val settingsViewModel: SettingsViewModel = viewModel(
@@ -933,14 +955,35 @@ fun FvpMainScreen(
                             playLiveFromGuide(channel, category, categoryStreams)
                         },
                     )
+                    // Le Impostazioni non dipendono dal catalogo: restano sempre
+                    // raggiungibili, anche mentre il catalogo si carica e anche
+                    // senza sorgenti attive (è il posto dove si riaccendono).
+                    // Vanno prima dei rami "globali": nessuno di loro deve
+                    // sostituire questa schermata.
+                    selectedTab == DrawerSection.Impostazioni -> SettingsScreen(
+                        viewModel = settingsViewModel,
+                        scale = scale,
+                        modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
+                        contentFocusRequester = contentFocusRequester,
+                        catalogSections = catalogState.refreshSections,
+                        catalogRefreshing = catalogState.isRefreshing,
+                        catalogLastUpdateMillis = catalogState.lastUpdateMillis,
+                        onRefreshCatalog = { catalogViewModel.refreshManual() },
+                        // Catalogo per la pagina "Contenuti protetti":
+                        // categorie e contenuti da nascondere.
+                        catalog = catalogState.catalog,
+                    )
                     // L'attesa del primo catalogo è a schermo intero: il BrandBackdrop
                     // è composto in fondo a questa schermata, sopra il menu laterale.
-                    // Nessuna sorgente attiva: si dice dove riaccenderla.
+                    // Nessuna sorgente attiva: si dice dove riaccenderla e si offre
+                    // la scorciatoia per tornarci senza passare dal menu.
                     !catalogState.hasAnySource -> EmptyState(
                         title = "Nessuna sorgente attiva",
                         description = "Attiva una sorgente in Impostazioni → Account per vedere i contenuti.",
                         scale = scale,
                         modifier = Modifier.align(Alignment.Center),
+                        actionLabel = "Apri Impostazioni",
+                        onAction = { selectedTab = DrawerSection.Impostazioni },
                     )
                     catalogState.isLoading && catalogState.catalog == null -> Unit
                     catalogState.errorMessage != null && catalogState.catalog == null -> {
@@ -1140,19 +1183,9 @@ fun FvpMainScreen(
                                     contentFocusRequester = contentFocusRequester,
                                     modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
                                 )
-                                DrawerSection.Impostazioni -> SettingsScreen(
-                                    viewModel = settingsViewModel,
-                                    scale = scale,
-                                    modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
-                                    contentFocusRequester = contentFocusRequester,
-                                    catalogSections = catalogState.refreshSections,
-                                    catalogRefreshing = catalogState.isRefreshing,
-                                    catalogLastUpdateMillis = catalogState.lastUpdateMillis,
-                                    onRefreshCatalog = { catalogViewModel.refreshManual() },
-                                    // Catalogo per la pagina "Contenuti protetti":
-                                    // categorie e contenuti da nascondere.
-                                    catalog = catalogState.catalog,
-                                )
+                                // Le Impostazioni sono gestite sopra, prima dei
+                                // rami globali: qui non si compongono mai.
+                                DrawerSection.Impostazioni -> Unit
                             }
                         } else {
                             EmptyState(title = "Catalogo vuoto", description = "Il server non ha restituito contenuti. Premi Riprova.", scale = scale)
@@ -1401,8 +1434,9 @@ fun FvpMainScreen(
     }
 
     // Primo caricamento del catalogo: attesa a schermo intero con lo stesso
-    // sfondo dell'avvio, sopra il menu laterale.
-    if (selectedTab != DrawerSection.GuidaTv && catalogState.isLoading && catalogState.catalog == null) {
+    // sfondo dell'avvio, sopra il menu laterale. Mai sopra le Impostazioni e la
+    // Guida TV: lì si può lavorare anche mentre il catalogo arriva.
+    if (tabAcceptsGlobalContentState(selectedTab) && catalogState.isLoading && catalogState.catalog == null) {
         BrandBackdrop(scale = scale) {
             LoadingState(message = "Caricamento catalogo in corso…", scale = scale)
         }
