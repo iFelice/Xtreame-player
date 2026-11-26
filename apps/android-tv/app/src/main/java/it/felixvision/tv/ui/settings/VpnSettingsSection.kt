@@ -24,6 +24,7 @@ import it.felixvision.tv.ui.theme.settingsRowSpacing
 import it.felixvision.tv.ui.theme.settingsRowText
 import it.felixvision.tv.ui.theme.settingsSectionPadding
 import it.felixvision.tv.vpn.VpnState
+import it.felixvision.tv.ui.components.fvpGlassPanel
 
 /** Riquadro "VPN": testi e tag di test. */
 const val SETTINGS_VPN_TITLE = "VPN"
@@ -92,8 +93,7 @@ internal fun VpnSettingsSection(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(scale.dp(14f)))
-            .background(FvpColors.Surface)
+            .fvpGlassPanel(scale, 14f)
             .padding(scale.settingsSectionPadding)
             .testTag(SETTINGS_VPN_SECTION_TAG),
         verticalArrangement = Arrangement.spacedBy(scale.settingsRowSpacing),

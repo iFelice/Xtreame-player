@@ -66,6 +66,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import it.felixvision.tv.ui.components.fvpGlassPanel
 
 /** Tag di test delle pagine delle Impostazioni. */
 const val SETTINGS_PAGE_TITLE_TAG = "settings_page_title"
@@ -274,8 +275,7 @@ internal fun SettingsAccountPage(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(scale.dp(14f)))
-                .background(FvpColors.Surface)
+                .fvpGlassPanel(scale, 14f)
                 .padding(scale.settingsSectionPadding)
                 .testTag(SETTINGS_ACCOUNT_SECTION_TAG),
             verticalArrangement = Arrangement.spacedBy(scale.settingsRowSpacing),
@@ -325,8 +325,7 @@ internal fun SettingsAccountPage(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(scale.dp(14f)))
-                    .background(FvpColors.Surface)
+                    .fvpGlassPanel(scale, 14f)
                     .padding(scale.settingsSectionPadding)
                     .testTag(SETTINGS_SOURCES_SECTION_TAG),
                 verticalArrangement = Arrangement.spacedBy(scale.settingsRowSpacing),
@@ -532,8 +531,7 @@ internal fun SettingsLogPage(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(scale.dp(14f)))
-                    .background(FvpColors.Surface)
+                    .fvpGlassPanel(scale, 14f)
                     .padding(scale.settingsSectionPadding)
                     .testTag(SETTINGS_LOG_LIST_TAG),
                 verticalArrangement = Arrangement.spacedBy(scale.settingsRowSpacing),
@@ -596,8 +594,7 @@ internal fun SettingsRemotePage(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(scale.dp(14f)))
-                .background(FvpColors.Surface)
+                .fvpGlassPanel(scale, 14f)
                 .padding(scale.settingsSectionPadding)
                 .testTag(SETTINGS_REMOTE_SECTION_TAG),
             verticalArrangement = Arrangement.spacedBy(scale.dp(6f)),
@@ -657,8 +654,7 @@ internal fun SettingsAppearancePage(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(scale.dp(14f)))
-                .background(FvpColors.Surface)
+                .fvpGlassPanel(scale, 14f)
                 .padding(scale.settingsSectionPadding)
                 .testTag(SETTINGS_APPEARANCE_SECTION_TAG),
             verticalArrangement = Arrangement.spacedBy(scale.settingsRowSpacing),
@@ -757,8 +753,7 @@ internal fun SettingsPlayerPage(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(scale.dp(14f)))
-                .background(FvpColors.Surface)
+                .fvpGlassPanel(scale, 14f)
                 .padding(scale.settingsSectionPadding)
                 .testTag(SETTINGS_PLAYER_SECTION_TAG),
             verticalArrangement = Arrangement.spacedBy(scale.settingsRowSpacing),
@@ -1095,8 +1090,7 @@ internal fun SettingsCatalogPage(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(scale.dp(14f)))
-                .background(FvpColors.Surface)
+                .fvpGlassPanel(scale, 14f)
                 .padding(scale.settingsSectionPadding)
                 .testTag(SETTINGS_CACHE_SECTION_TAG),
             verticalArrangement = Arrangement.spacedBy(scale.settingsRowSpacing),
@@ -1203,8 +1197,7 @@ internal fun SettingsAppPage(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(scale.dp(14f)))
-                .background(FvpColors.Surface)
+                .fvpGlassPanel(scale, 14f)
                 .padding(scale.settingsSectionPadding)
                 .testTag("settings_app_section"),
             verticalArrangement = Arrangement.spacedBy(scale.settingsRowSpacing),

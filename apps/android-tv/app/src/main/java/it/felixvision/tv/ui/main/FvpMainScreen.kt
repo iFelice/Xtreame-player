@@ -124,6 +124,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
+import it.felixvision.tv.ui.components.fvpGlassPanel
 
 /**
  * Vero quando gli stati **globali** dell'area contenuti (nessuna sorgente
@@ -1250,7 +1251,14 @@ fun FvpMainScreen(
                 }
 
                 (logWarning ?: favoritesMessage ?: vpnMessage)?.let { msg ->
-                    Box(modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = scale.dp(24f)).background(FvpColors.SurfaceElevated, shape = RoundedCornerShape(scale.dp(8f))).padding(horizontal = scale.dp(16f), vertical = scale.dp(8f))) {
+                    // Messaggio breve in basso, a vetro medio come i riquadri.
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = scale.dp(24f))
+                            .fvpGlassPanel(scale, 8f)
+                            .padding(horizontal = scale.dp(16f), vertical = scale.dp(8f)),
+                    ) {
                         Text(text = msg, color = FvpColors.TextPrimary)
                     }
                 }

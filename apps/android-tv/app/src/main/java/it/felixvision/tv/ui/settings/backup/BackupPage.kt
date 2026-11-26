@@ -26,6 +26,7 @@ import it.felixvision.tv.ui.settings.SettingsPage
 import it.felixvision.tv.ui.theme.FvpColors
 import it.felixvision.tv.ui.theme.settingsRowText
 import it.felixvision.tv.ui.theme.settingsSectionPadding
+import it.felixvision.tv.ui.components.fvpGlassPanel
 
 /** Funzione di backup aperta dalla pagina: esportazione o importazione. */
 enum class BackupFlow {
@@ -70,8 +71,7 @@ internal fun BackupPage(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(scale.dp(14f)))
-                .background(FvpColors.Surface)
+                .fvpGlassPanel(scale, 14f)
                 .padding(scale.settingsSectionPadding),
             verticalArrangement = Arrangement.spacedBy(scale.dp(12f)),
         ) {

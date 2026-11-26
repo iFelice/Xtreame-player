@@ -483,9 +483,10 @@ internal fun rememberSettingsPageFocusRequesters(): Map<SettingsCard, FocusReque
 /**
  * Una card della griglia: icona in alto, titolo e riga di stato.
  *
- * [Card] di tv-material cliccabile: fondo [FvpColors.Surface] in ogni stato,
- * bordo [FvpColors.SurfaceElevated] a riposo e [FvpColors.GreenFocus] di 2 dp
- * con il focus. La forma è una sola, condivisa da contenitore e bordi, così gli
+ * [Card] di tv-material cliccabile a **vetro medio**: fondo
+ * [FvpColors.GlassSurface] (Surface al 60%) in ogni stato, bordo
+ * [FvpColors.GlassBorder] (bianco al 10%) a riposo e [FvpColors.GreenFocus] di
+ * 2 dp con il focus. La forma è una sola, condivisa da contenitore e bordi, così gli
  * angoli restano arrotondati allo stesso modo in tutti gli stati.
  *
  * Con [iconOrange] l'icona resta arancione ([FvpColors.Orange]) anche a riposo
@@ -538,7 +539,8 @@ private fun SettingsCardTile(
     val restBorder = Border(
         border = BorderStroke(
             width = scale.dp(SettingsCardDimens.REST_BORDER_BASE),
-            color = FvpColors.SurfaceElevated,
+            // Vetro medio a riposo: bordo bianco al 10%, fondo Surface al 60%.
+            color = FvpColors.GlassBorder,
         ),
         shape = shape,
     )
@@ -561,11 +563,11 @@ private fun SettingsCardTile(
         // resta Surface in ogni stato, così la card non cambia colore con il focus
         // e a parlare è solo il bordo verde.
         colors = CardDefaults.colors(
-            containerColor = FvpColors.Surface,
+            containerColor = FvpColors.GlassSurface,
             contentColor = FvpColors.TextPrimary,
-            focusedContainerColor = FvpColors.Surface,
+            focusedContainerColor = FvpColors.GlassSurface,
             focusedContentColor = FvpColors.TextPrimary,
-            pressedContainerColor = FvpColors.Surface,
+            pressedContainerColor = FvpColors.GlassSurface,
             pressedContentColor = FvpColors.TextPrimary,
         ),
         border = CardDefaults.border(

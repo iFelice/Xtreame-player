@@ -40,6 +40,7 @@ import it.felixvision.tv.ui.components.ignoreHeldOkUntilReleased
 import it.felixvision.tv.ui.theme.FvpColors
 import it.felixvision.tv.ui.theme.settingsRowSpacing
 import it.felixvision.tv.ui.theme.settingsRowText
+import it.felixvision.tv.ui.components.fvpGlassPanel
 
 /** Tag di test della pagina "Liste M3U". */
 const val SETTINGS_PAGE_M3U_LISTS_TAG = "settings_page_m3u_lists"
@@ -165,7 +166,7 @@ internal fun M3uListsPage(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(FvpColors.Surface, shape = RoundedCornerShape(scale.dp(12f)))
+                    .fvpGlassPanel(scale, 12f)
                     .padding(horizontal = scale.dp(16f), vertical = scale.dp(10f))
                     .testTag("settings_m3u_row_${source.id}"),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -271,7 +272,7 @@ private fun M3uMoveDialog(
         ) {
             Column(
                 modifier = Modifier
-                    .background(FvpColors.Surface, shape = RoundedCornerShape(scale.dp(12f)))
+                    .fvpGlassPanel(scale, 12f)
                     .padding(scale.dp(20f))
                     .testTag("settings_m3u_move_dialog"),
                 horizontalAlignment = Alignment.CenterHorizontally,

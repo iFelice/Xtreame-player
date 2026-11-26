@@ -75,6 +75,7 @@ import it.felixvision.tv.ui.theme.settingsRowText
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import it.felixvision.tv.ui.components.fvpGlassPanel
 
 /** Etichetta breve di un tipo di contenuto negli elenchi. */
 internal fun protectedKindLabel(kind: ProtectedKind): String = when (kind) {
@@ -565,7 +566,7 @@ private fun ProtectedRemoveConfirmDialog(
         ) {
             Column(
                 modifier = Modifier
-                    .background(FvpColors.Surface, shape = RoundedCornerShape(scale.dp(12f)))
+                    .fvpGlassPanel(scale, 12f)
                     .padding(scale.dp(20f)),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(scale.dp(14f)),
