@@ -15,6 +15,8 @@ import it.felixvision.tv.data.playback.LiveStreamFormat
 import it.felixvision.tv.data.protection.ProtectedContentStore
 import it.felixvision.tv.data.protection.ProtectedPageAccess
 import it.felixvision.tv.data.protection.ProtectedSession
+import it.felixvision.tv.data.log.IssueEntry
+import it.felixvision.tv.data.log.IssueLog
 import it.felixvision.tv.data.sources.M3uErrorRow
 import it.felixvision.tv.data.sources.Source
 import it.felixvision.tv.data.sources.Sources
@@ -120,6 +122,16 @@ data class SettingsUiState(
      * l'indice delle liste. Le altre sorgenti restano disponibili.
      */
     val m3uErrors: List<M3uErrorRow> = emptyList(),
+    /**
+     * Interruttore generale della riga "Liste M3U": spento, nessuna lista entra
+     * nel catalogo. Le scelte fatte lista per lista restano salvate.
+     */
+    val listsVisible: Boolean = true,
+    /**
+     * Il Log dei problemi permanenti: righe con data e ora, già filtrate di
+     * quelle svuotate. La card mostra quante sono, la pagina le elenca.
+     */
+    val logEntries: List<IssueEntry> = emptyList(),
 ) {
     val isDownloadingUpdate: Boolean
         get() = updateStatus is AppUpdateStatus.Downloading
@@ -277,6 +289,12 @@ class SettingsViewModel(
         viewModelScope.launch {
             container.m3uSourceService.indexError.collect { refreshM3uErrors() }
         }
+        // Log dei problemi permanenti: la card e la pagina lo leggono da qui.
+        viewModelScope.launch {
+            container.issueLogStore.entries.collect { entries ->
+                _ui.update { it.copy(logEntries = IssueLog.visible(entries)) }
+            }
+        }
         refreshServerLabel()
         refreshProtectedSummary()
         // L'archivio dei contenuti protetti notifica ogni scrittura con la sua
@@ -355,6 +373,7 @@ class SettingsViewModel(
         refreshServerLabel()
         refreshProtectedSummary()
         refreshAccountInfo()
+        viewModelScope.launch { runCatching { container.m3uIssueCollector.refresh() } }
         recheckInstallPermission()
         checkForUpdates()
         if (pairingVisible) return
@@ -640,17 +659,24 @@ class SettingsViewModel(
      * delle Impostazioni.
      */
     /** Rilegge l'elenco delle sorgenti per il riquadro "Sorgenti". */
-    /** Ricalcola le righe d'errore delle liste (etichette comprese). */
+    /** Ricalcola le righe d'errore delle liste (etichette comprese) e il Log. */
     private suspend fun refreshM3uErrors() {
         val sources = runCatching { container.sourceRepository.sources() }.getOrDefault(emptyList())
         val rows = container.m3uSourceService.errorRows(sources)
         _ui.update { it.copy(m3uErrors = rows) }
+        runCatching { container.m3uIssueCollector.refresh() }
+    }
+
+    /** "Svuota log": i problemi in corso non tornano finché non rientrano. */
+    fun onClearLog() {
+        container.issueLogStore.clear()
     }
 
     private suspend fun refreshSources() {
         val sources = runCatching { container.sourceRepository.sources() }.getOrDefault(emptyList())
         val errors = container.m3uSourceService.errorRows(sources)
-        _ui.update { it.copy(sources = sources, m3uErrors = errors) }
+        val listsVisible = container.sourceRepository.listsVisible()
+        _ui.update { it.copy(sources = sources, m3uErrors = errors, listsVisible = listsVisible) }
     }
 
     /**
@@ -667,6 +693,28 @@ class SettingsViewModel(
                     runCatching { container.m3uSourceService.playlist(source) }
                 }
             }
+            refreshSources()
+        }
+    }
+
+    /**
+     * Interruttore generale "Mostra" della riga "Liste M3U": non tocca le
+     * singole liste, che restano come sono (riaccendendolo tornano).
+     */
+    fun setM3uListsVisible(visible: Boolean) {
+        viewModelScope.launch {
+            container.sourceRepository.setM3uListsVisible(visible)
+            refreshSources()
+        }
+    }
+
+    /**
+     * "Sposta su" / "Sposta giù" di una lista nella pagina "Liste M3U". La
+     * posizione è il numero dell'etichetta; le spente restano in coda.
+     */
+    fun moveSource(sourceId: String, up: Boolean) {
+        viewModelScope.launch {
+            container.sourceRepository.moveM3u(sourceId, up)
             refreshSources()
         }
     }

@@ -163,9 +163,10 @@ fun FvpNavigationDrawer(
             Column(
                 modifier = Modifier
                     .fillMaxHeight()
-                    // Fondo pieno #1C1C1E: il menu non lascia trasparire gli aloni
-                    // dello sfondo dei contenuti, né chiuso né aperto.
-                    .background(FvpColors.Background)
+                    // Fondo a vetro: il menu lascia trasparire gli aloni dello
+                    // sfondo dei contenuti, chiuso come aperto, e chiude con un
+                    // bordo bianco al 10% come gli altri riquadri.
+                    .background(FvpColors.GlassBackground)
                     .padding(vertical = scale.drawerVerticalPadding, horizontal = scale.dp(8f))
             ) {
                 DrawerSection.entries.forEach { section ->
@@ -243,15 +244,19 @@ fun FvpNavigationDrawer(
                             }
                             .testTag("drawer_${section.name}"),
                         colors = ListItemDefaults.colors(
-                            selectedContainerColor = FvpColors.SurfaceElevated,
+                            // Il riquadro dell'icona è a vetro sia compatto sia
+                            // esteso: la voce selezionata e quella a fuoco hanno
+                            // lo stesso fondo traslucido degli altri riquadri.
+                            selectedContainerColor = FvpColors.GlassSurface,
                             selectedContentColor = if (isSelected) section.activeColor else FvpColors.TextPrimary,
-                            focusedContainerColor = FvpColors.SurfaceElevated,
+                            focusedContainerColor = FvpColors.GlassSurface,
                             focusedContentColor = FvpColors.TextPrimary,
                             containerColor = Color.Transparent,
                             contentColor = FvpColors.Inactive,
                         ),
                         border = ListItemDefaults.border(
-                            focusedBorder = Border(BorderStroke(2.dp, FvpColors.GreenFocus))
+                            border = Border(BorderStroke(1.dp, FvpColors.GlassBorder)),
+                            focusedBorder = Border(BorderStroke(2.dp, FvpColors.GreenFocus)),
                         ),
                         scale = ListItemDefaults.scale(focusedScale = 1.04f),
                         shape = ListItemDefaults.shape(shape = androidx.compose.foundation.shape.RoundedCornerShape(scale.dp(10f))),

@@ -31,6 +31,7 @@ import it.felixvision.tv.ui.components.UiScale
 import it.felixvision.tv.ui.qr.QrBitmap
 import it.felixvision.tv.ui.theme.FvpColors
 import kotlinx.coroutines.delay
+import it.felixvision.tv.ui.components.fvpGlassPanel
 
 /**
  * Lato del QR, in unità di progetto: circa il 60% dei 196 dp di prima. Con il
@@ -59,9 +60,9 @@ fun PairingPanel(
     onRenewCode: (() -> Unit)? = null,
 ) {
     Column(
+        // Vetro medio: il riquadro lascia trasparire lo sfondo delle Impostazioni.
         modifier = modifier
-            .clip(RoundedCornerShape(scale.dp(20f)))
-            .background(FvpColors.Surface)
+            .fvpGlassPanel(scale, 20f)
             .padding(horizontal = scale.dp(14f), vertical = scale.dp(12f)),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {

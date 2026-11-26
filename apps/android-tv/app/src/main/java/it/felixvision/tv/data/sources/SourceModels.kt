@@ -38,6 +38,9 @@ enum class SourceType(val storageKey: String) {
  * @property m3uUrl indirizzo della lista M3U (solo per [SourceType.M3U]); arriva
  *   dalla compilazione ([it.felixvision.tv.data.sources.Sources.M3U_URL_ENV]) e
  *   non viene mai mostrato nell'interfaccia.
+ * @property m3uName nome del file della lista, ricordato alla creazione: resta
+ *   anche quando la lista esce dall'indice e il suo indirizzo non c'è più, così
+ *   righe e Log continuano a chiamarla per nome (`lista.m3u`).
  */
 data class Source(
     val id: String,
@@ -46,6 +49,7 @@ data class Source(
     val enabled: Boolean = true,
     val xtream: StoredCredentials? = null,
     val m3uUrl: String? = null,
+    val m3uName: String? = null,
 ) {
     /** Rappresentazione sicura: né credenziali né indirizzo della lista. */
     override fun toString(): String =
@@ -85,7 +89,9 @@ object Sources {
      */
     fun displayNames(sources: List<Source>): Map<String, String> {
         val lists = ordered(sources).filter { it.type == SourceType.M3U }
-        val bases = lists.associate { it.id to fileNameOf(it.m3uUrl) }
+        val bases = lists.associate { source ->
+            source.id to (source.m3uName ?: fileNameOf(source.m3uUrl))
+        }
         val repeats = bases.values.groupingBy { it }.eachCount()
         val used = HashMap<String, Int>()
         val names = HashMap<String, String>(sources.size)
@@ -168,6 +174,85 @@ object Sources {
             while (number in used) number += 1
             "$M3U_LABEL_PREFIX$number"
         }
+    }
+
+    /**
+     * Etichetta per una lista **in coda**: `M<numero più alto + 1>`. La usano le
+     * liste nuove e quelle che vengono accese o spente: così finiscono in fondo
+     * al proprio gruppo (accese o spente) e [normalizeM3uPositions] ricompatta
+     * i numeri.
+     */
+    fun appendM3uLabel(taken: Collection<String>): String {
+        val highest = taken.filter { isM3uLabel(it) }.mapNotNull { labelNumber(it) }.maxOrNull() ?: 0
+        return "$M3U_LABEL_PREFIX${highest + 1}"
+    }
+
+    /**
+     * Ordine della pagina "Liste M3U": prima le liste accese, fra loro per
+     * numero, poi quelle spente, fra loro per numero. È l'ordine che l'utente
+     * vede e che cambia con "Sposta su" / "Sposta giù".
+     */
+    fun m3uPageOrder(sources: List<Source>): List<Source> =
+        sources
+            .filter { it.type == SourceType.M3U }
+            .sortedWith(
+                compareBy<Source> { if (it.enabled) 0 else 1 }
+                    .thenBy { labelNumber(it.label) ?: Int.MAX_VALUE }
+                    .thenBy { it.id },
+            )
+
+    /**
+     * Rinumera le liste M3U secondo [m3uPageOrder]: la posizione è il numero
+     * dell'etichetta (1…n), le accese prima e le spente in coda, senza buchi.
+     * Gli account Xtream non si toccano: `S1`/`S2`/`S3` non sono posizioni.
+     */
+    fun normalizeM3uPositions(sources: List<Source>): List<Source> {
+        // Solo le liste visibili (con indirizzo) prendono una posizione: le
+        // righe rimaste senza indirizzo sono nascoste e restano come sono,
+        // pronte se la lista tornasse.
+        val page = m3uPageOrder(sources.filter { it.m3uUrl != null })
+        if (page.isEmpty()) return sources
+        val labels = page.withIndex().associate { (index, source) ->
+            source.id to "$M3U_LABEL_PREFIX${index + 1}"
+        }
+        return sources.map { source ->
+            val label = labels[source.id] ?: return@map source
+            if (source.label == label) source else source.copy(label = label)
+        }
+    }
+
+    /**
+     * Sposta una lista di una posizione **dentro il suo gruppo**: le accese fra
+     * le accese, le spente fra le spente. I due gruppi non si mescolano (le
+     * spente restano in coda), quindi ai bordi del gruppo l'elenco non cambia.
+     */
+    fun moveM3u(sources: List<Source>, sourceId: String, up: Boolean): List<Source> {
+        val page = m3uPageOrder(sources)
+        val index = page.indexOfFirst { it.id == sourceId }
+        if (index < 0) return sources
+        val target = if (up) index - 1 else index + 1
+        if (target !in page.indices) return sources
+        if (page[target].enabled != page[index].enabled) return sources
+        val moved = page.toMutableList()
+        val item = moved.removeAt(index)
+        moved.add(target, item)
+        val labels = moved.withIndex().associate { (position, source) ->
+            source.id to "$M3U_LABEL_PREFIX${position + 1}"
+        }
+        return sources.map { source ->
+            val label = labels[source.id] ?: return@map source
+            if (source.label == label) source else source.copy(label = label)
+        }
+    }
+
+    /** Vero se "Sposta su"/"Sposta giù" ha effetto, cioè se la lista ha una vicina nello stesso gruppo. */
+    fun canMoveM3u(sources: List<Source>, sourceId: String, up: Boolean): Boolean {
+        val page = m3uPageOrder(sources)
+        val index = page.indexOfFirst { it.id == sourceId }
+        if (index < 0) return false
+        val target = if (up) index - 1 else index + 1
+        if (target !in page.indices) return false
+        return page[target].enabled == page[index].enabled
     }
 
     /**

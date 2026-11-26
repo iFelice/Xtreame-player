@@ -75,9 +75,10 @@ import it.felixvision.tv.vpn.VpnConfigParser
 import it.felixvision.tv.vpn.VpnState
 
 /**
- * Schermata Impostazioni: una griglia di otto card (Account, Aspetto, Contenuti
- * protetti, VPN, Catalogo, Player, App, Backup) e, per ogni card, la pagina
- * della sua funzione a tutto schermo nell'area dei contenuti.
+ * Schermata Impostazioni: una griglia di dodici card, quattro per riga (Account,
+ * Aspetto, Contenuti protetti, VPN / Catalogo, Player, App, Backup / Log,
+ * Connessione remota, In arrivo, In arrivo) e, per ogni card che si apre, la
+ * pagina della sua funzione a tutto schermo nell'area dei contenuti.
  *
  * Il contenuto dei vecchi riquadri sta nelle pagine ([SettingsAccountPage],
  * [SettingsAppearancePage], [SettingsVpnPage], [SettingsCatalogPage],
@@ -127,6 +128,9 @@ fun SettingsScreen(
     // Formato del flusso Live: stessa osservazione, per la pagina Player.
     val liveStreamFormat by viewModel.liveStreamFormat.collectAsState()
     var showVpnSetup by remember { mutableStateOf(false) }
+    // Pagina annidata dentro la card Account: l'elenco delle liste M3U, con il
+    // "Mostra" di ognuna e il riordino. Indietro torna ad Account.
+    var showM3uLists by remember { mutableStateOf(false) }
     // Backup: la pagina apre la schermata di esportazione o di importazione.
     var backupFlow by remember { mutableStateOf<BackupFlow?>(null) }
     val vpnConfigureFocus = remember { FocusRequester() }
@@ -216,6 +220,8 @@ fun SettingsScreen(
             zappingSeconds = zappingSeconds,
             versionName = state.versionName,
             updateStatus = state.updateStatus,
+            // Una riga sola per problema: il numero è quello delle righe del Log.
+            logCount = state.logEntries.size,
         ),
         scale = scale,
         modifier = modifier,
@@ -224,16 +230,32 @@ fun SettingsScreen(
         downloadInProgress = state.isDownloadingUpdate,
         vpnSetupOpen = showVpnSetup,
         onCloseVpnSetup = { showVpnSetup = false },
+        listsPageOpen = showM3uLists,
+        onCloseLists = { showM3uLists = false },
         accountPage = { pageModifier, entryFocus ->
-            SettingsAccountPage(
-                state = state,
-                scale = scale,
-                modifier = pageModifier,
-                onExitClicked = { viewModel.onExitClicked() },
-                onRenewCode = { viewModel.onRenewCode() },
-                entryFocusRequester = entryFocus,
-                onSourceToggle = { sourceId, enabled -> viewModel.setSourceEnabled(sourceId, enabled) },
-            )
+            if (showM3uLists) {
+                M3uListsPage(
+                    sources = state.sources,
+                    listsVisible = state.listsVisible,
+                    scale = scale,
+                    modifier = pageModifier,
+                    onBack = { showM3uLists = false },
+                    onToggle = { sourceId, enabled -> viewModel.setSourceEnabled(sourceId, enabled) },
+                    onMoveUp = { sourceId -> viewModel.moveSource(sourceId, up = true) },
+                    onMoveDown = { sourceId -> viewModel.moveSource(sourceId, up = false) },
+                )
+            } else {
+                SettingsAccountPage(
+                    state = state,
+                    scale = scale,
+                    modifier = pageModifier,
+                    onExitClicked = { viewModel.onExitClicked() },
+                    entryFocusRequester = entryFocus,
+                    onSourceToggle = { sourceId, enabled -> viewModel.setSourceEnabled(sourceId, enabled) },
+                    onListsVisibleChange = { visible -> viewModel.setM3uListsVisible(visible) },
+                    onOpenLists = { showM3uLists = true },
+                )
+            }
         },
         // La pagina Aspetto dà il focus alla dimensione attiva con i propri
         // FocusRequester: non le serve quello della navigazione.
@@ -259,6 +281,25 @@ fun SettingsScreen(
                 modifier = pageModifier,
                 // Indietro dalla radice della schermata torna alla griglia.
                 onExit = closeProtectedPage,
+            )
+        },
+        logPage = { pageModifier, closeLogPage ->
+            SettingsLogPage(
+                entries = state.logEntries,
+                scale = scale,
+                modifier = pageModifier,
+                onClear = { viewModel.onClearLog() },
+                // A Log vuoto l'unico pulsante è "Torna alle card".
+                onBack = closeLogPage,
+            )
+        },
+        remotePage = { pageModifier, entryFocus ->
+            SettingsRemotePage(
+                pairing = state.pairing,
+                scale = scale,
+                modifier = pageModifier,
+                onRenewCode = { viewModel.onRenewCode() },
+                entryFocusRequester = entryFocus,
             )
         },
         vpnPage = { pageModifier, entryFocus ->
@@ -452,6 +493,10 @@ internal fun SettingsNavigation(
     downloadInProgress: Boolean = false,
     vpnSetupOpen: Boolean = false,
     onCloseVpnSetup: () -> Unit = {},
+    /** La pagina "Liste M3U" (dentro la card Account) è aperta: Indietro torna ad Account. */
+    listsPageOpen: Boolean = false,
+    /** Chiude la pagina "Liste M3U" quando si esce dalla card Account. */
+    onCloseLists: () -> Unit = {},
     backupFlowOpen: Boolean = false,
     onCloseBackupFlow: () -> Unit = {},
     accountPage: @Composable (Modifier, FocusRequester?) -> Unit = { _, _ -> },
@@ -464,6 +509,9 @@ internal fun SettingsNavigation(
     appPage: @Composable (Modifier, FocusRequester?) -> Unit = { _, _ -> },
     backupPage: @Composable (Modifier, FocusRequester?) -> Unit = { _, _ -> },
     backupFlowPage: @Composable (Modifier) -> Unit = {},
+    /** Pagina "Log": riceve anche il ritorno alla griglia (a Log vuoto). */
+    logPage: @Composable (Modifier, () -> Unit) -> Unit = { _, _ -> },
+    remotePage: @Composable (Modifier, FocusRequester?) -> Unit = { _, _ -> },
 ) {
     // La card aperta decide cosa occupa l'area dei contenuti; [lastOpenedCard]
     // resta anche dopo la chiusura, così il focus torna sulla card di ingresso.
@@ -488,6 +536,7 @@ internal fun SettingsNavigation(
     // l'eventuale schermata di esportazione o importazione del backup.
     val closePage: () -> Unit = {
         onCloseVpnSetup()
+        onCloseLists()
         onCloseBackupFlow()
         openCard = null
     }
@@ -506,6 +555,7 @@ internal fun SettingsNavigation(
     // La riserva per il dispositivo vero è il BackHandler qui sotto.
     val pageHandlesBack = openCard != SettingsCard.Protected &&
         !(openCard == SettingsCard.Vpn && vpnSetupOpen) &&
+        !(openCard == SettingsCard.Account && listsPageOpen) &&
         !(openCard == SettingsCard.Backup && backupFlowOpen) &&
         !downloadInProgress
 
@@ -580,6 +630,13 @@ internal fun SettingsNavigation(
                 } else {
                     backupPage(modifier, pageEntryFocusRequesters.getValue(SettingsCard.Backup))
                 }
+                SettingsCard.Log -> logPage(modifier, closePage)
+                SettingsCard.Remote -> remotePage(
+                    modifier,
+                    pageEntryFocusRequesters.getValue(SettingsCard.Remote),
+                )
+                // Segnaposto: non si aprono mai (non prendono il focus).
+                SettingsCard.ComingSoon, SettingsCard.ComingSoon2 -> Unit
                 null -> Unit
             }
         }

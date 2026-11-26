@@ -39,10 +39,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.tv.material3.Text
 import it.felixvision.tv.data.images.CacheCleanup
+import it.felixvision.tv.data.log.IssueEntry
+import it.felixvision.tv.data.log.IssueLog
+import it.felixvision.tv.data.pairing.PairingPanelState
 import it.felixvision.tv.data.playback.LiveStreamFormat
 import it.felixvision.tv.player.ZappingSeconds
 import it.felixvision.tv.ui.access.AccessViewModel
 import it.felixvision.tv.ui.access.PairingPanel
+import it.felixvision.tv.data.sources.SourceType
 import it.felixvision.tv.data.sources.Sources
 import it.felixvision.tv.ui.components.FvpCheckboxButton
 import it.felixvision.tv.ui.components.FvpCompactButton
@@ -64,6 +68,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import it.felixvision.tv.ui.components.fvpGlassPanel
 
 /** Tag di test delle pagine delle Impostazioni. */
 const val SETTINGS_PAGE_TITLE_TAG = "settings_page_title"
@@ -158,6 +163,12 @@ const val SETTINGS_SOURCES_SECTION_TAG = "settings_sources_section"
 /** Testo dell'interruttore di una sorgente. */
 const val SETTINGS_SOURCE_TOGGLE_LABEL = "Mostra"
 
+/** Riga unica delle liste M3U nella pagina Account. */
+const val SETTINGS_M3U_GROUP_TITLE = "Liste M3U"
+
+/** Pulsante che apre la pagina con l'elenco delle liste. */
+const val SETTINGS_M3U_OPEN_LABEL = "Apri"
+
 /** Riquadro dell'abbinamento da remoto dentro la pagina Account. */
 const val SETTINGS_PAIRING_SECTION_TAG = "settings_pairing_section"
 
@@ -226,8 +237,12 @@ internal fun SettingsPage(
 
 /**
  * Pagina "Impostazioni › Account": i dati dell'account che stavano nel riquadro
- * Account, l'uscita dall'account (con la sua casella nella finestra di conferma)
- * e la configurazione da remoto, che sostituisce le credenziali dell'account.
+ * Account, le sorgenti (account Xtream e lista "Liste M3U") e l'uscita
+ * dall'account, con la sua casella nella finestra di conferma.
+ *
+ * La configurazione da remoto ha una card sua ("Connessione remota"): qui non
+ * c'è più il QR, così la pagina resta corta. Le righe d'errore delle liste non
+ * si mostrano più in nessuna pagina: i problemi permanenti vanno nel Log.
  *
  * Il focus d'ingresso va su "Esci dall'account", l'unico pulsante sempre
  * presente nella pagina: chi la compone passa il [FocusRequester] ricordato in
@@ -239,9 +254,12 @@ internal fun SettingsAccountPage(
     scale: UiScale,
     modifier: Modifier = Modifier,
     onExitClicked: () -> Unit = {},
-    onRenewCode: () -> Unit = {},
     entryFocusRequester: FocusRequester? = null,
     onSourceToggle: (String, Boolean) -> Unit = { _, _ -> },
+    /** Interruttore generale della riga "Liste M3U". */
+    onListsVisibleChange: (Boolean) -> Unit = {},
+    /** Apre la pagina "Liste M3U" (elenco, "Mostra" per lista, riordino). */
+    onOpenLists: () -> Unit = {},
 ) {
     val localExitFocus = remember { FocusRequester() }
     val exitFocus = entryFocusRequester ?: localExitFocus
@@ -259,8 +277,7 @@ internal fun SettingsAccountPage(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(scale.dp(14f)))
-                .background(FvpColors.Surface)
+                .fvpGlassPanel(scale, 14f)
                 .padding(scale.settingsSectionPadding)
                 .testTag(SETTINGS_ACCOUNT_SECTION_TAG),
             verticalArrangement = Arrangement.spacedBy(scale.settingsRowSpacing),
@@ -299,15 +316,18 @@ internal fun SettingsAccountPage(
             )
         }
 
-        // Sorgenti: una riga per sorgente con l'interruttore "Mostra". La riga
-        // M3U è etichettata ("Lista M3U · S2") e non mostra mai l'indirizzo
-        // della lista. L'etichetta S1/S2/S3 è quella assegnata alla creazione.
+        // Sorgenti: una riga per ogni account Xtream e una sola riga per le
+        // liste M3U. Le liste possono essere cento: l'elenco, l'interruttore di
+        // ognuna e il riordino stanno nella pagina "Liste M3U", aperta con
+        // "Apri". Nessun indirizzo di lista compare mai qui.
         if (state.sources.isNotEmpty()) {
+            val xtreamNames = Sources.displayNames(state.sources)
+            val xtreamSources = state.sources.filter { it.type == SourceType.XTREAM }
+            val lists = state.sources.filter { it.type == SourceType.M3U }
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(scale.dp(14f)))
-                    .background(FvpColors.Surface)
+                    .fvpGlassPanel(scale, 14f)
                     .padding(scale.settingsSectionPadding)
                     .testTag(SETTINGS_SOURCES_SECTION_TAG),
                 verticalArrangement = Arrangement.spacedBy(scale.settingsRowSpacing),
@@ -323,9 +343,8 @@ internal fun SettingsAccountPage(
                     color = FvpColors.TextSecondary,
                     fontSize = scale.settingsRowText,
                 )
-                // Nome visibile: "Account Xtream" o il nome del file della lista.
-                val sourceNames = Sources.displayNames(state.sources)
-                state.sources.forEach { source ->
+                // Account Xtream: nome visibile e interruttore "Mostra".
+                xtreamSources.forEach { source ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -335,7 +354,7 @@ internal fun SettingsAccountPage(
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(scale.dp(2f))) {
                             Text(
-                                text = sourceNames[source.id] ?: Sources.typeName(source.type),
+                                text = xtreamNames[source.id] ?: Sources.typeName(source.type),
                                 color = FvpColors.TextPrimary,
                                 fontSize = scale.settingsRowText,
                                 modifier = Modifier.testTag("settings_source_title_${source.label}"),
@@ -355,12 +374,50 @@ internal fun SettingsAccountPage(
                         )
                     }
                 }
-                state.m3uErrors.forEach { row ->
-                    FvpStatusText(
-                        message = "${row.title}: ${row.message}. Le altre sorgenti restano disponibili.",
-                        scale = scale,
-                        modifier = Modifier.testTag("settings_sources_error_${row.sourceId}"),
-                    )
+                // Liste M3U: una riga sola, con il "Mostra" di tutte e "Apri".
+                if (lists.isNotEmpty()) {
+                    val activeLists = lists.count { it.enabled }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("settings_sources_m3u_row"),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(scale.dp(2f))) {
+                            Text(
+                                text = SETTINGS_M3U_GROUP_TITLE,
+                                color = FvpColors.TextPrimary,
+                                fontSize = scale.settingsRowText,
+                                modifier = Modifier.testTag("settings_sources_m3u_title"),
+                            )
+                            Text(
+                                text = if (state.listsVisible) {
+                                    "$activeLists attive su ${lists.size} liste"
+                                } else {
+                                    "Nascoste dal catalogo · $activeLists attive su ${lists.size} liste"
+                                },
+                                color = FvpColors.TextSecondary,
+                                fontSize = scale.settingsRowText,
+                                modifier = Modifier.testTag("settings_sources_m3u_status"),
+                            )
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(scale.dp(8f))) {
+                            FvpCheckboxButton(
+                                text = SETTINGS_SOURCE_TOGGLE_LABEL,
+                                checked = state.listsVisible,
+                                onCheckedChange = { visible -> onListsVisibleChange(visible) },
+                                scale = scale,
+                                modifier = Modifier.testTag("settings_sources_m3u_toggle"),
+                            )
+                            FvpSecondaryButton(
+                                text = SETTINGS_M3U_OPEN_LABEL,
+                                onClick = onOpenLists,
+                                scale = scale,
+                                modifier = Modifier.testTag("settings_sources_m3u_open"),
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -399,29 +456,173 @@ internal fun SettingsAccountPage(
             Text(text = it, color = FvpColors.Error, fontSize = scale.sp(14f))
         }
 
-        // Riquadro compatto: spaziature ridotte, il QR è più piccolo (vedi PairingPanel).
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(scale.dp(14f)))
-                .background(FvpColors.Surface)
-                .padding(scale.settingsSectionPadding)
-                .testTag(SETTINGS_PAIRING_SECTION_TAG),
-            verticalArrangement = Arrangement.spacedBy(scale.dp(6f)),
-        ) {
+    }
+}
+
+/** Tag di test delle pagine Log e Connessione remota. */
+const val SETTINGS_PAGE_LOG_TAG = "settings_page_log"
+const val SETTINGS_PAGE_REMOTE_TAG = "settings_page_remote"
+
+/** Riquadro con le righe del Log e riquadro della pagina "Connessione remota". */
+const val SETTINGS_LOG_LIST_TAG = "settings_log_list"
+const val SETTINGS_REMOTE_SECTION_TAG = "settings_remote_section"
+
+/** "Svuota log" e, a Log vuoto, "Torna alle card". */
+const val SETTINGS_LOG_CLEAR_LABEL = "Svuota log"
+const val SETTINGS_LOG_BACK_LABEL = "Torna alle card"
+const val SETTINGS_LOG_CLEAR_TAG = "settings_log_clear"
+const val SETTINGS_LOG_BACK_TAG = "settings_log_back"
+
+/** Testo della pagina Log quando non c'è niente da verificare. */
+const val SETTINGS_LOG_EMPTY_TEXT = "Nessun messaggio da verificare."
+
+/** Nota sotto le righe: cosa fa "Svuota log". */
+const val SETTINGS_LOG_HINT =
+    "Restano solo i problemi in corso. Svuotando il log, un problema non torna finché non rientra."
+
+/** Tag di test della riga [index] del Log, dalla più vecchia. */
+fun logRowTag(index: Int): String = "settings_log_row_$index"
+
+/**
+ * Pagina "Impostazioni › Log": le righe dei problemi permanenti, dalla più
+ * vecchia, con data e ora ("23/11 18:42 — lista.m3u: non presente nell'indice").
+ *
+ * Con il Log vuoto resta un solo pulsante, "Torna alle card", così la pagina ha
+ * sempre un elemento focalizzabile e il tasto Indietro non esce dalle
+ * Impostazioni. Con il Log pieno il primo elemento è "Svuota log": i problemi in
+ * corso non tornano finché non rientrano (se rientrano e si ripresentano, la
+ * riga torna con data e ora nuove).
+ */
+@Composable
+internal fun SettingsLogPage(
+    entries: List<IssueEntry>,
+    scale: UiScale,
+    modifier: Modifier = Modifier,
+    onClear: () -> Unit = {},
+    onBack: () -> Unit = {},
+) {
+    val clearFocus = remember { FocusRequester() }
+    val backFocus = remember { FocusRequester() }
+    val empty = entries.isEmpty()
+    LaunchedEffect(empty) {
+        withFrameNanos { }
+        runCatching { (if (empty) backFocus else clearFocus).requestFocus() }
+    }
+
+    SettingsPage(
+        card = SettingsCard.Log,
+        scale = scale,
+        modifier = modifier,
+        pageTag = SETTINGS_PAGE_LOG_TAG,
+    ) {
+        if (empty) {
             Text(
-                text = "Configura da remoto",
-                color = FvpColors.TextPrimary,
-                fontSize = scale.sp(16f),
-                fontWeight = FontWeight.SemiBold,
+                text = SETTINGS_LOG_EMPTY_TEXT,
+                color = FvpColors.TextSecondary,
+                fontSize = scale.settingsRowText,
             )
-            PairingPanel(state = state.pairing, scale = scale, modifier = Modifier.fillMaxWidth())
-            if (state.pairing.isExpired) {
-                FvpSecondaryButton(text = "Mostra un nuovo codice", onClick = onRenewCode, scale = scale)
+            FvpSecondaryButton(
+                text = SETTINGS_LOG_BACK_LABEL,
+                onClick = onBack,
+                scale = scale,
+                modifier = Modifier
+                    .focusRequester(backFocus)
+                    .testTag(SETTINGS_LOG_BACK_TAG),
+            )
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fvpGlassPanel(scale, 14f)
+                    .padding(scale.settingsSectionPadding)
+                    .testTag(SETTINGS_LOG_LIST_TAG),
+                verticalArrangement = Arrangement.spacedBy(scale.settingsRowSpacing),
+            ) {
+                entries.forEachIndexed { index, entry ->
+                    Text(
+                        text = IssueLog.line(entry),
+                        color = FvpColors.TextPrimary,
+                        fontSize = scale.settingsRowText,
+                        modifier = Modifier.testTag(logRowTag(index)),
+                    )
+                }
             }
+            Text(
+                text = SETTINGS_LOG_HINT,
+                color = FvpColors.TextSecondary,
+                fontSize = scale.settingsRowText,
+            )
+            FvpSecondaryButton(
+                text = SETTINGS_LOG_CLEAR_LABEL,
+                onClick = onClear,
+                scale = scale,
+                modifier = Modifier
+                    .focusRequester(clearFocus)
+                    .testTag(SETTINGS_LOG_CLEAR_TAG),
+            )
         }
     }
 }
+
+/**
+ * Pagina "Impostazioni › Connessione remota": il pannello di abbinamento con il
+ * QR e il PIN, spostato qui dal riquadro Account (che torna corto).
+ *
+ * "Mostra un nuovo codice" è sempre presente: è l'unico elemento focalizzabile
+ * della pagina, quindi il focus non esce e il tasto Indietro resta alle
+ * Impostazioni. Il pannello non ha un pulsante suo: l'azione è questa sola.
+ */
+@Composable
+internal fun SettingsRemotePage(
+    pairing: PairingPanelState,
+    scale: UiScale,
+    modifier: Modifier = Modifier,
+    onRenewCode: () -> Unit = {},
+    entryFocusRequester: FocusRequester? = null,
+) {
+    val localRenewFocus = remember { FocusRequester() }
+    val renewFocus = entryFocusRequester ?: localRenewFocus
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
+        runCatching { renewFocus.requestFocus() }
+    }
+
+    SettingsPage(
+        card = SettingsCard.Remote,
+        scale = scale,
+        modifier = modifier,
+        pageTag = SETTINGS_PAGE_REMOTE_TAG,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fvpGlassPanel(scale, 14f)
+                .padding(scale.settingsSectionPadding)
+                .testTag(SETTINGS_REMOTE_SECTION_TAG),
+            verticalArrangement = Arrangement.spacedBy(scale.dp(6f)),
+        ) {
+            PairingPanel(
+                state = pairing,
+                scale = scale,
+                modifier = Modifier.fillMaxWidth(),
+                // Il pulsante è sotto il pannello, così riceve il focus d'ingresso.
+                onRenewCode = null,
+            )
+            FvpSecondaryButton(
+                text = SETTINGS_REMOTE_RENEW_LABEL,
+                onClick = onRenewCode,
+                scale = scale,
+                modifier = Modifier
+                    .focusRequester(renewFocus)
+                    .testTag(SETTINGS_REMOTE_RENEW_TAG),
+            )
+        }
+    }
+}
+
+/** Testo e tag dell'unico pulsante della pagina "Connessione remota". */
+const val SETTINGS_REMOTE_RENEW_LABEL = "Mostra un nuovo codice"
+const val SETTINGS_REMOTE_RENEW_TAG = "settings_remote_renew"
 
 /**
  * Pagina "Impostazioni › Aspetto": la scelta della dimensione dell'interfaccia,
@@ -455,8 +656,7 @@ internal fun SettingsAppearancePage(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(scale.dp(14f)))
-                .background(FvpColors.Surface)
+                .fvpGlassPanel(scale, 14f)
                 .padding(scale.settingsSectionPadding)
                 .testTag(SETTINGS_APPEARANCE_SECTION_TAG),
             verticalArrangement = Arrangement.spacedBy(scale.settingsRowSpacing),
@@ -555,8 +755,7 @@ internal fun SettingsPlayerPage(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(scale.dp(14f)))
-                .background(FvpColors.Surface)
+                .fvpGlassPanel(scale, 14f)
                 .padding(scale.settingsSectionPadding)
                 .testTag(SETTINGS_PLAYER_SECTION_TAG),
             verticalArrangement = Arrangement.spacedBy(scale.settingsRowSpacing),
@@ -893,8 +1092,7 @@ internal fun SettingsCatalogPage(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(scale.dp(14f)))
-                .background(FvpColors.Surface)
+                .fvpGlassPanel(scale, 14f)
                 .padding(scale.settingsSectionPadding)
                 .testTag(SETTINGS_CACHE_SECTION_TAG),
             verticalArrangement = Arrangement.spacedBy(scale.settingsRowSpacing),
@@ -1001,8 +1199,7 @@ internal fun SettingsAppPage(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(scale.dp(14f)))
-                .background(FvpColors.Surface)
+                .fvpGlassPanel(scale, 14f)
                 .padding(scale.settingsSectionPadding)
                 .testTag("settings_app_section"),
             verticalArrangement = Arrangement.spacedBy(scale.settingsRowSpacing),

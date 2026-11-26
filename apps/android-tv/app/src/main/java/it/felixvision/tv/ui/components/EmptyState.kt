@@ -23,6 +23,13 @@ fun EmptyState(
     description: String,
     scale: UiScale,
     modifier: Modifier = Modifier,
+    /**
+     * Pulsante facoltativo sotto la descrizione: serve quando lo stato vuoto
+     * indica dove andare a rimediare (per esempio "Apri Impostazioni").
+     */
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null,
+    actionModifier: Modifier = Modifier,
 ) {
     Column(
         modifier = modifier
@@ -34,6 +41,10 @@ fun EmptyState(
         Text(text = title, color = FvpColors.TextPrimary, fontSize = scale.sp(20f), fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
         Spacer(Modifier.height(scale.dp(8f)))
         Text(text = description, color = FvpColors.TextSecondary, fontSize = scale.sp(15f), textAlign = TextAlign.Center)
+        if (actionLabel != null && onAction != null) {
+            Spacer(Modifier.height(scale.dp(16f)))
+            FvpPrimaryButton(text = actionLabel, onClick = onAction, scale = scale, modifier = actionModifier)
+        }
     }
 }
 

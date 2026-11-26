@@ -8,6 +8,7 @@ import it.felixvision.tv.data.catalog.allCategoryIds
 import it.felixvision.tv.data.channels.MyChannel
 import it.felixvision.tv.data.continuewatching.ContinueEntry
 import it.felixvision.tv.data.favorites.FavoriteItem
+import it.felixvision.tv.data.sources.SourceIds
 
 /**
  * Regole pure di visibilità: dato l'archivio dei contenuti protetti, tolgono
@@ -35,8 +36,19 @@ object ProtectedFilter {
     private fun isEmpty(data: ProtectedContentData): Boolean =
         data.hiddenCategories.isEmpty() && data.hiddenItems.isEmpty()
 
-    /** Catalogo visibile: categorie e contenuti nascosti tolti, [Catalog.updatedAtMillis] invariato. */
-    fun filterCatalog(catalog: Catalog, data: ProtectedContentData): Catalog {
+    /**
+     * Catalogo visibile: categorie e contenuti nascosti tolti, [Catalog.updatedAtMillis] invariato.
+     *
+     * @param emptyCategorySourceId sorgente le cui categorie spariscono quando
+     *   restano senza film: è il caso delle categorie unite delle liste M3U in
+     *   Film, che si nascondono per lista e non per identificativo. `null`
+     *   lascia le categorie come sono (nessuna colonna vuota creata o tolta).
+     */
+    fun filterCatalog(
+        catalog: Catalog,
+        data: ProtectedContentData,
+        emptyCategorySourceId: String? = null,
+    ): Catalog {
         if (isEmpty(data)) return catalog
         val liveCategories = catalog.liveCategories.filterNot {
             ProtectedContentRules.isCategoryHidden(data, ProtectedKind.LIVE, it.categoryId)
@@ -53,12 +65,30 @@ object ProtectedFilter {
         val vodStreams = catalog.vodStreams.filterNot {
             isItemHidden(data, ProtectedKind.VOD, it.streamId, it.allCategoryIds)
         }
+        val vodCategoryIds = if (emptyCategorySourceId == null) {
+            null
+        } else {
+            // Categorie unite rimaste senza film (tutti protetti): spariscono
+            // invece di restare come colonne vuote.
+            val used = vodStreams.mapNotNullTo(HashSet()) { it.categoryId }
+            vodCategories
+                .filterNot { category ->
+                    SourceIds.sourceOf(category.categoryId) == emptyCategorySourceId &&
+                        category.categoryId !in used
+                }
+                .mapTo(HashSet()) { it.categoryId }
+        }
         val series = catalog.series.filterNot {
             isItemHidden(data, ProtectedKind.SERIES, it.seriesId, it.allCategoryIds)
         }
+        val visibleVodCategories = if (vodCategoryIds == null) {
+            vodCategories
+        } else {
+            vodCategories.filter { it.categoryId in vodCategoryIds }
+        }
         if (
             liveCategories.size == catalog.liveCategories.size &&
-            vodCategories.size == catalog.vodCategories.size &&
+            visibleVodCategories.size == catalog.vodCategories.size &&
             seriesCategories.size == catalog.seriesCategories.size &&
             liveStreams.size == catalog.liveStreams.size &&
             vodStreams.size == catalog.vodStreams.size &&
@@ -70,7 +100,7 @@ object ProtectedFilter {
         return catalog.copy(
             liveCategories = liveCategories,
             liveStreams = liveStreams,
-            vodCategories = vodCategories,
+            vodCategories = visibleVodCategories,
             vodStreams = vodStreams,
             seriesCategories = seriesCategories,
             series = series,

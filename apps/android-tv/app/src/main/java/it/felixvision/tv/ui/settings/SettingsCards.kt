@@ -2,7 +2,10 @@ package it.felixvision.tv.ui.settings
 
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -19,6 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -53,7 +58,10 @@ const val SETTINGS_TITLE = "Impostazioni"
 const val SETTINGS_TITLE_TAG = "settings_title"
 const val SETTINGS_GRID_TAG = "settings_grid"
 
-/** Tag di test delle otto card, nell'ordine in cui compaiono nella griglia. */
+/**
+ * Tag di test delle dodici card, nell'ordine in cui compaiono nella griglia:
+ * le otto di sempre, poi Log, Connessione remota e i due segnaposto.
+ */
 const val SETTINGS_CARD_ACCOUNT_TAG = "settings_card_account"
 const val SETTINGS_CARD_APPEARANCE_TAG = "settings_card_appearance"
 const val SETTINGS_CARD_PROTECTED_TAG = "settings_card_protected"
@@ -62,6 +70,39 @@ const val SETTINGS_CARD_CATALOG_TAG = "settings_card_catalog"
 const val SETTINGS_CARD_PLAYER_TAG = "settings_card_player"
 const val SETTINGS_CARD_APP_TAG = "settings_card_app"
 const val SETTINGS_CARD_BACKUP_TAG = "settings_card_backup"
+const val SETTINGS_CARD_LOG_TAG = "settings_card_log"
+const val SETTINGS_CARD_REMOTE_TAG = "settings_card_remote"
+const val SETTINGS_CARD_COMING_SOON_TAG = "settings_card_coming_soon"
+const val SETTINGS_CARD_COMING_SOON_2_TAG = "settings_card_coming_soon_2"
+
+/** Pallino della card Log quando ci sono messaggi da verificare. */
+const val SETTINGS_LOG_DOT_TAG = "settings_card_log_dot"
+
+/** Titolo della card e della pagina del Log. */
+const val SETTINGS_LOG_TITLE = "Log"
+
+/** Riga di stato della card Log senza messaggi. */
+const val SETTINGS_LOG_EMPTY_STATUS = "Nessun problema"
+
+/** Riga di stato della card Log con un messaggio solo. */
+const val SETTINGS_LOG_ONE_STATUS = "1 problema"
+
+/** "3 problemi": riga di stato della card Log. */
+fun logCardStatusLine(count: Int): String = when (count) {
+    0 -> SETTINGS_LOG_EMPTY_STATUS
+    1 -> SETTINGS_LOG_ONE_STATUS
+    else -> "$count problemi"
+}
+
+/** Titolo della card e della pagina "Connessione remota". */
+const val SETTINGS_REMOTE_TITLE = "Connessione remota"
+
+/** Riga di stato della card "Connessione remota". */
+const val SETTINGS_REMOTE_STATUS = "QR e codice"
+
+/** Titolo dei due segnaposto e riga di stato. */
+const val SETTINGS_COMING_SOON_TITLE = "In arrivo"
+const val SETTINGS_COMING_SOON_STATUS = "Prossimamente"
 
 /** Suffisso del tag della riga di stato, del titolo e dell'icona di una card. */
 const val SETTINGS_CARD_STATUS_SUFFIX = "_status"
@@ -147,7 +188,13 @@ object SettingsCardDimens {
     /** Spazio tra le card e tra le righe della griglia. */
     const val GRID_SPACING_BASE = 16f
 
-    /** Card per riga: la griglia è 4 + 4. */
+    /** Pallino dei messaggi sulla card Log. */
+    const val LOG_DOT_BASE = 8f
+
+    /** Opacità delle card segnaposto ("In arrivo"): spente, non spariscono. */
+    const val PLACEHOLDER_ALPHA = 0.45f
+
+    /** Card per riga: la griglia è 4 + 4 + 4. */
     const val CARDS_PER_ROW = 4
 
     /** Margine orizzontale della griglia, come il resto delle Impostazioni. */
@@ -158,17 +205,24 @@ object SettingsCardDimens {
 }
 
 /**
- * Le otto card della griglia Impostazioni, nell'ordine in cui compaiono:
- * Account, Aspetto, Contenuti protetti, VPN, Catalogo, Player, App, Backup.
+ * Le dodici card della griglia Impostazioni, quattro per riga, nell'ordine in
+ * cui compaiono: Account, Aspetto, Contenuti protetti, VPN / Catalogo, Player,
+ * App, Backup / Log, Connessione remota, In arrivo, In arrivo.
  *
  * Ogni card apre la pagina della sua funzione. Le icone riusano i drawable già
  * presenti dove esistono (`ic_replay` per il Catalogo) e ne aggiungono di nuovi
  * a tratto semplice dove mancavano.
+ *
+ * I due segnaposto non sono una funzione: mostrano "In arrivo" con la riga
+ * "Prossimamente", hanno il fondo spento e non si aprono. Non prendono il focus,
+ * quindi con il telecomando si passa oltre, come se non ci fossero.
  */
 enum class SettingsCard(
     val title: String,
     val testTag: String,
     @DrawableRes val iconRes: Int,
+    /** Card segnaposto: solo informazione, non cliccabile e non focalizzabile. */
+    val placeholder: Boolean = false,
 ) {
     Account("Account", SETTINGS_CARD_ACCOUNT_TAG, R.drawable.ic_settings_account),
     Appearance(SETTINGS_APPEARANCE_TITLE, SETTINGS_CARD_APPEARANCE_TAG, R.drawable.ic_settings_text_size),
@@ -178,6 +232,20 @@ enum class SettingsCard(
     Player(SETTINGS_PLAYER_TITLE, SETTINGS_CARD_PLAYER_TAG, R.drawable.ic_settings_player),
     App("App", SETTINGS_CARD_APP_TAG, R.drawable.ic_settings_app),
     Backup(SETTINGS_BACKUP_TITLE, SETTINGS_CARD_BACKUP_TAG, R.drawable.ic_settings_backup),
+    Log(SETTINGS_LOG_TITLE, SETTINGS_CARD_LOG_TAG, R.drawable.ic_settings_log),
+    Remote(SETTINGS_REMOTE_TITLE, SETTINGS_CARD_REMOTE_TAG, R.drawable.ic_settings_remote),
+    ComingSoon(
+        SETTINGS_COMING_SOON_TITLE,
+        SETTINGS_CARD_COMING_SOON_TAG,
+        R.drawable.ic_nav_sparkles,
+        placeholder = true,
+    ),
+    ComingSoon2(
+        SETTINGS_COMING_SOON_TITLE,
+        SETTINGS_CARD_COMING_SOON_2_TAG,
+        R.drawable.ic_nav_sparkles,
+        placeholder = true,
+    ),
     ;
 
     /** Tag di test del titolo della card. */
@@ -211,6 +279,8 @@ data class SettingsCardsState(
     val zappingSeconds: Int = ZappingSeconds.DEFAULT,
     val versionName: String = "",
     val updateStatus: AppUpdateStatus = AppUpdateStatus.Checking,
+    /** Messaggi nel Log da verificare: 0 nessun problema. */
+    val logCount: Int = 0,
 )
 
 /** "<username> · scade <gg/mm/aaaa>"; senza scadenza resta il solo username. */
@@ -280,6 +350,10 @@ fun settingsCardStatuses(state: SettingsCardsState): Map<SettingsCard, SettingsC
     ),
     SettingsCard.App to appCardStatus(state.versionName, state.updateStatus),
     SettingsCard.Backup to SettingsCardStatus(text = SETTINGS_BACKUP_STATUS),
+    SettingsCard.Log to SettingsCardStatus(text = logCardStatusLine(state.logCount)),
+    SettingsCard.Remote to SettingsCardStatus(text = SETTINGS_REMOTE_STATUS),
+    SettingsCard.ComingSoon to SettingsCardStatus(text = SETTINGS_COMING_SOON_STATUS),
+    SettingsCard.ComingSoon2 to SettingsCardStatus(text = SETTINGS_COMING_SOON_STATUS),
 )
 
 /** Riga di stato della card Player: l'intervallo attuale dello zapping. */
@@ -350,6 +424,20 @@ internal fun SettingsGrid(
             ) {
                 rowCards.forEach { card ->
                     val cardFocus = cardFocusRequesters[card]
+                    // Il segnaposto non prende il focus: il telecomando lo salta.
+                    val focusModifier = if (card.placeholder) {
+                        Modifier
+                    } else {
+                        Modifier.then(
+                            if (cardFocus != null) Modifier.focusRequester(cardFocus) else Modifier,
+                        ).then(
+                            if (card == SettingsCard.entries.first() && entryFocusRequester != null) {
+                                Modifier.focusRequester(entryFocusRequester)
+                            } else {
+                                Modifier
+                            },
+                        )
+                    }
                     SettingsCardTile(
                         card = card,
                         status = statuses.getValue(card),
@@ -358,21 +446,17 @@ internal fun SettingsGrid(
                         // aggiornamento in corso (disponibile, in scaricamento
                         // o in installazione).
                         iconOrange = card == SettingsCard.App && appUpdateActive,
+                        // Pallino dei messaggi solo sulla card Log, e solo se il
+                        // Log ha qualcosa da verificare.
+                        showLogDot = card == SettingsCard.Log && state.logCount > 0,
                         modifier = Modifier
                             .weight(1f)
                             .height(cardHeight)
-                            .then(if (cardFocus != null) Modifier.focusRequester(cardFocus) else Modifier)
-                            .then(
-                                if (card == SettingsCard.entries.first() && entryFocusRequester != null) {
-                                    Modifier.focusRequester(entryFocusRequester)
-                                } else {
-                                    Modifier
-                                },
-                            ),
+                            .then(focusModifier),
                         onClick = { onOpenCard(card) },
                     )
                 }
-                // Seconda riga incompleta: spazi vuoti dello stesso peso.
+                // Riga incompleta: spazi vuoti dello stesso peso.
                 repeat(SettingsCardDimens.CARDS_PER_ROW - rowCards.size) {
                     Spacer(modifier = Modifier.weight(1f).height(cardHeight))
                 }
@@ -399,15 +483,21 @@ internal fun rememberSettingsPageFocusRequesters(): Map<SettingsCard, FocusReque
 /**
  * Una card della griglia: icona in alto, titolo e riga di stato.
  *
- * [Card] di tv-material cliccabile: fondo [FvpColors.Surface] in ogni stato,
- * bordo [FvpColors.SurfaceElevated] a riposo e [FvpColors.GreenFocus] di 2 dp
- * con il focus. La forma è una sola, condivisa da contenitore e bordi, così gli
+ * [Card] di tv-material cliccabile a **vetro medio**: fondo
+ * [FvpColors.GlassSurface] (Surface al 60%) in ogni stato, bordo
+ * [FvpColors.GlassBorder] (bianco al 10%) a riposo e [FvpColors.GreenFocus] di
+ * 2 dp con il focus. La forma è una sola, condivisa da contenitore e bordi, così gli
  * angoli restano arrotondati allo stesso modo in tutti gli stati.
  *
  * Con [iconOrange] l'icona resta arancione ([FvpColors.Orange]) anche a riposo
  * e con il focus: è il caso della card App con un aggiornamento disponibile,
  * in scaricamento o in installazione. Il colore corrente dell'icona è esposto
  * nella chiave semantica [SettingsCardIconTintKey].
+ *
+ * Le card segnaposto ([SettingsCard.placeholder]) non sono una [Card]: sono un
+ * contenitore con lo stesso disegno, il fondo spento e nessuna azione, quindi
+ * non prendono il focus e il telecomando le salta. Con [showLogDot] compare il
+ * pallino dei messaggi in alto a destra (card Log).
  */
 @Composable
 private fun SettingsCardTile(
@@ -416,13 +506,41 @@ private fun SettingsCardTile(
     scale: UiScale,
     modifier: Modifier = Modifier,
     iconOrange: Boolean = false,
+    showLogDot: Boolean = false,
     onClick: () -> Unit,
 ) {
     val shape = remember(scale) { RoundedCornerShape(scale.dp(SettingsCardDimens.CORNER_BASE)) }
+    var focused by remember(card) { mutableStateOf(false) }
+
+    if (card.placeholder) {
+        // Segnaposto: nessun clic, nessun focus, fondo spento.
+        Box(
+            modifier = modifier
+                .clip(shape)
+                .background(FvpColors.Surface.copy(alpha = SettingsCardDimens.PLACEHOLDER_ALPHA))
+                .border(
+                    width = scale.dp(SettingsCardDimens.REST_BORDER_BASE),
+                    color = FvpColors.SurfaceElevated.copy(alpha = SettingsCardDimens.PLACEHOLDER_ALPHA),
+                    shape = shape,
+                )
+                .testTag(card.testTag),
+        ) {
+            SettingsCardBody(
+                card = card,
+                status = status,
+                scale = scale,
+                iconTint = FvpColors.TextSecondary.copy(alpha = SettingsCardDimens.PLACEHOLDER_ALPHA),
+                textAlpha = SettingsCardDimens.PLACEHOLDER_ALPHA,
+            )
+        }
+        return
+    }
+
     val restBorder = Border(
         border = BorderStroke(
             width = scale.dp(SettingsCardDimens.REST_BORDER_BASE),
-            color = FvpColors.SurfaceElevated,
+            // Vetro medio a riposo: bordo bianco al 10%, fondo Surface al 60%.
+            color = FvpColors.GlassBorder,
         ),
         shape = shape,
     )
@@ -433,7 +551,6 @@ private fun SettingsCardTile(
         ),
         shape = shape,
     )
-    var focused by remember(card) { mutableStateOf(false) }
 
     Card(
         onClick = onClick,
@@ -446,11 +563,11 @@ private fun SettingsCardTile(
         // resta Surface in ogni stato, così la card non cambia colore con il focus
         // e a parlare è solo il bordo verde.
         colors = CardDefaults.colors(
-            containerColor = FvpColors.Surface,
+            containerColor = FvpColors.GlassSurface,
             contentColor = FvpColors.TextPrimary,
-            focusedContainerColor = FvpColors.Surface,
+            focusedContainerColor = FvpColors.GlassSurface,
             focusedContentColor = FvpColors.TextPrimary,
-            pressedContainerColor = FvpColors.Surface,
+            pressedContainerColor = FvpColors.GlassSurface,
             pressedContentColor = FvpColors.TextPrimary,
         ),
         border = CardDefaults.border(
@@ -459,6 +576,34 @@ private fun SettingsCardTile(
             pressedBorder = focusBorder,
         ),
     ) {
+        SettingsCardBody(
+            card = card,
+            status = status,
+            scale = scale,
+            iconTint = when {
+                iconOrange -> FvpColors.Orange
+                focused -> FvpColors.GreenFocus
+                else -> FvpColors.TextPrimary
+            },
+            showLogDot = showLogDot,
+        )
+    }
+}
+
+/**
+ * Contenuto di una card: icona, titolo e riga di stato. Lo usano sia le card
+ * cliccabili sia i segnaposto, così le dodici card si somigliano.
+ */
+@Composable
+private fun SettingsCardBody(
+    card: SettingsCard,
+    status: SettingsCardStatus,
+    scale: UiScale,
+    iconTint: Color,
+    textAlpha: Float = 1f,
+    showLogDot: Boolean = false,
+) {
+    Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -469,11 +614,6 @@ private fun SettingsCardTile(
                 Alignment.CenterVertically,
             ),
         ) {
-            val iconTint = when {
-                iconOrange -> FvpColors.Orange
-                focused -> FvpColors.GreenFocus
-                else -> FvpColors.TextPrimary
-            }
             Icon(
                 painter = painterResource(card.iconRes),
                 contentDescription = card.title,
@@ -485,7 +625,7 @@ private fun SettingsCardTile(
             )
             Text(
                 text = card.title,
-                color = FvpColors.TextPrimary,
+                color = FvpColors.TextPrimary.copy(alpha = textAlpha),
                 fontSize = scale.sp(SettingsCardDimens.TITLE_TEXT_BASE),
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
@@ -495,13 +635,26 @@ private fun SettingsCardTile(
             )
             Text(
                 text = status.text,
-                color = status.color,
+                color = status.color.copy(alpha = textAlpha),
                 fontSize = scale.sp(SettingsCardDimens.STATUS_TEXT_BASE),
                 maxLines = 1,
                 softWrap = false,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.testTag(card.statusTag),
+            )
+        }
+        if (showLogDot) {
+            // Pallino dei messaggi: disegno puro, non focalizzabile, in alto a
+            // destra come quello dell'aggiornamento sull'icona del menu.
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(scale.dp(SettingsCardDimens.CARD_PADDING_BASE))
+                    .size(scale.dp(SettingsCardDimens.LOG_DOT_BASE))
+                    .clip(CircleShape)
+                    .background(FvpColors.Error)
+                    .testTag(SETTINGS_LOG_DOT_TAG),
             )
         }
     }

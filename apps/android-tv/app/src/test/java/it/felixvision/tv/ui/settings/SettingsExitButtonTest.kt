@@ -90,18 +90,15 @@ class SettingsExitButtonTest {
         val server = rule.onNodeWithTag("settings_server_row").fetchSemanticsNode().boundsInRoot
         val exit = rule.onNodeWithTag(SETTINGS_EXIT_TAG).fetchSemanticsNode().boundsInRoot
         val accountSection = rule.onNodeWithTag(SETTINGS_ACCOUNT_SECTION_TAG).fetchSemanticsNode().boundsInRoot
-        val pairingSection = rule.onNodeWithTag(SETTINGS_PAIRING_SECTION_TAG).fetchSemanticsNode().boundsInRoot
 
         // Subito dopo la riga "Server", dentro il riquadro Account.
         assertTrue("l'uscita non sta sotto la riga Server", exit.top >= server.bottom - 1f)
         // Allineata a sinistra come le righe del riquadro.
         assertTrue("l'uscita non è allineata a sinistra", exit.left <= server.left + 2f)
-        // Dentro il riquadro Account, che finisce prima di "Configura da remoto".
+        // Dentro il riquadro Account.
         assertTrue("l'uscita non sta nel riquadro Account", exit.bottom <= accountSection.bottom + 1f)
-        assertTrue(
-            "il riquadro Account non sta sopra la configurazione da remoto",
-            accountSection.bottom <= pairingSection.top + 1f,
-        )
+        // La configurazione da remoto non è più in questa pagina: ha una card sua.
+        rule.onNodeWithTag(SETTINGS_PAIRING_SECTION_TAG).assertDoesNotExist()
     }
 
     @Test

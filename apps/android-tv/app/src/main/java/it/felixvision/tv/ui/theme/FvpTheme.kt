@@ -32,6 +32,21 @@ object FvpColors {
     val GlassBorder = Color.White.copy(alpha = 0.10f)
 
     /**
+     * Vetro **medio** dell'interfaccia, fuori dal player: [Surface] al 60% (lo
+     * stesso fondo degli elementi del player) con il bordo [GlassBorder] bianco
+     * al 10%. Lo usano le card della griglia delle Impostazioni, i riquadri
+     * delle pagine, le righe di stato, gli avvisi in basso e il menu laterale
+     * (fondo compreso), così l'interfaccia lascia trasparire lo sfondo.
+     *
+     * Il player resta com'è e le finestre sopra i contenuti restano piene:
+     * lì un fondo trasparente toglierebbe leggibilità.
+     */
+    val GlassSurface = Surface.copy(alpha = 0.60f)
+
+    /** Fondo del menu laterale: [Background] al 60%, così lascia trasparire i contenuti. */
+    val GlassBackground = Background.copy(alpha = 0.60f)
+
+    /**
      * Unico fondo degli elementi del player sopra il video (pannello del volume,
      * banner del canale, lista canali, barra comandi, pannello tracce, prossimo
      * episodio, Riprendi, etichetta dei salti, errori): [Surface] al 60%.

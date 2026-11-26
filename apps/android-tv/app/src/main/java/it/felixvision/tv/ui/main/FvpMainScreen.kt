@@ -32,6 +32,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -62,15 +67,18 @@ import it.felixvision.tv.data.channels.myChannelPickerGroups
 import it.felixvision.tv.data.channels.myChannelRemovalGroups
 import it.felixvision.tv.data.channels.toMyChannel
 import it.felixvision.tv.data.continuewatching.ContinueEntry
+import it.felixvision.tv.data.continuewatching.PlayableContinueEntries
 import it.felixvision.tv.data.favorites.FavoriteItem
+import it.felixvision.tv.data.log.IssueLog
 import it.felixvision.tv.data.playback.ChannelListOrigin
 import it.felixvision.tv.data.playback.ChannelNumberInput
 import it.felixvision.tv.data.playback.SeriesPlayback
 import it.felixvision.tv.data.playback.buildEpisodeQueue
 import it.felixvision.tv.data.playback.indexOfEpisode
 import it.felixvision.tv.data.progress.ProgressKeys
-import it.felixvision.tv.data.sources.Source
 import it.felixvision.tv.data.progress.WatchProgress
+import it.felixvision.tv.data.sources.Source
+import it.felixvision.tv.data.sources.SourceType
 import it.felixvision.tv.data.update.UpdateCheckState
 import it.felixvision.tv.ui.access.AccessViewModel
 import it.felixvision.tv.ui.catalog.CatalogViewModel
@@ -111,7 +119,23 @@ import it.felixvision.tv.ui.settings.SettingsViewModel
 import it.felixvision.tv.ui.theme.FvpColors
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
+import it.felixvision.tv.ui.components.fvpGlassPanel
+
+/**
+ * Vero quando gli stati **globali** dell'area contenuti (nessuna sorgente
+ * attiva, primo caricamento del catalogo, errore, contenuti protetti non ancora
+ * letti) possono prendere il posto della scheda scelta.
+ *
+ * Impostazioni e Guida TV non lo sono mai: sono le due schermate da cui si
+ * rimette a posto qualcosa e devono restare raggiungibili anche a catalogo
+ * assente. Senza questa regola, con tutte le sorgenti spente il messaggio
+ * "attiva una sorgente in Impostazioni" copriva anche le Impostazioni stesse, e
+ * non c'era più modo di riaccendere niente.
+ */
+internal fun tabAcceptsGlobalContentState(tab: DrawerSection): Boolean =
+    tab != DrawerSection.Impostazioni && tab != DrawerSection.GuidaTv
 
 /**
  * Costruisce la chiave di un ViewModel legata alla sessione di accesso in
@@ -151,6 +175,12 @@ fun catalogSessionKey(
 
 /** Durata degli avvisi della VPN nel riquadro in basso. */
 private const val VPN_MESSAGE_MILLIS = 4_000L
+
+/** Avviso all'apertura quando il Log ha messaggi da verificare. */
+const val LOG_WARNING_MESSAGE = "Ci sono messaggi di errore da verificare"
+
+/** Durata dell'avviso del Log: dieci secondi, oppure OK per chiuderlo prima. */
+private const val LOG_WARNING_MILLIS = 10_000L
 
 /** Aggiunta o rimozione multipla da "I miei canali": stessa pagina, due esiti. */
 enum class MyChannelPickerMode { Add, Remove }
@@ -215,6 +245,11 @@ fun FvpMainScreen(
     // arriva due volte lo stesso testo.
     var vpnMessage by remember { mutableStateOf<String?>(null) }
     var vpnMessageSerial by remember { mutableIntStateOf(0) }
+    // Avviso del Log: una volta sola per sessione, all'apertura dell'app, nello
+    // stesso spazio dei messaggi brevi (in basso al centro). OK lo chiude senza
+    // consumare il tasto.
+    var logWarning by remember(sessionId) { mutableStateOf<String?>(null) }
+    var logWarningShown by remember(sessionId) { mutableStateOf(false) }
     var continueLoadingKey by remember(sessionId) { mutableStateOf<String?>(null) }
     var continueErrorMessage by remember(sessionId) { mutableStateOf<String?>(null) }
     // Il testo cercato resta quando si torna nella sezione durante la sessione.
@@ -241,10 +276,17 @@ fun FvpMainScreen(
         factory = viewModelFactory {
             initializer { CatalogViewModel(container, currentServer, currentUsername, currentPassword) }
         },
-        // La revisione delle sorgenti riapre il catalogo quando un interruttore
-        // cambia: le categorie unite si ricompongono subito.
-        key = catalogSessionKey(sessionId, currentServer, currentUsername) + "_src$sourcesRevision",
+        key = catalogSessionKey(sessionId, currentServer, currentUsername),
     )
+    // Un interruttore "Mostra", l'ordine delle liste o un elenco diverso non
+    // ricreano più il catalogo (prima la `key` cambiava e con lei sparivano il
+    // catalogo a schermo e la pagina delle Impostazioni): si rileggono le
+    // sorgenti e il catalogo si ricompone in memoria, restando a schermo.
+    LaunchedEffect(catalogViewModel) {
+        container.sourceRepository.revision.drop(1).collect {
+            catalogViewModel.reloadSources()
+        }
+    }
     val catalogState by catalogViewModel.ui.collectAsState()
 
     val settingsViewModel: SettingsViewModel = viewModel(
@@ -429,7 +471,18 @@ fun FvpMainScreen(
     val visibleRecentFilms = visible.recentFilms
     val visibleRecentSeries = visible.recentSeries
     val visibleFavorites = visible.favorites
-    val visibleContinueEntries = visible.continueEntries
+    // "Continua a guardare" mostra solo ciò che il catalogo mostra: le voci di
+    // una lista spenta o sparita dall'indice non compaiono (la card sarebbe una
+    // porta chiusa). I dati restano archiviati: se la lista torna, tornano.
+    val enabledSourceIds = remember(catalogSources, sourcesRevision) {
+        val listsVisible = container.sourceRepository.listsVisible()
+        catalogSources
+            .filter { source -> source.enabled && (source.type != SourceType.M3U || listsVisible) }
+            .mapTo(HashSet()) { source -> source.id }
+    }
+    val visibleContinueEntries = remember(visible.continueEntries, enabledSourceIds) {
+        PlayableContinueEntries.playable(visible.continueEntries, enabledSourceIds)
+    }
     val visibleMyChannels = visible.myChannels
     val visibleMyChannelIds = remember(visibleMyChannels) { visibleMyChannels.map { it.streamId }.toSet() }
 
@@ -474,6 +527,23 @@ fun FvpMainScreen(
         if (vpnMessage != null) {
             delay(VPN_MESSAGE_MILLIS)
             vpnMessage = null
+        }
+    }
+
+    // Log dei problemi permanenti: se ha messaggi, all'apertura compare l'avviso.
+    val issueLogEntries by container.issueLogStore.entries.collectAsState()
+    val logMessageCount = remember(issueLogEntries) { IssueLog.visible(issueLogEntries).size }
+    LaunchedEffect(logMessageCount) {
+        if (!logWarningShown && logMessageCount > 0) {
+            logWarningShown = true
+            logWarning = LOG_WARNING_MESSAGE
+        }
+    }
+
+    LaunchedEffect(logWarning) {
+        if (logWarning != null) {
+            delay(LOG_WARNING_MILLIS)
+            logWarning = null
         }
     }
 
@@ -905,7 +975,24 @@ fun FvpMainScreen(
         // Sfondo unico dell'area a destra del menu (colonna categorie e contenuti
         // compresi): base #1C1C1E e due aloni verdi molto tenui.
         AppBackground(modifier = Modifier.fillMaxSize()) {
-            Box(modifier = Modifier.fillMaxSize().padding(scale.dp(8f))) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(scale.dp(8f))
+                    .onPreviewKeyEvent { event ->
+                        // OK chiude l'avviso del Log ma non consuma il tasto: la
+                        // pressione arriva comunque all'elemento focalizzato,
+                        // che fa quello che avrebbe fatto.
+                        if (logWarning == null) return@onPreviewKeyEvent false
+                        if (
+                            event.type == KeyEventType.KeyDown &&
+                            (event.key == Key.DirectionCenter || event.key == Key.Enter)
+                        ) {
+                            logWarning = null
+                        }
+                        false
+                    },
+            ) {
                 when {
                     // La Guida riceve esclusivamente il catalogo già filtrato
                     // dai contenuti protetti: mai le liste grezze del provider.
@@ -933,14 +1020,35 @@ fun FvpMainScreen(
                             playLiveFromGuide(channel, category, categoryStreams)
                         },
                     )
+                    // Le Impostazioni non dipendono dal catalogo: restano sempre
+                    // raggiungibili, anche mentre il catalogo si carica e anche
+                    // senza sorgenti attive (è il posto dove si riaccendono).
+                    // Vanno prima dei rami "globali": nessuno di loro deve
+                    // sostituire questa schermata.
+                    selectedTab == DrawerSection.Impostazioni -> SettingsScreen(
+                        viewModel = settingsViewModel,
+                        scale = scale,
+                        modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
+                        contentFocusRequester = contentFocusRequester,
+                        catalogSections = catalogState.refreshSections,
+                        catalogRefreshing = catalogState.isRefreshing,
+                        catalogLastUpdateMillis = catalogState.lastUpdateMillis,
+                        onRefreshCatalog = { catalogViewModel.refreshManual() },
+                        // Catalogo per la pagina "Contenuti protetti":
+                        // categorie e contenuti da nascondere.
+                        catalog = catalogState.catalog,
+                    )
                     // L'attesa del primo catalogo è a schermo intero: il BrandBackdrop
                     // è composto in fondo a questa schermata, sopra il menu laterale.
-                    // Nessuna sorgente attiva: si dice dove riaccenderla.
+                    // Nessuna sorgente attiva: si dice dove riaccenderla e si offre
+                    // la scorciatoia per tornarci senza passare dal menu.
                     !catalogState.hasAnySource -> EmptyState(
                         title = "Nessuna sorgente attiva",
                         description = "Attiva una sorgente in Impostazioni → Account per vedere i contenuti.",
                         scale = scale,
                         modifier = Modifier.align(Alignment.Center),
+                        actionLabel = "Apri Impostazioni",
+                        onAction = { selectedTab = DrawerSection.Impostazioni },
                     )
                     catalogState.isLoading && catalogState.catalog == null -> Unit
                     catalogState.errorMessage != null && catalogState.catalog == null -> {
@@ -1140,19 +1248,9 @@ fun FvpMainScreen(
                                     contentFocusRequester = contentFocusRequester,
                                     modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
                                 )
-                                DrawerSection.Impostazioni -> SettingsScreen(
-                                    viewModel = settingsViewModel,
-                                    scale = scale,
-                                    modifier = Modifier.fillMaxSize().focusRequester(contentFocusRequester),
-                                    contentFocusRequester = contentFocusRequester,
-                                    catalogSections = catalogState.refreshSections,
-                                    catalogRefreshing = catalogState.isRefreshing,
-                                    catalogLastUpdateMillis = catalogState.lastUpdateMillis,
-                                    onRefreshCatalog = { catalogViewModel.refreshManual() },
-                                    // Catalogo per la pagina "Contenuti protetti":
-                                    // categorie e contenuti da nascondere.
-                                    catalog = catalogState.catalog,
-                                )
+                                // Le Impostazioni sono gestite sopra, prima dei
+                                // rami globali: qui non si compongono mai.
+                                DrawerSection.Impostazioni -> Unit
                             }
                         } else {
                             EmptyState(title = "Catalogo vuoto", description = "Il server non ha restituito contenuti. Premi Riprova.", scale = scale)
@@ -1160,34 +1258,15 @@ fun FvpMainScreen(
                     }
                 }
 
-                // Righe non bloccanti delle liste M3U in errore: una per lista
-                // (con la sua etichetta M<n>), più quella dell'indice. Non
-                // prendono il focus e non fermano il resto dell'app.
-                if (catalogState.m3uErrors.isNotEmpty()) {
-                    Column(
+                (logWarning ?: favoritesMessage ?: vpnMessage)?.let { msg ->
+                    // Messaggio breve in basso, a vetro medio come i riquadri.
+                    Box(
                         modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(scale.dp(16f))
-                            .testTag("home_m3u_errors"),
-                        verticalArrangement = Arrangement.spacedBy(scale.dp(4f)),
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = scale.dp(24f))
+                            .fvpGlassPanel(scale, 8f)
+                            .padding(horizontal = scale.dp(16f), vertical = scale.dp(8f)),
                     ) {
-                        catalogState.m3uErrors.forEach { row ->
-                            Text(
-                                text = "${row.title}: ${row.message}",
-                                color = FvpColors.TextSecondary,
-                                fontSize = scale.sp(12f),
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(scale.dp(6f)))
-                                    .background(FvpColors.SurfaceElevated)
-                                    .padding(horizontal = scale.dp(10f), vertical = scale.dp(6f))
-                                    .testTag("home_m3u_error_${row.sourceId}"),
-                            )
-                        }
-                    }
-                }
-
-                (favoritesMessage ?: vpnMessage)?.let { msg ->
-                    Box(modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = scale.dp(24f)).background(FvpColors.SurfaceElevated, shape = RoundedCornerShape(scale.dp(8f))).padding(horizontal = scale.dp(16f), vertical = scale.dp(8f))) {
                         Text(text = msg, color = FvpColors.TextPrimary)
                     }
                 }
@@ -1401,8 +1480,9 @@ fun FvpMainScreen(
     }
 
     // Primo caricamento del catalogo: attesa a schermo intero con lo stesso
-    // sfondo dell'avvio, sopra il menu laterale.
-    if (selectedTab != DrawerSection.GuidaTv && catalogState.isLoading && catalogState.catalog == null) {
+    // sfondo dell'avvio, sopra il menu laterale. Mai sopra le Impostazioni e la
+    // Guida TV: lì si può lavorare anche mentre il catalogo arriva.
+    if (tabAcceptsGlobalContentState(selectedTab) && catalogState.isLoading && catalogState.catalog == null) {
         BrandBackdrop(scale = scale) {
             LoadingState(message = "Caricamento catalogo in corso…", scale = scale)
         }

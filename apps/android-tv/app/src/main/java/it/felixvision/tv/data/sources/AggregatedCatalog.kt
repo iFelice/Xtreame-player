@@ -77,7 +77,18 @@ object AggregatedCatalog {
         }
         val streams = keys.flatMapIndexed { index, key ->
             val categoryId = categories[index].categoryId
-            buckets.getValue(key).map { stream -> stream.copy(categoryId = categoryId) }
+            buckets.getValue(key).map { stream ->
+                stream.copy(
+                    categoryId = categoryId,
+                    // La categoria della singola lista resta fra quelle della
+                    // voce: nella vista unita l'identificativo è quello della
+                    // categoria fusa, ma i contenuti protetti si scelgono per
+                    // lista, quindi la regola deve poterli riconoscere anche qui.
+                    categoryIds = (stream.categoryIds + listOfNotNull(stream.categoryId))
+                        .filter { it.isNotBlank() }
+                        .distinct(),
+                )
+            }
         }
         return Catalog(
             vodCategories = categories,

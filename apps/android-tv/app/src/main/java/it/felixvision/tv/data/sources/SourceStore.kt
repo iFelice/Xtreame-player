@@ -81,13 +81,21 @@ class EncryptedSourceStore(
     override suspend fun loadAll(): List<Source> {
         val stored = readStored().orEmpty()
         val normalized = normalizeM3uLabels(stored)
-        val completed = ensureM3uSources(normalized)
+        // Posizioni: le liste accese restano davanti, quelle spente in coda, i
+        // numeri compatti 1…n (la posizione è il numero dell'etichetta).
+        val completed = Sources.normalizeM3uPositions(ensureM3uSources(normalized))
         if (completed != stored) writeStored(completed)
         val configured = configuredM3uIds()
         return Sources.ordered(
             completed.map { source ->
                 if (source.type == SourceType.M3U) {
-                    source.copy(m3uUrl = configured[source.id])
+                    // Il nome del file resta ricordato anche quando la lista esce
+                    // dall'indice: serve alle righe e al Log.
+                    val url = configured[source.id]
+                    source.copy(
+                        m3uUrl = url,
+                        m3uName = source.m3uName ?: url?.let { Sources.fileNameOf(it) },
+                    )
                 } else {
                     source
                 }
@@ -120,7 +128,13 @@ class EncryptedSourceStore(
                     .thenBy { it.id },
             )
             .take(MAX_STORED_LISTS)
-            .map { it.copy(m3uUrl = configured[it.id]) }
+            .map { source ->
+                val url = configured[source.id]
+                source.copy(
+                    m3uUrl = url,
+                    m3uName = source.m3uName ?: url?.let { Sources.fileNameOf(it) },
+                )
+            }
         return xtream + lists
     }
 
@@ -137,13 +151,17 @@ class EncryptedSourceStore(
         if (missing.isEmpty()) return stored
         val result = stored.toMutableList()
         for (id in missing) {
-            val label = Sources.nextLabel(SourceType.M3U, result.map { it.label }) ?: break
+            // In coda alle liste accese: se ci sono liste spente, la nuova si
+            // mette subito prima della prima spenta.
+            val label = Sources.appendM3uLabel(result.map { it.label })
+            val url = configured.getValue(id)
             result += Source(
                 id = id,
                 type = SourceType.M3U,
                 label = label,
                 enabled = true,
-                m3uUrl = configured[id],
+                m3uUrl = url,
+                m3uName = Sources.fileNameOf(url),
             )
         }
         return result

@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 data class CatalogUiState(
     val isLoading: Boolean = true,
@@ -61,6 +62,24 @@ internal data class CatalogRecentItems(
     val films: List<VodStream>,
     val series: List<SeriesItem>,
 )
+
+/** Cosa serve quando cambiano le sorgenti abilitate: vedi [sourceReload]. */
+internal enum class SourceReload { RECOMPOSE, RELOAD_XTREAM }
+
+/**
+ * Dopo un cambio di sorgenti (interruttore "Mostra", interruttore generale delle
+ * liste, ordine delle liste) il catalogo si **ricompone in memoria**: niente
+ * `isLoading`, niente catalogo azzerato, niente sezioni smontate. La rete serve
+ * solo se l'account Xtream è appena stato (ri)acceso e la sua parte non è più in
+ * memoria; quel ricaricamento resta comunque "silenzioso" quando un catalogo è
+ * già a schermo (`isRefreshing`, non `isLoading`).
+ */
+internal fun sourceReload(xtreamSourceId: String?, loadedXtreamSourceId: String?): SourceReload =
+    when {
+        xtreamSourceId == null -> SourceReload.RECOMPOSE
+        xtreamSourceId == loadedXtreamSourceId -> SourceReload.RECOMPOSE
+        else -> SourceReload.RELOAD_XTREAM
+    }
 
 /**
  * Contenuti della categoria NOVITÀ: solo l'account Xtream.
@@ -182,6 +201,38 @@ class CatalogViewModel(
         }
     }
 
+    /**
+     * Rilegge le sorgenti abilitate e **ricompone** il catalogo senza azzerarlo:
+     * la usano il cambio di un interruttore "Mostra", l'ordine delle liste e
+     * l'elenco delle liste. Il catalogo resta a schermo (niente `isLoading`,
+     * niente sezioni smontate, niente schermata di caricamento): quando la
+     * nuova composizione è pronta si sostituisce, un fotogramma dopo.
+     *
+     * Se l'account Xtream viene (ri)attivato e la sua parte non è più in
+     * memoria, si ricarica in silenzio: [refreshInternal] con un catalogo già
+     * presente accende `isRefreshing`, non `isLoading`.
+     */
+    fun reloadSources() {
+        viewModelScope.launch {
+            val plan = loadMutex.withLock {
+                prepareM3u(forceRefresh = false)
+                val sources = enabledSources()
+                m3uParts = loadM3uParts(sources, forceRefresh = false)
+                val xtreamSource = sources.firstOrNull { it.type == SourceType.XTREAM }
+                val plan = sourceReload(
+                    xtreamSourceId = xtreamSource?.id,
+                    loadedXtreamSourceId = xtreamPart?.source?.id,
+                )
+                if (plan == SourceReload.RECOMPOSE) {
+                    if (xtreamSource == null) xtreamPart = null
+                    applyCatalog(merged(), _ui.value.lastUpdateMillis ?: System.currentTimeMillis())
+                }
+                plan
+            }
+            if (plan == SourceReload.RELOAD_XTREAM) refreshInternal(showLoading = true)
+        }
+    }
+
     /** Risolve l'indice delle liste; se l'elenco cambia, la UI lo ricarica. */
     private suspend fun prepareM3u(forceRefresh: Boolean) {
         val changed = try {
@@ -192,12 +243,19 @@ class CatalogViewModel(
             false
         }
         if (changed) container.sourceRepository.notifyChanged()
+        // Una lista sparita dall'indice esce dall'elenco: il Log dice perché.
+        container.m3uIssueCollector.refresh()
     }
 
-    /** Ricalcola le righe d'errore delle liste abilitate. */
+    /**
+     * Ricalcola le righe d'errore delle liste abilitate e allinea il Log dei
+     * problemi permanenti: errori passeggeri fuori, definitivi dentro.
+     */
     private suspend fun refreshM3uErrors() {
-        val rows = container.m3uSourceService.errorRows(enabledSources())
+        val sources = enabledSources()
+        val rows = container.m3uSourceService.errorRows(sources)
         _ui.update { it.copy(m3uErrors = rows) }
+        container.m3uIssueCollector.refresh()
     }
 
     private suspend fun refreshInternal(showLoading: Boolean, forceM3u: Boolean = false) {
