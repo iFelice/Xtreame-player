@@ -243,12 +243,19 @@ class CatalogViewModel(
             false
         }
         if (changed) container.sourceRepository.notifyChanged()
+        // Una lista sparita dall'indice esce dall'elenco: il Log dice perché.
+        container.m3uIssueCollector.refresh()
     }
 
-    /** Ricalcola le righe d'errore delle liste abilitate. */
+    /**
+     * Ricalcola le righe d'errore delle liste abilitate e allinea il Log dei
+     * problemi permanenti: errori passeggeri fuori, definitivi dentro.
+     */
     private suspend fun refreshM3uErrors() {
-        val rows = container.m3uSourceService.errorRows(enabledSources())
+        val sources = enabledSources()
+        val rows = container.m3uSourceService.errorRows(sources)
         _ui.update { it.copy(m3uErrors = rows) }
+        container.m3uIssueCollector.refresh()
     }
 
     private suspend fun refreshInternal(showLoading: Boolean, forceM3u: Boolean = false) {

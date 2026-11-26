@@ -15,6 +15,7 @@ import it.felixvision.tv.data.m3u.M3uLibrary
 import it.felixvision.tv.data.m3u.M3uPlaylist
 import it.felixvision.tv.data.m3u.M3uRefreshSchedule
 import it.felixvision.tv.data.m3u.M3uTextResult
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -97,8 +98,8 @@ class M3uSourceService(
     /** Tentativi in silenzio già avviati, per sorgente. */
     private val retryJobs = HashMap<String, Job>()
 
-    /** Tentativi già consumati, per sorgente. */
-    private val retryAttempts = HashMap<String, Int>()
+    /** Tentativi già consumati, per sorgente (letto anche dal Log). */
+    private val retryAttempts = ConcurrentHashMap<String, Int>()
 
     /** Lista di [source]: dalla copia in memoria, dal disco o dalla rete. */
     suspend fun playlist(source: Source, forceRefresh: Boolean = false): M3uPlaylist? {
@@ -278,6 +279,28 @@ class M3uSourceService(
         }
         return rows
     }
+
+    /**
+     * Indirizzi delle liste dell'ultima risoluzione dell'indice: quelli appena
+     * risolti, altrimenti quelli della copia su disco. Vuoto se l'indice non è
+     * mai stato letto (all'avvio, prima della prima preparazione).
+     */
+    suspend fun indexedListUrls(): List<String> {
+        val resolved = registry.playlists()
+        if (resolved.isNotEmpty()) return resolved
+        return withContext(io) { indexCache.load()?.entries?.values?.flatten().orEmpty() }
+    }
+
+    /**
+     * Errori **definitivi** delle singole liste: quelli rimasti dopo tutti i
+     * tentativi automatici. Fino a quel momento l'errore è passeggero e non
+     * entra nel Log (la riga dell'indice si gestisce a parte).
+     */
+    fun permanentErrorRows(sources: List<Source>): List<M3uErrorRow> =
+        errorRows(sources).filter { row ->
+            row.sourceId != INDEX_SOURCE_ID &&
+                (retryAttempts[row.sourceId] ?: 0) >= retryDelaysMillis.size
+        }
 
     /** Toglie le righe di errore (per esempio dopo un aggiornamento riuscito). */
     fun clearError() {

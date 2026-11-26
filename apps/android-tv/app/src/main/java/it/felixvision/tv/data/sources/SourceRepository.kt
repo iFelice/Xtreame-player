@@ -31,6 +31,14 @@ class SourceRepository(
     /** Tutte le sorgenti, anche quelle disabilitate, in ordine di etichetta (= posizione). */
     suspend fun sources(): List<Source> = Sources.ordered(store.load())
 
+    /**
+     * Righe delle liste M3U salvate su disco, comprese quelle che non sono più
+     * nell'indice (e quindi non compaiono né qui né nel catalogo): servono al
+     * Log, che dice perché sono sparite. La riga resta, con i suoi dati.
+     */
+    suspend fun storedM3uSources(): List<Source> =
+        Sources.ordered(store.loadAll()).filter { it.type == SourceType.M3U }
+
     /** Vero se le liste M3U possono comparire nel catalogo (interruttore generale). */
     fun listsVisible(): Boolean = listsVisibility.listsVisible()
 
@@ -90,10 +98,14 @@ class SourceRepository(
     }
 
     /**
-     * Elimina le righe delle liste che non hanno più un indirizzo **e** che non
-     * hanno dati utente (preferiti, avanzamento, contenuti nascosti). Le righe
-     * con dati restano salvate, quindi nascoste, come prima: se la lista
-     * tornasse, preferiti e avanzamento sarebbero ancora lì.
+     * Elimina le righe degli **account Xtream** che non sono più nell'elenco e
+     * che non hanno dati utente (preferiti, avanzamento, contenuti nascosti).
+     *
+     * Le righe delle **liste M3U** non si eliminano mai: una lista che esce
+     * dall'indice sparisce dall'elenco, ma la sua riga resta su disco (al
+     * massimo 32, vedi `EncryptedSourceStore`), perché il Log
+     * deve poter dire perché è sparita e perché, se la lista tornasse, le sue
+     * scelte, i suoi preferiti e il suo avanzamento sarebbero ancora lì.
      *
      * @param hasUserData vero se la sorgente ha dati utente da conservare.
      * @return vero se l'elenco è cambiato.
@@ -101,7 +113,9 @@ class SourceRepository(
     suspend fun cleanupOrphans(hasUserData: suspend (String) -> Boolean): Boolean {
         val visible = store.load()
         val visibleIds = visible.mapTo(HashSet(visible.size)) { it.id }
-        val orphans = store.loadAll().filter { it.id !in visibleIds }
+        val orphans = store.loadAll().filter {
+            it.id !in visibleIds && it.type == SourceType.XTREAM
+        }
         if (orphans.isEmpty()) return false
         val kept = orphans.filter { source -> hasUserData(source.id) }
         if (kept.size == orphans.size) return false

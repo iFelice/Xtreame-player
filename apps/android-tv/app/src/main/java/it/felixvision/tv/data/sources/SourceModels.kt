@@ -38,6 +38,9 @@ enum class SourceType(val storageKey: String) {
  * @property m3uUrl indirizzo della lista M3U (solo per [SourceType.M3U]); arriva
  *   dalla compilazione ([it.felixvision.tv.data.sources.Sources.M3U_URL_ENV]) e
  *   non viene mai mostrato nell'interfaccia.
+ * @property m3uName nome del file della lista, ricordato alla creazione: resta
+ *   anche quando la lista esce dall'indice e il suo indirizzo non c'è più, così
+ *   righe e Log continuano a chiamarla per nome (`lista.m3u`).
  */
 data class Source(
     val id: String,
@@ -46,6 +49,7 @@ data class Source(
     val enabled: Boolean = true,
     val xtream: StoredCredentials? = null,
     val m3uUrl: String? = null,
+    val m3uName: String? = null,
 ) {
     /** Rappresentazione sicura: né credenziali né indirizzo della lista. */
     override fun toString(): String =
@@ -85,7 +89,9 @@ object Sources {
      */
     fun displayNames(sources: List<Source>): Map<String, String> {
         val lists = ordered(sources).filter { it.type == SourceType.M3U }
-        val bases = lists.associate { it.id to fileNameOf(it.m3uUrl) }
+        val bases = lists.associate { source ->
+            source.id to (source.m3uName ?: fileNameOf(source.m3uUrl))
+        }
         val repeats = bases.values.groupingBy { it }.eachCount()
         val used = HashMap<String, Int>()
         val names = HashMap<String, String>(sources.size)

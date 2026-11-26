@@ -3,14 +3,17 @@ package it.felixvision.tv.ui.settings
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.requestFocus
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import it.felixvision.tv.data.update.ReleaseInfo
 import it.felixvision.tv.ui.components.UPDATE_BADGE_TAG
@@ -29,10 +32,13 @@ import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 
 /**
- * Griglia delle Impostazioni: otto card, quattro per riga, nell'ordine Account,
- * Aspetto, Contenuti protetti, VPN, Catalogo, Player, App, Backup, ognuna con
- * la sua riga di stato calcolata da dati finti (nessun dato reale di server o
- * account).
+ * Griglia delle Impostazioni: dodici card, quattro per riga, nell'ordine
+ * Account, Aspetto, Contenuti protetti, VPN, Catalogo, Player, App, Backup, Log,
+ * Connessione remota, In arrivo, In arrivo, ognuna con la sua riga di stato
+ * calcolata da dati finti (nessun dato reale di server o account).
+ *
+ * I due segnaposto "In arrivo" non sono card: non hanno l'azione di clic e non
+ * prendono il focus (vedi il test dedicato).
  *
  * La griglia si compone senza ViewModel ([SettingsGrid]): le card sono [Card]
  * di tv-material, quindi OK si prova con l'azione semantica
@@ -92,7 +98,7 @@ class SettingsCardsGridTest {
     }
 
     @Test
-    fun `la griglia ha il titolo e le otto card nell'ordine indicato`() {
+    fun `la griglia ha il titolo e le dodici card nell'ordine indicato`() {
         showGrid()
 
         rule.onNodeWithTag(SETTINGS_TITLE_TAG).assertTextEquals(SETTINGS_TITLE)
@@ -107,6 +113,10 @@ class SettingsCardsGridTest {
             SETTINGS_CARD_PLAYER_TAG,
             SETTINGS_CARD_APP_TAG,
             SETTINGS_CARD_BACKUP_TAG,
+            SETTINGS_CARD_LOG_TAG,
+            SETTINGS_CARD_REMOTE_TAG,
+            SETTINGS_CARD_COMING_SOON_TAG,
+            SETTINGS_CARD_COMING_SOON_2_TAG,
         )
         assertEquals(
             SettingsCard.entries.map { it.testTag },
@@ -143,6 +153,52 @@ class SettingsCardsGridTest {
             assertTrue("la card non è larga come Account", abs(bounds.width - account.width) <= 0.5f)
             assertTrue("la card non è alta come Account", abs(bounds.height - account.height) <= 0.5f)
         }
+
+        // Terza riga: Log, Connessione remota e i due "In arrivo", larghe come le
+        // altre card, senza spazi vuoti in fondo alla griglia.
+        val log = rule.onNodeWithTag(SETTINGS_CARD_LOG_TAG).fetchSemanticsNode().boundsInRoot
+        val remote = rule.onNodeWithTag(SETTINGS_CARD_REMOTE_TAG).fetchSemanticsNode().boundsInRoot
+        val comingSoon = rule.onNodeWithTag(SETTINGS_CARD_COMING_SOON_TAG).fetchSemanticsNode().boundsInRoot
+        val comingSoon2 = rule.onNodeWithTag(SETTINGS_CARD_COMING_SOON_2_TAG).fetchSemanticsNode().boundsInRoot
+        assertTrue("Log non sta sotto la seconda riga", log.top >= catalog.bottom - 1f)
+        assertTrue("Connessione remota non sta a destra di Log", remote.left > log.left)
+        assertTrue("In arrivo non sta a destra di Connessione remota", comingSoon.left > remote.left)
+        assertTrue("il secondo In arrivo non sta a destra del primo", comingSoon2.left > comingSoon.left)
+        listOf(log, remote, comingSoon, comingSoon2).forEach { bounds ->
+            assertTrue("la card non è larga come Account", abs(bounds.width - account.width) <= 0.5f)
+            assertTrue("la card non è alta come Account", abs(bounds.height - account.height) <= 0.5f)
+            assertTrue(
+                "la card non sta sulla terza riga",
+                abs(bounds.top - log.top) <= 0.5f,
+            )
+        }
+    }
+
+    /**
+     * I segnaposto mostrano "In arrivo" e "Prossimamente", non si aprono e non
+     * prendono il focus: il telecomando li salta, come se non ci fossero.
+     */
+    @Test
+    fun `i segnaposto In arrivo non si aprono e non prendono il focus`() {
+        var opened: SettingsCard? = null
+        showGrid(onOpenCard = { opened = it })
+
+        listOf(SettingsCard.ComingSoon, SettingsCard.ComingSoon2).forEach { card ->
+            rule.onNodeWithTag(card.titleTag, useUnmergedTree = true)
+                .assertTextEquals(SETTINGS_COMING_SOON_TITLE)
+            rule.onNodeWithTag(card.statusTag, useUnmergedTree = true)
+                .assertTextEquals(SETTINGS_COMING_SOON_STATUS)
+            // Nessuna azione: il nodo non è cliccabile.
+            rule.onNodeWithTag(card.testTag).assert(!hasClickAction())
+        }
+
+        // Il telecomando va dalla card prima dei segnaposto a quella dopo di loro:
+        // il salto non li tocca. Da Connessione remota a destra non si va oltre.
+        rule.onNodeWithTag(SETTINGS_CARD_REMOTE_TAG).requestFocus()
+        rule.waitForIdle()
+        rule.onNodeWithTag(SETTINGS_CARD_REMOTE_TAG).assertIsFocused()
+
+        assertEquals(null, opened)
     }
 
     @Test
@@ -172,6 +228,37 @@ class SettingsCardsGridTest {
 
         rule.onNodeWithTag(SettingsCard.Backup.titleTag, useUnmergedTree = true).assertTextEquals("Backup")
         rule.onNodeWithTag(SettingsCard.Backup.statusTag, useUnmergedTree = true).assertTextEquals("Esporta e importa")
+
+        rule.onNodeWithTag(SettingsCard.Log.titleTag, useUnmergedTree = true).assertTextEquals("Log")
+        rule.onNodeWithTag(SettingsCard.Log.statusTag, useUnmergedTree = true).assertTextEquals("Nessun problema")
+
+        rule.onNodeWithTag(SettingsCard.Remote.titleTag, useUnmergedTree = true).assertTextEquals("Connessione remota")
+        rule.onNodeWithTag(SettingsCard.Remote.statusTag, useUnmergedTree = true).assertTextEquals("QR e codice")
+
+        rule.onNodeWithTag(SettingsCard.ComingSoon.titleTag, useUnmergedTree = true).assertTextEquals("In arrivo")
+        rule.onNodeWithTag(SettingsCard.ComingSoon.statusTag, useUnmergedTree = true).assertTextEquals("Prossimamente")
+        rule.onNodeWithTag(SettingsCard.ComingSoon2.titleTag, useUnmergedTree = true).assertTextEquals("In arrivo")
+        rule.onNodeWithTag(SettingsCard.ComingSoon2.statusTag, useUnmergedTree = true).assertTextEquals("Prossimamente")
+    }
+
+    /**
+     * La card Log conta i messaggi e, quando ce ne sono, mostra il pallino; senza
+     * messaggi il pallino non c'è.
+     */
+    @Test
+    fun `la card Log mostra il numero dei problemi e il pallino solo se ci sono`() {
+        showGrid(cardsState().copy(logCount = 3))
+
+        rule.onNodeWithTag(SettingsCard.Log.statusTag, useUnmergedTree = true).assertTextEquals("3 problemi")
+        rule.onNodeWithTag(SETTINGS_LOG_DOT_TAG, useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun `la card Log senza messaggi non ha il pallino`() {
+        showGrid(cardsState().copy(logCount = 0))
+
+        rule.onNodeWithTag(SettingsCard.Log.statusTag, useUnmergedTree = true).assertTextEquals("Nessun problema")
+        rule.onAllNodesWithTag(SETTINGS_LOG_DOT_TAG, useUnmergedTree = true).assertCountEquals(0)
     }
 
     @Test
@@ -254,16 +341,17 @@ class SettingsCardsGridTest {
         val opened = mutableListOf<SettingsCard>()
         showGrid(onOpenCard = { opened.add(it) })
 
-        SettingsCard.entries.forEach { card ->
+        val openable = SettingsCard.entries.filterNot { it.placeholder }
+        openable.forEach { card ->
             rule.onNodeWithTag(card.testTag).performSemanticsAction(SemanticsActions.OnClick)
         }
         rule.waitForIdle()
 
-        assertEquals(SettingsCard.entries.toList(), opened)
+        assertEquals(openable, opened)
     }
 
     @Test
-    fun `righe di stato delle otto card e regola dell'icona arancione`() {
+    fun `righe di stato delle card e regola dell'icona arancione`() {
         val release = ReleaseInfo(
             version = "1.0.3",
             downloadUrl = "http://server.esempio:8080/FelixVP.apk",
@@ -303,6 +391,18 @@ class SettingsCardsGridTest {
         assertEquals("Aggiornamento in corso…", catalogStatusLine(catalogUpdateMillis, refreshing = true))
         assertEquals("Aggiornato alle 14:05", catalogStatusLine(catalogUpdateMillis, refreshing = false))
         assertEquals("Mai aggiornato", catalogStatusLine(null, refreshing = false))
+        assertEquals("Nessun problema", logCardStatusLine(0))
+        assertEquals("1 problema", logCardStatusLine(1))
+        assertEquals("3 problemi", logCardStatusLine(3))
+        assertEquals(SETTINGS_REMOTE_STATUS, settingsCardStatuses(cardsState()).getValue(SettingsCard.Remote).text)
+        assertEquals(
+            SETTINGS_COMING_SOON_STATUS,
+            settingsCardStatuses(cardsState()).getValue(SettingsCard.ComingSoon).text,
+        )
+        assertEquals(
+            SETTINGS_COMING_SOON_TITLE,
+            SettingsCard.ComingSoon2.title,
+        )
         assertEquals("Versione 1.0.2", appCardStatus("1.0.2", AppUpdateStatus.UpToDate).text)
         assertEquals(
             "Disponibile la versione 1.0.3",

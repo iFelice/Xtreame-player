@@ -48,6 +48,8 @@ private const val FAKE_CATALOG_TAG = "fake_catalog_page"
 private const val FAKE_PLAYER_TAG = "fake_player_page"
 private const val FAKE_APP_TAG = "fake_app_page"
 private const val FAKE_BACKUP_TAG = "fake_backup_page"
+private const val FAKE_LOG_TAG = "fake_log_page"
+private const val FAKE_REMOTE_TAG = "fake_remote_page"
 private const val FAKE_BACKUP_FLOW_TAG = "fake_backup_flow_page"
 
 /** Suffisso del pulsante che riceve il focus dentro una pagina segnaposto. */
@@ -93,13 +95,18 @@ class SettingsNavigationTest {
         SettingsCard.Player -> FAKE_PLAYER_TAG
         SettingsCard.App -> FAKE_APP_TAG
         SettingsCard.Backup -> FAKE_BACKUP_TAG
+        SettingsCard.Log -> FAKE_LOG_TAG
+        SettingsCard.Remote -> FAKE_REMOTE_TAG
+        // I segnaposto non hanno una pagina: non si aprono.
+        SettingsCard.ComingSoon -> ""
+        SettingsCard.ComingSoon2 -> ""
     }
 
     @Test
     fun `ogni card apre la sua pagina e Indietro torna alla griglia con il focus sulla card`() {
         showNavigation()
 
-        SettingsCard.entries.forEach { card ->
+        SettingsCard.entries.filterNot { it.placeholder }.forEach { card ->
             val pageTag = fakePageTag(card)
 
             rule.onNodeWithTag(card.testTag).performSemanticsAction(SemanticsActions.OnClick)
@@ -179,20 +186,20 @@ class SettingsNavigationTest {
     }
 
     @Test
-    fun `all'ingresso c'è solo la griglia, con il titolo e le otto card`() {
+    fun `all'ingresso c'è solo la griglia, con il titolo e le dodici card`() {
         showNavigation()
 
         rule.onNodeWithTag(SETTINGS_TITLE_TAG).assertTextEquals(SETTINGS_TITLE)
         SettingsCard.entries.forEach { card ->
             rule.onNodeWithTag(card.testTag).assertExists()
-            rule.onNodeWithTag(fakePageTag(card)).assertDoesNotExist()
+            if (!card.placeholder) rule.onNodeWithTag(fakePageTag(card)).assertDoesNotExist()
         }
     }
 
     @Test
     fun `ogni pagina segnaposto dà il focus al suo primo elemento focalizzabile`() {
         showNavigation()
-        SettingsCard.entries.forEach { card ->
+        SettingsCard.entries.filterNot { it.placeholder }.forEach { card ->
             rule.onNodeWithTag(card.testTag).performSemanticsAction(SemanticsActions.OnClick)
             settle()
             // Il pulsante della pagina ha il focus d'ingresso: il tasto Indietro
@@ -315,6 +322,14 @@ class SettingsNavigationTest {
                             tag = FAKE_BACKUP_FLOW_TAG,
                             backAction = { backupFlowOpen = false },
                         )
+                    },
+                    // Log e Connessione remota: il Log riceve anche il ritorno
+                    // alla griglia (a Log vuoto, "Torna alle card").
+                    logPage = { pageModifier, closePage ->
+                        FakeSettingsPage(pageModifier, scale, FAKE_LOG_TAG, backAction = closePage)
+                    },
+                    remotePage = { pageModifier, entryFocus ->
+                        FakeSettingsPage(pageModifier, scale, FAKE_REMOTE_TAG, entryFocus = entryFocus)
                     },
                 )
             }

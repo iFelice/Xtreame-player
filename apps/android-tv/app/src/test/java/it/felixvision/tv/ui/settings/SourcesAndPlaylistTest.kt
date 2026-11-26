@@ -19,7 +19,6 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.tv.material3.Text
-import it.felixvision.tv.data.sources.M3uErrorRow
 import it.felixvision.tv.data.sources.Source
 import it.felixvision.tv.data.sources.SourceType
 import it.felixvision.tv.data.store.StoredCredentials
@@ -194,46 +193,6 @@ class SourcesAndPlaylistTest {
         rule.onNodeWithTag("queue_title").assertTextEquals("Prima")
         assertEquals(0, MoviePlaylist.previousIndex(0, titles.size))
         assertTrue(MoviePlaylist.hasNext(0, titles.size))
-    }
-
-    @Test
-    fun `una riga di errore per ogni lista in errore`() {
-        rule.setContent {
-            FvpTheme {
-                SettingsAccountPage(
-                    state = SettingsUiState(
-                        username = "demo",
-                        status = "Attivo",
-                        sources = listOf(
-                            xtreamSource,
-                            m3uSource,
-                            Source(id = "s3", type = SourceType.M3U, label = "M2"),
-                        ),
-                        m3uErrors = listOf(
-                            M3uErrorRow(
-                                sourceId = "s2",
-                                title = "lista",
-                                message = "Lista non raggiungibile",
-                            ),
-                            M3uErrorRow(
-                                sourceId = "s3",
-                                title = "serie",
-                                message = "Lista non trovata (404)",
-                            ),
-                        ),
-                    ),
-                    scale = scale,
-                )
-            }
-        }
-        rule.waitForIdle()
-
-        rule.onNodeWithTag("settings_sources_error_s2").assertTextEquals(
-            "lista: Lista non raggiungibile. Le altre sorgenti restano disponibili.",
-        )
-        rule.onNodeWithTag("settings_sources_error_s3").assertTextEquals(
-            "serie: Lista non trovata (404). Le altre sorgenti restano disponibili.",
-        )
     }
 
     @Test

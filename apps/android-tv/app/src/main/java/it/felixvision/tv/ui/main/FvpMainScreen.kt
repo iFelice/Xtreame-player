@@ -32,6 +32,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -53,11 +58,17 @@ import it.felixvision.tv.data.catalog.Episode
 import it.felixvision.tv.data.catalog.LiveStream
 import it.felixvision.tv.data.catalog.VodStream
 import it.felixvision.tv.data.channels.MyChannel
-import it.felixvision.tv.data.channels.MyChannelBulk
-import it.felixvision.tv.data.channels.MyChannelBulkResult
-import it.felixvision.tv.data.channels.MyChannelPlayback
-import it.felixvision.tv.data.channels.MyChannelSelection
-import it.felixvision.tv.data.channels.MyChannels
+import it.felixvision.tv.data.log.IssueLog
+import it.felixvision.tv.data.channels.MyChannel
+import it.felixvision.tv.data.log.IssueLogBulk
+import it.felixvision.tv.data.channels.MyChannel
+import it.felixvision.tv.data.log.IssueLogBulkResult
+import it.felixvision.tv.data.channels.MyChannel
+import it.felixvision.tv.data.log.IssueLogPlayback
+import it.felixvision.tv.data.channels.MyChannel
+import it.felixvision.tv.data.log.IssueLogSelection
+import it.felixvision.tv.data.channels.MyChannel
+import it.felixvision.tv.data.log.IssueLogs
 import it.felixvision.tv.data.channels.myChannelPickerGroups
 import it.felixvision.tv.data.channels.myChannelRemovalGroups
 import it.felixvision.tv.data.channels.toMyChannel
@@ -167,6 +178,12 @@ fun catalogSessionKey(
 /** Durata degli avvisi della VPN nel riquadro in basso. */
 private const val VPN_MESSAGE_MILLIS = 4_000L
 
+/** Avviso all'apertura quando il Log ha messaggi da verificare. */
+const val LOG_WARNING_MESSAGE = "Ci sono messaggi di errore da verificare"
+
+/** Durata dell'avviso del Log: dieci secondi, oppure OK per chiuderlo prima. */
+private const val LOG_WARNING_MILLIS = 10_000L
+
 /** Aggiunta o rimozione multipla da "I miei canali": stessa pagina, due esiti. */
 enum class MyChannelPickerMode { Add, Remove }
 
@@ -230,6 +247,11 @@ fun FvpMainScreen(
     // arriva due volte lo stesso testo.
     var vpnMessage by remember { mutableStateOf<String?>(null) }
     var vpnMessageSerial by remember { mutableIntStateOf(0) }
+    // Avviso del Log: una volta sola per sessione, all'apertura dell'app, nello
+    // stesso spazio dei messaggi brevi (in basso al centro). OK lo chiude senza
+    // consumare il tasto.
+    var logWarning by remember(sessionId) { mutableStateOf<String?>(null) }
+    var logWarningShown by remember(sessionId) { mutableStateOf(false) }
     var continueLoadingKey by remember(sessionId) { mutableStateOf<String?>(null) }
     var continueErrorMessage by remember(sessionId) { mutableStateOf<String?>(null) }
     // Il testo cercato resta quando si torna nella sezione durante la sessione.
@@ -496,6 +518,23 @@ fun FvpMainScreen(
         if (vpnMessage != null) {
             delay(VPN_MESSAGE_MILLIS)
             vpnMessage = null
+        }
+    }
+
+    // Log dei problemi permanenti: se ha messaggi, all'apertura compare l'avviso.
+    val issueLogEntries by container.issueLogStore.entries.collectAsState()
+    val logMessageCount = remember(issueLogEntries) { IssueLog.visible(issueLogEntries).size }
+    LaunchedEffect(logMessageCount) {
+        if (!logWarningShown && logMessageCount > 0) {
+            logWarningShown = true
+            logWarning = LOG_WARNING_MESSAGE
+        }
+    }
+
+    LaunchedEffect(logWarning) {
+        if (logWarning != null) {
+            delay(LOG_WARNING_MILLIS)
+            logWarning = null
         }
     }
 
@@ -927,7 +966,24 @@ fun FvpMainScreen(
         // Sfondo unico dell'area a destra del menu (colonna categorie e contenuti
         // compresi): base #1C1C1E e due aloni verdi molto tenui.
         AppBackground(modifier = Modifier.fillMaxSize()) {
-            Box(modifier = Modifier.fillMaxSize().padding(scale.dp(8f))) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(scale.dp(8f))
+                    .onPreviewKeyEvent { event ->
+                        // OK chiude l'avviso del Log ma non consuma il tasto: la
+                        // pressione arriva comunque all'elemento focalizzato,
+                        // che fa quello che avrebbe fatto.
+                        if (logWarning == null) return@onPreviewKeyEvent false
+                        if (
+                            event.type == KeyEventType.KeyDown &&
+                            (event.key == Key.DirectionCenter || event.key == Key.Enter)
+                        ) {
+                            logWarning = null
+                        }
+                        false
+                    },
+            ) {
                 when {
                     // La Guida riceve esclusivamente il catalogo già filtrato
                     // dai contenuti protetti: mai le liste grezze del provider.
@@ -1193,33 +1249,7 @@ fun FvpMainScreen(
                     }
                 }
 
-                // Righe non bloccanti delle liste M3U in errore: una per lista
-                // (con la sua etichetta M<n>), più quella dell'indice. Non
-                // prendono il focus e non fermano il resto dell'app.
-                if (catalogState.m3uErrors.isNotEmpty()) {
-                    Column(
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(scale.dp(16f))
-                            .testTag("home_m3u_errors"),
-                        verticalArrangement = Arrangement.spacedBy(scale.dp(4f)),
-                    ) {
-                        catalogState.m3uErrors.forEach { row ->
-                            Text(
-                                text = "${row.title}: ${row.message}",
-                                color = FvpColors.TextSecondary,
-                                fontSize = scale.sp(12f),
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(scale.dp(6f)))
-                                    .background(FvpColors.SurfaceElevated)
-                                    .padding(horizontal = scale.dp(10f), vertical = scale.dp(6f))
-                                    .testTag("home_m3u_error_${row.sourceId}"),
-                            )
-                        }
-                    }
-                }
-
-                (favoritesMessage ?: vpnMessage)?.let { msg ->
+                (logWarning ?: favoritesMessage ?: vpnMessage)?.let { msg ->
                     Box(modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = scale.dp(24f)).background(FvpColors.SurfaceElevated, shape = RoundedCornerShape(scale.dp(8f))).padding(horizontal = scale.dp(16f), vertical = scale.dp(8f))) {
                         Text(text = msg, color = FvpColors.TextPrimary)
                     }

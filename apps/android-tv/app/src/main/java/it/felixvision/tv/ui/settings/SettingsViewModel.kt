@@ -15,6 +15,8 @@ import it.felixvision.tv.data.playback.LiveStreamFormat
 import it.felixvision.tv.data.protection.ProtectedContentStore
 import it.felixvision.tv.data.protection.ProtectedPageAccess
 import it.felixvision.tv.data.protection.ProtectedSession
+import it.felixvision.tv.data.log.IssueEntry
+import it.felixvision.tv.data.log.IssueLog
 import it.felixvision.tv.data.sources.M3uErrorRow
 import it.felixvision.tv.data.sources.Source
 import it.felixvision.tv.data.sources.Sources
@@ -125,6 +127,11 @@ data class SettingsUiState(
      * nel catalogo. Le scelte fatte lista per lista restano salvate.
      */
     val listsVisible: Boolean = true,
+    /**
+     * Il Log dei problemi permanenti: righe con data e ora, già filtrate di
+     * quelle svuotate. La card mostra quante sono, la pagina le elenca.
+     */
+    val logEntries: List<IssueEntry> = emptyList(),
 ) {
     val isDownloadingUpdate: Boolean
         get() = updateStatus is AppUpdateStatus.Downloading
@@ -282,6 +289,12 @@ class SettingsViewModel(
         viewModelScope.launch {
             container.m3uSourceService.indexError.collect { refreshM3uErrors() }
         }
+        // Log dei problemi permanenti: la card e la pagina lo leggono da qui.
+        viewModelScope.launch {
+            container.issueLogStore.entries.collect { entries ->
+                _ui.update { it.copy(logEntries = IssueLog.visible(entries)) }
+            }
+        }
         refreshServerLabel()
         refreshProtectedSummary()
         // L'archivio dei contenuti protetti notifica ogni scrittura con la sua
@@ -360,6 +373,7 @@ class SettingsViewModel(
         refreshServerLabel()
         refreshProtectedSummary()
         refreshAccountInfo()
+        viewModelScope.launch { runCatching { container.m3uIssueCollector.refresh() } }
         recheckInstallPermission()
         checkForUpdates()
         if (pairingVisible) return
@@ -645,11 +659,17 @@ class SettingsViewModel(
      * delle Impostazioni.
      */
     /** Rilegge l'elenco delle sorgenti per il riquadro "Sorgenti". */
-    /** Ricalcola le righe d'errore delle liste (etichette comprese). */
+    /** Ricalcola le righe d'errore delle liste (etichette comprese) e il Log. */
     private suspend fun refreshM3uErrors() {
         val sources = runCatching { container.sourceRepository.sources() }.getOrDefault(emptyList())
         val rows = container.m3uSourceService.errorRows(sources)
         _ui.update { it.copy(m3uErrors = rows) }
+        runCatching { container.m3uIssueCollector.refresh() }
+    }
+
+    /** "Svuota log": i problemi in corso non tornano finché non rientrano. */
+    fun onClearLog() {
+        container.issueLogStore.clear()
     }
 
     private suspend fun refreshSources() {

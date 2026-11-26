@@ -35,6 +35,9 @@ import it.felixvision.tv.data.progress.ProgressStore
 import it.felixvision.tv.data.sources.EncryptedSourceStore
 import it.felixvision.tv.data.m3u.M3uIndexCache
 import it.felixvision.tv.data.sources.M3uListsVisibility
+import it.felixvision.tv.data.log.IssueLogStore
+import it.felixvision.tv.data.log.SharedPreferencesIssueLogStore
+import it.felixvision.tv.data.sources.M3uIssueCollector
 import it.felixvision.tv.data.sources.M3uSourceService
 import it.felixvision.tv.data.sources.M3uUrlRegistry
 import it.felixvision.tv.data.sources.SharedPreferencesM3uListsVisibility
@@ -354,6 +357,23 @@ class AppContainer(
             registry = m3uUrlRegistry,
             clock = clock,
             scope = applicationScope,
+        )
+    }
+
+    /**
+     * Log dei problemi permanenti: una riga per problema, con data e ora.
+     * Sopravvive al riavvio e si svuota dalle Impostazioni.
+     */
+    val issueLogStore: IssueLogStore by lazy {
+        SharedPreferencesIssueLogStore(context = context, clock = clock, json = json)
+    }
+
+    /** Porta nel Log i problemi delle liste M3U (indice, liste sparite, errori definitivi). */
+    val m3uIssueCollector: M3uIssueCollector by lazy {
+        M3uIssueCollector(
+            service = m3uSourceService,
+            sources = sourceRepository,
+            log = issueLogStore,
         )
     }
 

@@ -8,9 +8,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Pulizia delle righe orfane: una lista sparita dall'indice si elimina solo se
- * non ha dati utente; se ha preferiti, avanzamento o contenuti nascosti resta
- * salvata (quindi nascosta) come prima.
+ * Pulizia delle righe orfane: le righe degli account Xtream spariti si eliminano
+ * se non hanno dati utente, quelle delle liste M3U **mai**. Una lista sparita
+ * dall'indice esce dall'elenco (non ha indirizzo), ma la sua riga resta su
+ * disco: il Log può continuare a dire perché è sparita e, se la lista tornasse,
+ * preferiti, avanzamento e contenuti nascosti sarebbero ancora lì.
  */
 class SourceRepositoryCleanupTest {
 
@@ -40,29 +42,53 @@ class SourceRepositoryCleanupTest {
     /** Lista senza indirizzo: la riga è rimasta, la lista non c'è più. */
     private val orphan = Source(id = "s2", type = SourceType.M3U, label = "M1")
 
+    /** Account Xtream sparito dall'elenco (per esempio dopo un ripristino). */
+    private val oldAccount = Source(
+        id = "src0",
+        type = SourceType.XTREAM,
+        label = "S1",
+        xtream = StoredCredentials(
+            server = "http://vecchio.esempio:8080",
+            username = "vecchio",
+            password = "vecchio-password",
+        ),
+    )
+
     @Test
-    fun `la riga sparita senza dati utente viene eliminata`() = runTest {
+    fun `la riga di una lista sparita resta salvata, anche senza dati utente`() = runTest {
         val store = FakeSourceStore(listOf(account, orphan))
+        val repository = SourceRepository(store)
+
+        val changed = repository.cleanupOrphans { false }
+
+        assertFalse("le liste M3U non si eliminano", changed)
+        assertEquals(listOf("src1", "s2"), store.rows.map { it.id })
+        // Non compare comunque tra le sorgenti usabili: non ha indirizzo.
+        assertEquals(listOf("src1"), repository.sources().map { it.id })
+        // Ma resta leggibile per il Log, con la sua etichetta e il suo nome.
+        assertEquals(listOf("s2"), repository.storedM3uSources().map { it.id })
+    }
+
+    @Test
+    fun `la riga di un account sparito senza dati utente viene eliminata`() = runTest {
+        val store = FakeSourceStore(listOf(account, oldAccount))
         val repository = SourceRepository(store)
 
         val changed = repository.cleanupOrphans { false }
 
         assertTrue(changed)
         assertEquals(listOf("src1"), store.rows.map { it.id })
-        assertEquals(listOf("src1"), repository.sources().map { it.id })
     }
 
     @Test
-    fun `la riga sparita con dati utente resta salvata e nascosta`() = runTest {
-        val store = FakeSourceStore(listOf(account, orphan))
+    fun `la riga di un account sparito con dati utente resta`() = runTest {
+        val store = FakeSourceStore(listOf(account, oldAccount))
         val repository = SourceRepository(store)
 
-        val changed = repository.cleanupOrphans { sourceId -> sourceId == "s2" }
+        val changed = repository.cleanupOrphans { sourceId -> sourceId == "src0" }
 
         assertFalse(changed)
-        assertEquals(listOf("src1", "s2"), store.rows.map { it.id })
-        // Non compare comunque tra le sorgenti usabili: non ha indirizzo.
-        assertEquals(listOf("src1"), repository.sources().map { it.id })
+        assertEquals(listOf("src1", "src0"), store.rows.map { it.id })
     }
 
     @Test
