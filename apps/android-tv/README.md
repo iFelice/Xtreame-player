@@ -348,7 +348,10 @@ etichette**. Una lista tolta dall'indice sparisce dall'elenco; al primo
 aggiornamento utile la sua riga viene **eliminata** se non ha dati utente
 (preferiti, avanzamento, contenuti nascosti), mentre se ne ha resta su disco —
 quindi nascosta — e riprendendo la stessa lista riprende lo stesso `M` con i
-suoi dati.
+suoi dati. La riga della lista **resta salvata** anche senza dati da conservare
+(al massimo 32 righe, le liste configurate per prime): è quella che permette al
+Log di dire perché la lista è sparita e, se il file tornasse nell'indice, di
+ritrovare etichetta, preferiti e avanzamento.
 
 #### Aggiornamento
 
@@ -356,12 +359,77 @@ Le liste e l'indice vengono riletti alle **08:30, 14:30, 18:30 e 22:30** (ora
 locale del dispositivo): la copia salvata vale fino al primo di questi orari
 successivo al download, e "Aggiorna catalogo" riscarica subito. Le liste si
 scaricano in parallelo (massimo tre richieste alla volta), quindi una lista lenta
-non blocca le altre. Se una lista non risponde si usa la copia salvata e compare
-una riga d'errore per ogni lista interessata (`lista: …`, il nome del file), sia in
-Impostazioni › Account sia nella schermata principale, senza bloccare le altre
-sorgenti; i tentativi successivi sono in silenzio, con attese crescenti (30 s,
-2 min, 5 min). Se non risponde l'indice si usano le liste dell'ultima risoluzione
-buona.
+non blocca le altre. Se una lista non risponde si usa la copia salvata: nessuna riga d'errore
+compare più né in Home né in Impostazioni › Account, e le altre sorgenti restano
+disponibili. I tentativi successivi sono in silenzio, con attese crescenti (30 s,
+2 min, 5 min); solo quando l'ultimo tentativo è andato a vuoto l'errore è
+**definitivo** ed entra nel **Log** (vedi sotto). Se non risponde l'indice si usano
+le liste dell'ultima risoluzione buona, e anche questo entra nel Log perché
+l'app non ritenta da sola.
+
+#### Log dei problemi permanenti
+
+Nel **Log** (Impostazioni › Log) finiscono solo i problemi che non si risolvono da
+soli, **uno per problema**, con data e ora:
+
+```
+23/11 18:42 — lista.m3u: non presente nell'indice
+23/11 18:47 — Indice delle liste: non raggiungibile
+```
+
+1. una lista salvata che non è più nell'indice: esce dall'elenco delle liste, i
+   suoi dati restano, e il Log dice perché;
+2. l'indice delle liste non raggiungibile o non valido: finché è così l'app usa
+   l'ultima copia buona e non ritenta da sola;
+3. una lista che non risponde **dopo** tutti i tentativi automatici.
+
+Gli errori passeggeri non entrano: un tentativo fallito e poi riuscito non lascia
+righe. Quando un problema rientra la sua riga **esce** dal Log; se si ripresenta è
+una riga nuova, con data e ora nuove. La stessa riga non si duplica mai: il
+messaggio si aggiorna, la data resta quella in cui il problema è comparso.
+
+La card **Log** dice quanti problemi ci sono (`Nessun problema`, `1 problema`,
+`3 problemi`) e mostra un pallino rosso in alto a destra quando ce ne sono. La
+pagina elenca le righe e ha **"Svuota log"**: è definitivo, il problema svuotato
+non torna finché resta in corso (se rientra e si ripresenta, torna con una data
+nuova). A Log vuoto resta il solo pulsante **"Torna alle card"**, così il tasto
+Indietro non esce mai dalle Impostazioni.
+
+All'apertura dell'app, se il Log ha messaggi, nello spazio dei messaggi brevi in
+basso al centro compare **"Ci sono messaggi di errore da verificare"**: sparisce
+dopo 10 secondi oppure con OK, e OK **non consuma il tasto** (la pressione arriva
+comunque all'elemento focalizzato).
+
+Il Log è salvato nelle preferenze (`fvp_log`, chiave `issues`): sopravvive al
+riavvio, non contiene né indirizzi di lista né credenziali.
+
+#### Connessione remota e card "In arrivo"
+
+La configurazione da remoto ha una card sua, **Connessione remota**: QR, PIN,
+indirizzo breve e tempo residuo, più il pulsante sempre presente **"Mostra un
+nuovo codice"**. La pagina Account non la contiene più e resta corta.
+
+Le due card **"In arrivo"** sono segnaposto: titolo, riga `Prossimamente` e icona
+a scintille, con il fondo spento. Non sono cliccabili e **non prendono il focus**:
+con il telecomando si passa oltre, come se non ci fossero, e non promettono
+nessuna funzione.
+
+La griglia ha così **dodici card, quattro per riga e tre righe piene** (nessuno
+spazio vuoto in fondo): Account, Aspetto, Contenuti protetti, VPN / Catalogo,
+Player, App, Backup / Log, Connessione remota, In arrivo, In arrivo. **Aggiornamenti
+resta dentro la card App**, come sempre.
+
+#### Vetro medio
+
+Fuori dal player i riquadri sono a **vetro medio**: fondo `Surface` al 60% e bordo
+bianco al 10% (`FvpColors.GlassSurface` e `GlassBorder`, un solo idioma in
+`Modifier.fvpGlassPanel`). Vale per le card della griglia delle Impostazioni, per i
+riquadri delle pagine (Account, Aspetto, Contenuti protetti, VPN, Catalogo, Player,
+App, Backup, Liste M3U, Log, Connessione remota, pannello del QR), per il messaggio
+breve in basso e per il **menu laterale**, il cui fondo è traslucido (`Background`
+al 60%) e il cui riquadro della voce selezionata o a fuoco è a vetro, compatto come
+esteso. Il **player resta com'è** e le finestre sopra i contenuti (dialoghi,
+conferme, documenti sovrapposti) restano piene, per leggibilità.
 
 #### Riproduzione e contenuti protetti
 
@@ -410,8 +478,8 @@ server Xtream raggiunti con indirizzo privato non risponderebbero.
 - **Navigazione a cassetto**: a riposo colonna di icone, si espande al focus; voci nell'ordine Novità, Preferiti, Live, Film, Serie, Guida TV, Cerca, Impostazioni; colori attivi Live #FF9F0A, Film #10B981, Serie #2DD4BF, Novità #A3E635, Guida TV #38BDF8, Preferiti #FBBF24, Cerca #A78BFA, Impostazioni bianco; inattive #AEAEB2; focus con bordo #34D399 e leggero ingrandimento; sfondi #1C1C1E/#2C2C2E/#3A3A3C. Guida TV usa l'icona vettoriale `ic_nav_tv_guide`; la larghezza aperta è misurata sulla voce più lunga, "Impostazioni". Indietro: sezione → voce attiva del menu → Novità → finestra di uscita.
 - **Sezioni**: Novità con la riga orizzontale "Continua a guardare" (nascosta quando non ci sono voci) sopra gli ultimi film e le ultime serie; ultimi film per `added`, ultime serie per `last_modified`, 40 ciascuna; la voce Guida TV apre il segnaposto "disponibile nel prossimo aggiornamento". Live con categorie a sinistra e debounce 300 ms; Film/Serie con griglia 5 colonne e dettaglio on-demand (`get_vod_info`/`get_series_info`); nella colonna delle categorie la voce locale è "NOVITÀ" (il menu laterale resta "Novità") e OK su una categoria la conferma subito, senza attendere il debounce, portando il focus al primo canale o alla prima copertina (con la categoria vuota il focus resta sulla voce e la colonna resta aperta); Preferiti con pressione lunga OK e DataStore per account; liste con `LazyColumn`/`LazyVerticalGrid` e chiavi stabili fino a 20k elementi.
 - **Ordine delle categorie di Film e Serie** (come l'app Black): ogni categoria del provider parte dalla data di aggiunta, dal più recente (Film: `added`; Serie: `last_modified`, in mancanza `releaseDate`; a parità l'identificativo numerico decrescente). Il Live resta nell'ordine del server, legato alla numerazione dei canali, e NOVITÀ resta l'elenco dei recenti (40 elementi). Sopra la griglia, sulla riga del contatore "N / Totale", c'è un pulsante `FvpCompactButton` basso (margine verticale 4 dp e altezza massima 32 dp, così scavalca i 40 dp minimi di tv-material e non copre la prima riga di copertine) con tre ordini a ciclo — "Ordina: Aggiunti di recente", "Ordina: A-Z" (`java.text.Collator` italiano, forza PRIMARY: maiuscole e accenti non contano), "Ordina: Anno" (campo `year` o anno tra parentesi nel titolo, dal più recente, senza anno in fondo). Dalla prima riga la Freccia su porta al pulsante, la Freccia giù torna alla prima copertina, e OK sul pulsante lascia il focus lì riportando la lista in cima. La scelta vale **per categoria** e resta al riavvio: SharedPreferences `fvp_sort`, chiave `vod_<categoryId>` o `series_<categoryId>`, valori `added`/`az`/`year` (assente o non valido = `added`). Tag dei pulsanti: `film_sort_button`, `series_sort_button`; i bounds non ritagliati del pulsante non intersecano quelli della prima copertina, con e senza focus.
-- **Impostazioni**: griglia di sette card, quattro per riga e non in una lista scorrevole, nell'ordine Account, Aspetto, Contenuti protetti, VPN, Catalogo, Player, App; la card Player mostra "Zapping ogni N s" (sempre il valore attuale) e apre la pagina con "Durata zapping" (da 5 a 120 s, predefinita 10, salvata in SharedPreferences `fvp_player` e letta dallo zapping automatico all'avvio) e "Formato live" (Automatico = il formato dichiarato dal pannello, di norma MPEG-TS; MPEG-TS e HLS forzano il formato se ammesso: le tre scelte con il "✓" sull'attiva, salvate in `fvp_player` chiave `live_format` e lette alla creazione di ogni sessione del player, mini-player della Guida compreso); ogni card è alta 150 dp (scalati), con angoli da 18 dp uguali per fondo e bordi, fondo #2C2C2E, bordo #3A3A3C a riposo e #34D399 da 2 dp con il focus, icona sopra il titolo e una riga di stato: "demo · scade 12/03/2026" (solo l'utente se non c'è scadenza), "Interfaccia compatta|media|grande", "PIN impostato" o "PIN non impostato", "Connessa · server" in verde, "VPN non connessa" in rosso, "Spenta", "Nessuna configurazione", "Aggiornato alle hh:mm" o "Aggiornamento in corso…", "Versione x" o "Disponibile la versione y" in verde. Il pallino arancione degli aggiornamenti resta solo sull'icona Impostazioni del menu, mai sulle card; con un aggiornamento disponibile, in scaricamento o in installazione l'icona della card App si colora di arancione (#FF9F0A). Dall'ingresso del menu il focus va sulla prima card; OK apre la pagina della card, Indietro torna alla griglia con il focus sulla card da cui si era entrati; la card "Contenuti protetti" apre direttamente la schermata con il PIN, senza pagina intermediaria.
-- **Pagine delle Impostazioni**: a tutto schermo nell'area dei contenuti, con il titolo "Impostazioni › <Nome>" e una sola colonna scorrevole (nessun rientro automatico delle righe nelle pagine con più pulsanti). Dati account riletti dal server a ogni apertura con orario "Dati account aggiornati alle hh:mm" e "Aggiornamento dati account…" durante la lettura (utente, stato, scadenza con giorni rimanenti, "Connessioni in uso (tutti i dispositivi)"), avviso "L'account è in uso su un altro dispositivo" quando le connessioni attive raggiungono il massimo e questa TV non sta riproducendo, "Aggiorna catalogo" che apre una finestra con le righe Live, Film, Serie con barra di avanzamento e stato a destra ("In attesa", "62% · 14,8 di 23,9 MB" con totale noto, "14,8 MB" con barra indeterminata senza totale, "Elaborazione…", "Completato · 21.277 elementi", "Errore"; ordine e sequenzialità delle richieste invariati), "Chiudi" attivo a fine aggiornamento con focus; durante lo scaricamento Indietro chiude la finestra senza interrompere il lavoro, "Cache immagini" con lo spazio occupato e il pulsante "Svuota cache immagini" (cache su disco di Coil in `cacheDir/fvp_images`, cache in memoria dell'`ImageLoader` e file di `cacheDir/updates` tranne l'APK di un aggiornamento in corso; il catalogo salvato in `filesDir` non viene toccato) che dopo la pulizia mostra "Cache svuotata · liberati N MB", "Configura da remoto" con QR (verifica login, sostituisce credenziali e cancella cache se riesce, altrimenti mantiene le vecchie), "Esci" con conferma che cancella credenziali, cache, preferiti, avanzamento e archivio "Continua a guardare".
+- **Impostazioni**: griglia di **dodici card, quattro per riga e tre righe piene**, non in una lista scorrevole, nell'ordine Account, Aspetto, Contenuti protetti, VPN / Catalogo, Player, App, Backup / Log, Connessione remota, In arrivo, In arrivo; le due card "In arrivo" sono segnaposto spenti, non cliccabili e non focalizzabili (il telecomando le salta), e **Aggiornamenti resta dentro la card App**. La card Player mostra "Zapping ogni N s" (sempre il valore attuale) e apre la pagina con "Durata zapping" (da 5 a 120 s, predefinita 10, salvata in SharedPreferences `fvp_player` e letta dallo zapping automatico all'avvio) e "Formato live" (Automatico = il formato dichiarato dal pannello, di norma MPEG-TS; MPEG-TS e HLS forzano il formato se ammesso: le tre scelte con il "✓" sull'attiva, salvate in `fvp_player` chiave `live_format` e lette alla creazione di ogni sessione del player, mini-player della Guida compreso); la card Log dice quanti problemi ci sono ("Nessun problema", "1 problema", "3 problemi") con un pallino rosso in alto a destra quando ce ne sono, e la card Connessione remota dice "QR e codice". Ogni card è alta 150 dp (scalati), con angoli da 18 dp uguali per fondo e bordi, **vetro medio** (fondo Surface al 60%) in ogni stato, bordo bianco al 10% a riposo e #34D399 da 2 dp con il focus, icona sopra il titolo e una riga di stato: "demo · scade 12/03/2026" (solo l'utente se non c'è scadenza), "Interfaccia compatta|media|grande", "PIN impostato" o "PIN non impostato", "Connessa · server" in verde, "VPN non connessa" in rosso, "Spenta", "Nessuna configurazione", "Aggiornato alle hh:mm" o "Aggiornamento in corso…", "Versione x" o "Disponibile la versione y" in verde, "Esporta e importa", "Prossimamente". Il pallino arancione degli aggiornamenti resta solo sull'icona Impostazioni del menu, mai sulle card; con un aggiornamento disponibile, in scaricamento o in installazione l'icona della card App si colora di arancione (#FF9F0A). Dall'ingresso del menu il focus va sulla prima card; OK apre la pagina della card, Indietro torna alla griglia con il focus sulla card da cui si era entrati; la card "Contenuti protetti" apre direttamente la schermata con il PIN, senza pagina intermediaria; la card Log apre la pagina del Log ("Svuota log" oppure "Torna alle card" a Log vuoto).
+- **Pagine delle Impostazioni**: a tutto schermo nell'area dei contenuti, con il titolo "Impostazioni › <Nome>" e una sola colonna scorrevole (nessun rientro automatico delle righe nelle pagine con più pulsanti). Dati account riletti dal server a ogni apertura con orario "Dati account aggiornati alle hh:mm" e "Aggiornamento dati account…" durante la lettura (utente, stato, scadenza con giorni rimanenti, "Connessioni in uso (tutti i dispositivi)"), avviso "L'account è in uso su un altro dispositivo" quando le connessioni attive raggiungono il massimo e questa TV non sta riproducendo, "Aggiorna catalogo" che apre una finestra con le righe Live, Film, Serie con barra di avanzamento e stato a destra ("In attesa", "62% · 14,8 di 23,9 MB" con totale noto, "14,8 MB" con barra indeterminata senza totale, "Elaborazione…", "Completato · 21.277 elementi", "Errore"; ordine e sequenzialità delle richieste invariati), "Chiudi" attivo a fine aggiornamento con focus; durante lo scaricamento Indietro chiude la finestra senza interrompere il lavoro, "Cache immagini" con lo spazio occupato e il pulsante "Svuota cache immagini" (cache su disco di Coil in `cacheDir/fvp_images`, cache in memoria dell'`ImageLoader` e file di `cacheDir/updates` tranne l'APK di un aggiornamento in corso; il catalogo salvato in `filesDir` non viene toccato) che dopo la pulizia mostra "Cache svuotata · liberati N MB", "Esci" con conferma che cancella credenziali, cache, preferiti, avanzamento e archivio "Continua a guardare".
 - **Correzioni abbinamento**: nessuna sessione durante verifica credenziali salvate; dopo 3 scadenze consecutive (30 min) si ferma con "Codice scaduto" e pulsante "Mostra un nuovo codice"; pannello Impostazioni attivo solo quando visibile.
 
 ### Player (PR3)
@@ -768,7 +836,10 @@ simulato e implementazioni finte per cifrario e preferenze:
 | `VpnSettingsSectionTest` | riquadro VPN con stato finto: solo "Configura" senza configurazione, "Connessa · server" con tre pulsanti, Accendi/Spegni, callback dei pulsanti, riga di stato dentro la pagina "Impostazioni › VPN" |
 | `InterfaceSizeSettingsTest`, `SettingsExitButtonTest`, `SettingsUpdateAndExitTest` | pagina Aspetto con la scelta della dimensione dell'interfaccia e le relative etichette, pagina Account con il pulsante di uscita e il riquadro dell'abbinamento da remoto, pagina App con versione, stato dell'aggiornamento, pulsante sempre presente ("Aggiorna" con una versione disponibile, altrimenti "Controlla aggiornamenti") e conferma di uscita |
 | `SettingsPagesFocusTest` | focus d'ingresso di ogni pagina sul suo primo elemento focalizzabile (App → pulsante dell'aggiornamento, Catalogo → "Aggiorna catalogo", Account → "Esci dall'account", Aspetto → dimensione attiva, VPN → "Configura"), pagina App senza aggiornamento con "Controlla aggiornamenti" focalizzato che rilancia il controllo manuale, e ogni pagina vera dentro la navigazione con Indietro che torna sulla card |
-| `SettingsCardsGridTest` | griglia con dati finti: sette card nell'ordine Account, Aspetto, Contenuti protetti, VPN, Catalogo, Player, App; quattro per riga con altezze e larghezze uguali; righe di stato con e senza scadenza, per ogni dimensione dell'interfaccia, PIN impostato o no, tutti gli stati della VPN, catalogo aggiornato o in corso, "Zapping ogni N s", versione installata e aggiornamento disponibile; icona della card App arancione (chiave semantica `SettingsCardIconTintKey`) con aggiornamento disponibile e al colore normale senza; nessun pallino degli aggiornamenti dentro le Impostazioni |
+| `SettingsCardsGridTest` | griglia con dati finti: **dodici card** nell'ordine Account, Aspetto, Contenuti protetti, VPN, Catalogo, Player, App, Backup, Log, Connessione remota, In arrivo, In arrivo; quattro per riga, tre righe piene, con altezze e larghezze uguali; i segnaposto non si aprono e non prendono il focus; la card Log mostra il numero dei problemi e il pallino solo se ci sono; righe di stato con e senza scadenza, per ogni dimensione dell'interfaccia, PIN impostato o no, tutti gli stati della VPN, catalogo aggiornato o in corso, "Zapping ogni N s", versione installata e aggiornamento disponibile; icona della card App arancione (chiave semantica `SettingsCardIconTintKey`) con aggiornamento disponibile e al colore normale senza; nessun pallino degli aggiornamenti dentro le Impostazioni |
+| `IssueLogTest`, `IssueLogStoreTest` | regole del Log senza Android: una riga per problema con data e ora, nessun duplicato, la data resta quella in cui è comparso, il messaggio si aggiorna; un problema rientrato esce e, se si ripresenta, torna con data nuova; "Svuota log" tacita le righe e il problema svuotato non torna finché è in corso, mentre un problema nuovo si vede |
+| `M3uIssuesTest` | problemi delle liste M3U che finiscono nel Log: lista non più nell'indice (con il nome del file ricordato), indice non raggiungibile, errore definitivo di una lista; nessun messaggio quando l'indice non è ancora stato letto |
+| `SettingsLogPageTest`, `SettingsRemotePageTest` | pagina Log con le righe formattate, "Svuota log" come primo elemento e, a Log vuoto, il solo "Torna alle card"; pagina Connessione remota con il pannello del QR e "Mostra un nuovo codice" focalizzato |
 | `SettingsPlayerPageTest` | pagina Player con le voci "Durata zapping" e "Formato live": valore al centro tra "−" e "+" (un secondo per OK, pressione prolungata: 500 ms di attesa e poi un secondo ogni 100 ms, con i cambi contati sul `mainClock`), valori salvati in `fvp_player` (10 → 11, 5 fermo al limite con "−" disattivato, 120 fermo al limite con "+" disattivato), scelte rapide 5/10/15/30 con il "✓" solo sul valore attivo e nessuno con 12, valore usato dallo zapping (a 11 s nessun cambio, a 12 s cambio; regola dei 5 s invariata) e Indietro che torna alla griglia con il focus sulla card Player e la riga già aggiornata; "Formato live" parte su Automatico con le tre scelte e il "✓" sull'attiva, scegliere HLS sposta il segno e salva `live_format` (un valore sconosciuto torna ad Automatico) |
 | `SettingsNavigationTest` | navigazione con pagine finte: OK su ogni card apre la pagina giusta, Indietro torna alla griglia con il focus sulla card di ingresso, ogni pagina riceve il focus d'ingresso, Indietro da una pagina senza elementi focalizzabili torna alla griglia e non al menu laterale, "Contenuti protetti" apre la schermata con il PIN, la pagina VPN apre la configurazione con il QR, durante lo scaricamento di un aggiornamento Indietro resta sulla pagina; all'ingresso c'è solo la griglia |
 | `CacheCleanupTest` | cartelle vere senza Robolectric: conteggio di immagini, aggiornamenti e cache in memoria, APK in uso escluso, cartelle mancanti, arrotondamento dei megabyte |
