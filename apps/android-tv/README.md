@@ -200,10 +200,10 @@ perdere preferiti, avanzamento, PIN o copie del catalogo: le chiavi degli
 archivi per server+utente non cambiano.
 
 Le etichette seguono il tipo di sorgente: `S1`…`S3` sono riservate agli account
-Xtream (al massimo tre), le liste M3U prendono `M1`, `M2`, … e **non hanno
-limite**. L'etichetta è assegnata alla creazione e non cambia più; le liste
-create da una versione precedente con un'etichetta `S` vengono portate a `M`
-alla prima lettura.
+Xtream (al massimo tre) e non cambiano mai; le liste M3U prendono `M1`, `M2`, …
+e **non hanno limite**, e per una lista il numero **è la sua posizione** nella
+pagina delle Impostazioni (vedi sotto). Le liste create da una versione
+precedente con un'etichetta `S` vengono portate a `M` alla prima lettura.
 
 **Le etichette restano interne**: non compaiono nella sezione Film, in Serie, in
 Cerca, nei Preferiti o in Riprendi, né come prefisso di categoria né come badge
@@ -228,6 +228,44 @@ indirizzi non sono mai scritti nel codice né mostrati in Impostazioni.
 **L'indirizzo compilato nell'APK è leggibile da chi estrae l'APK**: non metterci
 credenziali, e usa un indice (sotto) se vuoi cambiare le liste senza
 ricompilare.
+
+#### Impostazioni › Account: una riga per le liste M3U
+
+Le liste possono essere cento, quindi non hanno una riga ciascuna in Account: ci
+sono una riga per ogni account Xtream e **una sola riga per le liste M3U**, con
+
+- l'interruttore **"Mostra" generale**: spento, nessuna lista entra nel catalogo,
+  ma le scelte fatte lista per lista restano salvate e tornano riaccendendolo;
+  la riga dice quante liste sono attive (`4 attive su 6 liste`);
+- il pulsante **"Apri"**, che porta alla pagina **Liste M3U**.
+
+Nella pagina ogni lista ha la posizione (`M1`, `M2`, …), il nome del file e
+l'interruttore **"Mostra"** (OK accende o spegne quella lista). La **pressione
+lunga** su una riga apre il menu **"Sposta su" / "Sposta giù"**, lo stesso
+comportamento di "I miei canali"; ai bordi del gruppo le voci sono disattivate.
+Indietro torna alla pagina Account.
+
+Regole delle posizioni:
+
+1. le liste **accese** stanno davanti, quelle **spente** in coda;
+2. la posizione è il numero: portando la lista in quinta riga alla seconda, la
+   vecchia seconda diventa terza e tutte le altre scalano di una;
+3. una lista nuova (nasce accesa) entra **in coda alle accese**, cioè subito
+   prima della prima spenta;
+4. spegnendo una lista va **all'ultima posizione disponibile**; riaccendendola
+   torna **in coda alle accese**;
+5. se una lista sparisce dall'indice, le posizioni si **ricompattano** subito.
+
+L'ordine delle liste è l'ordine del catalogo: nella voce "Liste M3U" di Film le
+categorie compaiono nell'ordine di prima comparsa scorrendo le liste, e dentro
+una categoria le voci seguono l'ordine delle liste e poi quello del file.
+
+Accendere o spegnere una sorgente, cambiare l'interruttore generale o spostare
+una lista **non ricarica il catalogo**: si rilegge l'elenco delle sorgenti e il
+catalogo si **ricompone in memoria**, restando a schermo. Le Impostazioni non
+vengono smontate (niente schermata "Caricamento catalogo in corso…", niente
+focus che salta sul menu laterale) e restano raggiungibili anche con tutte le
+sorgenti spente: lo stato vuoto ha il pulsante **"Apri Impostazioni"**.
 
 #### Scelta della sorgente in Film
 
