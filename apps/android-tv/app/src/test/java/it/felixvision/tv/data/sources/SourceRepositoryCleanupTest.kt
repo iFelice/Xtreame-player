@@ -16,10 +16,16 @@ import org.junit.Test
  */
 class SourceRepositoryCleanupTest {
 
-    private class FakeSourceStore(var rows: List<Source>) : SourceStore {
+    private class FakeSourceStore(
+        var rows: List<Source>,
+        /** Righe che l'elenco non mostra più (account sparito con la sua riga). */
+        private val hidden: Set<String> = emptySet(),
+    ) : SourceStore {
 
         override suspend fun load(): List<Source> =
-            rows.filter { source -> source.type != SourceType.M3U || source.m3uUrl != null }
+            rows.filter { source ->
+                source.id !in hidden && (source.type != SourceType.M3U || source.m3uUrl != null)
+            }
 
         override suspend fun loadAll(): List<Source> = rows
 
@@ -71,18 +77,18 @@ class SourceRepositoryCleanupTest {
 
     @Test
     fun `la riga di un account sparito senza dati utente viene eliminata`() = runTest {
-        val store = FakeSourceStore(listOf(account, oldAccount))
+        val store = FakeSourceStore(listOf(account, oldAccount), hidden = setOf("src0"))
         val repository = SourceRepository(store)
 
         val changed = repository.cleanupOrphans { false }
 
-        assertTrue(changed)
+        assertTrue("l'account sparito senza dati utente si elimina", changed)
         assertEquals(listOf("src1"), store.rows.map { it.id })
     }
 
     @Test
     fun `la riga di un account sparito con dati utente resta`() = runTest {
-        val store = FakeSourceStore(listOf(account, oldAccount))
+        val store = FakeSourceStore(listOf(account, oldAccount), hidden = setOf("src0"))
         val repository = SourceRepository(store)
 
         val changed = repository.cleanupOrphans { sourceId -> sourceId == "src0" }
