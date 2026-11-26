@@ -3,6 +3,7 @@ package it.felixvision.tv.ui.navigation
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -164,103 +166,118 @@ fun FvpNavigationDrawer(
                 modifier = Modifier
                     .fillMaxHeight()
                     // Fondo a vetro: il menu lascia trasparire gli aloni dello
-                    // sfondo dei contenuti, chiuso come aperto, e chiude con un
-                    // bordo bianco al 10% come gli altri riquadri.
+                    // sfondo dei contenuti, chiuso come aperto.
+                    //
+                    // La grafica delle voci è quella della colonna delle
+                    // categorie Live: **un solo piano** con sopra voci piatte,
+                    // nessun contorno a riposo, il bordo verde solo quando la
+                    // voce ha il focus. Prima ogni voce aveva un riquadro
+                    // bianco al 10% sempre visibile: con otto voci impilate
+                    // erano otto cornici che rubavano il segno del focus.
                     .background(FvpColors.GlassBackground)
                     .padding(vertical = scale.drawerVerticalPadding, horizontal = scale.dp(8f))
             ) {
-                DrawerSection.entries.forEach { section ->
-                    val isSelected = section == selected
-                    // Pallino di aggiornamento disponibile solo su Impostazioni:
-                    // è disegno puro, non è focalizzabile e sta dentro la voce,
-                    // quindi non cambia la larghezza calcolata del menu.
-                    val showUpdateBadge = updateAvailable && section == DrawerSection.Impostazioni
-                    // NavigationDrawerItem forces its own width internally. Keep its ListItem
-                    // primitive (and closed dimensions), but let the open width fit the labels.
-                    // Voce compatta: altezza ridotta dal ListItem denso.
-                    DenseListItem(
-                        selected = isSelected,
-                        onClick = {
-                            onSelect(section)
-                            drawerState.setValue(DrawerValue.Closed)
-                            pendingContentFocus = true
-                        },
-                        leadingContent = {
-                            // L'icona va centrata nel riquadro della voce: a menu
-                            // chiuso il riquadro è IconSize per l'altezza della voce
-                            // densa, a menu aperto lo slot cresce con la scala.
-                            Box(
-                                modifier = if (expanded) {
-                                    Modifier.padding(start = extraInset, end = openGap - 8.dp)
-                                        .size(openIconSlot)
-                                } else {
-                                    Modifier.size(NavigationDrawerItemDefaults.IconSize)
-                                },
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Icon(
-                                    painter = painterResource(id = section.iconRes),
-                                    contentDescription = section.label,
-                                    tint = if (isSelected) section.activeColor else FvpColors.Inactive,
-                                    modifier = Modifier.size(scale.dp(20f))
-                                )
-                                if (showUpdateBadge) {
-                                    // In alto a destra dell'icona, a menu chiuso
-                                    // come a menu aperto.
-                                    UpdateBadge(
-                                        scale = scale,
-                                        tag = DRAWER_UPDATE_BADGE_ICON_TAG,
-                                        modifier = Modifier.align(Alignment.TopEnd),
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(scale.dp(4f)),
+                ) {
+                    DrawerSection.entries.forEach { section ->
+                        val isSelected = section == selected
+                        // Pallino di aggiornamento disponibile solo su Impostazioni:
+                        // è disegno puro, non è focalizzabile e sta dentro la voce,
+                        // quindi non cambia la larghezza calcolata del menu.
+                        val showUpdateBadge = updateAvailable && section == DrawerSection.Impostazioni
+                        // NavigationDrawerItem forces its own width internally. Keep its ListItem
+                        // primitive (and closed dimensions), but let the open width fit the labels.
+                        // Voce compatta: altezza ridotta dal ListItem denso.
+                        DenseListItem(
+                            selected = isSelected,
+                            onClick = {
+                                onSelect(section)
+                                drawerState.setValue(DrawerValue.Closed)
+                                pendingContentFocus = true
+                            },
+                            leadingContent = {
+                                // L'icona va centrata nel riquadro della voce: a menu
+                                // chiuso il riquadro è IconSize per l'altezza della voce
+                                // densa, a menu aperto lo slot cresce con la scala.
+                                Box(
+                                    modifier = if (expanded) {
+                                        Modifier.padding(start = extraInset, end = openGap - 8.dp)
+                                            .size(openIconSlot)
+                                    } else {
+                                        Modifier.size(NavigationDrawerItemDefaults.IconSize)
+                                    },
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Icon(
+                                        painter = painterResource(id = section.iconRes),
+                                        contentDescription = section.label,
+                                        tint = if (isSelected) section.activeColor else FvpColors.Inactive,
+                                        modifier = Modifier.size(scale.dp(20f))
+                                    )
+                                    if (showUpdateBadge) {
+                                        // In alto a destra dell'icona, a menu chiuso
+                                        // come a menu aperto.
+                                        UpdateBadge(
+                                            scale = scale,
+                                            tag = DRAWER_UPDATE_BADGE_ICON_TAG,
+                                            modifier = Modifier.align(Alignment.TopEnd),
+                                        )
+                                    }
+                                }
+                            },
+                            headlineContent = {
+                                if (expanded) {
+                                    // Il pallino di aggiornamento sta solo sull'icona:
+                                    // l'etichetta resta il solo testo della voce.
+                                    // Il colore della sezione resta sull'icona: sulla
+                                    // colonna Live l'etichetta della voce scelta è
+                                    // primaria, non colorata.
+                                    Text(
+                                        text = section.label,
+                                        style = labelStyle,
+                                        color = if (isSelected) FvpColors.TextPrimary else FvpColors.TextSecondary,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        modifier = Modifier.padding(end = extraInset),
                                     )
                                 }
-                            }
-                        },
-                        headlineContent = {
-                            if (expanded) {
-                                // Il pallino di aggiornamento sta solo sull'icona:
-                                // l'etichetta resta il solo testo della voce.
-                                Text(
-                                    text = section.label,
-                                    style = labelStyle,
-                                    color = if (isSelected) section.activeColor else FvpColors.TextSecondary,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    maxLines = 1,
-                                    softWrap = false,
-                                    modifier = Modifier.padding(end = extraInset),
-                                )
-                            }
-                        },
-                        modifier = Modifier
-                            .width(if (expanded) expandedItemWidth else NavigationDrawerItemDefaults.CollapsedDrawerItemWidth)
-                            .heightIn(min = scale.drawerItemHeight)
-                            .focusRequester(itemFocusRequesters.getValue(section))
-                            .onKeyEvent { event ->
-                                if (event.key == Key.DirectionRight) {
-                                    onSelect(section)
-                                    drawerState.setValue(DrawerValue.Closed)
-                                    pendingContentFocus = true
-                                    true
-                                } else false
-                            }
-                            .testTag("drawer_${section.name}"),
-                        colors = ListItemDefaults.colors(
-                            // Il riquadro dell'icona è a vetro sia compatto sia
-                            // esteso: la voce selezionata e quella a fuoco hanno
-                            // lo stesso fondo traslucido degli altri riquadri.
-                            selectedContainerColor = FvpColors.GlassSurface,
-                            selectedContentColor = if (isSelected) section.activeColor else FvpColors.TextPrimary,
-                            focusedContainerColor = FvpColors.GlassSurface,
-                            focusedContentColor = FvpColors.TextPrimary,
-                            containerColor = Color.Transparent,
-                            contentColor = FvpColors.Inactive,
-                        ),
-                        border = ListItemDefaults.border(
-                            border = Border(BorderStroke(1.dp, FvpColors.GlassBorder)),
-                            focusedBorder = Border(BorderStroke(2.dp, FvpColors.GreenFocus)),
-                        ),
-                        scale = ListItemDefaults.scale(focusedScale = 1.04f),
-                        shape = ListItemDefaults.shape(shape = androidx.compose.foundation.shape.RoundedCornerShape(scale.dp(10f))),
-                    )
+                            },
+                            modifier = Modifier
+                                .width(if (expanded) expandedItemWidth else NavigationDrawerItemDefaults.CollapsedDrawerItemWidth)
+                                .heightIn(min = scale.drawerItemHeight)
+                                .focusRequester(itemFocusRequesters.getValue(section))
+                                .onKeyEvent { event ->
+                                    if (event.key == Key.DirectionRight) {
+                                        onSelect(section)
+                                        drawerState.setValue(DrawerValue.Closed)
+                                        pendingContentFocus = true
+                                        true
+                                    } else false
+                                }
+                                .testTag("drawer_${section.name}"),
+                            colors = ListItemDefaults.colors(
+                                // Il riquadro dell'icona è a vetro sia compatto sia
+                                // esteso: la voce selezionata e quella a fuoco hanno
+                                // lo stesso fondo traslucido degli altri riquadri.
+                                selectedContainerColor = FvpColors.GlassSurface,
+                                selectedContentColor = if (isSelected) section.activeColor else FvpColors.TextPrimary,
+                                focusedContainerColor = FvpColors.GlassSurface,
+                                focusedContentColor = FvpColors.TextPrimary,
+                                containerColor = Color.Transparent,
+                                contentColor = FvpColors.Inactive,
+                            ),
+                            // Nessun bordo a riposo (era un riquadro bianco al 10%
+                            // su tutte e otto le voci): il contorno verde da 2 dp è
+                            // solo il segno del focus, come nella colonna Live.
+                            border = ListItemDefaults.border(
+                                focusedBorder = Border(BorderStroke(2.dp, FvpColors.GreenFocus)),
+                            ),
+                            scale = ListItemDefaults.scale(focusedScale = 1.04f),
+                            shape = ListItemDefaults.shape(shape = RoundedCornerShape(scale.dp(8f))),
+                        )
+                    }
                 }
 
                 // Ora sotto l'ultima voce (Impostazioni), e data breve a menu

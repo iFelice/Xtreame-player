@@ -427,9 +427,29 @@ bianco al 10% (`FvpColors.GlassSurface` e `GlassBorder`, un solo idioma in
 riquadri delle pagine (Account, Aspetto, Contenuti protetti, VPN, Catalogo, Player,
 App, Backup, Liste M3U, Log, Connessione remota, pannello del QR), per il messaggio
 breve in basso e per il **menu laterale**, il cui fondo è traslucido (`Background`
-al 60%) e il cui riquadro della voce selezionata o a fuoco è a vetro, compatto come
-esteso. Il **player resta com'è** e le finestre sopra i contenuti (dialoghi,
-conferme, documenti sovrapposti) restano piene, per leggibilità.
+al 60%) e la cui voce selezionata o a fuoco è a vetro, compatto come esteso. Il
+**player resta com'è** e le finestre sopra i contenuti (dialoghi, conferme,
+documenti sovrapposti) restano piene, per leggibilità.
+
+### Menu laterale come la colonna delle categorie Live
+
+Le voci del menu laterale seguono la grafica della **colonna delle categorie**
+(Live, Film, Serie), non quella dei riquadri:
+
+- **niente contorno a riposo**: il bordo verde da 2 dp esiste solo sulla voce con
+  il focus. Prima ogni voce aveva un riquadro bianco al 10% sempre visibile e,
+  con otto voci impilate, il segno del focus doveva competere con otto cornici;
+- **voce piatta** su un solo piano (il fondo traslucido del menu); la voce scelta
+  o a fuoco prende il fondo a vetro, come nella colonna `SurfaceElevated` per la
+  categoria scelta;
+- **stesso ritmo**: 4 dp fra una voce e l'altra, angoli da 8 dp, ingrandimento
+  1.04 con il focus, etichetta primaria quando la voce è scelta e secondaria
+  altrimenti. Il colore della sezione resta **sull'icona**, che è l'identità del
+  menu, non sull'etichetta.
+
+Pallino degli aggiornamenti sull'icona Impostazioni, orologio in fondo, menu
+chiuso con le sole icone e freccia destra che chiude e porta il focus ai
+contenuti restano come prima.
 
 #### Riproduzione e contenuti protetti
 
