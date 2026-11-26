@@ -120,6 +120,11 @@ data class SettingsUiState(
      * l'indice delle liste. Le altre sorgenti restano disponibili.
      */
     val m3uErrors: List<M3uErrorRow> = emptyList(),
+    /**
+     * Interruttore generale della riga "Liste M3U": spento, nessuna lista entra
+     * nel catalogo. Le scelte fatte lista per lista restano salvate.
+     */
+    val listsVisible: Boolean = true,
 ) {
     val isDownloadingUpdate: Boolean
         get() = updateStatus is AppUpdateStatus.Downloading
@@ -650,7 +655,8 @@ class SettingsViewModel(
     private suspend fun refreshSources() {
         val sources = runCatching { container.sourceRepository.sources() }.getOrDefault(emptyList())
         val errors = container.m3uSourceService.errorRows(sources)
-        _ui.update { it.copy(sources = sources, m3uErrors = errors) }
+        val listsVisible = container.sourceRepository.listsVisible()
+        _ui.update { it.copy(sources = sources, m3uErrors = errors, listsVisible = listsVisible) }
     }
 
     /**
@@ -667,6 +673,28 @@ class SettingsViewModel(
                     runCatching { container.m3uSourceService.playlist(source) }
                 }
             }
+            refreshSources()
+        }
+    }
+
+    /**
+     * Interruttore generale "Mostra" della riga "Liste M3U": non tocca le
+     * singole liste, che restano come sono (riaccendendolo tornano).
+     */
+    fun setM3uListsVisible(visible: Boolean) {
+        viewModelScope.launch {
+            container.sourceRepository.setM3uListsVisible(visible)
+            refreshSources()
+        }
+    }
+
+    /**
+     * "Sposta su" / "Sposta giù" di una lista nella pagina "Liste M3U". La
+     * posizione è il numero dell'etichetta; le spente restano in coda.
+     */
+    fun moveSource(sourceId: String, up: Boolean) {
+        viewModelScope.launch {
+            container.sourceRepository.moveM3u(sourceId, up)
             refreshSources()
         }
     }

@@ -76,8 +76,9 @@ class SourcesAndPlaylistTest {
     )
 
     @Test
-    fun `la riga della Lista M3U mostra il nome del file e non l'indirizzo`() {
-        var toggled: Pair<String, Boolean>? = null
+    fun `le liste M3U hanno una riga sola, con Mostra e Apri`() {
+        var listsVisible: Boolean? = null
+        var opened = false
         rule.setContent {
             FvpTheme {
                 SettingsAccountPage(
@@ -87,7 +88,8 @@ class SourcesAndPlaylistTest {
                         sources = listOf(xtreamSource, m3uSource),
                     ),
                     scale = scale,
-                    onSourceToggle = { sourceId, enabled -> toggled = sourceId to enabled },
+                    onListsVisibleChange = { visible -> listsVisible = visible },
+                    onOpenLists = { opened = true },
                 )
             }
         }
@@ -95,11 +97,42 @@ class SourcesAndPlaylistTest {
 
         rule.onNodeWithTag(SETTINGS_SOURCES_SECTION_TAG).assertExists()
         rule.onNodeWithTag("settings_source_title_S1").assertTextEquals("Account Xtream")
-        rule.onNodeWithTag("settings_source_title_M1").assertTextEquals("lista")
-        rule.onNodeWithTag("settings_source_row_M1").assertIsDisplayed()
+        // Le liste non hanno più una riga ciascuna: una riga sola per tutte.
+        rule.onNodeWithTag("settings_sources_m3u_title").assertTextEquals("Liste M3U")
+        rule.onNodeWithTag("settings_sources_m3u_status").assertTextEquals("1 attive su 1 liste")
+        rule.onNodeWithTag("settings_source_row_M1").assertDoesNotExist()
 
-        // L'interruttore spegne la sorgente: la riga resta, l'etichetta pure.
-        rule.onNodeWithTag("settings_source_toggle_M1").performSemanticsAction(SemanticsActions.OnClick)
+        // L'interruttore spegne tutte le liste insieme, senza toccare le singole.
+        rule.onNodeWithTag("settings_sources_m3u_toggle").performSemanticsAction(SemanticsActions.OnClick)
+        rule.waitForIdle()
+        assertEquals(false, listsVisible)
+
+        rule.onNodeWithTag("settings_sources_m3u_open").performSemanticsAction(SemanticsActions.OnClick)
+        rule.waitForIdle()
+        assertTrue(opened)
+    }
+
+    @Test
+    fun `la pagina delle liste mostra il nome del file e non l'indirizzo`() {
+        var toggled: Pair<String, Boolean>? = null
+        rule.setContent {
+            FvpTheme {
+                M3uListsPage(
+                    sources = listOf(xtreamSource, m3uSource),
+                    listsVisible = true,
+                    scale = scale,
+                    onToggle = { sourceId, enabled -> toggled = sourceId to enabled },
+                )
+            }
+        }
+        rule.waitForIdle()
+
+        rule.onNodeWithTag(SETTINGS_PAGE_M3U_LISTS_TAG).assertExists()
+        rule.onNodeWithTag("settings_m3u_row_s2").assertIsDisplayed()
+        rule.onNodeWithTag("settings_m3u_title_s2").assertTextEquals("M1 · lista")
+
+        // L'interruttore spegne la lista: la riga resta, l'etichetta pure.
+        rule.onNodeWithTag("settings_m3u_toggle_s2").performSemanticsAction(SemanticsActions.OnClick)
         rule.waitForIdle()
 
         assertEquals("s2" to false, toggled)
@@ -204,12 +237,13 @@ class SourcesAndPlaylistTest {
     }
 
     @Test
-    fun `il riquadro Sorgenti mostra tutte le liste`() {
+    fun `la riga unica dice quante liste ci sono e quante sono attive`() {
         val lists = (1..6).map { index ->
             Source(
                 id = "s$index",
                 type = SourceType.M3U,
                 label = "M$index",
+                enabled = index <= 4,
                 m3uUrl = "http://server.esempio:8080/lista$index.m3u8",
             )
         }
@@ -229,11 +263,37 @@ class SourcesAndPlaylistTest {
 
         rule.onNodeWithTag(SETTINGS_SOURCES_SECTION_TAG).assertExists()
         rule.onNodeWithTag("settings_source_title_S1").assertTextEquals("Account Xtream")
-        lists.forEach { source ->
-            rule.onNodeWithTag("settings_source_title_${source.label}")
-                .assertTextEquals("lista${source.label.removePrefix("M")}")
-            rule.onNodeWithTag("settings_source_toggle_${source.label}").assertExists()
+        // Sei liste, una riga: il conteggio sta nella riga di gruppo.
+        rule.onNodeWithTag("settings_sources_m3u_status").assertTextEquals("4 attive su 6 liste")
+        rule.onNodeWithTag("settings_source_row_M1").assertDoesNotExist()
+    }
+
+    @Test
+    fun `la pagina delle liste elenca tutte le liste in ordine di posizione`() {
+        val lists = (1..6).map { index ->
+            Source(
+                id = "s$index",
+                type = SourceType.M3U,
+                label = "M$index",
+                m3uUrl = "http://server.esempio:8080/lista$index.m3u8",
+            )
         }
+        rule.setContent {
+            FvpTheme {
+                M3uListsPage(
+                    sources = listOf(xtreamSource) + lists,
+                    listsVisible = true,
+                    scale = scale,
+                )
+            }
+        }
+        rule.waitForIdle()
+
+        lists.forEach { source ->
+            rule.onNodeWithTag("settings_m3u_title_${source.id}").assertExists()
+            rule.onNodeWithTag("settings_m3u_toggle_${source.id}").assertExists()
+        }
+        rule.onNodeWithTag("settings_m3u_title_s1").assertTextEquals("M1 · lista1")
     }
 }
 

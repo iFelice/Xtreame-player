@@ -43,6 +43,7 @@ import it.felixvision.tv.data.playback.LiveStreamFormat
 import it.felixvision.tv.player.ZappingSeconds
 import it.felixvision.tv.ui.access.AccessViewModel
 import it.felixvision.tv.ui.access.PairingPanel
+import it.felixvision.tv.data.sources.SourceType
 import it.felixvision.tv.data.sources.Sources
 import it.felixvision.tv.ui.components.FvpCheckboxButton
 import it.felixvision.tv.ui.components.FvpCompactButton
@@ -158,6 +159,12 @@ const val SETTINGS_SOURCES_SECTION_TAG = "settings_sources_section"
 /** Testo dell'interruttore di una sorgente. */
 const val SETTINGS_SOURCE_TOGGLE_LABEL = "Mostra"
 
+/** Riga unica delle liste M3U nella pagina Account. */
+const val SETTINGS_M3U_GROUP_TITLE = "Liste M3U"
+
+/** Pulsante che apre la pagina con l'elenco delle liste. */
+const val SETTINGS_M3U_OPEN_LABEL = "Apri"
+
 /** Riquadro dell'abbinamento da remoto dentro la pagina Account. */
 const val SETTINGS_PAIRING_SECTION_TAG = "settings_pairing_section"
 
@@ -242,6 +249,10 @@ internal fun SettingsAccountPage(
     onRenewCode: () -> Unit = {},
     entryFocusRequester: FocusRequester? = null,
     onSourceToggle: (String, Boolean) -> Unit = { _, _ -> },
+    /** Interruttore generale della riga "Liste M3U". */
+    onListsVisibleChange: (Boolean) -> Unit = {},
+    /** Apre la pagina "Liste M3U" (elenco, "Mostra" per lista, riordino). */
+    onOpenLists: () -> Unit = {},
 ) {
     val localExitFocus = remember { FocusRequester() }
     val exitFocus = entryFocusRequester ?: localExitFocus
@@ -299,10 +310,14 @@ internal fun SettingsAccountPage(
             )
         }
 
-        // Sorgenti: una riga per sorgente con l'interruttore "Mostra". La riga
-        // M3U è etichettata ("Lista M3U · S2") e non mostra mai l'indirizzo
-        // della lista. L'etichetta S1/S2/S3 è quella assegnata alla creazione.
+        // Sorgenti: una riga per ogni account Xtream e una sola riga per le
+        // liste M3U. Le liste possono essere cento: l'elenco, l'interruttore di
+        // ognuna e il riordino stanno nella pagina "Liste M3U", aperta con
+        // "Apri". Nessun indirizzo di lista compare mai qui.
         if (state.sources.isNotEmpty()) {
+            val xtreamNames = Sources.displayNames(state.sources)
+            val xtreamSources = state.sources.filter { it.type == SourceType.XTREAM }
+            val lists = state.sources.filter { it.type == SourceType.M3U }
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -323,9 +338,8 @@ internal fun SettingsAccountPage(
                     color = FvpColors.TextSecondary,
                     fontSize = scale.settingsRowText,
                 )
-                // Nome visibile: "Account Xtream" o il nome del file della lista.
-                val sourceNames = Sources.displayNames(state.sources)
-                state.sources.forEach { source ->
+                // Account Xtream: nome visibile e interruttore "Mostra".
+                xtreamSources.forEach { source ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -335,7 +349,7 @@ internal fun SettingsAccountPage(
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(scale.dp(2f))) {
                             Text(
-                                text = sourceNames[source.id] ?: Sources.typeName(source.type),
+                                text = xtreamNames[source.id] ?: Sources.typeName(source.type),
                                 color = FvpColors.TextPrimary,
                                 fontSize = scale.settingsRowText,
                                 modifier = Modifier.testTag("settings_source_title_${source.label}"),
@@ -353,6 +367,51 @@ internal fun SettingsAccountPage(
                             scale = scale,
                             modifier = Modifier.testTag("settings_source_toggle_${source.label}"),
                         )
+                    }
+                }
+                // Liste M3U: una riga sola, con il "Mostra" di tutte e "Apri".
+                if (lists.isNotEmpty()) {
+                    val activeLists = lists.count { it.enabled }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("settings_sources_m3u_row"),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(scale.dp(2f))) {
+                            Text(
+                                text = SETTINGS_M3U_GROUP_TITLE,
+                                color = FvpColors.TextPrimary,
+                                fontSize = scale.settingsRowText,
+                                modifier = Modifier.testTag("settings_sources_m3u_title"),
+                            )
+                            Text(
+                                text = if (state.listsVisible) {
+                                    "$activeLists attive su ${lists.size} liste"
+                                } else {
+                                    "Nascoste dal catalogo · $activeLists attive su ${lists.size} liste"
+                                },
+                                color = FvpColors.TextSecondary,
+                                fontSize = scale.settingsRowText,
+                                modifier = Modifier.testTag("settings_sources_m3u_status"),
+                            )
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(scale.dp(8f))) {
+                            FvpCheckboxButton(
+                                text = SETTINGS_SOURCE_TOGGLE_LABEL,
+                                checked = state.listsVisible,
+                                onCheckedChange = { visible -> onListsVisibleChange(visible) },
+                                scale = scale,
+                                modifier = Modifier.testTag("settings_sources_m3u_toggle"),
+                            )
+                            FvpSecondaryButton(
+                                text = SETTINGS_M3U_OPEN_LABEL,
+                                onClick = onOpenLists,
+                                scale = scale,
+                                modifier = Modifier.testTag("settings_sources_m3u_open"),
+                            )
+                        }
                     }
                 }
                 state.m3uErrors.forEach { row ->

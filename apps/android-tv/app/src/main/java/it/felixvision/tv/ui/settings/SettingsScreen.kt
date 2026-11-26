@@ -127,6 +127,9 @@ fun SettingsScreen(
     // Formato del flusso Live: stessa osservazione, per la pagina Player.
     val liveStreamFormat by viewModel.liveStreamFormat.collectAsState()
     var showVpnSetup by remember { mutableStateOf(false) }
+    // Pagina annidata dentro la card Account: l'elenco delle liste M3U, con il
+    // "Mostra" di ognuna e il riordino. Indietro torna ad Account.
+    var showM3uLists by remember { mutableStateOf(false) }
     // Backup: la pagina apre la schermata di esportazione o di importazione.
     var backupFlow by remember { mutableStateOf<BackupFlow?>(null) }
     val vpnConfigureFocus = remember { FocusRequester() }
@@ -224,16 +227,33 @@ fun SettingsScreen(
         downloadInProgress = state.isDownloadingUpdate,
         vpnSetupOpen = showVpnSetup,
         onCloseVpnSetup = { showVpnSetup = false },
+        listsPageOpen = showM3uLists,
+        onCloseLists = { showM3uLists = false },
         accountPage = { pageModifier, entryFocus ->
-            SettingsAccountPage(
-                state = state,
-                scale = scale,
-                modifier = pageModifier,
-                onExitClicked = { viewModel.onExitClicked() },
-                onRenewCode = { viewModel.onRenewCode() },
-                entryFocusRequester = entryFocus,
-                onSourceToggle = { sourceId, enabled -> viewModel.setSourceEnabled(sourceId, enabled) },
-            )
+            if (showM3uLists) {
+                M3uListsPage(
+                    sources = state.sources,
+                    listsVisible = state.listsVisible,
+                    scale = scale,
+                    modifier = pageModifier,
+                    onBack = { showM3uLists = false },
+                    onToggle = { sourceId, enabled -> viewModel.setSourceEnabled(sourceId, enabled) },
+                    onMoveUp = { sourceId -> viewModel.moveSource(sourceId, up = true) },
+                    onMoveDown = { sourceId -> viewModel.moveSource(sourceId, up = false) },
+                )
+            } else {
+                SettingsAccountPage(
+                    state = state,
+                    scale = scale,
+                    modifier = pageModifier,
+                    onExitClicked = { viewModel.onExitClicked() },
+                    onRenewCode = { viewModel.onRenewCode() },
+                    entryFocusRequester = entryFocus,
+                    onSourceToggle = { sourceId, enabled -> viewModel.setSourceEnabled(sourceId, enabled) },
+                    onListsVisibleChange = { visible -> viewModel.setM3uListsVisible(visible) },
+                    onOpenLists = { showM3uLists = true },
+                )
+            }
         },
         // La pagina Aspetto dà il focus alla dimensione attiva con i propri
         // FocusRequester: non le serve quello della navigazione.
@@ -452,6 +472,10 @@ internal fun SettingsNavigation(
     downloadInProgress: Boolean = false,
     vpnSetupOpen: Boolean = false,
     onCloseVpnSetup: () -> Unit = {},
+    /** La pagina "Liste M3U" (dentro la card Account) è aperta: Indietro torna ad Account. */
+    listsPageOpen: Boolean = false,
+    /** Chiude la pagina "Liste M3U" quando si esce dalla card Account. */
+    onCloseLists: () -> Unit = {},
     backupFlowOpen: Boolean = false,
     onCloseBackupFlow: () -> Unit = {},
     accountPage: @Composable (Modifier, FocusRequester?) -> Unit = { _, _ -> },
@@ -488,6 +512,7 @@ internal fun SettingsNavigation(
     // l'eventuale schermata di esportazione o importazione del backup.
     val closePage: () -> Unit = {
         onCloseVpnSetup()
+        onCloseLists()
         onCloseBackupFlow()
         openCard = null
     }
@@ -506,6 +531,7 @@ internal fun SettingsNavigation(
     // La riserva per il dispositivo vero è il BackHandler qui sotto.
     val pageHandlesBack = openCard != SettingsCard.Protected &&
         !(openCard == SettingsCard.Vpn && vpnSetupOpen) &&
+        !(openCard == SettingsCard.Account && listsPageOpen) &&
         !(openCard == SettingsCard.Backup && backupFlowOpen) &&
         !downloadInProgress
 

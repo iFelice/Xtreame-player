@@ -34,8 +34,10 @@ import it.felixvision.tv.data.playback.PlaybackActivityTracker
 import it.felixvision.tv.data.progress.ProgressStore
 import it.felixvision.tv.data.sources.EncryptedSourceStore
 import it.felixvision.tv.data.m3u.M3uIndexCache
+import it.felixvision.tv.data.sources.M3uListsVisibility
 import it.felixvision.tv.data.sources.M3uSourceService
 import it.felixvision.tv.data.sources.M3uUrlRegistry
+import it.felixvision.tv.data.sources.SharedPreferencesM3uListsVisibility
 import it.felixvision.tv.data.sources.SourceRepository
 import it.felixvision.tv.data.sources.SourceStore
 import it.felixvision.tv.data.sources.Sources
@@ -304,9 +306,17 @@ class AppContainer(
         )
     }
 
+    /**
+     * Interruttore generale della riga "Liste M3U": spegne tutte le liste in una
+     * volta senza toccare le scelte fatte lista per lista.
+     */
+    val m3uListsVisibility: M3uListsVisibility by lazy {
+        SharedPreferencesM3uListsVisibility(context = context)
+    }
+
     /** Interruttore "Mostra" delle sorgenti, con la revisione per la UI. */
     val sourceRepository: SourceRepository by lazy {
-        SourceRepository(store = sourceStore)
+        SourceRepository(store = sourceStore, listsVisibility = m3uListsVisibility)
     }
 
     /**
