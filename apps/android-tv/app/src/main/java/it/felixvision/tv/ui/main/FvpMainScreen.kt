@@ -58,30 +58,27 @@ import it.felixvision.tv.data.catalog.Episode
 import it.felixvision.tv.data.catalog.LiveStream
 import it.felixvision.tv.data.catalog.VodStream
 import it.felixvision.tv.data.channels.MyChannel
-import it.felixvision.tv.data.log.IssueLog
-import it.felixvision.tv.data.channels.MyChannel
-import it.felixvision.tv.data.log.IssueLogBulk
-import it.felixvision.tv.data.channels.MyChannel
-import it.felixvision.tv.data.log.IssueLogBulkResult
-import it.felixvision.tv.data.channels.MyChannel
-import it.felixvision.tv.data.log.IssueLogPlayback
-import it.felixvision.tv.data.channels.MyChannel
-import it.felixvision.tv.data.log.IssueLogSelection
-import it.felixvision.tv.data.channels.MyChannel
-import it.felixvision.tv.data.log.IssueLogs
+import it.felixvision.tv.data.channels.MyChannelBulk
+import it.felixvision.tv.data.channels.MyChannelBulkResult
+import it.felixvision.tv.data.channels.MyChannelPlayback
+import it.felixvision.tv.data.channels.MyChannelSelection
+import it.felixvision.tv.data.channels.MyChannels
 import it.felixvision.tv.data.channels.myChannelPickerGroups
 import it.felixvision.tv.data.channels.myChannelRemovalGroups
 import it.felixvision.tv.data.channels.toMyChannel
 import it.felixvision.tv.data.continuewatching.ContinueEntry
+import it.felixvision.tv.data.continuewatching.PlayableContinueEntries
 import it.felixvision.tv.data.favorites.FavoriteItem
+import it.felixvision.tv.data.log.IssueLog
 import it.felixvision.tv.data.playback.ChannelListOrigin
 import it.felixvision.tv.data.playback.ChannelNumberInput
 import it.felixvision.tv.data.playback.SeriesPlayback
 import it.felixvision.tv.data.playback.buildEpisodeQueue
 import it.felixvision.tv.data.playback.indexOfEpisode
 import it.felixvision.tv.data.progress.ProgressKeys
-import it.felixvision.tv.data.sources.Source
 import it.felixvision.tv.data.progress.WatchProgress
+import it.felixvision.tv.data.sources.Source
+import it.felixvision.tv.data.sources.SourceType
 import it.felixvision.tv.data.update.UpdateCheckState
 import it.felixvision.tv.ui.access.AccessViewModel
 import it.felixvision.tv.ui.catalog.CatalogViewModel
@@ -125,6 +122,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import it.felixvision.tv.ui.components.fvpGlassPanel
+import it.felixvision.tv.data.continuewatching.PlayableContinueEntries
 
 /**
  * Vero quando gli stati **globali** dell'area contenuti (nessuna sorgente
@@ -474,7 +472,18 @@ fun FvpMainScreen(
     val visibleRecentFilms = visible.recentFilms
     val visibleRecentSeries = visible.recentSeries
     val visibleFavorites = visible.favorites
-    val visibleContinueEntries = visible.continueEntries
+    // "Continua a guardare" mostra solo ciò che il catalogo mostra: le voci di
+    // una lista spenta o sparita dall'indice non compaiono (la card sarebbe una
+    // porta chiusa). I dati restano archiviati: se la lista torna, tornano.
+    val enabledSourceIds = remember(catalogSources, sourcesRevision) {
+        val listsVisible = container.sourceRepository.listsVisible()
+        catalogSources
+            .filter { source -> source.enabled && (source.type != SourceType.M3U || listsVisible) }
+            .mapTo(HashSet()) { source -> source.id }
+    }
+    val visibleContinueEntries = remember(visible.continueEntries, enabledSourceIds) {
+        PlayableContinueEntries.playable(visible.continueEntries, enabledSourceIds)
+    }
     val visibleMyChannels = visible.myChannels
     val visibleMyChannelIds = remember(visibleMyChannels) { visibleMyChannels.map { it.streamId }.toSet() }
 

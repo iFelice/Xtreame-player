@@ -8,6 +8,8 @@ import it.felixvision.tv.data.continuewatching.ContinueEntry
 import it.felixvision.tv.data.favorites.FavoriteItem
 import it.felixvision.tv.data.protection.ProtectedContentData
 import it.felixvision.tv.data.protection.ProtectedFilter
+import it.felixvision.tv.data.sources.SourceIds
+import it.felixvision.tv.data.sources.AggregatedCatalog
 
 /**
  * Tutte le liste che la schermata principale mostra, già filtrate in base alla
@@ -101,5 +103,18 @@ fun protectedFilmCatalog(
 ): Catalog? {
     if (catalog == null) return null
     if (unlocked || data == null) return catalog
-    return ProtectedFilter.filterCatalog(catalog, data)
+    // Nella vista unita delle liste M3U le categorie si chiamano con
+    // l'identificativo fuso (`m3u_all:…`), ma i contenuti protetti si scelgono
+    // per lista: la regola arriva dalle categorie delle singole liste, che
+    // stanno fra quelle della voce, e una categoria fusa rimasta senza film
+    // sparisce invece di restare vuota.
+    val emptyCategorySourceId = if (catalog.vodCategories.any { category ->
+            SourceIds.sourceOf(category.categoryId) == AggregatedCatalog.M3U_MERGED_ID
+        }
+    ) {
+        AggregatedCatalog.M3U_MERGED_ID
+    } else {
+        null
+    }
+    return ProtectedFilter.filterCatalog(catalog, data, emptyCategorySourceId)
 }

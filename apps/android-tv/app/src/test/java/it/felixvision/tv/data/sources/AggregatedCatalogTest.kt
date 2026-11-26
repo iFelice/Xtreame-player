@@ -170,6 +170,57 @@ class AggregatedCatalogTest {
         assertEquals(listOf("Azione"), merged.vodCategories.map { it.categoryName })
     }
 
+    /**
+     * Nella vista unita la voce ha l'identificativo della categoria fusa, ma
+     * ricorda anche la categoria della **sua** lista: è quella che si nasconde
+     * dai Contenuti protetti, che si scelgono per lista e non per vista.
+     */
+    @Test
+    fun `le voci unite ricordano anche la categoria della loro lista`() {
+        val first = Source(id = "s2", type = SourceType.M3U, label = "M1")
+        val second = Source(id = "s3", type = SourceType.M3U, label = "M2")
+        val merged = AggregatedCatalog.mergeM3u(
+            listOf(
+                CatalogPart(
+                    first,
+                    M3uLibrary.buildCatalog(
+                        sourceId = first.id,
+                        entries = listOf(
+                            M3uEntry(title = "Primo", url = "http://server.esempio/1.mp4", group = "Azione"),
+                        ),
+                    ),
+                ),
+                CatalogPart(
+                    second,
+                    M3uLibrary.buildCatalog(
+                        sourceId = second.id,
+                        entries = listOf(
+                            M3uEntry(title = "Secondo", url = "http://server.esempio/2.mp4", group = "Azione"),
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+        val mergedCategoryId = merged.vodCategories.single().categoryId
+        val firstFilm = merged.vodStreams.first { it.name == "Primo" }
+        val secondFilm = merged.vodStreams.first { it.name == "Secondo" }
+
+        // L'identificativo principale è quello fuso, uguale per entrambe le liste.
+        assertEquals(mergedCategoryId, firstFilm.categoryId)
+        assertEquals(mergedCategoryId, secondFilm.categoryId)
+        assertEquals(AggregatedCatalog.M3U_MERGED_ID, SourceIds.sourceOf(mergedCategoryId.orEmpty()))
+        // Fra le altre categorie resta quella della lista di appartenenza.
+        assertEquals(
+            listOf("s2:m3u_cat_0"),
+            firstFilm.categoryIds.filter { SourceIds.sourceOf(it) == "s2" },
+        )
+        assertEquals(
+            listOf("s3:m3u_cat_0"),
+            secondFilm.categoryIds.filter { SourceIds.sourceOf(it) == "s3" },
+        )
+    }
+
     @Test
     fun `identificativi aggregati`() {
         assertEquals("s2:abc", SourceIds.scoped("s2", "abc"))
