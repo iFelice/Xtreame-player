@@ -39,7 +39,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.tv.material3.Text
 import it.felixvision.tv.data.images.CacheCleanup
+import it.felixvision.tv.data.log.IssueEntry
 import it.felixvision.tv.data.log.IssueLog
+import it.felixvision.tv.data.pairing.PairingPanelState
 import it.felixvision.tv.data.playback.LiveStreamFormat
 import it.felixvision.tv.player.ZappingSeconds
 import it.felixvision.tv.ui.access.AccessViewModel

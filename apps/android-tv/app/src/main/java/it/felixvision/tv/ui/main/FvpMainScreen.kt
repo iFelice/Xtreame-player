@@ -122,7 +122,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import it.felixvision.tv.ui.components.fvpGlassPanel
-import it.felixvision.tv.data.continuewatching.PlayableContinueEntries
 
 /**
  * Vero quando gli stati **globali** dell'area contenuti (nessuna sorgente
