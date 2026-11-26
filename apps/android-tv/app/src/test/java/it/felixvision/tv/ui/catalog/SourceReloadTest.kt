@@ -1,4 +1,4 @@
-package it.felixvision.tv.data.catalog
+package it.felixvision.tv.ui.catalog
 
 import org.junit.Assert.assertEquals
 import org.junit.Test
