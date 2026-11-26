@@ -445,6 +445,18 @@ vengono filtrati anche per le liste, perché il filtro lavora sul catalogo già
 unito (identificativi compresi). Non ci sono liste nascoste separate per
 sorgente: il PIN e l'elenco dei contenuti nascosti restano quelli dell'account.
 
+Nella vista **Film › Liste M3U** le liste stanno in un solo catalogo con le
+categorie omonime fuse, quindi un film ha due identificativi di categoria:
+quello della categoria fusa (`m3u_all:…`, che si vede in Film) e quello della
+categoria della **sua** lista (`s2:m3u_cat_…`, quello su cui si sceglie nei
+Contenuti protetti). La voce porta tutti e due: nascondere una categoria toglie
+il film sia da Film sia da Preferiti, Cerca e Continua a guardare, senza
+distinguere da dove passa la richiesta. Se in una categoria fusa non resta
+nessun film visibile (tutti protetti, o tutte le liste che la riempivano
+spente) la categoria sparisce dalla colonna invece di restare vuota; il
+catalogo dell'account non cambia, lì le categorie hanno già il loro
+identificativo.
+
 ### Traffico in chiaro
 
 `res/xml/network_security_config.xml` consente esplicitamente il traffico HTTP: molti
@@ -637,7 +649,11 @@ server Xtream raggiunti con indirizzo privato non risponderebbero.
   senza URL) e la coda parte dall'episodio salvato. Pressione lunga: "Apri scheda" oppure
   "Rimuovi da Continua a guardare"; la rimozione nasconde la voce finché il contenuto non
   viene riprodotto e non modifica i preferiti. Al ritorno dal player il focus torna sulla
-  voce (o passa alla prima card di Novità se la voce è uscita).
+  voce (o passa alla prima card di Novità se la voce è uscita). Nella riga compaiono solo le
+  voci **riproducibili adesso**: se la lista è spenta, uscita dall'indice o nascosta
+  dall'interruttore generale, la sua card non compare (con l'indirizzo diretto il player non
+  avrebbe potuto avviare niente). I dati restano archiviati: riaccendendo la lista la card
+  torna con il suo punto di ripresa. Le voci dell'account Xtream restano sempre.
 - **Sezione Cerca**: campo in alto con la tastiera di sistema del TV (dettatura vocale
   se il TV la offre) e focus sul campo all'ingresso; freccia giù porta ai risultati. La
   ricerca è locale sul catalogo in memoria, senza richieste al server: da 2 caratteri,
@@ -798,7 +814,8 @@ simulato e implementazioni finte per cifrario e preferenze:
 | `PlayerVolumeKeysTest` | Su/Giù a volume solo con pannello aperto e focus sul volume, chiusura del pannello appena il focus lascia il volume |
 | `SectionSourceSelectionTest`, `FilmSourcePickerTest` | voci della scelta della sorgente solo per le sorgenti con film, apertura sull'ultima usata, ripiego sulla prima se la ricordata non c'è più, riga "Cambia Sorgente" solo con due sorgenti, finestra di scelta con spunta sull'attiva, testo della sorgente non focusabile, nessun badge di sorgente sulle card |
 | `SourceRepositoryCleanupTest` | righe orfane eliminate solo senza dati utente, righe con dati utente conservate e nascoste |
-| `AggregatedCatalogTest` | catalogo unito senza etichette, categorie omonime delle liste M3U fuse in una, voci in ordine di lista e di file, provenienza negli identificativi |
+| `AggregatedCatalogTest` | catalogo unito senza etichette, categorie omonime delle liste M3U fuse in una, voci in ordine di lista e di file, provenienza negli identificativi, categoria della lista conservata accanto a quella fusa |
+| `M3uProtectedContentTest` | contenuti protetti delle liste M3U in Film: categoria nascosta di una lista che toglie i suoi film anche dalla vista unita, categoria fusa rimasta senza film che sparisce, comportamento invariato senza la richiesta esplicita, film nascosto singolarmente, film senza categoria che resta visibile |
 | `CatalogModelsTest` | JSON reali tipici con stream_id numerico/testuale, added testuale, campi null, ordine Novità |
 | `CatalogClientSequentialTest` | nessuna richiesta concorrente, errore interrompe sequenza senza retry |
 | `CatalogCacheTest` | lettura all'avvio, regola 24h, separazione per server+utente, clear su Esci |
@@ -825,6 +842,7 @@ simulato e implementazioni finte per cifrario e preferenze:
 | `SettingsCatalogProgressDialogTest` | finestra di avanzamento del catalogo con barra per ogni sezione Live/Film/Serie e stati con totale noto, senza totale, in elaborazione, completato ed errore (Robolectric, un solo `setContent` per test) |
 | `CatalogSearchTest` | normalizzazione (maiuscole, accenti, spazi), prefisso prima di contiene poi alfabetico, limite 50 per riga, soglia 2 caratteri, catalogo assente |
 | `ContinueWatchingRulesTest` | inserimento, ordine per ultimo aggiornamento, soglia 30 s, rimozione del film al 90%, passaggio all'episodio successivo, rimozione all'ultimo episodio, nascondi/ricompari, limite 30, archivio vuoto e voci incomplete |
+| `PlayableContinueEntriesTest` | riga Continua a guardare delle liste: voci di lista accesa che restano, lista spenta e lista sparita dall'indice che non compaiono, voce dell'account Xtream sempre presente, ordine dell'archivio conservato, serie filtrata con la sua lista, archivio vuoto |
 | `ContinueWatchingStoreTest` | archivio DataStore vuoto, film salvato e riletto, nessuna scrittura sotto 30 s, rimozione al 90%, avanzamento al prossimo episodio, rimozione all'ultimo episodio, nascosta e di nuovo visibile, separazione per account, "Segna come visto" |
 | `DrawerSectionsOrderTest` | ordine delle otto voci del menu, etichette delle nuove voci, icone distinte (senza simulazione D-pad) |
 | `FocusMarqueeTextTest` | titoli con ellissi e fermi senza focus, marquee su una sola riga, nessuno scorrimento su più righe (Robolectric, senza D-pad) |
