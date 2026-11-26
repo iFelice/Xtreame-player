@@ -76,7 +76,7 @@ class M3uProtectedContentTest {
         // Il film della lista nascosta non c'è più; quello dell'altra lista resta.
         assertEquals(listOf("Azione due", "Commedia uno"), filtered.vodStreams.map { it.name }.sorted())
         // La categoria fusa "Azione" resta comunque: contiene un film visibile.
-        assertEquals(listOf("Azione", "Commedia"), filtered.vodCategories.map { it.categoryName }.sorted())
+        assertEquals(listOf("Azione", "Commedia"), filtered.vodCategories.mapNotNull { it.categoryName }.sorted())
     }
 
     @Test
@@ -118,7 +118,7 @@ class M3uProtectedContentTest {
 
         // Comportamento di prima per chi non lo chiede (per esempio il catalogo
         // dell'account, dove le categorie hanno già il loro identificativo).
-        assertEquals(listOf("Azione", "Commedia"), filtered.vodCategories.map { it.categoryName }.sorted())
+        assertEquals(listOf("Azione", "Commedia"), filtered.vodCategories.mapNotNull { it.categoryName }.sorted())
     }
 
     @Test
@@ -145,7 +145,7 @@ class M3uProtectedContentTest {
         assertTrue(filtered.vodStreams.none { it.streamId == hiddenFilm.streamId })
         assertEquals(listOf("Azione uno", "Commedia uno"), filtered.vodStreams.map { it.name }.sorted())
         // La categoria "Azione" resta: c'è ancora il film della prima lista.
-        assertEquals(listOf("Azione", "Commedia"), filtered.vodCategories.map { it.categoryName }.sorted())
+        assertEquals(listOf("Azione", "Commedia"), filtered.vodCategories.mapNotNull { it.categoryName }.sorted())
     }
 
     @Test
