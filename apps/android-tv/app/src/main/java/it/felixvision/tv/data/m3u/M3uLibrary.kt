@@ -119,17 +119,28 @@ object M3uLibrary {
      * (`s2:<hash>` → indirizzo). Serve al player, che per le voci M3U riproduce
      * l'indirizzo così com'è, senza costruirlo come per Xtream.
      */
-    fun urlsById(entries: List<M3uEntry>, sourceId: String): Map<String, String> {
-        val urls = LinkedHashMap<String, String>(entries.size)
+    fun urlsById(entries: List<M3uEntry>, sourceId: String): Map<String, String> =
+        targetsById(entries, sourceId).mapValues { (_, target) -> target.url }
+
+    /**
+     * Indirizzo **e header** di ogni voce, per identificativo aggregato. Gli
+     * header sono quelli che la lista chiede con `#EXTVLCOPT` (User-Agent e
+     * Referer): senza, molti server rispondono 403 e la voce non parte.
+     */
+    fun targetsById(entries: List<M3uEntry>, sourceId: String): Map<String, M3uPlaybackTarget> {
+        val targets = LinkedHashMap<String, M3uPlaybackTarget>(entries.size)
         val used = HashMap<String, Int>()
         for (entry in entries) {
             val plainId = stableId(entry)
             val occurrence = (used[plainId] ?: 0) + 1
             used[plainId] = occurrence
             val localId = if (occurrence > 1) "$plainId-$occurrence" else plainId
-            urls[SourceIds.scoped(sourceId, localId)] = entry.url
+            targets[SourceIds.scoped(sourceId, localId)] = M3uPlaybackTarget(
+                url = entry.url,
+                headers = entry.requestHeaders,
+            )
         }
-        return urls
+        return targets
     }
 
     /**

@@ -459,6 +459,13 @@ con la coda della categoria: Successivo/Precedente scorrono le voci in ordine di
 file, a fine video si passa da solo alla successiva e dopo l'ultima si torna al
 catalogo. La pressione lunga di OK aggiunge o toglie la voce dai preferiti.
 
+Ogni voce delle liste può portare le direttive `#EXTVLCOPT` che i player di
+riferimento usano per farsi riconoscere dal server (`http-user-agent`,
+`http-referrer`): si leggono e si mandano come header HTTP della voce, senza
+niente da configurare. Molte voci restano così `mp4` nell'indirizzo ma sono
+playlist HLS servite dopo un redirect: in quel caso il player riapre la voce
+dichiarandola HLS, una volta sola.
+
 Le voci delle liste seguono gli **stessi contenuti protetti** dell'account
 Xtream: le categorie e i titoli nascosti in Impostazioni › Contenuti protetti
 vengono filtrati anche per le liste, perché il filtro lavora sul catalogo già
@@ -520,9 +527,24 @@ server Xtream raggiunti con indirizzo privato non risponderebbero.
   `org.jellyfin.media3:media3-ffmpeg-decoder:1.9.0+1`: decodifica di sistema preferita,
   FFmpeg solo come ripiego audio per AC3/EAC3/DTS (`EXTENSION_RENDERER_MODE_ON`).
   Rete in `PlayerNetworkConfig`: connessione 20 s, lettura 30 s, redirect anche tra http
-  e https, User-Agent di sistema; errori di rete, timeout e risposte HTTP 500/502/503/504
-  ritentati fino a 3 volte (dopo 1, 2 e 4 s), nessun nuovo tentativo per HTTP 401/403/404,
-  per gli altri codici HTTP e per gli altri errori.
+  e https, User-Agent di sistema (o quello che chiede la lista, vedi sotto); errori di
+  rete, timeout e risposte HTTP 500/502/503/504 ritentati fino a 3 volte (dopo 1, 2 e 4 s),
+  nessun nuovo tentativo per HTTP 401/403/404, per gli altri codici HTTP e per gli altri
+  errori.
+- **Header della lista (`#EXTVLCOPT`)**: le voci M3U possono dichiarare
+  `http-user-agent` e `http-referrer` (o `http-referer`) prima dell'indirizzo. Il parser
+  li legge (`M3uEntry.userAgent` / `referer`), viaggiano fino al player con l'indirizzo
+  (`M3uPlaybackTarget`) e finiscono sulla richiesta HTTP dell'`ExoPlayer`
+  (`PlayerNetworkConfig.httpDataSourceFactory(headers)`): l'User-Agent sulla factory,
+  il Referer fra le proprietà predefinite, che Media3 riapplica a ogni richiesta —
+  redirect compresi. Senza, i server che filtrano per player rispondono 403 e la voce
+  non parte anche con l'indirizzo giusto.
+- **Contenuto che si rivela HLS**: capita che un `.mp4` (o un indirizzo senza estensione)
+  rimandi con un redirect a una playlist HLS con un percorso che non finisce in `.m3u8`.
+  Media3 sceglie la sorgente dall'indirizzo e sbaglia (`UnrecognizedInputFormat`), quindi
+  al primo errore di analisi il player riapre la stessa voce — alla stessa posizione —
+  dichiarando `MimeTypes.APPLICATION_M3U8`, **una volta sola** per indirizzo
+  (`MaskedHls`). Live escluso: lì il ripiego è lo scambio `.ts` ↔ `.m3u8`.
 - **URL** in `StreamUrls`: live `/live/{utente}/{password}/{id}.ts`, con `.m3u8` solo se
   l'account non ammette `ts` ma ammette `m3u8`; film `/movie/…`; episodi `/series/…`;
   estensione da `container_extension`, default `mp4`; credenziali codificate per il
@@ -848,6 +870,7 @@ simulato e implementazioni finte per cifrario e preferenze:
 | `LiveZappingTest`, `PlaybackFormattingTest` | zapping circolare, accelerazione 10/30/60 s, tempi `mm:ss` e `h:mm:ss` |
 | `LiveStallDetectorTest` | cane da guardia del Live con tempo simulato: 5 s con il buffer pronto ma fermo, 25 s in caricamento, azzeramento dopo un segnale o un cambio di stato, mai in pausa, mai senza player o a fine stream, soglie sotto il read timeout di rete |
 | `LiveAutoRestartTest` | tre riavvii silenziosi (immediati, immediati, 1 s) per gli errori di rete, **due riavvii dedicati** per 456/429 (immediato, poi 1,5 s) con budget separato, mai per le altre risposte HTTP o stream malformati, rigenerazione della sorgente dopo due riavvii consecutivi, azzeramento con un nuovo avvio |
+| `MaskedHlsTest` | contenuto che si rivela HLS: `.mp4` e indirizzi senza estensione da riprovare, playlist già dichiarata da lasciare stare, secondo tentativo mai ripetuto, errori di rete e HTTP esclusi, riconoscimento di `.m3u8` con parametri e maiuscole |
 | `PlayerLoadControlTest` | valori del buffer in `PlayerNetworkConfig` (50 s minimo e massimo, avvio 2,5 s, ripresa 5 s, tempo prima dei byte) e `DefaultLoadControl` che li usa davvero: nessun buffer all'indietro |
 | `PlayerLoadErrorPolicyTest` | 3 tentativi 1/2/4 s per film, episodi e manifest; **zero** tentativi interni sul Live progressivo (`.ts`), riconosciuto dall'URL, così l'errore arriva subito e la sorgente si ricostruisce da zero |
 | `PlaybackErrorsTest` | ogni risposta HTTP di errore riconosciuta come tale (quindi niente scambio di formato), errori di rete distinti, codici di accesso negato (401/403/409/429/456) e messaggi senza indirizzi né credenziali |

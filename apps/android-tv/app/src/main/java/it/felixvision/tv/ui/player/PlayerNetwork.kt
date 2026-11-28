@@ -143,13 +143,27 @@ object PlayerNetworkConfig {
     const val LOAD_CONTROL_REBUFFER_BUFFER_MILLIS: Int = 5_000
     const val LOAD_CONTROL_PRIORITIZE_TIME: Boolean = true
 
-    /** Sorgente HTTP del player con i valori qui sopra. */
-    fun httpDataSourceFactory(): DefaultHttpDataSource.Factory =
-        DefaultHttpDataSource.Factory()
-            .setUserAgent(USER_AGENT)
+    /**
+     * Sorgente HTTP del player con i valori qui sopra, più gli header che la
+     * lista chiede per la voce in onda (`#EXTVLCOPT`: User-Agent e Referer).
+     *
+     * L'User-Agent va su [DefaultHttpDataSource.Factory.setUserAgent] (così vale
+     * anche per i nuovi tentativi della sorgente); il resto su
+     * [DefaultHttpDataSource.Factory.setDefaultRequestProperties], che Media3
+     * riapplica a **ogni** richiesta, redirect compresi. Senza header il
+     * comportamento è quello di sempre.
+     */
+    fun httpDataSourceFactory(headers: Map<String, String> = emptyMap()): DefaultHttpDataSource.Factory {
+        val userAgentHeader = headers.entries
+            .firstOrNull { (name, _) -> name.equals("User-Agent", ignoreCase = true) }
+        val otherHeaders = headers.filterKeys { name -> !name.equals("User-Agent", ignoreCase = true) }
+        return DefaultHttpDataSource.Factory()
+            .setUserAgent(userAgentHeader?.value ?: USER_AGENT)
             .setConnectTimeoutMs(CONNECT_TIMEOUT_MILLIS)
             .setReadTimeoutMs(READ_TIMEOUT_MILLIS)
             .setAllowCrossProtocolRedirects(ALLOW_CROSS_PROTOCOL_REDIRECTS)
+            .apply { if (otherHeaders.isNotEmpty()) setDefaultRequestProperties(otherHeaders) }
+    }
 
     /**
      * Fabbrica delle sorgenti del player: stessi estrattori di
@@ -157,8 +171,12 @@ object PlayerNetworkConfig {
      * la politica degli errori [PlayerLoadErrorPolicy]. [streamUrl] serve solo
      * ai log, sempre oscurato con [StreamUrls.redactStreamUrl].
      */
-    fun mediaSourceFactory(context: Context, streamUrl: String?): DefaultMediaSourceFactory =
-        DefaultMediaSourceFactory(DefaultDataSource.Factory(context, httpDataSourceFactory()))
+    fun mediaSourceFactory(
+        context: Context,
+        streamUrl: String?,
+        headers: Map<String, String> = emptyMap(),
+    ): DefaultMediaSourceFactory =
+        DefaultMediaSourceFactory(DefaultDataSource.Factory(context, httpDataSourceFactory(headers)))
             .setLoadErrorHandlingPolicy(
                 PlayerLoadErrorPolicy(
                     streamUrl = streamUrl,

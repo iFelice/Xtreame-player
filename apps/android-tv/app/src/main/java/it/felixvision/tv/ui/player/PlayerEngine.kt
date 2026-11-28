@@ -11,6 +11,7 @@ import androidx.compose.runtime.setValue
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
@@ -130,6 +131,12 @@ class PlayerEngine(
     private var replayProgram: EpgProgram? = null
     private var replayBaseMillis: Long = 0L
     private var replayDurationMillis: Long = 0L
+
+    /**
+     * Indirizzo già riaperto dichiarandolo HLS: serve a impedire il ciclo di
+     * riaperture quando il contenuto è davvero illeggibile.
+     */
+    private var forcedHlsUrl: String? = null
 
     private var started = false
     private var exited = false
@@ -615,13 +622,23 @@ class PlayerEngine(
             return
         }
         AppLog.info("Player: apertura ${StreamUrls.redactStreamUrl(url)}")
+        // La riapertura come HLS vale per **quella** voce: cambiando indirizzo
+        // (canale, film, episodio) il tipo torna a deciderlo l'indirizzo.
+        if (forcedHlsUrl != null && forcedHlsUrl != url) forcedHlsUrl = null
 
         val renderersFactory = DefaultRenderersFactory(context)
             // La decodifica di sistema resta preferita; FFmpeg è il ripiego
             // per gli audio che il dispositivo non decodifica (AC3/EAC3/DTS).
             .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
         // Tempi di rete, redirect e nuovi tentativi: vedi PlayerNetworkConfig.
-        val mediaSourceFactory = PlayerNetworkConfig.mediaSourceFactory(context, streamUrl = url)
+        // Con gli header della lista (`#EXTVLCOPT`) il server riconosce la
+        // richiesta: senza, quelle voci rispondono 403.
+        val requestHeaders = currentRequestHeaders()
+        val mediaSourceFactory = PlayerNetworkConfig.mediaSourceFactory(
+            context = context,
+            streamUrl = url,
+            headers = requestHeaders,
+        )
         val newPlayer = ExoPlayer.Builder(context)
             .setRenderersFactory(renderersFactory)
             .setMediaSourceFactory(mediaSourceFactory)
@@ -636,8 +653,13 @@ class PlayerEngine(
         // un episodio che finisce deve arrivare a handlePlaybackEnded.
         newPlayer.repeatMode =
             if (isLiveSource && replayProgram == null) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
+        // Contenuto rivelatosi HLS dopo un primo errore di analisi: il tipo si
+        // dichiara, perché l'indirizzo (per esempio `.mp4` che rimanda a una
+        // playlist) non lo direbbe.
+        val forcedHls = url == forcedHlsUrl
         val mediaItem = MediaItem.Builder()
             .setUri(url)
+            .also { builder -> if (forcedHls) builder.setMimeType(MimeTypes.APPLICATION_M3U8) }
             .setMediaMetadata(MediaMetadata.Builder().setTitle(replayProgram?.title ?: titleForCurrent()).build())
             .build()
         // Volume del nostro player: curva percettiva sul livello salvato.
@@ -808,6 +830,17 @@ class PlayerEngine(
         val movieSource = movieSource ?: return null
         movieSource.directUrls[movie.streamId]?.let { return it }
         return movieSource.directUrl?.takeIf { movie.streamId == movieSource.stream.streamId }
+    }
+
+    /**
+     * Header HTTP che la lista chiede per la voce in onda (`#EXTVLCOPT`).
+     * Vuoto per l'account Xtream e per le voci che non dichiarano niente.
+     */
+    private fun currentRequestHeaders(): Map<String, String> {
+        val movieSource = movieSource ?: return emptyMap()
+        val movie = currentMovie() ?: return emptyMap()
+        movieSource.directHeadersById[movie.streamId]?.let { if (it.isNotEmpty()) return it }
+        return if (movie.streamId == movieSource.stream.streamId) movieSource.directHeaders else emptyMap()
     }
 
     /** Vero quando la riproduzione corrente è una coda della Lista M3U. */
@@ -1844,6 +1877,9 @@ class PlayerEngine(
         // non parte in MPEG-TS spesso parte in HLS e viceversa; il tentativo è
         // uno solo per errore e non consuma i riavvii automatici.
         if (swapLiveFormatOnError(error)) return
+        // Contenuto che l'indirizzo mascherava (`.mp4` che in realtà è una
+        // playlist HLS): si riapre dichiarando il tipo, una volta sola.
+        if (retryMaskedHlsOnError(error)) return
         // Canale live ancora senza rete dopo i nuovi tentativi: riavvio
         // silenzioso dello stesso canale, con attese crescenti, prima di
         // mostrare l'errore.
@@ -1940,6 +1976,30 @@ class PlayerEngine(
         // Il formato nuovo può cambiare la sorgente: il player va ricostruito.
         destroyPlayer()
         buildPlayer(startPositionMillis = 0L, autoPlay = true)
+        return true
+    }
+
+    /**
+     * Ripiego per i contenuti che si rivelano HLS: l'indirizzo (`.mp4`, o senza
+     * estensione) non lo diceva, Media3 ha scelto la sorgente sbagliata e il
+     * primo errore è di analisi. Si riapre la **stessa** voce — alla stessa
+     * posizione — dichiarando `MimeTypes.APPLICATION_M3U8`, una volta sola per
+     * indirizzo ([forcedHlsUrl]). Live escluso: lì il ripiego è lo scambio di
+     * formato di [swapLiveFormatOnError].
+     */
+    private fun retryMaskedHlsOnError(error: PlaybackException): Boolean {
+        if (isLiveSource) return false
+        val url = currentUrl() ?: return false
+        if (!MaskedHls.shouldRetry(error.errorCode, url, alreadyForced = url == forcedHlsUrl)) return false
+        val position = exoPlayer?.currentPosition ?: state.positionMillis
+        val wasPlaying = exoPlayer?.isPlaying ?: true
+        forcedHlsUrl = url
+        AppLog.info(
+            "Player: contenuto non riconosciuto (codice ${error.errorCode}), " +
+                "secondo tentativo come HLS su ${StreamUrls.redactStreamUrl(url)}",
+        )
+        destroyPlayer()
+        buildPlayer(startPositionMillis = position.coerceAtLeast(0L), autoPlay = wasPlaying)
         return true
     }
 

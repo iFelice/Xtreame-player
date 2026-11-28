@@ -36,7 +36,20 @@ sealed interface M3uParseResult {
  *
  * Tolleranze: BOM iniziale, righe CRLF o CR, UTF-8, virgolette negli attributi,
  * virgole nel titolo, righe vuote, righe di commento, righe sconosciute
- * (ignorate) e attributi mancanti. Gli indirizzi relativi (`/film.mp4`,
+ * (ignorate) e attributi mancanti.
+ *
+ * **`#EXTVLCOPT`**: le direttive `http-user-agent` e `http-referrer` (o
+ * `http-referer`) si leggono e si attaccano alla voce che segue, prima o dopo
+ * l'`#EXTINF`:
+ * ```
+ * #EXTINF:-1 group-title="Film",Film
+ * #EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) …
+ * #EXTVLCOPT:http-referrer=https://sito.esempio/video/809445/
+ * https://sito.esempio/809445.mp4
+ * ```
+ * Sono le direttive con cui VLC e Kodi mandano gli header che il server
+ * pretende; senza, quelle voci rispondono 403 anche con l'indirizzo giusto. Le
+ * altre `#EXTVLCOPT` restano ignorate. Gli indirizzi relativi (`/film.mp4`,
  * `film.mp4`, `file://…`) vengono scartati: si accettano solo `http` e `https`.
  *
  * Titolo di una voce: il testo dopo la virgola dell'`#EXTINF`; se manca, il
@@ -58,6 +71,14 @@ object M3uParser {
     private const val EXTINF = "#EXTINF:"
     private const val TARGET_DURATION = "#EXT-X-TARGETDURATION"
     private const val STREAM_INF = "#EXT-X-STREAM-INF"
+    private const val EXTVLCOPT = "#EXTVLCOPT:"
+
+    /** Direttive `#EXTVLCOPT` che diventano header HTTP della voce. */
+    private const val OPT_USER_AGENT = "http-user-agent"
+
+    /** VLC scrive `referrer`, molte liste `referer`: si accettano entrambe. */
+    private const val OPT_REFERRER = "http-referrer"
+    private const val OPT_REFERER = "http-referer"
 
     /** Nome dato a una voce rimasta senza titolo (nessun `tvg-name`). */
     const val UNTITLED = "Senza titolo"
@@ -88,11 +109,24 @@ object M3uParser {
 
         val entries = ArrayList<M3uEntry>()
         var pending: M3uEntry? = null
+        var pendingUserAgent: String? = null
+        var pendingReferer: String? = null
         var sawExtInf = false
 
         for (rawLine in normalized.lineSequence()) {
             val line = rawLine.trim()
             if (line.isEmpty()) continue
+            if (line.startsWith(EXTVLCOPT, ignoreCase = true)) {
+                // Direttiva della voce che segue: si accumula e si azzera
+                // quando la voce è completa (indirizzo letto).
+                val option = parseVlcOption(line.substring(EXTVLCOPT.length))
+                when (option.key) {
+                    OPT_USER_AGENT -> pendingUserAgent = option.value
+                    OPT_REFERRER, OPT_REFERER -> pendingReferer = option.value
+                    else -> Unit // altre direttive: ignorate
+                }
+                continue
+            }
             if (line.startsWith(EXTINF, ignoreCase = true)) {
                 sawExtInf = true
                 pending = parseExtInf(line.substring(EXTINF.length))
@@ -105,6 +139,8 @@ object M3uParser {
             if (!isAbsoluteHttpUrl(line)) {
                 // Indirizzo relativo o riga non riconosciuta: si scarta.
                 pending = null
+                pendingUserAgent = null
+                pendingReferer = null
                 continue
             }
             val base = pending ?: M3uEntry()
@@ -115,7 +151,11 @@ object M3uParser {
                 title = base.title
                     .ifBlank { base.tvgName.orEmpty().trim() }
                     .ifBlank { videoTitle(position) },
+                userAgent = base.userAgent ?: pendingUserAgent,
+                referer = base.referer ?: pendingReferer,
             )
+            pendingUserAgent = null
+            pendingReferer = null
         }
 
         if (!sawExtInf || entries.isEmpty()) {
@@ -143,6 +183,24 @@ object M3uParser {
             logo = attributes["tvg-logo"]?.trim()?.takeIf { it.isNotEmpty() },
         )
     }
+
+    /**
+     * Direttiva di una riga `#EXTVLCOPT`: `chiave=valore`, senza spazi ai bordi
+     * e con la chiave in minuscolo. Il valore può contenere `=` (un
+     * User-Agent non lo fa, un Referer con parametri sì): si spezza sulla prima
+     * `=`. Una riga senza `=` o con valore vuoto non è una direttiva utile e
+     * restituisce chiave vuota.
+     */
+    private fun parseVlcOption(payload: String): DirectiveOption {
+        val separator = payload.indexOf('=')
+        if (separator <= 0) return DirectiveOption("", null)
+        val key = payload.substring(0, separator).trim().lowercase()
+        val value = payload.substring(separator + 1).trim()
+        return DirectiveOption(key, value.takeIf { it.isNotEmpty() })
+    }
+
+    /** Direttiva `#EXTVLCOPT` letta: chiave in minuscolo e valore (o `null`). */
+    private data class DirectiveOption(val key: String, val value: String?)
 
     /** Prima virgola fuori dalle virgolette, oppure -1. */
     private fun indexOfTitleSeparator(payload: String): Int {
