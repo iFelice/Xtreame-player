@@ -97,8 +97,24 @@ jobs:
               print(f"::notice::test eseguiti: {tot}, falliti: {fail}, errori: {err}, superati: {tot - fail - err}")
           PY
           # 3) errori di lint
+          lint_found=""
           if [ -f apps/android-tv/app/build/reports/lint-results-debug.txt ]; then
-            sed -n -E "s|^$GITHUB_WORKSPACE/([^:]+):([0-9]+) Error: (.*)$|::error file=\1,line=\2::lint: \3|p" apps/android-tv/app/build/reports/lint-results-debug.txt | head -10
+            lint_found=$(sed -n -E "s|^$GITHUB_WORKSPACE/([^:]+):([0-9]+) Error: (.*)$|::error file=\1,line=\2::lint: \3|p" apps/android-tv/app/build/reports/lint-results-debug.txt | head -10)
+            echo "$lint_found"
+          fi
+          # 4) rete di sicurezza: se il passo è fallito ma nessuna delle righe
+          #    sopra ha prodotto un'annotazione (lint in un altro formato, errore
+          #    di configurazione, fallimento non classificato), si annotano le
+          #    righe di errore di Gradle. I log completi non sono raggiungibili
+          #    da tutte le reti, quindi questa è l'unica traccia leggibile.
+          if [ "${{ job.status }}" != "success" ] && [ -z "$lint_found" ]; then
+            grep -nE "Error: |error: |FAILURE: |e: file:" /tmp/fvp-tv-build.log 2>/dev/null | head -10 | while IFS= read -r line; do
+              echo "::error::gradle: ${line:0:900}"
+            done
+            echo "::notice::ultime righe del log"
+            tail -12 /tmp/fvp-tv-build.log 2>/dev/null | while IFS= read -r line; do
+              echo "::error::log: ${line:0:900}"
+            done
           fi
 
       - name: Carica i report in caso di errore
