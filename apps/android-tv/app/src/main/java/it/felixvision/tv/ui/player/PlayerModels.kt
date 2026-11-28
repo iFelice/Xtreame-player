@@ -41,6 +41,11 @@ sealed interface PlaybackSource {
          */
         val directUrl: String? = null,
         /**
+         * Header HTTP della voce aperta ([directUrl]), presi dalla lista
+         * (`#EXTVLCOPT`): User-Agent e Referer che il server pretende.
+         */
+        val directHeaders: Map<String, String> = emptyMap(),
+        /**
          * Coda della categoria M3U nell'ordine del file: è quella che
          * Successivo/Precedente scorrono e che a fine video passa alla voce
          * dopo. Vuota per i film Xtream.
@@ -50,6 +55,8 @@ sealed interface PlaybackSource {
         val startIndex: Int = 0,
         /** Indirizzo diretto di ogni voce della coda, per identificativo. */
         val directUrls: Map<String, String> = emptyMap(),
+        /** Header delle voci della coda, per identificativo (vuoto se nessuna li chiede). */
+        val directHeadersById: Map<String, Map<String, String>> = emptyMap(),
     ) : PlaybackSource
 
     data class Series(

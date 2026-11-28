@@ -801,9 +801,13 @@ fun FvpMainScreen(
         // Voce della Lista M3U: indirizzo diretto e coda della categoria
         // nell'ordine del file (Successivo/Precedente e passaggio automatico).
         val m3uSource = container.m3uSourceService.sourceOf(resolved.streamId, catalogSources)
-        val directUrls = m3uSource
-            ?.let { container.m3uSourceService.directUrlsFor(it) }
+        val directTargets = m3uSource
+            ?.let { container.m3uSourceService.directTargetsFor(it) }
             .orEmpty()
+        val directUrls = directTargets.mapValues { (_, target) -> target.url }
+        val directHeaders = directTargets
+            .filterValues { target -> target.headers.isNotEmpty() }
+            .mapValues { (_, target) -> target.headers }
         val queue = m3uSource
             ?.let { source -> resolved.categoryId?.let { container.m3uSourceService.queueFor(source, it) } }
             .orEmpty()
@@ -814,9 +818,11 @@ fun FvpMainScreen(
                 categoryId = resolved.categoryId,
                 title = resolved.name.ifBlank { film.name },
                 directUrl = directUrls[resolved.streamId],
+                directHeaders = directHeaders[resolved.streamId].orEmpty(),
                 queue = queue,
                 startIndex = if (queueIndex >= 0) queueIndex else 0,
                 directUrls = directUrls,
+                directHeadersById = directHeaders,
             ),
             autoResume = autoResume,
         )

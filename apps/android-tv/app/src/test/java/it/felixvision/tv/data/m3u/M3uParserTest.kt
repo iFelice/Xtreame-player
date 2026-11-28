@@ -1,6 +1,7 @@
 package it.felixvision.tv.data.m3u
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -139,6 +140,125 @@ class M3uParserTest {
         )
 
         assertEquals(listOf("Prima", "Dopo"), parsed.map { it.title })
+    }
+
+    /**
+     * Il caso vero: la lista dichiara User-Agent e Referer con le direttive di
+     * VLC perché il server li pretende. Senza, la voce risponde 403 e non parte.
+     */
+    @Test
+    fun `legge gli header EXTVLCOPT della voce`() {
+        val parsed = entries(
+            """
+            #EXTM3U
+            #EXTINF:-1 tvg-id="p1v1" group-title="NUOVI OK",Video uno
+            #EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36
+            #EXTVLCOPT:http-referrer=https://sito.esempio/video/809445/
+            https://sito.esempio/get_file/809445/809445_360p.mp4
+            """.trimIndent(),
+        )
+
+        assertEquals(1, parsed.size)
+        assertEquals(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36",
+            parsed[0].userAgent,
+        )
+        assertEquals("https://sito.esempio/video/809445/", parsed[0].referer)
+        assertEquals(
+            mapOf(
+                "User-Agent" to
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36",
+                "Referer" to "https://sito.esempio/video/809445/",
+            ),
+            parsed[0].requestHeaders,
+        )
+    }
+
+    @Test
+    fun `le direttive valgono anche scritte prima di EXTINF`() {
+        val parsed = entries(
+            """
+            #EXTM3U
+            #EXTVLCOPT:http-user-agent=PlayerTV/1.0
+            #EXTINF:-1,Prima
+            https://sito.esempio/prima.mp4
+            #EXTINF:-1,Seconda
+            https://sito.esempio/seconda.mp4
+            """.trimIndent(),
+        )
+
+        // Solo la voce che segue la direttiva la eredita.
+        assertEquals("PlayerTV/1.0", parsed[0].userAgent)
+        assertNull(parsed[1].userAgent)
+        assertNull(parsed[1].referer)
+        assertEquals(emptyMap<String, String>(), parsed[1].requestHeaders)
+    }
+
+    @Test
+    fun `accetta referer e referrer, ignora le altre direttive`() {
+        val parsed = entries(
+            """
+            #EXTM3U
+            #EXTINF:-1,Uno
+            #EXTVLCOPT:http-referer=https://sito.esempio/pagina
+            #EXTVLCOPT:network-caching=3000
+            #EXTVLCOPT:http-user-agent=Diverso/2.0
+            https://sito.esempio/uno.mp4
+            """.trimIndent(),
+        )
+
+        assertEquals("https://sito.esempio/pagina", parsed[0].referer)
+        assertEquals("Diverso/2.0", parsed[0].userAgent)
+    }
+
+    @Test
+    fun `una direttiva vuota o senza valore non diventa un header`() {
+        val parsed = entries(
+            """
+            #EXTM3U
+            #EXTINF:-1,Uno
+            #EXTVLCOPT:http-user-agent=
+            #EXTVLCOPT:http-referrer
+            #EXTVLCOPT:http-referer=https://sito.esempio/pagina?q=1&r=2
+            https://sito.esempio/uno.mp4
+            """.trimIndent(),
+        )
+
+        assertNull(parsed[0].userAgent)
+        // Il valore si prende intero, `=` compresi.
+        assertEquals("https://sito.esempio/pagina?q=1&r=2", parsed[0].referer)
+    }
+
+    @Test
+    fun `gli header non passano alla voce dopo un indirizzo scartato`() {
+        val parsed = entries(
+            """
+            #EXTM3U
+            #EXTINF:-1,Scartata
+            #EXTVLCOPT:http-user-agent=PlayerTV/1.0
+            /relativo.mp4
+            #EXTINF:-1,Buona
+            https://sito.esempio/buona.mp4
+            """.trimIndent(),
+        )
+
+        assertEquals(listOf("Buona"), parsed.map { it.title })
+        assertNull(parsed[0].userAgent)
+    }
+
+    @Test
+    fun `senza direttive non ci sono header`() {
+        val parsed = entries(
+            """
+            #EXTM3U
+            #EXTINF:-1,Semplice
+            https://sito.esempio/semplice.mp4
+            """.trimIndent(),
+        )
+
+        assertNull(parsed[0].userAgent)
+        assertNull(parsed[0].referer)
+        assertEquals(emptyMap<String, String>(), parsed[0].requestHeaders)
     }
 
     @Test

@@ -22,7 +22,17 @@ class M3uLibraryTest {
         group: String? = null,
         tvgId: String? = null,
         logo: String? = null,
-    ) = M3uEntry(title = title, url = url, group = group, tvgId = tvgId, logo = logo)
+        userAgent: String? = null,
+        referer: String? = null,
+    ) = M3uEntry(
+        title = title,
+        url = url,
+        group = group,
+        tvgId = tvgId,
+        logo = logo,
+        userAgent = userAgent,
+        referer = referer,
+    )
 
     @Test
     fun `le categorie seguono l'ordine di prima comparsa`() {
@@ -104,6 +114,40 @@ class M3uLibraryTest {
         )
 
         assertEquals("http://server.esempio/logo.png", catalog.vodStreams.single().streamIcon)
+    }
+
+    @Test
+    fun `gli header della voce arrivano al player insieme all'indirizzo`() {
+        val entries = listOf(
+            entry(
+                "Con header",
+                url = "https://sito.esempio/uno.mp4",
+                tvgId = "a",
+                userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0",
+                referer = "https://sito.esempio/video/809445/",
+            ),
+            entry("Senza header", url = "https://sito.esempio/due.mp4", tvgId = "b"),
+        )
+
+        val targets = M3uLibrary.targetsById(entries, sourceId)
+        val catalog = M3uLibrary.buildCatalog(sourceId, entries)
+
+        assertEquals(
+            M3uPlaybackTarget(
+                url = "https://sito.esempio/uno.mp4",
+                headers = mapOf(
+                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0",
+                    "Referer" to "https://sito.esempio/video/809445/",
+                ),
+            ),
+            targets[catalog.vodStreams[0].streamId],
+        )
+        assertEquals(
+            M3uPlaybackTarget(url = "https://sito.esempio/due.mp4"),
+            targets[catalog.vodStreams[1].streamId],
+        )
+        // `urlsById` resta la vista dei soli indirizzi.
+        assertEquals("https://sito.esempio/uno.mp4", M3uLibrary.urlsById(entries, sourceId)[catalog.vodStreams[0].streamId])
     }
 
     @Test

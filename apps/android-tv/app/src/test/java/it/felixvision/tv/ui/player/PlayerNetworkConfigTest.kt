@@ -118,6 +118,64 @@ class PlayerNetworkConfigTest {
         assertEquals(defaultAgent, playerAgent)
     }
 
+    /**
+     * Il caso vero di una lista M3U: la voce dichiara `#EXTVLCOPT`
+     * User-Agent e Referer perché il server li pretende. Gli header devono
+     * arrivare sulla richiesta, altrimenti la risposta è 403.
+     */
+    @Test
+    fun `gli header della lista arrivano sulla richiesta`() {
+        server.enqueue(MockResponse().setBody("ok"))
+        val dataSpec = DataSpec(Uri.parse(server.url("/get_file/809445/809445_360p.mp4").toString()))
+        val headers = mapOf(
+            "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0",
+            "Referer" to "https://sito.esempio/video/809445/",
+        )
+
+        assertNull(openOnce(PlayerNetworkConfig.httpDataSourceFactory(headers), dataSpec))
+
+        val request = server.takeRequest(5, TimeUnit.SECONDS)
+        assertNotNull(request)
+        assertEquals(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0",
+            request!!.getHeader("User-Agent"),
+        )
+        assertEquals("https://sito.esempio/video/809445/", request.getHeader("Referer"))
+    }
+
+    @Test
+    fun `senza header la richiesta resta come prima, senza Referer`() {
+        server.enqueue(MockResponse().setBody("ok"))
+        val dataSpec = DataSpec(Uri.parse(server.url("/movie/demo/demo/001.mp4").toString()))
+
+        assertNull(openOnce(PlayerNetworkConfig.httpDataSourceFactory(), dataSpec))
+
+        val request = server.takeRequest(5, TimeUnit.SECONDS)
+        assertNotNull(request)
+        assertNull(request!!.getHeader("Referer"))
+    }
+
+    @Test
+    fun `col Referer della lista un 403 diventa una risposta buona`() {
+        val dataSpec = DataSpec(Uri.parse(server.url("/get_file/809445/809445_360p.mp4").toString()))
+
+        // Prima senza header: il server rifiuta.
+        server.enqueue(MockResponse().setResponseCode(403).setBody("no"))
+        val refused = openOnce(PlayerNetworkConfig.httpDataSourceFactory(), dataSpec)
+        assertTrue(refused is HttpDataSource.InvalidResponseCodeException)
+        assertEquals(403, (refused as HttpDataSource.InvalidResponseCodeException).responseCode)
+        assertNull(server.takeRequest(5, TimeUnit.SECONDS)!!.getHeader("Referer"))
+
+        // Poi con gli header della voce: passa.
+        server.enqueue(MockResponse().setBody("video"))
+        val headers = mapOf("Referer" to "https://sito.esempio/video/809445/")
+        assertNull(openOnce(PlayerNetworkConfig.httpDataSourceFactory(headers), dataSpec))
+        assertEquals(
+            "https://sito.esempio/video/809445/",
+            server.takeRequest(5, TimeUnit.SECONDS)!!.getHeader("Referer"),
+        )
+    }
+
     /** Apre e chiude una sorgente; restituisce l'errore di apertura, se c'è. */
     private fun openOnce(factory: HttpDataSource.Factory, dataSpec: DataSpec): IOException? {
         val source = factory.createDataSource()

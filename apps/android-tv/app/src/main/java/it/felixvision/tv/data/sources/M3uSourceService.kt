@@ -12,6 +12,7 @@ import it.felixvision.tv.data.m3u.M3uIndex
 import it.felixvision.tv.data.m3u.M3uIndexCache
 import it.felixvision.tv.data.m3u.M3uIndexResult
 import it.felixvision.tv.data.m3u.M3uLibrary
+import it.felixvision.tv.data.m3u.M3uPlaybackTarget
 import it.felixvision.tv.data.m3u.M3uPlaylist
 import it.felixvision.tv.data.m3u.M3uRefreshSchedule
 import it.felixvision.tv.data.m3u.M3uTextResult
@@ -242,9 +243,16 @@ class M3uSourceService(
      * Indirizzi di riproduzione delle voci della lista, per identificativo
      * aggregato. Vuoto se la lista non è ancora in memoria.
      */
-    fun directUrlsFor(source: Source): Map<String, String> {
+    fun directUrlsFor(source: Source): Map<String, String> =
+        directTargetsFor(source).mapValues { (_, target) -> target.url }
+
+    /**
+     * Indirizzo e header di ogni voce della lista, per identificativo
+     * aggregato: gli header sono quelli che la lista chiede con `#EXTVLCOPT`.
+     */
+    fun directTargetsFor(source: Source): Map<String, M3uPlaybackTarget> {
         val entries = playlists.value[source.id]?.entries ?: return emptyMap()
-        return M3uLibrary.urlsById(entries, source.id)
+        return M3uLibrary.targetsById(entries, source.id)
     }
 
     /** Indirizzo diretto di una voce, `null` se non è della lista o non c'è. */
