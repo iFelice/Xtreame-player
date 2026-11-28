@@ -1,5 +1,8 @@
+@file:OptIn(androidx.media3.common.util.UnstableApi::class)
+
 package it.felixvision.tv.ui.player
 
+import androidx.annotation.OptIn
 import androidx.media3.common.PlaybackException
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
